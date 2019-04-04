@@ -149,6 +149,7 @@ def compute_halo_densities(snapname,s,h):
 		hi3 = hi3s[bhj['iord']]
 		rhoVi[j-1] = np.sum(rhos[bhj['iord']]*(hi3))/np.sum(hi3)
 		print("Completed " + str(j) +  " of " + str(len(h)) + " halos.\n")				
+
 	# Save data:
 	pickle.dump(rhoVi,open("./" + snapname + "_rhoVi_data.p","wb"))
 	# Garbage collection, since sometimes this doesn't happen correctly leading to memory errors:
@@ -157,7 +158,7 @@ def compute_halo_densities(snapname,s,h):
 	return rhoVi
 	
 # Function which takes the density data and plots it for different redshifts:
-def halo_density_plot(rhoVgrid,base,snapname,redshift='none',rhoB='none',bin13='none',bin14 = 'none',bin15='none',snaps_to_process='all',suffix=''):
+def halo_density_plot(rhoVgrid,base,snapname,redshift='none',rhoB='none',bin13='none',bin14 = 'none',bin15='none',snaps_to_process='all',suffix='',outname='outfile_'):
 	# Load snapshots (but not data) to get the cosmological properties:
 	s = pynbody.load(base)
 	h = s.halos()
@@ -172,19 +173,26 @@ def halo_density_plot(rhoVgrid,base,snapname,redshift='none',rhoB='none',bin13='
 	# Extract redshift and background densities if not provided:
 	
 	if(redshift == 'none' or rhoB == 'none'):
-		a0 = s[snapcount-1].properties['a']
+		a0 = s.properties['a']
 		redshift = np.zeros(snapcount)
 		rhoB = np.zeros(snapcount)
 		for i in range(0,snapcount):
-			si = pynbody.load(snapname + "{:0>3d}".format(i+1) + suffix)
+			si = pynbody.load(snapname + "{:0>3d}".format(snaps_to_process[i]) + suffix)
 			redshift[i] = (a0/si.properties['a']) - 1.0
 			rhoB[i] = pynbody.analysis.cosmology.rho_M(si,0)
-			print("Extracted data from " + str(i+1) + " of " + str(snapcount+1) + " snapshots.")
+			# Garbage collection:
+			del si
+			gc.collect()
+			print("Extracted data from snap " + str(snaps_to_process[i]))
+		# Adjust density to be in physical units rather than co-moving units:
+		rhoB = rhoB*((1.0 + redshift)**3)
+		# Save data for later use:
+		pickle.dump([redshift,rhoB],open(outname + "z_rhoB_data.p","wb"))
 	
 	# Get masses of all the halos and bin them
 	# TODO - re-write this so that we can specify arbitrary bins:
 	compute = np.array([0,0,0])
-	bin_lower = np.array([1e14,1e13,1e12])
+	bin_lower = np.array([1e14,1e13,1e12])s
 	bin_list = [[],[],[]]
 	if(bin15 == 'none'):
 		compute[0] = 1
@@ -198,18 +206,26 @@ def halo_density_plot(rhoVgrid,base,snapname,redshift='none',rhoB='none',bin13='
 	mass = np.zeros(len(h))
 	if(np.any(compute)):
 		for i in range(0,len(h)):
-			massi = np.sum(h[i]['mass'])
+			massi = np.sum(h[i+1]['mass'])
 			if (massi.in_units('Msol h**-1') > 1e14 and compute[0] == 1):
 				bin15.append(i)
-			elif (massi.in_units('Msol h**-1') > 1e13 and compute[1] == 1) :
+			elif (massi.in_units('Msol h**-1') > 1e13 and compute[1] == 1):
 				bin14.append(i)
 			elif (massi.in_units('Msol h**-1') > 1e12 and compute[2] == 1):
 				bin13.append(i)
 			print("Binned " + str(i+1) + " of " + str(len(h) + 1) + " halos.")
+
+
+	
+
 	# Get average density in each bin:
 	rhoV13 = np.sum(rhoVgrid[:,bin13]/rhoB[:,None],1)/len(bin13)
 	rhoV14 = np.sum(rhoVgrid[:,bin14]/rhoB[:,None],1)/len(bin14)
 	rhoV15 = np.sum(rhoVgrid[:,bin15]/rhoB[:,None],1)/len(bin15)
+	
+	# Save data for future use:
+	pickle.dump([bin13,bin14,bin15],open(outname + "halo_bins.p","wb"))
+	pickle.dump([rhoV13,rhoV14,rhoV15],open(outname + "rho_bins.p","wb"))
 	
 	# Plot the results:
 	plt.semilogy(redshift,rhoV13,redshift,rhoV14,redshift,rhoV15)
