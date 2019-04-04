@@ -12,6 +12,7 @@ import os
 import pickle
 import multiprocessing as mp
 import matplotlib.pylab as plt
+import gc
 
 """# Process only a single snapshot
 def evaluate(arg1):
@@ -150,6 +151,9 @@ def compute_halo_densities(snapname,s,h):
 		print("Completed " + str(j) +  " of " + str(len(h)) + " halos.\n")				
 	# Save data:
 	pickle.dump(rhoVi,open("./" + snapname + "_rhoVi_data.p","wb"))
+	# Garbage collection, since sometimes this doesn't happen correctly leading to memory errors:
+	del si
+	gc.collect()
 	return rhoVi
 	
 # Function which takes the density data and plots it for different redshifts:
