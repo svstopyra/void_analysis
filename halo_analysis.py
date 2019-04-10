@@ -192,7 +192,7 @@ def halo_density_plot(rhoVgrid,base,snapname,redshift='none',rhoB='none',bin13='
 	# Get masses of all the halos and bin them
 	# TODO - re-write this so that we can specify arbitrary bins:
 	compute = np.array([0,0,0])
-	bin_lower = np.array([1e14,1e13,1e12])s
+	bin_lower = np.array([1e14,1e13,1e12])
 	bin_list = [[],[],[]]
 	if(bin15 == 'none'):
 		compute[0] = 1
