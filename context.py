@@ -294,4 +294,8 @@ def local_group_z_correction(z_helio,b,l):
 	vcorr = cz - 79.0*np.cos(l*np.pi/180)*np.cos(b*np.pi/180) + 296.0*np.sin(l*np.pi/180)*np.cos(b*np.pi/180) - 36.0*np.sin(b*np.pi/180)
 	return vcorr*1000/c
 
+# Quickly convert row vector to column vectors:
+def row2col(row):
+	return np.reshape(row,(len(row),1))
+
 	
