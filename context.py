@@ -198,7 +198,7 @@ def galactic_to_equitorial(galactic):
 	# Get the correct angles for anything that is actually between pi and 2pi radians:
 	if galactic.ndim > 1:
 		alphap[negrange] = (2.0*np.pi - alphap[negrange])
-	elif alphap < 0.0:
+	elif sinap < 0.0:
 		alphap = 2.0*np.pi - alphap
 		
 	# Add on the right ascension of the NGP:
@@ -245,7 +245,7 @@ def equitorial_to_galactic(equitorial):
 	lp = (np.arccos(coslp))
 	if equitorial.ndim > 1:
 		lp[negrange] = (2.0*np.pi - lp[negrange])
-	elif lp < 0.0:
+	elif sinlp < 0.0:
 		lp = 2.0*np.pi - lp
 	# Get the longitude:
 	l = np.mod(lNCP - lp,2.0*np.pi)
@@ -260,6 +260,30 @@ def equitorial_to_galactic(equitorial):
 		galactic[0] = l*(180.0/np.pi)
 		galactic[1] = b*(180.0/np.pi)
 	return galactic
+
+
+# Matrix for converting between supergalactic and galactic co-ordinates:
+def sgl_gal_matrix(lx,lz,bx,bz):
+	coslx = np.cos(lx)
+	coslz = np.cos(lz)
+	cosbx = np.cos(bx)
+	cosbz = np.cos(bz)
+	sinlx = np.sin(lx)
+	sinlz = np.sin(lz)
+	sinbx = np.sin(bx)
+	sinbz = np.sin(bz)
+	return np.array([[coslx*cosbx,sinlz*cosbz*sinbx-sinbz*sinlx*cosbx,coslz*cosbz],[sinlx*cosbx,sinbz*coslx*cosbx - coslz*cosbz*sinbx,sinlz*cosbz],[sinbx,cosbz*cosbx*np.sin(lx - lz),sinbz]])
+
+# Converts a 3d position vector in galactic co-ordinates into a 3d position vector in supergalactic co-ordinates.
+def galactic_to_supergalactic(galactic_pos):
+	M = sgl_gal_matrix(137.37*np.pi/180.0,47.37*np.pi/180.0,0.0,bz = 6.32*np.pi/180.0)
+	Mi = np.linalg.inv(M)
+	return (Mi.dot(galactic_pos.T)).T
+
+# Inverse - convert supergalactic to galactic co-ordinates:
+def supergalactic_to_galactic(sgl_pos):
+	M = sgl_gal_matrix(137.37*np.pi/180.0,47.37*np.pi/180.0,0.0,bz = 6.32*np.pi/180.0)
+	return (M.dot(sgl_pos.T)).T
 	
 	
 	
