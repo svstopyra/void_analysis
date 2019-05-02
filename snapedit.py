@@ -60,5 +60,50 @@ def f1(Om,Ol,z):
 	Olz = Ol/(Om*(1+z)**3 + Ol)
 	return Omz**0.6 + Olz*(1.0 + Omz/2.0)/70.0
 
+# Indexing co-ordinates on an NxN grid - convert linear to co-ordinate:
+def lin2coord(n,N):
+	i = np.floor(n/(N**2))
+	j = np.floor((n - i*N**2)/N)
+	k = n - i*N**2 - j*N
+	return np.array([i,j,k],dtype='int')
+
+# Inverse of lin2coord - convert co-ordinates to linear indices:
+def coord2lin(coord,N):
+	return coord[0]*N**2 + coord[1]*N + coord[2]
+
+# Construct a list of indices that we expect for an NxNxN grid:
+def gridList(N):
+	ind = np.zeros((N**3,3),dtype='int')
+	ind[:,2] = np.tile(range(0,N),N**2)
+	ind[:,1] = np.tile(np.repeat(range(0,N),N),N)
+	ind[:,0] = np.repeat(range(0,N),N**2)
+	return ind
+
+
+# Takes a set of initial conditions, reverses them, and then output a new initial conditions file.
+def reverseICs(s,N,filename=None,units=None,fmt=None):
+	if(units == None):
+		# Inherit the units from the previous snapshot
+		units = s['pos'].units
+	if(fmt == None):
+		# Inherit snap format from s:
+		fmt = type(s)
+	centroid = (pynbody.array.SimArray(gridList(N),"")*s.properties['boxsize']/N + s.properties['boxsize']/(2*N)).in_units(units)
+	snew = pynbody.snapshot.new(len(s))
+	snew['pos'] = 2.0*centroid - s['pos']
+	snew['vel'] = -s['vel']
+	# Other properties should be the same:
+	snew.properties = s.properties
+	snew['mass'] = s['mass']
+	snew['iord'] = s['iord']
+	if(filename != None):
+		# Only output the snapshot if a filename is specified.
+		snew.write(filename=filename,fmt=fmt)
+	return snew
+	
+	
+	
+
+
 
 	
