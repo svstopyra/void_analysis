@@ -2,6 +2,29 @@
 import numpy as np
 import pynbody
 
+# Attempt to figure out what type of particle arrangement we have:
+def gridTest(s,grid,lfl_corner=[0,0,0]):
+	boxsize = s.properties['boxsize'].ratio("Mpc a h**-1")
+	n3 = len(s)
+	n = np.cbrt(n3)
+	N = np.round(n).astype(int)
+	if(n - N != 0.0):
+		# Suspect grid is not cubic, so probably a zoom simulation
+		print("Non-cubic grid. Exact centroids cannot be computed.")
+		return -1
+	else:
+		ind = index(grid,boxsize,N,lfl_corner=lfl_corner)
+		# Check format:
+		third = np.where(ind[1] == 1)
+		second = np.where(ind[N] == 1)
+		first = np.where(ind[N**2] == 1)
+		if((len(first[0]) != 1) or (len(second[0]) != 1) or (len(third[0]) != 1) ):
+			# Nonstandard order:
+			print("Warning - grid appears cubic, but non-standard particle order detected. Exact centroids cannot be computed.")
+			return -1
+		else:
+			return (first[0][0],second[0][0],third[0][0])
+
 # Wrap positions so that they lie in the periodic domain:
 def wrap(pos,boxsize):
 	wrap_up = np.where(pos < 0.0)
@@ -52,30 +75,54 @@ def getGridFromZeldovich(s,factor):
 	return wrap((s['pos'].in_units("Mpc a h**-1") - (s['vel']/fac)),boxsize)
 
 # Test whether a set of initial conditions uses the zeldovich approximation
-def zeldovich_test(s,N,factor=1,tol=1e-4,lfl=[0,0,0],dist_unit="Mpc"):
+def zeldovich_test(s,factor=1,tol=1e-4,lfl=[0,0,0]):
 	
+	units = s['pos'].units
+	boxsize = s.properties['boxsize'].in_units(units)
+
 	# Get positions of particles subtracting off what the offsets would be if we were using the zeldovich approximation:
 	grid = getGridFromZeldovich(s,factor)
-	# Get the closest indices to these points (if the initial conditions are zeldovich, these will be extremely close to the grid points, so this should give something close to grid):
-	diff = grid_offset(grid,boxsize,N,lfl)
-	diff_dist = np.sqrt(np.sum(diff**2,1))
-	diff_ratio = diff_dist*N/(s.properties['boxsize'].in_units("Mpc a h**-1"))
-	mean = np.mean(diff_ratio)
-	stddev = np.sqrt(np.var(diff_ratio))
-	print("Average difference from expected grid point as a fraction of cell size: " + str(mean))
-	print("Standard deviation: " + str(stddev))
-	# Get number of violating:
-	violaters = np.where(np.abs(diff_ratio) > tol)
-	if (np.abs(mean) < tol):
-		print("ICs appear to be Zeldovich within tolerance of " + str(tol))
-		if(len(violaters[0]) > 0):
-			print(str(len(violaters[0])) + " particles not sufficiently close to grid points after inversion. Maximum violation is " + str(np.max(diff_ratio[violaters[0]])))
-		return True
+
+	# centroids of grid points:
+	perm = gridTest(s,grid)
+	if(perm != -1):
+		# Identified as a specific cubic grid
+		N = np.round(np.cbrt(len(s))).astype(int)
+		centres = centroid(s,N,perm=perm)
+		print("Grid is cubic, with N = " + str(N))
+		diff = unwrap(grid - centres,boxsize)
+		diff_dist = np.sqrt(np.sum(diff**2,1))
+		diff_ratio = diff_dist*N/(boxsize)
+		mean = np.mean(diff_ratio)
+		stddev = np.sqrt(np.var(diff_ratio))
+		print("Average difference from expected grid centroids as a fraction of cell size after inverting Zeldovich approximation is " + str(mean))
+		print("Standard deviation: " + str(stddev))
+		disp = unwrap(s['pos'] - centres,boxsize)
+		disp_dist = np.sqrt(np.sum(disp**2,1))
+		disp_ratio = disp_dist*N/(boxsize)
+		mean_disp = np.mean(disp_ratio)
+		stddev_disp = np.sqrt(np.var(disp_ratio))
+		print("Average displacement from grid centroids as a fraction of cell size is: " + str(mean_disp))
+		print("Standard deviation: " + str(stddev_disp))
+		# Get number of violating:
+		violaters = np.where(np.abs(diff_ratio) > tol)
+		if (np.abs(mean) < tol):
+			print("ICs appear to be Zeldovich within tolerance of " + str(tol))
+			if(len(violaters[0]) > 0):
+				print(str(len(violaters[0])) + " particles not sufficiently close to grid points after inversion. Maximum violation is " + str(np.max(diff_ratio[violaters[0]])))
+			return True
+		else:
+			print("ICs do not appear to be Zeldovich.")
+			if(len(violaters[0]) > 0):
+				print(str(len(violaters[0])) + " particles not sufficiently close to grid points after inversion. Maximum violation is " + str(np.max(diff_ratio[violaters[0]])))
+			return False
+
 	else:
-		print("ICs do not appear to be Zeldovich.")
-		if(len(violaters[0]) > 0):
-			print(str(len(violaters[0])) + " particles not sufficiently close to grid points after inversion. Maximum violation is " + str(np.max(diff_ratio[violaters[0]])))
+		print("ICs are not cubic - cannot determine grid centroids to assess whether or not the Zeldovich approximation is used.")
 		return False
+	
+	
+	
 
 # Computes the logarithmic derivative of the linear structure growth function, used to get
 # peculiar velocities in the Zeldovich approximation:
@@ -113,28 +160,7 @@ def gridListPermutation(N,perm=(0,1,2)):
 	ind[:,perm[2]] = np.tile(range(0,N),N**2)	
 	return ind
 	
-# Attempt to figure out what type of particle arrangement we have:
-def gridTest(s,grid,lfl_corner=[0,0,0]):
-	boxsize = s.properties['boxsize'].ratio("Mpc a h**-1")
-	n3 = len(s)
-	n = np.cbrt(n3)
-	N = np.round(n).astype(int)
-	if(n - N != 0.0):
-		# Suspect grid is not cubic, so probably a zoom simulation
-		print("Non-cubic grid. Exact centroids cannot be computed.")
-		return -1
-	else:
-		ind = index(grid,boxsize,N,lfl_corner=lfl_corner)
-		# Check format:
-		third = np.where(ind[1] == 1)
-		second = np.where(ind[N] == 1)
-		first = np.where(ind[N**2] == 1)
-		if((len(first[0]) != 1) or (len(second[0]) != 1) or (len(third[0]) != 1) ):
-			# Nonstandard order:
-			print("Warning - grid appears cubic, but non-standard particle order detected. Exact centroids cannot be computed.")
-			return -1
-		else:
-			return (first[0][0],second[0][0],third[0][0])
+
 
 # Return a grid pointing to the centres of the cells in a given snapshot
 def centroid(s,N,units=None,perm=(0,1,2)):
