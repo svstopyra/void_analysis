@@ -1,11 +1,17 @@
 #
-from mayavi.mlab import points3d, text3d
+from mayavi.mlab import points3d, text3d, plot3d
+from mayavi import mlab
 import pynbody
 from void_analysis import context
 import numpy as np
 
+# Plot the positions in a snapshot:
 def subsnap_scatter(subsnap,color_spec=(1,1,1),scale=1.0,type='2dvertex'):
 	r = subsnap['pos']
+	points3d(r[:,0],r[:,1],r[:,2],mode=type,color=color_spec,scale_factor=scale)
+
+# Plot a set of specified points (wrapper for points3d):
+def point_scatter(r,color_spec=(1,1,1),scale=1.0,type='2dvertex'):
 	points3d(r[:,0],r[:,1],r[:,2],mode=type,color=color_spec,scale_factor=scale)
 
 # Returns a subsnap contains the particles within halos only that satisfy the specified filter
@@ -34,4 +40,19 @@ def plot_named_clusters(cluster_pos,cluster_names,color_spec=(0,1,0),point_type=
 	for k in range(0,len(cluster_names)):
 		text3d(cluster_pos[k,0],cluster_pos[k,1],cluster_pos[k,2],cluster_names[k],color=text_colour,scale=text_scale)
 
+def plot_numbered_voids(hr,to_plot,void_centres,bridge,void_colour=(1,0,0),text_scale=1000,text_colour=(1,0,0)):
+	for k in range(0,len(to_plot)):
+		r = void_centres[to_plot[k]]
+		subsnap_scatter(bridge(hr[to_plot[k]+1]),color_spec=void_colour,type='sphere',scale=500)
+		text3d(r[0],r[1],r[2],str(to_plot[k]+1),scale=text_scale,color=text_colour)
+
+def recentre(centre):
+	f = mlab.gcf()
+	camera = f.scene.camera
+	camera.focal_point = centre
+
+def line_plot(line,color=(1,0,0),line_width=10,reset_zoom=False):
+	plot3d(line[:,0],line[:,1],line[:,2],line_width=line_width,reset_zoom=reset_zoom,color=color,representation='wireframe')
+
+	
 	

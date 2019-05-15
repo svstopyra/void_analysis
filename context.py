@@ -88,7 +88,7 @@ def voids_in_sphere(hr,radius,centre,sn,sr,void_centre_list='none'):
 	filt = pynbody.filt.Sphere(radius,centre)
 	b = pynbody.bridge.Bridge(sn,sr)
 	for k in range(0,len(in_sphere[0])):
-		if (len(b(hr[in_sphere[0][k]+1])[filt]) == 0):
+		if (len(b(hr[in_sphere[0][k]+1])[filt]) < len(hr[in_sphere[0][k]+1])/2):
 			collect[in_sphere[0][k]] = 0
 	in_sphere = np.where(collect == 1)
 	return in_sphere[0]
@@ -294,8 +294,87 @@ def local_group_z_correction(z_helio,b,l):
 	vcorr = cz - 79.0*np.cos(l*np.pi/180)*np.cos(b*np.pi/180) + 296.0*np.sin(l*np.pi/180)*np.cos(b*np.pi/180) - 36.0*np.sin(b*np.pi/180)
 	return vcorr*1000/c
 
+# Converts supergalactic angular positions into supergalactic positions:
+def supergalactic_ang_to_pos(ang):
+	# Assume Nx3 matrix, with first column radius, second column sgl, third column sgb
+	# Convert to polar co-ordinates in radians:
+	r = ang[:,0]
+	theta = (90.0 - ang[:,2])*np.pi/180.0
+	phi = ang[:,1]*np.pi/180.0
+	SGX = r*np.sin(theta)*np.cos(phi)
+	SGY = r*np.sin(theta)*np.sin(phi)
+	SGZ = r*np.cos(theta)
+	return np.hstack([SGX.reshape((len(SGX),1)),SGY.reshape((len(SGY),1)),SGZ.reshape((len(SGZ),1))])
+
 # Quickly convert row vector to column vectors:
 def row2col(row):
 	return np.reshape(row,(len(row),1))
 
+# Return the mean distance of halo h from the specified centre
+def mean_distance(h,centre=(0,0,0)):
+	return np.mean(np.sqrt(np.sum((h['pos'] - centre)**2,1)))
+
+# Returns the distance of the list of positions, pos, from centre
+def distance(pos,centre = (0,0,0)):
+	if(pos.ndim == 1):
+		return np.sqrt(np.sum((pos - centre)**2))
+	else:
+		return np.sqrt(np.sum((pos - centre)**2,1))
+
+# Return the distances of each halo from the specified centre:
+def halo_distances(hlist,centre = (0,0,0)):
+	dist = np.zeros(len(hlist))
+	for k in range(0,len(hlist)):
+		dist[k] = mean_distance(hlist[k+1],centre)
+	return dist
+
+def void_distances(hr,b,centre = (0,0,0)):
+	dist = np.zeros(len(hr))
+	for k in range(0,len(hr)):
+		dist[k] = mean_distance(b(hr[k+1]),centre)
+	return dist
+
+# Creates a list of points from the union of many halos:
+def snapunion_positions(halolist,to_use):
+	totals = np.zeros(len(to_use),dtype='int')
+	for k in range(0,len(to_use)):
+		# In most cases, we are using a halo catalogue, which is offset by one
+		# from the indices:
+		totals[k] = len(halolist[to_use[k] + 1])
+	cumsum = np.cumsum(totals)
+	total = np.sum(totals)
+	# Pre-allocate array:
+	pos = np.zeros((total,3))
+	# Populate:
+	pos[0:cumsum[0],:] = halolist[to_use[0] + 1]['pos']
+	for k in range(1,len(to_use)):
+		pos[cumsum[k-1]:cumsum[k],:] = halolist[to_use[k] + 1]['pos']
+	return pos
+
+# Return a sphere of particles extracted from s, at the specified location:
+def select_sphere(s,radius,distance,direction,offset=(0,0,0)):
+	dir_norm = direction/np.sqrt(np.sum(direction**2))
+	filt = pynbody.filt.Sphere(radius,distance*dir_norm + offset)
+	return s[filt]
+
+# Return the halos that the selection has particles from (offset by downwards)
+def get_containing_halos(snap,halos):
+	particle_count = np.zeros(len(halos),dtype='int')
+	for k in range(0,len(halos)):
+		particle_count[k] = len(halos[k+1].intersect(snap))
 	
+	containing_halos = np.where(particle_count > 0)
+	return [containing_halos,particle_count[containing_halos]]
+
+
+
+
+
+
+
+
+
+
+
+
+
