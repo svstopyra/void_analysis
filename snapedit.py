@@ -207,12 +207,116 @@ def reverseICs(s,filename=None,units=None,fmt=None,inverted=False,factor=1,perm=
 		snew.write(filename=filename,fmt=fmt)
 	return snew
 
+# Get zone information and turn it into a list of particles:
+def zones2Particles(partfile):
+	# Binary formatted data:
+	particle_data = np.fromfile(partfile,dtype='int32')
+	zoneCount = particle_data[1]
+	zoneParts = []
+	iterator = 3 # Start of first particle id
+	for k in range(0,zoneCount):
+		zoneParts.append(particle_data[iterator:(iterator+particle_data[iterator-1])])
+		iterator = iterator + particle_data[iterator-1] + 1
+	return zoneParts
 
-
+# Get list of zones for each void:
+def voids2Zones(zonefile):
+	# Import binary data:
+	zone_data = np.fromfile(zonefile,dtype='int32')
+	zoneCount = zone_data[0]
+	voidZones = []
+	iterator = 2 # First zone id
+	for k in range(0,zoneCount):
+		voidZones.append(zone_data[iterator:(iterator+zone_data[iterator-1])])
+		iterator = iterator + zone_data[iterator-1] + 1
+	return voidZones
 	
-	
+# Class to store void information imported from ZOBOV:
+class ZobovVoid:
+	def getParticles(self,zoneParts,voidZones):
+		partList = zoneParts[voidZones[self.id][0]]
+		for k in range(1,len(voidZones[self.id])):
+			partList = np.concatenate((partList,zoneParts[voidZones[self.id][k]]))
+		if(len(partList) != self.npart):
+			raise(Exception("Particle list does not match expected number of particles."))
+		return partList
+	def __init__(self,row,voidProperties,zoneParts,voidZones):
+		if(voidProperties.shape[1] != 14):
+			raise(Exception("Data row must have 14 elements."))
+		datarow = voidProperties[row,:]
+		self.center = np.array(datarow[0:3])
+		self.volumeNorm = datarow[3] # Normalised volume
+		self.radius = datarow[4] # In Mpc/h
+		self.z = datarow[5] # Redshift
+		self.volume = datarow[6] # In (Mpc/h)^3
+		self.id = int(datarow[7])
+		self.delta = datarow[8] 
+		self.npart = int(datarow[9]) # Number of particles in this void
+		self.parentID = int(datarow[10]) # ID of parent void (-1 if no parent)
+		self.treeLevel = int(datarow[11])
+		self.nchild = int(datarow[12]) # Number of child voids
+		self.centralDensity = datarow[13]
+		# Attempt to get the list of particles associated to this void:
+		self.particles = self.getParticles(zoneParts,voidZones)
+		# Get list of children:
+		parents = voidProperties[:,10].astype(int)
+		self.children = np.where(parents == self.id)[0]
+		if(self.parentID != -1):
+			self.parent = np.where(voidProperties[:,7] == self.id)[0][0]
+		else:
+			self.parent = -1
+	# Container access functions:
+	def __len__(self):
+		return len(self.particles)
+	def __getitem__(self,key):
+		return self.particles[key]
+	def __setitem__(self,key,value):
+		self.particles[key] = value
 	
 
+# Function to import ZOBOV voids from files and return a list of them:
+def importVoidList(voidData,zoneData,partData):
+	# Get void properties:
+	voidProperties = np.loadtxt(voidData,skiprows=1)
+	voidList = []
+	zoneParts = zones2Particles(partData)
+	voidZones = voids2Zones(zoneData)
+	sortedList = np.argsort(-voidProperties[:,9])
+	for k in range(0,len(voidProperties)):
+		voidList.append(ZobovVoid(sortedList[k],voidProperties[sortedList,:],zoneParts,voidZones))
+	return voidList
+	
+# Gets voids intersecting a given snap, organised by size of overlap:
+def getIntersectingVoids(snap,voidList):
+	overlap = np.zeros(len(voidList),dtype=int)
+	for k in range(0,len(overlap)):
+		overlap[k] = len(np.intersect1d(snap['iord'],voidList[k].particles))
+	local = np.where(overlap > 0)[0]
+	return local[np.argsort(-overlap[local])]
 
+def getParticlesInHalos(snap,halos):
+	lengths = np.zeros(len(halos),dtype=int)
+	for k in range(0,len(halos)):
+		lengths[k] = len(halos[k+1])
+	ntotal = np.sum(lengths)
+	in_halos = np.zeros(ntotal,dtype=int)
+	counter = 0
+	for k in range(0,len(halos)):
+		in_halos[counter:(counter + lengths[k])] = halos[k+1]['iord']
+		counter = counter + lengths[k]
+	# Return unique set, since some particles are part of more than one halo:
+	in_halos = np.unique(in_halos)
+	# Have to sort the indices of snap, because these are usually not in ascending order:
+	
+	return snap[np.argsort(snap['iord'])][np.unique(in_halos)]
+
+# Outputs a copy of a snapshot filt, with the particles re-ordered to be in ascending index order:
+def reorderSnap(snapname_in,snapname_out):
+	s = pynbody.load(snapname_in)
+	#Sort the index order:
+	sortedIndices = np.argsort(s['iord'])
+	snew = s[sortedIndices]
+	snew.write(filename=snapname_out,fmt=type(s))
+	return snew
 
 	

@@ -4,6 +4,9 @@ from mayavi import mlab
 import pynbody
 from void_analysis import context
 import numpy as np
+import imageio
+import os
+import gc
 
 # Plot the positions in a snapshot:
 def subsnap_scatter(subsnap,color_spec=(1,1,1),scale=1.0,type='2dvertex'):
@@ -54,5 +57,32 @@ def recentre(centre):
 def line_plot(line,color=(1,0,0),line_width=10,reset_zoom=False):
 	plot3d(line[:,0],line[:,1],line[:,2],line_width=line_width,reset_zoom=reset_zoom,color=color,representation='wireframe')
 
+def plotHistory(sn,sr,halo_list,halo,color_list,highlight_mode='point3d',scalefactor=1):
+	childList = np.array(halo.properties['children']) - 1
+	children = context.combineHalos(sn,halo_list,childList)
+	extras = halo.setdiff(children)
+	b = pynbody.bridge.Bridge(sn,sr)
+	subsnap_scatter(b(extras),color_spec=(1,1,1))
+	for k in range(0,len(childList)):
+		subsnap_scatter(b(halo_list[childList[k]+1]),color_spec=color_list[np.mod(k,len(color_list))],scale=scalefactor,type=highlight_mode)
+
+# Animate the evolution of the specified snapshots:
+def animate(snaplist,plot_command,save_directory="./",size=None,scaling=1):
+	filenames = []
+	for k in snaplist:
+		filenames.append(save_directory + "snapshot_" + "{:0>3d}".format(k) + ".png")
+		plot_command(k)
+		fig = mlab.gcf().scene
+		if size is None:
+			sceneSize = np.array(fig.get_size())*scaling
+		else:
+			sceneSize = np.array(size)*scaling
+		mlab.savefig(save_directory + "snapshot_" + "{:0>3d}".format(k) + ".png",size=sceneSize)
+		mlab.clf()
+	# Construct gif:
+	with imageio.get_writer(save_directory + "animation.gif",mode='I',duration=1) as writer:
+		for filename in filenames:
+			image = imageio.imread(filename)
+			writer.append_data(image)
 	
 	

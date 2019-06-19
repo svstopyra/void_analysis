@@ -98,7 +98,7 @@ def compute_densities_for_all_snapshots(base,snapname,snaps_to_process='all',suf
 		rhoVgrid = np.zeros((snapcount,len(h)))
 		# If specified, only compute certain snapshots:
 		if snaps_to_process == 'all':
-			snaprange = np.flip(range(1,snapcount+1))
+			snaprange = range(1,snapcount+1)
 		else:
 			snaprange = snaps_to_process
 		# One by one, load the snapshots, and compute the densities of these particles:
@@ -230,6 +230,8 @@ def halo_density_plot(rhoVgrid,base,snapname,redshift='none',rhoB='none',bin13='
 	# Plot the results:
 	plt.semilogy(redshift,rhoV13,redshift,rhoV14,redshift,rhoV15)
 	plt.show()
+
+	return [bin13,bin14,bin15,rhoV13,rhoV14,rhoV15,redshift,rhoB]
 	
 	
 	
@@ -237,6 +239,42 @@ def halo_density_plot(rhoVgrid,base,snapname,redshift='none',rhoB='none',bin13='
 if __name__ == "__main__":
     compute_densities_for_all_snapshots(sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5])
 
+def plot_halo_void_densities(zn,zr,rhoBn,rhoBr,bin13n,bin14n,bin15n,bin13r,bin14r,bin15r,rhoVin,rhoVir):
+	rhoV13n = np.mean(rhoVin[:,bin13n]/rhoBn[:,None],1)
+	rhoV13nstd = np.sqrt(np.var(rhoVin[:,bin13n]/rhoBn[:,None],1))
+	rhoV14n = np.mean(rhoVin[:,bin14n]/rhoBn[:,None],1)
+	rhoV14nstd = np.sqrt(np.var(rhoVin[:,bin14n]/rhoBn[:,None],1))
+	rhoV15n = np.mean(rhoVin[:,bin15n]/rhoBn[:,None],1)
+	rhoV15nstd = np.sqrt(np.var(rhoVin[:,bin15n]/rhoBn[:,None],1))
+	rhoV13r = np.mean(rhoVir[:,bin13r]/rhoBr[:,None],1)
+	rhoV13rstd = np.sqrt(np.var(rhoVir[:,bin13r]/rhoBr[:,None],1))
+	rhoV14r = np.mean(rhoVir[:,bin14r]/rhoBr[:,None],1)
+	rhoV14rstd = np.sqrt(np.var(rhoVir[:,bin14r]/rhoBr[:,None],1))
+	rhoV15r = np.mean(rhoVir[:,bin15r]/rhoBr[:,None],1)
+	rhoV15rstd = np.sqrt(np.var(rhoVir[:,bin15r]/rhoBr[:,None],1))
+	plt.semilogy(zn,rhoV13n,color=(1,0,0))
+	plt.semilogy(zn,rhoV14n,color=(0,1,0))
+	plt.semilogy(zn,rhoV15n,color=(0,0,1))
+	plt.semilogy(zr,rhoV13r,color=(1,1,0))
+	plt.semilogy(zr,rhoV14r,color=(1,0,1))
+	plt.semilogy(zr,rhoV15r,color=(0,1,1))
+	plt.fill_between(zn,rhoV13n - rhoV13nstd, rhoV13n + rhoV13nstd,color=(0.5,0,0))
+	plt.fill_between(zn,rhoV14n - rhoV14nstd, rhoV14n + rhoV14nstd,color=(0,0.5,0))
+	plt.fill_between(zn,rhoV15n - rhoV15nstd, rhoV15n + rhoV15nstd,color=(0,0,0.5))
+	plt.fill_between(zr,rhoV13r - rhoV13rstd, rhoV13r + rhoV13rstd,color=(0.5,0.5,0))
+	plt.fill_between(zr,rhoV14r - rhoV14rstd, rhoV14r + rhoV14rstd,color=(0.5,0,0.5))
+	plt.fill_between(zr,rhoV15r - rhoV15rstd, rhoV15r + rhoV15rstd,color=(0,0.5,0.5))
+	plt.xlabel('z')
+	plt.ylabel('(Local Density)/(Background Density)')
+	plt.legend(['Halo Density, $10^{12} - 10^{13} M_{sol}/h$','Halo Density, $10^{13} - 10^{14} M_{sol}/h$','Halo Density, $10^{14} - 10^{15} M_{sol}/h$','Void Density, $10^{12} - 10^{13} M_{sol}/h$','Void Density, $10^{13} - 10^{14} M_{sol}/h$','Void Density, $10^{14} - 10^{15} M_{sol}/h$'])
+	plt.show()
+
+#[bin13n,bin14n,bin15n] = pickle.load(open("unreversed/density_plot_outfile_halo_bins.p","rb"))
+#[rhoV13n,rhoV14n,rhoV15n] = pickle.load(open("unreversed/density_plot_outfile_rho_bins.p","rb"))
+#[zn,rhoBn] = pickle.load(open("unreversed/density_plot_outfile_z_rhoB_data.p","rb"))
+#[bin13r,bin14r,bin15r] = pickle.load(open("reversed/density_plot_outfile_halo_bins.p","rb"))
+#[rhoV13r,rhoV14r,rhoV15r] = pickle.load(open("reversed/density_plot_outfile_rho_bins.p","rb"))
+#[zr,rhoBr] = pickle.load(open("reversed/density_plot_outfile_z_rhoB_data.p","rb"))
 
 
 

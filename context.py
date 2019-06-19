@@ -60,9 +60,9 @@ def halo_filter(s,h,filt):
 	return indices[0]
 
 # Get halos inside a specified sphere, using centre and mass:
-def halos_in_sphere(h,radius,centre,halo_centres='none'):
+def halos_in_sphere(h,radius,centre,halo_centres=None):
 	# Generate halo_centres and masses if these are not given:
-	if(halo_centres == 'none'):
+	if(halo_centres == None):
 		[halo_centres,halo_masses] = halo_centres_and_mass(h)
 	#Get distance from the centre specified:
 	r = np.sqrt(np.sum((halo_centres - centre)**2,1))
@@ -78,8 +78,8 @@ def halos_in_sphere(h,radius,centre,halo_centres='none'):
 			collect[in_sphere[0][k]] = 0
 	in_sphere = np.where(collect == 1)
 	return in_sphere[0]
-def voids_in_sphere(hr,radius,centre,sn,sr,void_centre_list='none'):
-	if(void_centre_list == 'none'):
+def voids_in_sphere(hr,radius,centre,sn,sr,void_centre_list=None):
+	if(void_centre_list == None):
 		void_centre_list = void_centres(sn,sr,hr)
 	r = np.sqrt(np.sum((void_centre_list - centre)**2,1))
 	in_sphere = np.where(r < radius)
@@ -189,7 +189,7 @@ def galactic_to_equitorial(galactic):
 	cosdNGP = np.cos(dNGP)
 	# Sin of the declination angle:
 	sind = sindNGP*sinb + cosdNGP*cosb*coslp
-	cosd = np.sqrt(1.0 - sind**2)
+	cosd = np.sqrt(1.0 - sind**2) # No sign, as declination is always between -pi/2 and pi/2
 	# Have to check the sin of the RHS here to get the correct conversion to right ascension:
 	sinap = cosb*sinlp/cosd
 	cosap = (sinb*cosdNGP - cosb*sindNGP*coslp)/cosd
@@ -239,18 +239,20 @@ def equitorial_to_galactic(equitorial):
 	cosap = np.cos(a - aNGP)
 	# Sin and cos of galactic co-ordinate parameters:
 	sinb = sindNGP*sind + cosdNGP*cosd*cosap
-	sinlp = cosd*sinap
-	coslp = cosdNGP*sind - sindNGP*cosd*cosap
+	# Galactic Latitude (already correct range):
+	b = np.arcsin(sinb)
+	cosb = np.cos(b)
+	# Galactic Longitude (have to account for sign of sin(lp)):
+	sinlp = cosd*sinap/cosb
+	coslp = (cosdNGP*sind - sindNGP*cosd*cosap)/cosb
 	negrange = np.where(sinlp < 0)
 	lp = (np.arccos(coslp))
 	if equitorial.ndim > 1:
 		lp[negrange] = (2.0*np.pi - lp[negrange])
 	elif sinlp < 0.0:
 		lp = 2.0*np.pi - lp
-	# Get the longitude:
+	# Get the longitude in the right range:
 	l = np.mod(lNCP - lp,2.0*np.pi)
-	# Latitude (already correct range):
-	b = np.arcsin(sinb)
 	# Final result (in degrees):	
 	galactic = np.zeros(equitorial.shape)
 	if galactic.ndim > 1:
@@ -284,8 +286,65 @@ def galactic_to_supergalactic(galactic_pos):
 def supergalactic_to_galactic(sgl_pos):
 	M = sgl_gal_matrix(137.37*np.pi/180.0,47.37*np.pi/180.0,0.0,bz = 6.32*np.pi/180.0)
 	return (M.dot(sgl_pos.T)).T
-	
-	
+# Angular co-ordinate conversion, galactic to supergalactic:
+def gal2SG(galactic):
+	if galactic.ndim > 1:	
+		cosl = np.cos(galactic[:,0]*np.pi/180.0).reshape((len(galactic[:,0]),1))
+		sinl = np.sin(galactic[:,0]*np.pi/180.0).reshape((len(galactic[:,0]),1))
+		cosb = np.cos(galactic[:,1]*np.pi/180.0).reshape((len(galactic[:,0]),1))
+		sinb = np.sin(galactic[:,1]*np.pi/180.0).reshape((len(galactic[:,0]),1))
+	else:
+		cosl = np.cos(galactic[0]*np.pi/180.0)
+		sinl = np.sin(galactic[0]*np.pi/180.0)
+		cosb = np.cos(galactic[1]*np.pi/180.0)
+		sinb = np.sin(galactic[1]*np.pi/180.0)
+	# Unit vector in galactic co-ordinates:	
+	Xgal = np.hstack((cosb*cosl,cosb*sinl,sinb))
+	# Rotate to unit vector in sgl co-ordinates:
+	Xsgl = galactic_to_supergalactic(Xgal)
+	# Obtain sin SGB:
+	sinSGB = Xsgl[:,2] if (galactic.ndim > 1) else Xsgl[2]
+	SGB = np.arcsin(sinSGB) # Already correct range: (-pi/2,pi/2)
+	cosSGB = np.cos(SGB)
+	cosSGL = Xsgl[:,0]/cosSGB if (galactic.ndim > 1) else Xsgl[0]/cosSGB
+	sinSGL = Xsgl[:,1]/cosSGB if (galactic.ndim > 1) else Xsgl[1]/cosSGB
+	SGL = np.arccos(cosSGL)
+	if(galactic.ndim > 1):
+		neg = np.where(sinSGL < 0.0)
+		SGL[neg] = 2.0*np.pi - SGL[neg]
+	elif sinSGL < 0.0:
+		SGL = 2.0*np.pi - SGL		
+	return np.hstack((SGL.reshape((len(SGL),1)),SGB.reshape((len(SGB),1))))*(180.0/np.pi)
+
+# Angular co-ordinate conversion, galactic to supergalactic:
+def sg2gal(sgl):
+	if sgl.ndim > 1:	
+		cosSGL = np.cos(sgl[:,0]*np.pi/180.0).reshape((len(sgl[:,0]),1))
+		sinSGL = np.sin(sgl[:,0]*np.pi/180.0).reshape((len(sgl[:,0]),1))
+		cosSGB = np.cos(sgl[:,1]*np.pi/180.0).reshape((len(sgl[:,0]),1))
+		sinSGB = np.sin(sgl[:,1]*np.pi/180.0).reshape((len(sgl[:,0]),1))
+	else:
+		cosSGL = np.cos(sgl[0]*np.pi/180.0)
+		sinSGL = np.sin(sgl[0]*np.pi/180.0)
+		cosSGB = np.cos(sgl[1]*np.pi/180.0)
+		sinSGB = np.sin(sgl[1]*np.pi/180.0)
+	# Unit vector in galactic co-ordinates:	
+	Xsgl = np.hstack((cosSGB*cosSGL,cosSGB*sinSGL,sinSGB))
+	# Rotate to unit vector in sgl co-ordinates:
+	Xgal = supergalactic_to_galactic(Xsgl)
+	# Obtain sin b:
+	sinb = Xgal[:,2] if (sgl.ndim > 1) else Xgal[2]
+	b = np.arcsin(sinb) # Already correct range: (-pi/2,pi/2)
+	cosb = np.cos(b)
+	cosl = Xgal[:,0]/cosb if (sgl.ndim > 1) else Xgal[0]/cosb
+	sinl = Xgal[:,1]/cosb if (sgl.ndim > 1) else Xgal[1]/cosb
+	l = np.arccos(cosl)
+	if(sgl.ndim > 1):
+		neg = np.where(sinl < 0.0)
+		l[neg] = 2.0*np.pi - l[neg]
+	elif sinl < 0.0:
+		l = 2.0*np.pi - l		
+	return np.hstack((l.reshape((len(l),1)),b.reshape((len(b),1))))*(180.0/np.pi)	
 	
 # Converts observed helio-centric redshifts into redshifts corrected using the velocity of the local group.
 def local_group_z_correction(z_helio,b,l):
@@ -364,9 +423,79 @@ def get_containing_halos(snap,halos):
 		particle_count[k] = len(halos[k+1].intersect(snap))
 	
 	containing_halos = np.where(particle_count > 0)
-	return [containing_halos,particle_count[containing_halos]]
+	particles = particle_count[containing_halos]
+	sortOrder = np.argsort(-particles)
+	return [containing_halos[0][sortOrder],particles[sortOrder]]
 
+# Combine specified halos into a single subsnap:
+def combineHalos(snap,halos,to_include):
+	lengths = np.zeros(len(to_include),dtype=int)
+	ntotal = 0
+	for k in range(0,len(to_include)):
+		lengths[k] = len(halos[to_include[k]+1])
+	ntotal = np.sum(lengths)
+	ind = np.zeros(ntotal,dtype=int)
+	counter = 0
+	for k in range(0,len(to_include)):
+		ind[counter:(counter + lengths[k])] = halos[to_include[k]+1]['iord']
+		counter = counter + lengths[k]
+	ind = np.unique(ind)
+	return snap[ind]
 
+# Returns true if the pair of specified halos is a viable local group candidate. Assumes kpc
+def localGroupTest(n1,n2,halo_centres,halo_masses,centre,testScale=1000):
+	com = (halo_centres[n1-1]*halo_masses[n1-1] + halo_centres[n2-1]*halo_masses[n2-1])/(halo_masses[n2-1] + halo_masses[n1-1])
+	total_mass = halo_masses[n2-1] + halo_masses[n1-1]
+	mSmall = np.min(np.array([halo_masses[n1-1],halo_masses[n2-1]]))
+	mLarge = np.max(np.array([halo_masses[n1-1],halo_masses[n2-1]]))
+	dist = distance(halo_centres[n1-1] - halo_centres[n2-1])
+	mLargeNear = 0
+	nearestList = []
+	nLargest = 0
+	boxDistance = distance(com,centre=centre)
+	for k in range(0,len(halo_masses)):
+		if ((k+1 == n1) | (k+1 == n2)):
+			continue
+		if (distance(hn_centres[k] - com) < 2.5*testScale):
+			nearestList.append(k)
+			if (halo_masses[k] > mLargeNear):
+				mLargeNear = halo_masses[k]
+				nLargest = k + 1
+	# 5 tests:
+	test1 = (total_mass < 500)
+	test2 = (mSmall > 50)
+	test3 = ((dist > 0.3*testScale) & (dist < 1.5*testScale))
+	test4 = (mLargeNear  < mSmall)
+	test5 = boxDistance < 5*testScale
+	if(test1):
+		print("Total mass ok for local group: " + str(total_mass*1e10) + " M_sol/h.")
+	else:
+		print("TEST FAILED: Total mass too large for local group halos: " + str(total_mass*1e10) + " M_sol/h. > " + str(500*1e10) + "M_sol/h.")
+	if(test2):
+		print("Smallest halo mass ok for local group: " + str(mSmall*1e10) + " M_sol/h.")
+	else:
+		print("TEST FAILED: Smallest halo too large for local group:" + str(mSmall*1e10) + " M_sol/h.")
+	if(test3):
+		print("Separation ok for local group: " + str(dist/testScale) + " Mpc/h.")
+	else:
+		print("TEST FAILED: Halo separation not in valid range for local group: " + str(dist/testScale) + " Mpc/h")
+	if(test4):
+		print("No large halos within 2.5 Mpc/h.")
+	else:
+		print("TEST FAILED: halo number " + str(nLargest) +  " with mass " + str(mLargeNear*1e10) + " M_sol/h exists at distance " + str(distance(hn_centres[nLargest-1] - com)/testScale) + " from centre of mass of halo pair.")
+	if(test5):
+		print("Halo pair centre is within 5Mpc of the box centres.")
+	else:
+		print("TEST FAILED: Halo pair centre is " + str(boxDistance/testScale) + " Mpc/h from box centre.")
+	return [test1 & test2 & test3 & test4 & test5, nearestList]
+	
+	
+			
+			
+	
+	
+	
+	
 
 
 
