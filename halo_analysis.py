@@ -156,117 +156,93 @@ def compute_halo_densities(snapname,s,h):
 	del si
 	gc.collect()
 	return rhoVi
+
+# Function to extract redshift and density information:
+def get_z_and_rhoB(snapname,snaps_to_process,suffix=''):
+	snapcount = len(snaps_to_process)
+	a0 = 1.0
+	redshift = np.zeros(snapcount)
+	rhoB = np.zeros(snapcount)
+	for i in range(0,snapcount):
+		si = pynbody.load(snapname + "{:0>3d}".format(snaps_to_process[i]) + suffix)
+		redshift[i] = (a0/si.properties['a']) - 1.0
+		rhoB[i] = pynbody.analysis.cosmology.rho_M(si,0)
+		# Garbage collection:
+		del si
+		gc.collect()
+		print("Extracted data from snap " + str(snaps_to_process[i]))
+	return [redshift,rhoB]
 	
 # Function which takes the density data and plots it for different redshifts:
-def halo_density_plot(rhoVgrid,base,snapname,redshift='none',rhoB='none',bin13='none',bin14 = 'none',bin15='none',snaps_to_process='all',suffix='',outname='outfile_'):
+def bin_halo_densities(rhoVgrid,masses,redshift,rhoB,bins=None):
 	# Load snapshots (but not data) to get the cosmological properties:
-	s = pynbody.load(base)
-	h = s.halos()
-	si = []
-	snapcount = np.shape(rhoVgrid)[0]
-	if(snaps_to_process == 'all'):
-		snaps_to_process = range(1,snapcount + 1)
-	else:
-		snapcount = len(snaps_to_process)
-		
-		
-	# Extract redshift and background densities if not provided:
-	
-	if(redshift == 'none' or rhoB == 'none'):
-		a0 = s.properties['a']
-		redshift = np.zeros(snapcount)
-		rhoB = np.zeros(snapcount)
-		for i in range(0,snapcount):
-			si = pynbody.load(snapname + "{:0>3d}".format(snaps_to_process[i]) + suffix)
-			redshift[i] = (a0/si.properties['a']) - 1.0
-			rhoB[i] = pynbody.analysis.cosmology.rho_M(si,0)
-			# Garbage collection:
-			del si
-			gc.collect()
-			print("Extracted data from snap " + str(snaps_to_process[i]))
-		# Adjust density to be in physical units rather than co-moving units:
-		rhoB = rhoB*((1.0 + redshift)**3)
-		# Save data for later use:
-		pickle.dump([redshift,rhoB],open(outname + "z_rhoB_data.p","wb"))
-	
 	# Get masses of all the halos and bin them
-	# TODO - re-write this so that we can specify arbitrary bins:
-	compute = np.array([0,0,0])
-	bin_lower = np.array([1e14,1e13,1e12])
-	bin_list = [[],[],[]]
-	if(bin15 == 'none'):
-		compute[0] = 1
-		bin15 = []
-	if(bin14 == 'none'):
-		compute[1] = 1
-		bin14 = []
-	if(bin13 == 'none'):
-		compute[2] = 1
-		bin13 = []
-	mass = np.zeros(len(h))
-	if(np.any(compute)):
-		for i in range(0,len(h)):
-			massi = np.sum(h[i+1]['mass'])
-			if (massi.in_units('Msol h**-1') > 1e14 and compute[0] == 1):
-				bin15.append(i)
-			elif (massi.in_units('Msol h**-1') > 1e13 and compute[1] == 1):
-				bin14.append(i)
-			elif (massi.in_units('Msol h**-1') > 1e12 and compute[2] == 1):
-				bin13.append(i)
-			print("Binned " + str(i+1) + " of " + str(len(h) + 1) + " halos.")
-
-
-	
-
-	# Get average density in each bin:
-	rhoV13 = np.sum(rhoVgrid[:,bin13]/rhoB[:,None],1)/len(bin13)
-	rhoV14 = np.sum(rhoVgrid[:,bin14]/rhoB[:,None],1)/len(bin14)
-	rhoV15 = np.sum(rhoVgrid[:,bin15]/rhoB[:,None],1)/len(bin15)
-	
-	# Save data for future use:
-	pickle.dump([bin13,bin14,bin15],open(outname + "halo_bins.p","wb"))
-	pickle.dump([rhoV13,rhoV14,rhoV15],open(outname + "rho_bins.p","wb"))
-	
-	# Plot the results:
-	plt.semilogy(redshift,rhoV13,redshift,rhoV14,redshift,rhoV15)
-	plt.show()
-
-	return [bin13,bin14,bin15,rhoV13,rhoV14,rhoV15,redshift,rhoB]
-	
-	
-	
+	# Arbitrary bins:
+	if bins is None:
+		# Vector should contain the boundaries of the bins in question
+		bins = [1e12,1e13,1e14,1e15]
+	if len(redshift) != rhoVgrid.shape[0]:
+		raise Exception("Supplied redshift list does not match halo densities list.")
+	# Average density array:
+	rhoVav = np.zeros((len(redshift),len(bins)-1))
+	rhoVsd = np.zeros((len(redshift),len(bins)-1))
+	binList = []
+	for i in range(0,len(bins)-1):
+		inBins = np.where( (masses >= bins[i]) & (masses < bins[i+1]))
+		binList.append(inBins)
+		rhoVav[:,i] = np.mean(rhoVgrid[:,inBins[0]]/rhoB[:,None],axis=1)
+		rhoVsd[:,i] = np.sqrt(np.var(rhoVgrid[:,inBins[0]]/rhoB[:,None],axis=1))
+	return [rhoVav,rhoVsd,binList,redshift,rhoB]
+		
 
 if __name__ == "__main__":
     compute_densities_for_all_snapshots(sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5])
 
-def plot_halo_void_densities(zn,zr,rhoBn,rhoBr,bin13n,bin14n,bin15n,bin13r,bin14r,bin15r,rhoVin,rhoVir):
-	rhoV13n = np.mean(rhoVin[:,bin13n]/rhoBn[:,None],1)
-	rhoV13nstd = np.sqrt(np.var(rhoVin[:,bin13n]/rhoBn[:,None],1))
-	rhoV14n = np.mean(rhoVin[:,bin14n]/rhoBn[:,None],1)
-	rhoV14nstd = np.sqrt(np.var(rhoVin[:,bin14n]/rhoBn[:,None],1))
-	rhoV15n = np.mean(rhoVin[:,bin15n]/rhoBn[:,None],1)
-	rhoV15nstd = np.sqrt(np.var(rhoVin[:,bin15n]/rhoBn[:,None],1))
-	rhoV13r = np.mean(rhoVir[:,bin13r]/rhoBr[:,None],1)
-	rhoV13rstd = np.sqrt(np.var(rhoVir[:,bin13r]/rhoBr[:,None],1))
-	rhoV14r = np.mean(rhoVir[:,bin14r]/rhoBr[:,None],1)
-	rhoV14rstd = np.sqrt(np.var(rhoVir[:,bin14r]/rhoBr[:,None],1))
-	rhoV15r = np.mean(rhoVir[:,bin15r]/rhoBr[:,None],1)
-	rhoV15rstd = np.sqrt(np.var(rhoVir[:,bin15r]/rhoBr[:,None],1))
-	plt.semilogy(zn,rhoV13n,color=(1,0,0))
-	plt.semilogy(zn,rhoV14n,color=(0,1,0))
-	plt.semilogy(zn,rhoV15n,color=(0,0,1))
-	plt.semilogy(zr,rhoV13r,color=(1,1,0))
-	plt.semilogy(zr,rhoV14r,color=(1,0,1))
-	plt.semilogy(zr,rhoV15r,color=(0,1,1))
-	plt.fill_between(zn,rhoV13n - rhoV13nstd, rhoV13n + rhoV13nstd,color=(0.5,0,0))
-	plt.fill_between(zn,rhoV14n - rhoV14nstd, rhoV14n + rhoV14nstd,color=(0,0.5,0))
-	plt.fill_between(zn,rhoV15n - rhoV15nstd, rhoV15n + rhoV15nstd,color=(0,0,0.5))
-	plt.fill_between(zr,rhoV13r - rhoV13rstd, rhoV13r + rhoV13rstd,color=(0.5,0.5,0))
-	plt.fill_between(zr,rhoV14r - rhoV14rstd, rhoV14r + rhoV14rstd,color=(0.5,0,0.5))
-	plt.fill_between(zr,rhoV15r - rhoV15rstd, rhoV15r + rhoV15rstd,color=(0,0.5,0.5))
+# Halves the RGB values of a specified color
+def half_color(color):
+	if(len(color) != 3):
+		raise Exception("Colour must be a three element tuple.")
+	return (color[0]/2,color[1]/2,color[2]/2)
+
+# Construct a set of ncolors even spaced colours in rgb space.
+def construct_color_list(n,ncolors):
+	ncbrt = np.ceil(np.cbrt(ncolors))
+	if(n > ncolors):
+		raise Exception("Requested colour exceeds maximum specified number of colours. Specify more colours.")
+	k = np.floor(n/(ncbrt**2))
+	j = np.floor((n - k*ncbrt**2)/ncbrt)
+	i = (n - k*ncbrt**2 - j*ncbrt)
+	return (i/(ncbrt-1),j/(ncbrt-1),k/(ncbrt-1))
+
+# Returns the specified number in scientific notation:
+def scientificNotation(x,latex=False,s=2):
+	log10x = np.log10(x)
+	z = np.floor(log10x).astype(int)
+	y = 10.0**(log10x - z)
+	resultString = "10^{" + "{0:0d}".format(z) + "}"
+	if np.floor(y) != 1.0:
+		resultString = ("{0:." + str(s) + "g}").format(y) + "\\times " + resultString
+	if latex:
+		resultString = "$" + resultString + "$"
+	return resultString
+
+# Plot binned halo densities as a function of redshift
+def plot_halo_void_densities(z,rhoVnav,rhoVnsd,rhoVrav,rhoVrsd,bins):
+	binNo = len(bins) - 1
+	legendList = []
+	# Want to format bins in scientific notation:
+	
+	for k in range(0,binNo):
+		plt.semilogy(z,rhoVnav[:,k],color=construct_color_list(k+1,2*binNo))
+		plt.fill_between(z,rhoVnav[:,k] - rhoVnsd[:,k],rhoVnav[:,k] + rhoVnsd[:,k],color=half_color(construct_color_list(k+1,2*binNo)))
+		legendList.append('Halo Density, $' + scientificNotation(bins[k]) + '$ - $' + scientificNotation(bins[k+1]) + ' M_{sol}/h$')
+	for k in range(0,binNo):
+		plt.semilogy(z,rhoVrav[:,k],color=construct_color_list(binNo + k+1,2*binNo))
+		plt.fill_between(z,rhoVrav[:,k] - rhoVrsd[:,k],rhoVrav[:,k] + rhoVrsd[:,k],color=half_color(construct_color_list(binNo + k+1,2*binNo)))
+		legendList.append('Anti-halo Density, $' + scientificNotation(bins[k]) + '$ - $' + scientificNotation(bins[k+1]) + ' M_{sol}/h$')
 	plt.xlabel('z')
 	plt.ylabel('(Local Density)/(Background Density)')
-	plt.legend(['Halo Density, $10^{12} - 10^{13} M_{sol}/h$','Halo Density, $10^{13} - 10^{14} M_{sol}/h$','Halo Density, $10^{14} - 10^{15} M_{sol}/h$','Void Density, $10^{12} - 10^{13} M_{sol}/h$','Void Density, $10^{13} - 10^{14} M_{sol}/h$','Void Density, $10^{14} - 10^{15} M_{sol}/h$'])
+	plt.legend(legendList)
 	plt.show()
 
 #[bin13n,bin14n,bin15n] = pickle.load(open("unreversed/density_plot_outfile_halo_bins.p","rb"))
