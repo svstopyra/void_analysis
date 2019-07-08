@@ -112,7 +112,7 @@ def compute_densities_for_all_snapshots(base,snapname,snaps_to_process='all',suf
 					rhoVgrid[counter,:] = rhoVi
 				else:
 					print('Processing snapshot ' + str(i))
-					rhoVi = compute_halo_densities(snapname + "{:0>3d}".format(i),s,h)				
+					rhoVi = compute_halo_densities(snapname + "{:0>3d}".format(i) + suffix,s,h)				
 					# Add this row to the combined data:
 					rhoVgrid[counter,:] = rhoVi
 				counter = counter + 1
@@ -171,7 +171,7 @@ def get_z_and_rhoB(snapname,snaps_to_process,suffix=''):
 		del si
 		gc.collect()
 		print("Extracted data from snap " + str(snaps_to_process[i]))
-	return [redshift,rhoB]
+	return [redshift,rhoB*(1 + redshift)**3]
 	
 # Function which takes the density data and plots it for different redshifts:
 def bin_halo_densities(rhoVgrid,masses,redshift,rhoB,bins=None):
@@ -188,62 +188,61 @@ def bin_halo_densities(rhoVgrid,masses,redshift,rhoB,bins=None):
 	rhoVsd = np.zeros((len(redshift),len(bins)-1))
 	binList = []
 	for i in range(0,len(bins)-1):
-		inBins = np.where( (masses >= bins[i]) & (masses < bins[i+1]))
+		inBins = np.where( (masses >= bins[i]) & (masses < bins[i+1]))[0]
 		binList.append(inBins)
 		rhoVav[:,i] = np.mean(rhoVgrid[:,inBins[0]]/rhoB[:,None],axis=1)
 		rhoVsd[:,i] = np.sqrt(np.var(rhoVgrid[:,inBins[0]]/rhoB[:,None],axis=1))
 	return [rhoVav,rhoVsd,binList,redshift,rhoB]
+
+
 		
 
 if __name__ == "__main__":
     compute_densities_for_all_snapshots(sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5])
 
-# Halves the RGB values of a specified color
-def half_color(color):
-	if(len(color) != 3):
-		raise Exception("Colour must be a three element tuple.")
-	return (color[0]/2,color[1]/2,color[2]/2)
+# Return the fraction of anti-halos that are below average density, as a function of mass
+def getUnderdenseFraction(rhoV,masses,massBins,rhoB,z=1.0):
+	logrhoV = np.log(rhoV/rhoB)
+	inBins = np.zeros(len(massBins)-1,dtype=int)
+	frac = np.zeros(len(massBins)-1)
+	sigma = np.zeros(len(massBins)-1)
+	for k in range(0,len(massBins)-1):
+		inThisBin = np.where((masses >= massBins[k]) & (masses < massBins[k+1]))[0]
+		inBins[k] = len(inThisBin)
+		voidLike = np.where(logrhoV[inThisBin] < 0.0)[0]
+		p = len(voidLike)/inBins[k]
+		frac[k] = p
+		sigma[k] = z*np.sqrt(p*(1.0 - p)/inBins[k])
+	return [frac,sigma,inBins]
 
-# Construct a set of ncolors even spaced colours in rgb space.
-def construct_color_list(n,ncolors):
-	ncbrt = np.ceil(np.cbrt(ncolors))
-	if(n > ncolors):
-		raise Exception("Requested colour exceeds maximum specified number of colours. Specify more colours.")
-	k = np.floor(n/(ncbrt**2))
-	j = np.floor((n - k*ncbrt**2)/ncbrt)
-	i = (n - k*ncbrt**2 - j*ncbrt)
-	return (i/(ncbrt-1),j/(ncbrt-1),k/(ncbrt-1))
+# Return the fraction of anti-halos that expanded since the previous time-step
+def getExpandingFraction(rhoVfull,redshift,masses,massBins,rhoBfull,z=1.0,mode=1):
+	logrhoV = np.log(rhoVfull/rhoBfull[:,None])
+	inBins = np.zeros(len(massBins)-1,dtype=int)
+	frac = np.zeros(len(massBins)-1)
+	sigma = np.zeros(len(massBins)-1)
+	noOfZs = logrhoV.shape[0]
+	# Get trend of expansion or collapse for all halos:
+	expansionDirection = np.polyfit(redshift,logrhoV,1)
+	# Only count halos as expanding it their general trend is towards lower density, and the last time step leads to their density decreasing.
+	if mode == 1:
+		expanding = np.where((expansionDirection[0,:] > 0.0) & (logrhoV[noOfZs-1,:] < logrhoV[noOfZs-2,:]))[0]
+	elif mode == 2:
+		expanding = np.where(logrhoV[noOfZs-1,:] < logrhoV[noOfZs-2,:])[0]
+	else:
+		expanding = np.where(logrhoV[noOfZs-1,:] < 0.0)[0]
+		
+	# Record the halos which are in each mass bin:
+	binList = []
+	for k in range(0,len(massBins)-1):
+		inThisBin = np.where((masses >= massBins[k]) & (masses < massBins[k+1]))[0]
+		binList.append(inThisBin)
+		inBins[k] = len(inThisBin)
+		p = len(np.intersect1d(expanding,inThisBin))/inBins[k]
+		frac[k] = p
+		sigma[k] = z*np.sqrt(p*(1.0 - p)/inBins[k])
+	return [frac,sigma,inBins,expanding,binList]
 
-# Returns the specified number in scientific notation:
-def scientificNotation(x,latex=False,s=2):
-	log10x = np.log10(x)
-	z = np.floor(log10x).astype(int)
-	y = 10.0**(log10x - z)
-	resultString = "10^{" + "{0:0d}".format(z) + "}"
-	if np.floor(y) != 1.0:
-		resultString = ("{0:." + str(s) + "g}").format(y) + "\\times " + resultString
-	if latex:
-		resultString = "$" + resultString + "$"
-	return resultString
-
-# Plot binned halo densities as a function of redshift
-def plot_halo_void_densities(z,rhoVnav,rhoVnsd,rhoVrav,rhoVrsd,bins):
-	binNo = len(bins) - 1
-	legendList = []
-	# Want to format bins in scientific notation:
-	
-	for k in range(0,binNo):
-		plt.semilogy(z,rhoVnav[:,k],color=construct_color_list(k+1,2*binNo))
-		plt.fill_between(z,rhoVnav[:,k] - rhoVnsd[:,k],rhoVnav[:,k] + rhoVnsd[:,k],color=half_color(construct_color_list(k+1,2*binNo)))
-		legendList.append('Halo Density, $' + scientificNotation(bins[k]) + '$ - $' + scientificNotation(bins[k+1]) + ' M_{sol}/h$')
-	for k in range(0,binNo):
-		plt.semilogy(z,rhoVrav[:,k],color=construct_color_list(binNo + k+1,2*binNo))
-		plt.fill_between(z,rhoVrav[:,k] - rhoVrsd[:,k],rhoVrav[:,k] + rhoVrsd[:,k],color=half_color(construct_color_list(binNo + k+1,2*binNo)))
-		legendList.append('Anti-halo Density, $' + scientificNotation(bins[k]) + '$ - $' + scientificNotation(bins[k+1]) + ' M_{sol}/h$')
-	plt.xlabel('z')
-	plt.ylabel('(Local Density)/(Background Density)')
-	plt.legend(legendList)
-	plt.show()
 
 #[bin13n,bin14n,bin15n] = pickle.load(open("unreversed/density_plot_outfile_halo_bins.p","rb"))
 #[rhoV13n,rhoV14n,rhoV15n] = pickle.load(open("unreversed/density_plot_outfile_rho_bins.p","rb"))
@@ -252,5 +251,61 @@ def plot_halo_void_densities(z,rhoVnav,rhoVnsd,rhoVrav,rhoVrsd,bins):
 #[rhoV13r,rhoV14r,rhoV15r] = pickle.load(open("reversed/density_plot_outfile_rho_bins.p","rb"))
 #[zr,rhoBr] = pickle.load(open("reversed/density_plot_outfile_z_rhoB_data.p","rb"))
 
+# Computed the density contrast in a sphere of increasing radius around the centre of a specified point. Radii are assumed to be in units of 'Mpc a h**-1', but should be dimensionless.
+def integratedDensityContrast(snap,centre,radii,rhoB = None):
+	if rhoB is None:
+		redshift = (1.0/snap.properties['a']) - 1.0
+		rhoB = pynbody.analysis.cosmology.rho_M(snap,0)*((1 + redshift)**3)
+	Delta = np.zeros(len(radii))
+	for k in range(0,len(radii)):
+		filt = pynbody.filt.Sphere(radii[k],centre)
+		radk = radii[k]*pynbody.units.Unit('Mpc a h**-1')
+		Delta[k] = (np.sum(snap[filt]['mass'])/((4.0*np.pi/3.0)*radk**3))/rhoB - 1.0
+		
+# Compute and store the centres of each halo in all the snapshots, so that we can track them:
+def haloHistory(base,snapname,snaps_to_process = None,suffix=''):
+	# Search for all available snaps if list isn't specified:
+	if snaps_to_process is None:
+		snapcount = 1
+		if os.path.isfile('./' + snapname + "{:0>3d}".format(snapcount) + suffix):
+			stop = 0
+			while(stop == 0):
+				if(os.path.isfile('./' + snapname + "{:0>3d}".format(snapcount + 1) + suffix)):
+					snapcount = snapcount + 1
+				else:
+					stop = 1
+			snaps_to_process = range(1,snapcount+1)
+		else:
+			raise Exception("Could not find snapshot files with snapname name: " + snapname)
+	else:
+		snapcount = len(snaps_to_process)
+	# Get them ony by one:
+	s = pynbody.load(base)
+	h = s.halos()
+	halo_centres = np.zeros((len(h),snapcount,3))
+	for j in range(0,snapcount):
+		sj = pynbody.load(snapname + "{:0>3d}".format(snaps_to_process[j]) + suffix)
+		b = pynbody.bridge.Bridge(s,sj)
+		for i in range(0,len(h)):
+			halo_centres[i,j,:] = pynbody.analysis.halo.center_of_mass(h[i+1])
+		
+		del sj
+		gc.collect()
+	return halo_centres
 
+# Volume of a set of points, computed using the convex hull
+def snapVolume(snap,hull=None):
+	if hull is None:
+		# Compute convex hull if we don't already have it.
+		hull = spatial.ConvexHull(snap['pos'])
+	# Get and return the volume:
+	return hull.volume
+
+# Effective radius of a set of points, defined as the radius of a sphere with volume equivalent to that of the convex hull of the points.
+def effectiveRadius(snap,hull=None):
+	if hull is None:
+		# Compute convex hull if we don't already have it.
+		hull = spatial.ConvexHull(snap['pos'])
+	volume = snapVolume(snap,hull=hull)
+	return np.cbrt(3*volume/(4*np.pi))	
 

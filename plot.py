@@ -7,6 +7,7 @@ import numpy as np
 import imageio
 import os
 import gc
+import matplotlib.pylab as plt
 
 # Plot the positions in a snapshot:
 def subsnap_scatter(subsnap,color_spec=(1,1,1),scale=1.0,type='2dvertex'):
@@ -84,5 +85,144 @@ def animate(snaplist,plot_command,save_directory="./",size=None,scaling=1):
 		for filename in filenames:
 			image = imageio.imread(filename)
 			writer.append_data(image)
+
+# Halves the RGB values of a specified color
+def half_color(color):
+	if(len(color) != 3):
+		raise Exception("Colour must be a three element tuple.")
+	return (color[0]/2,color[1]/2,color[2]/2)
+
+# Construct a set of ncolors even spaced colours in rgb space.
+def construct_color_list(n,ncolors):
+	ncbrt = np.ceil(np.cbrt(ncolors))
+	if(n > ncolors):
+		raise Exception("Requested colour exceeds maximum specified number of colours. Specify more colours.")
+	k = np.floor(n/(ncbrt**2))
+	j = np.floor((n - k*ncbrt**2)/ncbrt)
+	i = (n - k*ncbrt**2 - j*ncbrt)
+	return (i/(ncbrt-1),j/(ncbrt-1),k/(ncbrt-1))
+
+# Returns the specified number in scientific notation:
+def scientificNotation(x,latex=False,s=2):
+	log10x = np.log10(x)
+	z = np.floor(log10x).astype(int)
+	y = 10.0**(log10x - z)
+	resultString = "10^{" + "{0:0d}".format(z) + "}"
+	if np.floor(y) != 1.0:
+		resultString = ("{0:." + str(s) + "g}").format(y) + "\\times " + resultString
+	if latex:
+		resultString = "$" + resultString + "$"
+	return resultString
+
+# Plot binned halo densities as a function of redshift
+def plot_halo_void_densities(z,rhoVnav,rhoVnsd,rhoVrav,rhoVrsd,bins):
+	binNo = len(bins) - 1
+	legendList = []
+	# Want to format bins in scientific notation:
 	
+	for k in range(0,binNo):
+		plt.semilogy(z,rhoVnav[:,k],color=construct_color_list(k+1,2*binNo))
+		plt.fill_between(z,rhoVnav[:,k] - rhoVnsd[:,k],rhoVnav[:,k] + rhoVnsd[:,k],color=half_color(construct_color_list(k+1,2*binNo)))
+		legendList.append('Halo Density, $' + scientificNotation(bins[k]) + '$ - $' + scientificNotation(bins[k+1]) + ' M_{sol}/h$')
+	for k in range(0,binNo):
+		plt.semilogy(z,rhoVrav[:,k],color=construct_color_list(binNo + k+1,2*binNo))
+		plt.fill_between(z,rhoVrav[:,k] - rhoVrsd[:,k],rhoVrav[:,k] + rhoVrsd[:,k],color=half_color(construct_color_list(binNo + k+1,2*binNo)))
+		legendList.append('Anti-halo Density, $' + scientificNotation(bins[k]) + '$ - $' + scientificNotation(bins[k+1]) + ' M_{sol}/h$')
+	plt.xlabel('z')
+	plt.ylabel('(Local Density)/(Background Density)')
+	plt.legend(legendList)
+	plt.show()
+
+def computeHistogram(x,bins,z=1.0):
+	noInBins = np.zeros(len(bins)-1,dtype=int)
+	N = len(x)
+	prob = np.zeros(len(bins)-1)
+	sigma = np.zeros(len(bins)-1)
+	inBins = []
+	if N != 0:
+		for k in range(0,len(bins)-1):
+			inBins.append(np.where((x > bins[k]) & (x < bins[k+1]))[0])
+			noInBins[k] = len(inBins[k])
+			# Estimate of the probability density for this bin:
+			p = len(inBins[k])/N
+			prob[k] = p/(bins[k+1] - bins[k])
+			# Normal distribution approximation of the confidence interval on this density:
+			sigma[k] = z*np.sqrt(p*(1.0-p)/N)/(bins[k+1] - bins[k])
+	return [prob,sigma,noInBins,inBins]
+
+def binValues(values,bins):
+	binList = []
+	noInBins = np.zeros(len(bins)-1,dtype=int)
+	for k in range(0,len(bins)-1):
+		inThisBin = np.where((values >= bins[k]) & (values < bins[k+1]))[0]
+		binList.append(inThisBin)
+		noInBins[k] = len(inThisBin)		
+	return [binList,noInBins]
+
+# Plot a histogram, but include error bars for the confidence interval of the uncertainty
+def histWithErrors(p,sigma,bins):
+	x = (bins[1:len(bins)] + bins[0:(len(bins)-1)])/2
+	width = bins[1:len(bins)] - bins[0:(len(bins)-1)]
+	plt.bar(x,p,width=width,yerr=sigma,alpha=0.5)
+
+# Histogram of halo densities
+def haloHistogram(logrho,logrhoBins,masses,massBins,massBinList = None,massBinsToPlot = None,density=True,logMassBase = None):
+	# Plot all the mass bins unless otherwise specified:
+	if massBinsToPlot is None:
+		massBinsToPlot = range(0,len(massBins)-1)
+	# Bin the masses of the halos if this has not already been supplied.
+	if massBinList is None:
+		[massBinList,noInBins] = binValues(masses,massBins)
+	legendList = []
+	for k in massBinsToPlot:
+		[p,sigma,noInBins,inBins] = computeHistogram(logrho[massBinList[k]],logrhoBins)
+		histWithErrors(p,sigma,logrhoBins)
+		if logMassBase is None:
+			legendList.append('Average density, $' + scientificNotation(massBins[k]) + '$ - $' + scientificNotation(massBins[k+1]) + ' M_{sol}/h$')
+		else:
+			# Exponentiate the masses if they were supplied in log space:
+			legendList.append('Average density, $' + scientificNotation(logMassBase**massBins[k]) + '$ - $' + scientificNotation(logMassBase**massBins[k+1]) + ' M_{sol}/h$')
+		
+	plt.xlabel('$log(\\rho/\\bar{\\rho})$')
+	plt.ylabel('Probability Density')
+	plt.legend(legendList)
+	plt.show()
+
+# Plot Fraction of halos in a set of mass bins that are underdense:
+def plotUnderdenseFraction(frac,sigma,logMassBins):
+	# frac and sigma should be computed by halo_analysis.getExpansionFraction
+	# Assuming given in log10 mass bins:
+	massCentres = 10**((logMassBins[1:len(logMassBins)] + logMassBins[0:(len(logMassBins)-1)])/2)
+	fig, ax = plt.subplots()
+	ax.errorbar(massCentres,frac,yerr=sigma)
+	ax.set_xscale('log')
+	plt.xlabel('Mass bin$/M_{sol}/h$')
+	plt.ylabel('Underdense fraction at z = 0')
+	plt.show()
+
+# Plot average density in each of the supplies mass bins:
+def plotMassBinDensity(rhoV,binList,logMassBins):
+	massCentres = 10**((logMassBins[1:len(logMassBins)] + logMassBins[0:(len(logMassBins)-1)])/2)
+	fig, ax = plt.subplots()
+	rhoVav = np.zeros(len(massCentres))
+	rhoVsd = np.zeros(len(massCentres))
+	for k in range(0,len(rhoVav)):
+		if len(binList[k] != 0):
+			rhoVav[k] = np.mean(rhoV[binList[k]])
+			rhoVsd[k] = np.sqrt(np.var(rhoV[binList[k]])/len(binList[k]))
+	ax.errorbar(massCentres,rhoVav,yerr=rhoVsd)
+	ax.set_xscale('log')
+	ax.set_yscale('log')
+	plt.xlabel('Mass bin$/M_{sol}/h$')
+	plt.ylabel('$\\langle\\rho\\rangle/\\bar{\\rho}$')
+	plt.show()
+
 	
+
+
+
+
+		
+
+
+

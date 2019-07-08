@@ -25,8 +25,10 @@ def get_nearest_halos(centre,halo_list,coms='None',neighbours=1):
 def halo_centres_and_mass(h,save_file='none'):
 	halo_centres = np.zeros([len(h),3])
 	halo_masses = np.zeros(len(h))
+	units = sn['pos'].units
+	boxsize = sn.properties['boxsize'].ratio(sn['pos'].units)
 	for k in range(0,len(h)):
-		halo_centres[k,:] = pynbody.analysis.halo.center_of_mass(h[k+1])
+		halo_centres[k,:] = periodicCentre(h[k+1],boxsize,units=units)
 		halo_masses[k] = np.sum(h[k+1]['mass'])
 	if(save_file != 'none'):
 		pickle.dump([halo_centres,halo_masses],open(save_file,"wb"))
@@ -36,9 +38,36 @@ def halo_centres_and_mass(h,save_file='none'):
 def void_centres(sn,sr,hr):
 	void_centre_list = np.zeros([len(hr),3])
 	b = pynbody.bridge.Bridge(sn,sr)
+	units = sn['pos'].units
+	boxsize = sn.properties['boxsize'].ratio(sn['pos'].units)
 	for k in range(0,len(hr)):
-		void_centre_list[k,:] = pynbody.analysis.halo.center_of_mass(b(hr[k+1]))
+		void_centre_list[k,:] = periodicCentre(b(hr[k+1]),boxsize,units=units)
 	return void_centre_list
+
+# Get the centre of mass of a system of points, taking into account periodicity:
+def periodicCentre(snap,periodicity,units = "Mpc a h**-1"):
+	if np.isscalar(periodicity):
+		period = (periodicity,periodicity,periodicity)
+	else:
+		period = periodicity
+	if(len(period) != 3):
+		raise Exception("Periodicity must be a length 3 vector or a scalar.")
+	# Map everything into angles so that we can properly account for how close particles are:
+	theta = np.zeros((len(snap),3))
+	theta[:,0] = (snap['pos'][:,0].in_units(units))*2.0*np.pi/period[0]
+	theta[:,1] = (snap['pos'][:,1].in_units(units))*2.0*np.pi/period[1]
+	theta[:,2] = (snap['pos'][:,2].in_units(units))*2.0*np.pi/period[2]
+	M = np.sum(snap['mass'])
+	xi = np.cos(theta)
+	zeta = np.sin(theta)
+	# Angular averages:
+	xibar = np.sum(snap['mass'][:,None]*xi,0)/M
+	zetabar = np.sum(snap['mass'][:,None]*zeta,0)/M
+	# Back to theta:
+	thetabar = np.arctan2(-zetabar,-xibar) + np.pi
+	return period*thetabar/(2.0*np.pi)
+	
+	
 	
 # Converts a list of reversed simulation halos to unreversed simulation voids:
 def anti_halos_to_voids(ah_list,sn,sr):
