@@ -13,6 +13,9 @@ import pickle
 import multiprocessing as mp
 import matplotlib.pylab as plt
 import gc
+from void_analysis.context import periodicCentre, halo_centres_and_mass, combineHalos
+from void_analysis.snapedit import wrap, unwrap
+from void_analysis.plot import binValues
 
 """# Process only a single snapshot
 def evaluate(arg1):
@@ -285,27 +288,263 @@ def haloHistory(base,snapname,snaps_to_process = None,suffix=''):
 	halo_centres = np.zeros((len(h),snapcount,3))
 	for j in range(0,snapcount):
 		sj = pynbody.load(snapname + "{:0>3d}".format(snaps_to_process[j]) + suffix)
+		units = sj['pos'].units
+		boxsize = sj.properties['boxsize'].ratio(units)
 		b = pynbody.bridge.Bridge(s,sj)
 		for i in range(0,len(h)):
-			halo_centres[i,j,:] = pynbody.analysis.halo.center_of_mass(h[i+1])
+			halo_centres[i,j,:] = periodicCentre(h[i+1],boxsize,units=units)
 		
 		del sj
 		gc.collect()
 	return halo_centres
 
+# Compute the convex hull of the set of particles, accounting for the periodic boundary conditions by properly unwrapping them relative to the centre of mass.
+def getConvexHull(snap):
+	units = snap['pos'].units
+	boxsize = snap.properties['boxsize'].ratio(units)
+	centre = periodicCentre(snap,boxsize,units=units)
+	hull = spatial.ConvexHull(unwrap(snap['pos'] - centre,boxsize) + centre)
+	return hull
+	
+
 # Volume of a set of points, computed using the convex hull
 def snapVolume(snap,hull=None):
 	if hull is None:
-		# Compute convex hull if we don't already have it.
-		hull = spatial.ConvexHull(snap['pos'])
+		hull = getConvexHull(snap)
 	# Get and return the volume:
 	return hull.volume
 
 # Effective radius of a set of points, defined as the radius of a sphere with volume equivalent to that of the convex hull of the points.
 def effectiveRadius(snap,hull=None):
 	if hull is None:
-		# Compute convex hull if we don't already have it.
-		hull = spatial.ConvexHull(snap['pos'])
+		hull = getConvexHull(snap)
 	volume = snapVolume(snap,hull=hull)
-	return np.cbrt(3*volume/(4*np.pi))	
+	return np.cbrt(3*volume/(4*np.pi))
 
+# Volume weighted centre of a set of points. Requires the volume weight for each point.
+def volumeWeightedCentre(snap,Vi):
+	if(len(Vi) == len(snap)):
+		# Assume that this is just the volume weights of the snap:
+		return np.sum(snap['pos']*Vi[:,None],0)/np.sum(Vi)
+	else:
+		# Assume we have been given the full list of volumes for all particles, and we have to extract the right volumes:
+		return np.sum(snap['pos']*Vi[snap['iord'],None],0)/np.sum(Vi[snap['iord']])
+
+# Compute a void stack, using the anti-halo definition of a void:
+def stackAntiHaloVoids(sn,sr,hr,Vi,rbins,dzbins,Reff=None,vwb = None,densityCutoff=None):
+	b = pynbody.bridge.Bridge(sn,sr)
+	if Reff is None:
+		# Compute effective radii for all anti-halos
+		Reff = np.zeros(len(hr))
+		for k in range(0,len(hr)):
+			Reff[k] = effectiveRadius(b(hr[k+1]))
+	if vwb is None:
+		# Compute the volume weighted barycentre (vwb):
+		vwb = np.zeros((len(hr),3))
+		for k in range(0,len(hr)):
+			vwb[k,:] = volumeWeightedCentre(b(hr[k+1]),Vi)
+	# Figure out which voids belong in each bin:
+	[rbinList,noInBins] = binValues(Reff,rbins)
+	
+	# Cosmological average density (for filtering void candidates):
+	redshift = (1.0/sn.properties['a']) - 1.0
+	rhoB = pynbody.analysis.cosmology.rho_M(sn,0)*(1 + redshift)**3
+	
+	# Density for each rbin:
+	ndz = np.zeros((len(rbins)-1,len(dzbins) - 1,len(dzbins) - 1))
+	# Boxsize, so we can account for wrapping:
+	wrapScale = sn.properties['boxsize'].ratio(sn['pos'].units)
+	
+	# Compute density profiles:	
+	for j in range(0,len(rbins)-1):
+		# Filter for core densities that are too high to count as voids:
+		if(densityCutoff is not None):
+			tooDense = []
+			for k in range(0,len(rbinList[j])):
+				radii = np.sqrt(np.sum((b(hr[rbinList[j][k]+1])['pos'] - vwb[rbinList[j][k],:])**2,1))
+				inCore = np.where(radii < Reff[rbinList[j][k]]/4)
+				rhoCore = np.sum(b(hr[rbinList[j][k]+1])['mass'])/((4*np.pi/3)*(Reff[rbinList[j][k]]/4)**3)
+				if(rhoCore > densityCutoff*rhoB):
+					tooDense.append(k)
+			inRange = np.setdiff(rbinList[j],tooDense)
+		else:
+			inRange = rbinList[j]
+		# Compute the stack density profile:
+		ndz[j,:,:] = stackAntiHalosInRange(sn,inRange,hr,b,vwb,dzbins,wrapScale,rhoB)
+	return ndz
+		
+		
+	
+# Convert (x,y,z) co-ordinates to line of sight (d = \sqrt{x^2 + y^2},|z|) co-ordinates
+def xyz_to_dz(xyz):
+	dz = np.zeros((len(xyz),2))
+	dz[:,0] = np.sqrt(xyz[:,0]**2 + xyz[:,1]**2)
+	dz[:,1] = np.abs(xyz[:,2])
+	return dz
+
+# Stack all the anti-halos in the specified range (assumes that the stack has already been filtered for negligible voids and any we wish to skin, etc...)
+def stackAntiHalosInRange(sn,inRange,hr,bridge,vwb,dzbins,wrapScale,rhoB):
+	nVoids = len(inRange) # No. of voids in stack
+	nStack = np.zeros(len(inRange)+1,dtype=int) # Cumulative number of particles surrounding each void
+	endRadius = dzbins[len(dzbins)-1]
+	ndz = np.zeros((len(dzbins)-1,len(dzbins)-1))
+	# Go through the voids one by one, adding particles to the stack:
+	for k in range(0,nVoids):
+		print("Done " + str(k+1) + " of " + str(nVoids))
+		# Cutout all particles within the specified radius of the void:
+		cutout = pynbody.filt.Sphere(endRadius,vwb[k])
+		# Get their (d,z) positions:
+		dzstack = xyz_to_dz(snapedit.unwrap(sn[cutout]['pos'] - vwb[k],wrapScale))
+		# Add them to the stack:
+		ndz = ndz + np.histogram2d(dzstack[:,0],dzstack[:,1],bins=dzbins,density=False)[0]
+	# Now normalise for volume, using the Jacobian factor in cylindrical co-ordinates:
+	dwidth = dzbins[1:len(dzbins)] - dzbins[0:(len(dzbins)-1)]
+	d = (dzbins[1:len(dzbins)] + dzbins[0:(len(dzbins)-1)])/2
+	zwidth = dzbins[1:len(dzbins)] - dzbins[0:(len(dzbins)-1)]
+	ndz = ndz/d[:,None] # Divide by jacobian factor
+	ndz = ndz/dwidth[:,None] # Divide by bin width along d direction
+	ndz = ndz/zwidth[None,:] # Divide by bin width along z direction (gives density/volume)
+	ndz = ndz/nVoids # Divide by number of voids (gives density/(volume*void))
+	ndz = ndz/(4*np.pi*rhoB) # Divide by angular factors (2*pi), and an additional factor of 2 (accounting for the fact that + and - z are stacked on top of each other), and the cosmological background density to get the density fraction.
+	return ndz	
+			
+	
+	
+	
+		
+	
+
+
+	
+# Compute the distance of each particle in the snapshot to the 64th nearest neighbour.
+def neighbourDistance(snap,noNeighbours=64,nblock=1000000,tree=None,returnTree = False):
+	N = len(snap)
+	# Want to compute the largest distance to one of the 64 nearest neighbours
+	hi = np.zeros(N)
+	# Have to perform this calculation in blocks, otherwise we risk running our of memory.
+	blocks = np.floor(N/nblock).astype(int)
+	if tree is None:
+		# Generate a kd tree if none exists already
+		tree = spatial.cKDTree(snap['pos'])
+	for i in range(0,blocks):
+		nearest = tree.query(snap['pos'][(i*nblock):((i+1)*nblock)],k=(noNeighbours+1))[0]
+		hi[(i*nblock):((i+1)*nblock)] = nearest[:,noNeighbours]
+	if N > blocks*nblock:
+		nearest = tree.query(snap['pos'][(blocks*nblock):N],k=(noNeighbours+1))[0]
+		hi[(blocks*nblock):N] = nearest[:,noNeighbours]
+	if returnTree:
+		return [hi,tree]
+	else:
+		return hi
+
+# Compute the volume weighted underdense fraction in each bin:
+def volumeWeightedUnderdenseFraction(sn,sr,antiHalos,antiHaloMasses,massBins,rhoB,volumeWeight=None,density=None,return_underdense=False):
+	b = pynbody.bridge.Bridge(sn,sr)
+	[binList,noInBins] = binValues(antiHaloMasses,massBins)
+	combinedVoids = []
+	if return_underdense:
+		underdense = []
+	vwf = np.zeros(len(binList))
+	if volumeWeight is None:
+		volumeWeight = sn['smooth']**3
+	if density is None:
+		density = sn['rho']
+	for k in range(0,len(binList)):
+		combinedVoids.append(combineHalos(sn,antiHalos,binList[k]))
+		underdense_frac = np.where(density[combinedVoids[k]['iord']] < rhoB)[0]
+		if return_underdense:
+			underdense.append(underdense_frac)
+		vwf[k] = np.sum(volumeWeight[combinedVoids[k]['iord']][underdense_frac])/np.sum(volumeWeight[combinedVoids[k]['iord']])
+	if return_underdense:
+		return [vwf,underdense_frac,combinedVoids]
+	else:
+		return vwf
+
+# Volume averaged density of some subset of particles. Requires the volumeWeights and density of the whole simulation snap to have been computed.
+def volumeWeightedDensity(subSnap,volumeWeight,density):
+	return np.sum(density[subSnap['iord']]*volumeWeight[subSnap['iord']])/np.sum(volumeWeight[subSnap['iord']])
+
+# Compute the volume-weighted averaged density in the supplied mass bins, by summing over all particles in the bin, rather than individual halos and then averaging them.
+def volumeWeightedDensityByBins(sn,antiHalos,antiHaloMasses,massBins,volumeWeight=None,density=None):
+	[binList,noInBins] = binValues(antiHaloMasses,massBins)
+	vad = np.zeros(len(binList))
+	if volumeWeight is None:
+		volumeWeight = sn['smooth']**3
+	if density is None:
+		density = sn['rho']
+	for k in range(0,len(binList)):
+		combinedVoids = combineHalos(sn,antiHalos,binList[k])
+		vad[k] = volumeWeightedDensity(combinedVoids,volumeWeight,density)
+	return vad
+		
+	
+		
+	
+
+# Class to store analysis data concerning a given snapshot of a simulation
+class SnapAnalysis:
+	def __init__(self,snapname,reverse_snapname,recompute=False,getHalos=False,getDensity=False,saveTree=False,loadStacking=False):
+		self.snap = pynbody.load(snapname)
+		self.rev = pynbody.load(reverse_snapname)
+		self.snapname = snapname
+		self.reversename = reverse_snapname
+		self.b = pynbody.bridge.Bridge(self.snap,self.rev)
+		if getHalos:
+			self.halos = self.snap.halos()
+			self.antihalos = self.rev.halos()
+			if os.path.isfile('./' + snapname + "_halo_additional_properties.p") and (not recompute):
+				[self.halo_centres,self.halo_masses] = pickle.load(open('./' + snapname + "_halo_additional_properties.p","rb"))
+			else:
+				print("Computing halo centres and mass list")
+				[self.halo_centres,self.halo_masses] = halo_centres_and_mass(self.halos,'./' + snapname + "_halo_additional_properties.p")
+			if os.path.isfile('./' + reverse_snapname + "_halo_additional_properties.p") and (not recompute):
+				[self.antihalo_centres,self.antihalo_masses] = pickle.load(open('./' + reverse_snapname + "_halo_additional_properties.p","rb"))
+			else:
+				print("Computing halo centres and mass list")
+				[self.antihalo_centres,self.antihalo_masses] = halo_centres_and_mass(self.antihalos,'./' + reverse_snapname + "_halo_additional_properties.p")
+		if getDensity:
+			# Density information:
+			if(os.path.isfile('./' + snapname + "_rhoVi_data.p") and (not recompute) and getHalos):
+				self.rhoVi = pickle.load(open('./' + snapname + "_rhoVi_data.p","rb"))
+			else:
+				print("Computing halo density data...")
+				self.rhoVi = self.computeDensityData()
+			# Local volume information:
+			if(os.path.isfile('./' + snapname + "_volumes.p") and (not recompute)):
+				self.hi = pickle.load(open('./' + snapname + "_volumes.p","rb"))
+			else:
+				self.hi = self.nnDistance(saveTree)
+				pickle.dump(self.hi,open('./' + snapname + "_volumes.p","wb"))
+		if loadStacking:
+			if(os.path.isfile('./' + snapname + "_stack_data.p") and (not recompute) and getHalos):
+				[self.Reff,self.vwb] = pickle.load(open('./' + snapname + "_stack_data.p","rb"))
+			else:
+				print("Computing stacking statistics...")
+				self.Reff = np.zeros(len(self.antihalos))
+				self.vwb = np.zeros((len(self.antihalos),3))
+				for k in range(0,len(self.antihalos)):
+					self.Reff[k] = effectiveRadius(self.b(self.antihalos[k+1]))
+					self.vwb[k,:] = volumeWeightedCentre(self.b(self.antihalos[k+1]),self.hi**3)
+	# Compute local density for all the halos in the snapshot:
+	def computeDensityData(self):
+		if(not hasattr(self,'halos')):
+			self.halos = self.snap.halos()
+		return compute_halo_densities(self.snapname,self.snap,self.halos)
+	# Compute the nearest neighbour distance for each particle:
+	def nnDistance(self,saveKDTree):
+		print("Computing volumes for snapshot...")
+		if(os.path.isfile('./' + self.snapname + "_kdtree.p")):
+			tree = pickle.load(open('./' + self.snapname + "_kdtree.p","rb"))		
+		else:
+			# Build the tree from scratch:
+			print("Building kd-tree for snapshot.")
+			tree = spatial.cKDTree(self.snap['pos'])
+			if(saveKDTree):
+				pickle.dump(tree,open('./' + self.snapname + "_kdtree.p","wb"))
+		print("Computing max distance to nearest neighbours")
+		hi = neighbourDistance(self.snap,tree)
+		return hi
+
+
+			
+			

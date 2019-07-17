@@ -25,8 +25,8 @@ def get_nearest_halos(centre,halo_list,coms='None',neighbours=1):
 def halo_centres_and_mass(h,save_file='none'):
 	halo_centres = np.zeros([len(h),3])
 	halo_masses = np.zeros(len(h))
-	units = sn['pos'].units
-	boxsize = sn.properties['boxsize'].ratio(sn['pos'].units)
+	units = h[1]['pos'].units
+	boxsize = h[1].properties['boxsize'].ratio(h[1]['pos'].units)
 	for k in range(0,len(h)):
 		halo_centres[k,:] = periodicCentre(h[k+1],boxsize,units=units)
 		halo_masses[k] = np.sum(h[k+1]['mass'])
@@ -44,8 +44,8 @@ def void_centres(sn,sr,hr):
 		void_centre_list[k,:] = periodicCentre(b(hr[k+1]),boxsize,units=units)
 	return void_centre_list
 
-# Get the centre of mass of a system of points, taking into account periodicity:
-def periodicCentre(snap,periodicity,units = "Mpc a h**-1"):
+# Get the centre of a system of points each with some weight (eg mass, volume), taking into account periodicity:
+def periodicCentreWeighted(snap,weight,periodicity,units = pynbody.units.Unit("Mpc a h**-1")):
 	if np.isscalar(periodicity):
 		period = (periodicity,periodicity,periodicity)
 	else:
@@ -57,16 +57,19 @@ def periodicCentre(snap,periodicity,units = "Mpc a h**-1"):
 	theta[:,0] = (snap['pos'][:,0].in_units(units))*2.0*np.pi/period[0]
 	theta[:,1] = (snap['pos'][:,1].in_units(units))*2.0*np.pi/period[1]
 	theta[:,2] = (snap['pos'][:,2].in_units(units))*2.0*np.pi/period[2]
-	M = np.sum(snap['mass'])
+	M = np.sum(weight)
 	xi = np.cos(theta)
 	zeta = np.sin(theta)
 	# Angular averages:
-	xibar = np.sum(snap['mass'][:,None]*xi,0)/M
-	zetabar = np.sum(snap['mass'][:,None]*zeta,0)/M
+	xibar = np.sum(weight[:,None]*xi,0)/M
+	zetabar = np.sum(weight[:,None]*zeta,0)/M
 	# Back to theta:
 	thetabar = np.arctan2(-zetabar,-xibar) + np.pi
-	return period*thetabar/(2.0*np.pi)
-	
+	return (period*thetabar/(2.0*np.pi))*units
+
+# Centre of mass, taking into account periodicity:
+def periodicCentre(snap,periodicity,units = pynbody.units.Unit("Mpc a h**-1")):
+	return periodicCentreWeighted(snap,snap['mass'],periodicity,units = units)
 	
 	
 # Converts a list of reversed simulation halos to unreversed simulation voids:

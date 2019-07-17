@@ -16,7 +16,10 @@ def subsnap_scatter(subsnap,color_spec=(1,1,1),scale=1.0,type='2dvertex'):
 
 # Plot a set of specified points (wrapper for points3d):
 def point_scatter(r,color_spec=(1,1,1),scale=1.0,type='2dvertex'):
-	points3d(r[:,0],r[:,1],r[:,2],mode=type,color=color_spec,scale_factor=scale)
+	if len(r.shape) == 2:
+		points3d(r[:,0],r[:,1],r[:,2],mode=type,color=color_spec,scale_factor=scale)
+	else:
+		points3d(r[0],r[1],r[2],mode=type,color=color_spec,scale_factor=scale)
 
 # Returns a subsnap contains the particles within halos only that satisfy the specified filter
 #def halo_filter(halo_list,filt):
@@ -103,12 +106,12 @@ def construct_color_list(n,ncolors):
 	return (i/(ncbrt-1),j/(ncbrt-1),k/(ncbrt-1))
 
 # Returns the specified number in scientific notation:
-def scientificNotation(x,latex=False,s=2):
+def scientificNotation(x,latex=False,s=3):
 	log10x = np.log10(x)
 	z = np.floor(log10x).astype(int)
 	y = 10.0**(log10x - z)
 	resultString = "10^{" + "{0:0d}".format(z) + "}"
-	if np.floor(y) != 1.0:
+	if y != 1.0:
 		resultString = ("{0:." + str(s) + "g}").format(y) + "\\times " + resultString
 	if latex:
 		resultString = "$" + resultString + "$"
@@ -150,6 +153,12 @@ def computeHistogram(x,bins,z=1.0):
 			sigma[k] = z*np.sqrt(p*(1.0-p)/N)/(bins[k+1] - bins[k])
 	return [prob,sigma,noInBins,inBins]
 
+# Put the specified values in the specified bins:
+# values - values to bin (array)
+# bins - boundaries of the bins to use (will be one fewer bins than there are boundaries)
+# Returns:
+# binList - list of arrays giving the indices of all the elements of values that are in each bin.
+# noInBins - number of elements in each bin
 def binValues(values,bins):
 	binList = []
 	noInBins = np.zeros(len(bins)-1,dtype=int)
@@ -159,14 +168,30 @@ def binValues(values,bins):
 		noInBins[k] = len(inThisBin)		
 	return [binList,noInBins]
 
+# Returns the centres of the bins, specified from their boundaries. Has one fewer elements.
+def binCentres(bins):
+	return (bins[1:len(bins)] + bins[0:(len(bins)-1)])/2
+
+# Create bins for a list of values:
+def createBins(values,nBins,log=False):
+	if log:
+		# Logarithmically spaced bins:
+		return 10**np.linspace(np.log10(np.min(values)),np.log10(np.max(values)),nBins+1)
+	else:
+		# linearly spaced bins:
+		return np.linspace(np.min(values),np.max(values),nBins+1)
+
 # Plot a histogram, but include error bars for the confidence interval of the uncertainty
-def histWithErrors(p,sigma,bins):
+def histWithErrors(p,sigma,bins,ax = None):
 	x = (bins[1:len(bins)] + bins[0:(len(bins)-1)])/2
 	width = bins[1:len(bins)] - bins[0:(len(bins)-1)]
-	plt.bar(x,p,width=width,yerr=sigma,alpha=0.5)
+	if ax is None:
+		return plt.bar(x,p,width=width,yerr=sigma,alpha=0.5)
+	else:
+		return ax.bar(x,p,width=width,yerr=sigma,alpha=0.5)
 
 # Histogram of halo densities
-def haloHistogram(logrho,logrhoBins,masses,massBins,massBinList = None,massBinsToPlot = None,density=True,logMassBase = None):
+def haloHistogram(logrho,logrhoBins,masses,massBins,massBinList = None,massBinsToPlot = None,density=True,logMassBase = None,subplots=True,subplot_shape=None):
 	# Plot all the mass bins unless otherwise specified:
 	if massBinsToPlot is None:
 		massBinsToPlot = range(0,len(massBins)-1)
@@ -174,18 +199,48 @@ def haloHistogram(logrho,logrhoBins,masses,massBins,massBinList = None,massBinsT
 	if massBinList is None:
 		[massBinList,noInBins] = binValues(masses,massBins)
 	legendList = []
+	if subplots:
+		if subplot_shape is not None:
+			# Check that the requested shape makes sense:
+			if len(subplot_shape) != 2:
+				raise Exception("Sub-plots must be arranged on a 2d grid.")
+			if subplot_shape[0]*subplot_shape[1] < len(massBinsToPlot):
+				raise Exception("Not enough room in requested sub-plot arrangement to fit all plots.")
+			a = subplot_shape[0]
+			b = subplot_shape[1]
+		else:
+			nearestSquareRoot = np.ceil(np.sqrt(len(massBinsToPlot))).astype(int)
+			a = b = nearestSquareRoot
+		fig, ax = plt.subplots(nrows=a,ncols=b)
+		counter = 0
 	for k in massBinsToPlot:
 		[p,sigma,noInBins,inBins] = computeHistogram(logrho[massBinList[k]],logrhoBins)
-		histWithErrors(p,sigma,logrhoBins)
+		if subplots:
+			# Plot axes on a square grid:
+			i = np.floor(counter/b).astype(int)
+			j = np.mod(counter,b).astype(int)
+			histWithErrors(p,sigma,logrhoBins,ax[i,j])
+			if logMassBase is None:
+				ax[i,j].legend(['$' + scientificNotation(massBins[k]) + ' < M < ' + scientificNotation(massBins[k+1]) + ' M_{sol}/h$'])
+			else:
+				ax[i,j].legend(['$' + scientificNotation(logMassBase**massBins[k]) + '$ < M < $' + scientificNotation(logMassBase**massBins[k+1]) + ' M_{sol}/h$'])
+			if i == a - 1:
+				ax[i,j].set_xlabel('$log(\\langle\\rho\\rangle_V/\\bar{\\rho})$')
+			if j == 0:
+				ax[i,j].set_ylabel('Probability Density')
+			counter = counter + 1			
+		else:
+			# Plot everything on one axis:
+			histWithErrors(p,sigma,logrhoBins)
 		if logMassBase is None:
-			legendList.append('Average density, $' + scientificNotation(massBins[k]) + '$ - $' + scientificNotation(massBins[k+1]) + ' M_{sol}/h$')
+			legendList.append('$' + scientificNotation(massBins[k]) + ' < M < ' + scientificNotation(massBins[k+1]) + ' M_{sol}/h$')
 		else:
 			# Exponentiate the masses if they were supplied in log space:
-			legendList.append('Average density, $' + scientificNotation(logMassBase**massBins[k]) + '$ - $' + scientificNotation(logMassBase**massBins[k+1]) + ' M_{sol}/h$')
-		
-	plt.xlabel('$log(\\rho/\\bar{\\rho})$')
-	plt.ylabel('Probability Density')
-	plt.legend(legendList)
+			legendList.append('$' + scientificNotation(logMassBase**massBins[k]) + ' < M < ' + scientificNotation(logMassBase**massBins[k+1]) + ' M_{sol}/h$')
+	if not subplots:
+		plt.xlabel('$log(\\langle\\rho\\rangle_V/\\bar{\\rho})$')
+		plt.ylabel('Probability Density')
+		plt.legend(legendList)
 	plt.show()
 
 # Plot Fraction of halos in a set of mass bins that are underdense:
@@ -217,7 +272,31 @@ def plotMassBinDensity(rhoV,binList,logMassBins):
 	plt.ylabel('$\\langle\\rho\\rangle/\\bar{\\rho}$')
 	plt.show()
 
-	
+# Linear regression, together with various statistics
+def linearRegression(x,y,full=False,errors=False):
+	z = np.polyfit(x,y,deg=1)
+	a = z[0]
+	b = z[1]
+	xbar = np.mean(x)
+	ybar = np.mean(y)
+	n = len(x)
+	ssxx = np.sum((x - xbar)**2)
+	ssyy = np.sum((np.log10(y) - ybar)**2)
+	ssxy = np.sum((np.log10(y) - ybar)*(x - xbar))
+	ssxy = np.sum((np.log10(y) - ybar)*(x - xbar))
+	r2 = (ssxy**2)/(ssxx*ssyy)
+	s = np.sqrt((ssyy - (ssxy**2)/ssxx)/(n-2))
+	sea = s*np.sqrt((1/n) + (xbar**2)/ssxx)
+	seb = s*np.sqrt(ssxx)
+	if (full and errors):
+		return [a,b,sea,seb,ssxx,ssyy,ssyy,r2,s]
+	elif full:
+		return [a,b,ssxx,ssyy,ssyy,r2,s]
+	elif errors:
+		return [a,b,sea,seb]
+	else:
+		return [a,b]
+
 
 
 
