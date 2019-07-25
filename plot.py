@@ -1,5 +1,5 @@
 #
-from mayavi.mlab import points3d, text3d, plot3d
+from mayavi.mlab import points3d, text3d, plot3d, triangular_mesh
 from mayavi import mlab
 import pynbody
 from void_analysis import context
@@ -168,6 +168,13 @@ def binValues(values,bins):
 		noInBins[k] = len(inThisBin)		
 	return [binList,noInBins]
 
+def binValues2d(values,bins):
+	binList = []
+	for k in range(0,len(bins)-1):
+		inThisBin = np.where((values >= bins[k]) & (values < bins[k+1]))
+		binList.append(inThisBin)		
+	return binList
+
 # Returns the centres of the bins, specified from their boundaries. Has one fewer elements.
 def binCentres(bins):
 	return (bins[1:len(bins)] + bins[0:(len(bins)-1)])/2
@@ -297,8 +304,18 @@ def linearRegression(x,y,full=False,errors=False):
 	else:
 		return [a,b]
 
+# Plot the convex hull around a set of points:
+def plotConvexHull(snap,hull=None,color=(0,1,0),opacity=0.3,vertices=False):
+	if hull is None:
+		hull = halo_analysis.getConvexHull(snap)
+	if vertices:
+		point_scatter(snap['pos'][hull.vertices],color_spec=color,type='sphere')
+	triangular_mesh(snap['pos'][:,0],snap['pos'][:,1],snap['pos'][:,2],hull.simplices,color=color,opacity=opacity,representation = 'wireframe')
 
-
+def plotConvexHullFromPoints(pos,hull=None,color=(0,1,0),opacity=0.3,vertices=False):
+	if hull is None:
+		hull = spatial.ConvexHull(pos)
+	triangular_mesh(pos[:,0],pos[:,1],pos[:,2],hull.simplices,color=color,opacity=opacity,representation = 'wireframe')
 
 
 		

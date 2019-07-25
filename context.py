@@ -521,9 +521,49 @@ def localGroupTest(n1,n2,halo_centres,halo_masses,centre,testScale=1000):
 		print("TEST FAILED: Halo pair centre is " + str(boxDistance/testScale) + " Mpc/h from box centre.")
 	return [test1 & test2 & test3 & test4 & test5, nearestList]
 	
+# Estimate volume of a set of intersecting spheres by the monte carlo method:
+def spheresMonteCarlo(centres,radii,boundBox,tol=1e-3,count_max=100,nRand=None,nConv = 3):
+	boundVolume = boundBox[0]*boundBox[1]*boundBox[2]
+	counter = 0
+	diffRatio = 1
+	totalRands = 0
+	totalIncluded = 0
+	fracGuess = 0.5
+	inARow = 0
+	# Use a binomial distribution confidence interval to estimate how many randoms we need:
+	if nRand is None:
+		nRand = np.ceil(fracGuess*(1 - fracGuess)/(tol**2)).astype(int)
 	
-			
-			
+	while (counter < count_max):
+		rand = np.random.rand(nRand,3)
+		for j in range(0,3):
+			rand[:,j] = rand[:,j]*boundBox[j]
+		included = np.zeros(nRand,dtype=int)
+		for k in range(0,len(radii)):
+			inSphere = np.where(np.sqrt(np.sum((rand - centres[k,:])**2,1)) < radii[k])[0]
+			included[inSphere] = 1
+		noIncluded = np.sum(included)
+		totalIncluded = totalIncluded + noIncluded
+		totalRands = totalRands + nRand
+		frac = totalIncluded/totalRands
+		diffRatio = np.abs(fracGuess - frac)/frac
+		fracGuess = frac
+		sigma = np.sqrt(fracGuess*(1 - fracGuess)/totalIncluded)
+		print("fracGuess = " + str(frac))
+		print(counter)
+		if sigma < tol:
+			break
+		else:
+			nRand = np.ceil(fracGuess*(1 - fracGuess)/(tol**2)).astype(int) - nRand
+			if nRand < 0:
+				break
+		#print(diffRatio)
+		#print(frac)
+		counter = counter + 1
+	if (counter >= count_max):
+		print("Warning, failed to converge after " + str(count_max) + " iterations.")
+	volume = fracGuess*boundVolume
+	return volume
 	
 	
 	

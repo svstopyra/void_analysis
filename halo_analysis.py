@@ -13,9 +13,10 @@ import pickle
 import multiprocessing as mp
 import matplotlib.pylab as plt
 import gc
-from void_analysis.context import periodicCentre, halo_centres_and_mass, combineHalos
+from void_analysis.context import periodicCentre, halo_centres_and_mass, combineHalos, spheresMonteCarlo
 from void_analysis.snapedit import wrap, unwrap
-from void_analysis.plot import binValues
+from void_analysis.plot import binValues, binValues2d
+import scipy.optimize as optimize
 
 """# Process only a single snapshot
 def evaluate(arg1):
@@ -331,7 +332,7 @@ def volumeWeightedCentre(snap,Vi):
 		return np.sum(snap['pos']*Vi[snap['iord'],None],0)/np.sum(Vi[snap['iord']])
 
 # Compute a void stack, using the anti-halo definition of a void:
-def stackAntiHaloVoids(sn,sr,hr,Vi,rbins,dzbins,Reff=None,vwb = None,densityCutoff=None):
+def stackAntiHaloVoids(sn,sr,hr,Vi,rbins,ndzbins,Reff=None,vwb = None,densityCutoff=None):
 	b = pynbody.bridge.Bridge(sn,sr)
 	if Reff is None:
 		# Compute effective radii for all anti-halos
@@ -351,12 +352,18 @@ def stackAntiHaloVoids(sn,sr,hr,Vi,rbins,dzbins,Reff=None,vwb = None,densityCuto
 	rhoB = pynbody.analysis.cosmology.rho_M(sn,0)*(1 + redshift)**3
 	
 	# Density for each rbin:
-	ndz = np.zeros((len(rbins)-1,len(dzbins) - 1,len(dzbins) - 1))
+	dzbins = np.zeros((len(rbins)-1,ndzbins))
+	ndz2d = np.zeros((len(rbins)-1,ndzbins - 1,ndzbins - 1))
+	nr = np.zeros((len(rbins)-1,len(ndzbins) - 1))
+	rhodz2d = np.zeros((len(rbins)-1,ndzbins - 1,ndzbins - 1))
+	rhor = np.zeros((len(rbins)-1,ndzbins - 1))
 	# Boxsize, so we can account for wrapping:
 	wrapScale = sn.properties['boxsize'].ratio(sn['pos'].units)
 	
 	# Compute density profiles:	
 	for j in range(0,len(rbins)-1):
+		# Fill dzbins up to the relevant 3 times the radius:
+		dzbins[j] = np.linspace(0,3.0*rbins[j],ndzbins)
 		# Filter for core densities that are too high to count as voids:
 		if(densityCutoff is not None):
 			tooDense = []
@@ -370,8 +377,13 @@ def stackAntiHaloVoids(sn,sr,hr,Vi,rbins,dzbins,Reff=None,vwb = None,densityCuto
 		else:
 			inRange = rbinList[j]
 		# Compute the stack density profile:
-		ndz[j,:,:] = stackAntiHalosInRange(sn,inRange,hr,b,vwb,dzbins,wrapScale,rhoB)
-	return ndz
+		[rhodz1,ndz1,rhor1,nr1] = stackAntiHalosInRange(sn,inRange,hr,b,vwb,dzbins[j],wrapScale,rhoB)
+		rhodz2d[j,:,:] = rhodz1
+		ndz2d[j,:,:] = ndz1
+		rhor[j,:] = rhor1
+		nr[j,:] = nr1
+	return [rhodz2d,ndz2d,rhor,nr,dzbins]
+		
 		
 		
 	
@@ -388,32 +400,52 @@ def stackAntiHalosInRange(sn,inRange,hr,bridge,vwb,dzbins,wrapScale,rhoB):
 	nStack = np.zeros(len(inRange)+1,dtype=int) # Cumulative number of particles surrounding each void
 	endRadius = dzbins[len(dzbins)-1]
 	ndz = np.zeros((len(dzbins)-1,len(dzbins)-1))
-	# Go through the voids one by one, adding particles to the stack:
+	nr = np.zeros(len(dzbins)-1)
 	for k in range(0,nVoids):
-		print("Done " + str(k+1) + " of " + str(nVoids))
-		# Cutout all particles within the specified radius of the void:
 		cutout = pynbody.filt.Sphere(endRadius,vwb[k])
-		# Get their (d,z) positions:
-		dzstack = xyz_to_dz(snapedit.unwrap(sn[cutout]['pos'] - vwb[k],wrapScale))
-		# Add them to the stack:
-		ndz = ndz + np.histogram2d(dzstack[:,0],dzstack[:,1],bins=dzbins,density=False)[0]
+		# Get the (d,z) positions of all particles:
+		positions = snapedit.unwrap(sn[cutout]['pos'] - vwb[k],wrapScale)
+		dzstack = xyz_to_dz(positions)
+		ndz = ndz + np.histogram2d(dzstack[:,0],dzstack[:,1],bins=dzbins,density=False)[0]	
+		radius = np.sqrt(np.sum(positions**2,1))
+		nr = nr + np.histogram(radius,bins=dzbins,density=False)[0]
+		print("Done " + str(k+1) + " of " + str(nVoids))
 	# Now normalise for volume, using the Jacobian factor in cylindrical co-ordinates:
 	dwidth = dzbins[1:len(dzbins)] - dzbins[0:(len(dzbins)-1)]
 	d = (dzbins[1:len(dzbins)] + dzbins[0:(len(dzbins)-1)])/2
 	zwidth = dzbins[1:len(dzbins)] - dzbins[0:(len(dzbins)-1)]
-	ndz = ndz/d[:,None] # Divide by jacobian factor
-	ndz = ndz/dwidth[:,None] # Divide by bin width along d direction
-	ndz = ndz/zwidth[None,:] # Divide by bin width along z direction (gives density/volume)
-	ndz = ndz/nVoids # Divide by number of voids (gives density/(volume*void))
-	ndz = ndz/(4*np.pi*rhoB) # Divide by angular factors (2*pi), and an additional factor of 2 (accounting for the fact that + and - z are stacked on top of each other), and the cosmological background density to get the density fraction.
-	return ndz	
-			
-	
-	
+	rhodz = ndz/d[:,None] # Divide by jacobian factor
+	rhodz = rhodz/dwidth[:,None] # Divide by bin width along d direction
+	rhodz = rhodz/zwidth[None,:] # Divide by bin width along z direction (gives density/volume)
+	rhodz = rhodz/nVoids # Divide by number of voids (gives density/(volume*void))
+	rhodz = (rhodz*sn['mass'][0])/(4*np.pi*rhoB) # Divide by angular factors (2*pi), and an additional factor of 2 (accounting for the fact that + and - z are stacked on top of each other), and the cosmological background density to get the density fraction.
+	rhor = nr/(4*np.pi*(d**2)) # Divide by shell area
+	rhor = rhor/dwidth # Divide by shell thickness to get number density
+	rhor = rhor*(sn['mass'][0])/(nVoids*rhoB0) # Divide by number of voids to get 
+	return [rhodz,ndz,rhor,nr]
+
+
+# Ellipticity of a halo stack
+
+def haloStackEllipticity(sn,inRange,endRadius,centre,wrapScale,multiMass=True,tree=None,npar=-1):
+	nVoids = len(inRange)
+	# Second order moments matrix:
+	Iij = np.zeros((3,3))
+	# Generate a kd tree if none provided:
+	if tree is None:
+		tree = spatial.cKDTree(sn['pos'],boxsize=wrapScale)
+	for k in range(0,nVoids):
+		print("Done " + str(k+1) + " of " + str(nVoids))
+		#cutout = pynbody.filt.Sphere(endRadius,centre[k])
+		cutout = tree.query_ball_point(centre[k],endRadius,n_jobs=npar)
+		positions = unwrap(sn[cutout]['pos'] - centre[k],wrapScale)
+		if multiMass:
+			Iij = Iij + np.matmul(positions.transpose(),positions*sn[cutout]['mass'][:,None])
+		else:
+			Iij = Iij + sn['mass'][0]*np.matmul(positions.transpose(),positions)
+	return Iij/nVoids
 	
 		
-	
-
 
 	
 # Compute the distance of each particle in the snapshot to the 64th nearest neighbour.
@@ -545,6 +577,64 @@ class SnapAnalysis:
 		hi = neighbourDistance(self.snap,tree)
 		return hi
 
+# Void volumes from monte-carlo:
+def volumesFromMonteCarlo(sn,hr,void_centres,b,radiusList):	
+	volList = np.zeros(len(hr))
+	wrapLength = sn.properties['boxsize'].ratio(sn['pos'][0].units)
+	for k in range(0,len(hr)):
+		centresUnshifted = unwrap(b(hr[k+1])['pos'] - void_centres[k],wrapLength)
+		centres = centresUnshifted + np.abs(np.min(centresUnshifted))
+		boxLength = np.max(centres)
+		radii = radiusList[b(hr[k+1])['iord']]
+		# Only need percent level accuracy, really:
+		volList[k] = spheresMonteCarlo(centres,radii,[boxLength,boxLength,boxLength],tol=1e-2)
+		print("Done " + str(k+1) + " of " + str(len(hr)) + " anti-halos.")
+	return volList
+		
+# Ellipse as a function of theta, defined by y^2/a^2 + x^2/b^2 = 1
+def ellipseR(theta,a,b):
+	return a/np.sqrt(1 + ((a/b)**2-1)*np.cos(theta)**2)
 
-			
+# Fit elliptical model to different density bins:
+def ellipseFit(rhodz,X,Y,denBins,returnCovariance=False):
+	denBinsList = binValues2d(rhodz,denBins)
+	param = np.zeros((len(denBins)-1,2))
+	paramError = np.zeros((len(denBins)-1,2))
+	if returnCovariance:
+		cov = []
+	for k in range(0,len(denBins)-1):
+		thetaToFit = np.arctan(Y[denBinsList[k]]/X[denBinsList[k]])
+		RToFit = np.sqrt(X[denBinsList[k]]**2 + Y[denBinsList[k]]**2)
+		fit = optimize.curve_fit(ellipseR,thetaToFit,RToFit)
+		param[k,:] = fit[0]
+		paramError[k,:] = np.sqrt(np.diag(fit[1]))
+		if returnCovariance:
+			cov.append(fit[1])
+	if returnCovariance:
+		return [param,paramError,cov]
+	else:
+		return [param,paramError]
+
+# Compute eccentricity (or ellipticity) from a and b parameters of ellipse:
+def eccentricity(ab):
+	a = ab[:,0]
+	b = ab[:,1]
+	aIsSemiMajor = np.where(a > b)[0]
+	bIsSemiMajor = np.setdiff1d(range(0,len(a)),aIsSemiMajor)
+	ecc = np.zeros(len(a))
+	ecc[aIsSemiMajor] = np.sqrt(1 - b[aIsSemiMajor]**2/a[aIsSemiMajor]**2)
+	ecc[bIsSemiMajor] = np.sqrt(1 - a[bIsSemiMajor]**2/b[bIsSemiMajor]**2)
+	return ecc
+
+# Get the radius from the binned density profile:
+def radiusFromDensity(r,rhor,thresh = 0.5):
+	radii = np.zeros(len(rhor))
+	for k in range(0,len(radii)):
+		print(str(k))
+		f = lambda x: np.interp(x,r,rhor[k]) - thresh
+		if f(r[0])*f(r[-1]) > 0:
+			print("Warning: could not find Reff for k = " + str(k))
+		else:
+			radii[k] = optimize.brentq(f,r[0],r[-1])
+	return radii
 			
