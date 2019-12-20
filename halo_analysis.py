@@ -83,11 +83,11 @@ def halo_density(near64,mi):
 def compute_densities_for_all_snapshots(base,snapname,snaps_to_process='all',suffix=''):
 	# First find the snapshot files to be read in one by one:
 	snapcount = 1
-	if os.path.isfile('./' + snapname + "{:0>3d}".format(snapcount) + suffix):
+	if os.path.isfile(snapname + "{:0>3d}".format(snapcount) + suffix):
 		# Found snapshot files. Start by counting them
 		stop = 0
 		while(stop == 0):
-			if(os.path.isfile('./' + snapname + "{:0>3d}".format(snapcount + 1) + suffix)):
+			if(os.path.isfile(snapname + "{:0>3d}".format(snapcount + 1) + suffix)):
 				snapcount = snapcount + 1
 			else:
 				stop = 1				
@@ -106,13 +106,13 @@ def compute_densities_for_all_snapshots(base,snapname,snaps_to_process='all',suf
 		else:
 			snaprange = snaps_to_process
 		# One by one, load the snapshots, and compute the densities of these particles:
-		if os.path.isfile('./' + snapname + "rhoV_data.p"):
-			rhoVgrid = pickle.load(open('./' + snapname + "rhoV_data.p","rb"))
+		if os.path.isfile(snapname + "rhoV_data.p"):
+			rhoVgrid = pickle.load(open(snapname + "rhoV_data.p","rb"))
 		else:
 			counter = 0
 			for i in snaprange:
-				if(os.path.isfile('./' + snapname + "{:0>3d}".format(i) + "_rhoVi_data.p")):
-					rhoVi = pickle.load(open('./' + snapname + "{:0>3d}".format(i) + "_rhoVi_data.p","rb"))
+				if(os.path.isfile(snapname + "{:0>3d}".format(i) + "_rhoVi_data.p")):
+					rhoVi = pickle.load(open(snapname + "{:0>3d}".format(i) + "_rhoVi_data.p","rb"))
 					rhoVgrid[counter,:] = rhoVi
 				else:
 					print('Processing snapshot ' + str(i))
@@ -135,7 +135,6 @@ def compute_halo_densities(snapname,s,h):
 	b = pynbody.bridge.Bridge(si,s)
 	# Have to generate this data from scratch:	
 	rhoVi = np.zeros(len(h))	
-
 	# Fastest way to access this is actually to compute local density
 	# for all particle (not just the ones in halos), and then pull what we need from there:
 	rhos = si['rho']
@@ -153,9 +152,8 @@ def compute_halo_densities(snapname,s,h):
 		hi3 = hi3s[bhj['iord']]
 		rhoVi[j-1] = np.sum(rhos[bhj['iord']]*(hi3))/np.sum(hi3)
 		print("Completed " + str(j) +  " of " + str(len(h)) + " halos.\n")				
-
 	# Save data:
-	pickle.dump(rhoVi,open("./" + snapname + "_rhoVi_data.p","wb"))
+	pickle.dump(rhoVi,open(snapname + "_rhoVi_data.p","wb"))
 	# Garbage collection, since sometimes this doesn't happen correctly leading to memory errors:
 	del si
 	gc.collect()

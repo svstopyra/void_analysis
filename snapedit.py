@@ -319,4 +319,22 @@ def reorderSnap(snapname_in,snapname_out):
 	snew.write(filename=snapname_out,fmt=type(s))
 	return snew
 
+# Pads the points from a snapshot periodically, adding duplicates of particles from one end of the box to the other.
+def periodicPadding(snapshot,width,boxsize):
+	points = snapshot['pos']
+	indices = snapshot['iord']
+	plowx = np.where((points[:,0] > 0.0) & (points[:,0] <= width))
+	puppx = np.where((points[:,0] > boxsize - width) & (points[:,0] <= boxsize))
+	points_new = np.vstack((points,points[plowx] + np.array([boxsize,0,0]),points[puppx] - np.array([boxsize,0,0])))
+	indices = np.hstack((indices,indices[plowx[0]],indices[puppx[0]]))
+	plowx = np.where((points_new[:,1] > 0.0) & (points_new[:,1] <= width))
+	puppx = np.where((points_new[:,1] > boxsize - width) & (points_new[:,1] <= boxsize))
+	points_new = np.vstack((points_new,points_new[plowx] + np.array([0,boxsize,0]),points_new[puppx] - np.array([0,boxsize,0])))
+	indices = np.hstack((indices,indices[plowx[0]],indices[puppx[0]]))
+	plowx = np.where((points_new[:,2] > 0.0) & (points_new[:,2] <= width))
+	puppx = np.where((points_new[:,2] > boxsize - width) & (points_new[:,2] <= boxsize))
+	points_new = np.vstack((points_new,points_new[plowx] + np.array([0,0,boxsize]),points_new[puppx] - np.array([0,0,boxsize])))
+	indices = np.hstack((indices,indices[plowx[0]],indices[puppx[0]]))
+	return [points_new,indices]
+
 	
