@@ -1,0 +1,257 @@
+# Stacking functions
+import Corrfunc
+import scipy.spatial
+import numpy as np
+from . import snapedit
+import multiprocessing as mp
+from scipy.optimize import curve_fit
+
+# Compute correlation function for a given set of points (cross correlation if a second is specified)
+def simulationCorrelation(rBins,boxsize,data1,data2=None,nThreads = 1,weights1=None,weights2 = None):
+	
+	X1 = data1[:,0]
+	Y1 = data1[:,1]
+	Z1 = data1[:,2]
+	N1 = len(X1)
+	# Randoms for each dataset:
+	rand_N1 = 3*N1
+	X1rand = np.random.uniform(0,boxsize,rand_N1)
+	Y1rand = np.random.uniform(0,boxsize,rand_N1)
+	Z1rand = np.random.uniform(0,boxsize,rand_N1)
+	if data2 is not None:
+		X2 = data2[:,0]
+		Y2 = data2[:,1]
+		Z2 = data2[:,2]
+		N2 = len(X2)
+		rand_N2 = 3*N2
+		X2rand = np.random.uniform(0,boxsize,rand_N2)
+		Y2rand = np.random.uniform(0,boxsize,rand_N2)
+		Z2rand = np.random.uniform(0,boxsize,rand_N2)
+	if data2 is None:
+		# Auto-correlation:
+		DD1 = Corrfunc.theory.DD(1,nThreads,rBins,X1,Y1,Z1,periodic=True,boxsize=boxsize,weights1=weights1)
+		DR1 = Corrfunc.theory.DD(0,nThreads,rBins,X1,Y1,Z1,periodic=True,boxsize=boxsize,X2 = X1rand,Y2=Y1rand,Z2=Z1rand,weights1=weights1)
+		RR1 = Corrfunc.theory.DD(1,nThreads,rBins,X1rand,Y1rand,Z1rand,periodic=True,boxsize=boxsize,weights1=weights1)
+		xiEst = Corrfunc.utils.convert_3d_counts_to_cf(N1,N1,rand_N1,rand_N1,DD1,DR1,DR1,RR1)
+	else:
+		# Cross correlation:
+		D1D2 = Corrfunc.theory.DD(0,nThreads,rBins,X1,Y1,Z1,X2=X2,Y2=Y2,Z2=Z2,periodic=True,boxsize=boxsize,weights1=weights1,weights2=weights2)
+		D1R2 = Corrfunc.theory.DD(0,nThreads,rBins,X1,Y1,Z1,periodic=True,boxsize=boxsize,X2 = X2rand,Y2=Y2rand,Z2=Z2rand,weights1=weights1,weights2=weights2)
+		D2R1 = Corrfunc.theory.DD(0,nThreads,rBins,X2,Y2,Z2,periodic=True,boxsize=boxsize,X2 = X1rand,Y2=Y1rand,Z2=Z1rand,weights1=weights1,weights2=weights2)
+		R1R2 = Corrfunc.theory.DD(0,nThreads,rBins,X1rand,Y1rand,Z1rand,X2 = X2rand,Y2=Y2rand,Z2=Z2rand,periodic=True,boxsize=boxsize,weights1=weights1,weights2=weights2)
+		xiEst = Corrfunc.utils.convert_3d_counts_to_cf(N1,N2,rand_N1,rand_N2,D1D2,D1R2,D2R1,R1R2)
+	return xiEst
+	
+
+
+
+# Cross correlation of two sets of points:
+def getCrossCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,matterSnap,rMin = 0,rMax = np.inf,rRange = np.linspace(0.1,10,101),nThreads=12,boxsize = 200.0):
+	rFilter1 = np.where((ahRadii > rMin) & (ahRadii < rMax))[0]
+	rFilter2 = np.where((voidRadii > rMin) & (voidRadii < rMax))[0]
+	ahPos = ahCentres[rFilter1,:]
+	vdPos = voidCentres[rFilter2,:]
+	xiAM = simulationCorrelation(rRange,boxsize,ahPos,data2=snap['pos'],nThreads=nThreads,weights2 = snap['mass'])
+	xiVM = simulationCorrelation(rRange,boxsize,vdPos,data2=snap['pos'],nThreads=nThreads,weights2 = snap['mass'])
+	xiAV = simulationCorrelation(rRange,boxsize,ahPos,data2=vdPos,nThreads=nThreads)
+	return [xiAM,xiVM,xiAV]
+
+# Auto correlation of a set of points:
+def getAutoCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,matterSnap,rMin = 0,rMax = np.inf,rRange = np.linspace(0.1,10,101),nThreads=12,boxsize = 200.0):
+	rFilter1 = np.where((ahRadii > rMin) & (ahRadii < rMax))[0]
+	rFilter2 = np.where((voidRadii > rMin) & (voidRadii < rMax))[0]
+	ahPos = ahCentres[rFilter1,:]
+	vdPos = voidCentres[rFilter2,:]
+	xiAA = simulationCorrelation(rRange,boxsize,ahPos,nThreads=nThreads)
+	xiVV = simulationCorrelation(rRange,boxsize,vdPos,nThreads=nThreads)
+	return [xiAA,xiVV]
+
+# Plot the correlation function:
+def plotCrossCorrelations(rBins,xiAM,xiVM,xiAV,ax=None,rMin=0,rMax = np.inf):
+	rBinCentres = plot.binCentres(rBins)
+	if ax is None:
+		fig, ax = plt.subplots()
+	ax.plot(rBinCentres,xiAM,label="Antihalo-Matter cross correlation")
+	ax.plot(rBinCentres,xiVM,label="ZOBOV void-Matter cross correlation")
+	ax.plot(rBinCentres,xiAV,label="ZOBOV void-Antihalo cross correlation")
+	ax.set_xlabel('$r [\mathrm{Mpc}/h]$')
+	ax.set_ylabel('$\\xi(r)$',fontsize = 15)
+	ax.legend()
+	ax.tick_params(axis='both',labelsize=15)
+	ax.set_ylim([-1,5])
+	if rMin > 0:
+		if np.isfinite(rMax):
+			ax.set_title('$R_{\mathrm{eff}} = $' + scientificFormat(rMin) + '-' + scientificFormat(rMax) + '$\,\mathrm{Mpc}/h ($' + scientificFormat(RtoM(rMin,a,b)) + '-' + scientificFormat(RtoM(rMax,a,b)) + '$M_{\mathrm{sol}}/h)$')
+		else:
+			ax.set_title('$R_{\mathrm{eff}} > $' + scientificFormat(rMin) + '$\,\mathrm{Mpc}/h ($' + scientificFormat(RtoM(rMin,a,b)) + '$M_{\mathrm{sol}}/h)$')
+	else:
+		if np.isfinite(rMax):
+			ax.set_title('$R_{\mathrm{eff}} < $' + scientificFormat(rMax) + '$\,\mathrm{Mpc}/h ($' + scientificFormat(RtoM(rMax,a,b)) + '$M_{\mathrm{sol}}/h)$')
+		else:
+			ax.set_title('All voids/anti-halos')
+
+
+# Stacking:
+def stackVoids(voidCentres,snap,rBins,nThreads=12,voidScales=None):
+	if voidScales is None:
+		voidScales = np.ones(len(voidCentres))
+	boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+	massCentres = snap['pos'].in_units("Mpc a h**-1")
+	massValues = snap['mass'].in_units("Msol h**-1")
+	# Get pairs:
+	DD = Corrfunc.theory.DD(0,nThreads,rBins,voidCentres[:,0],voidCentres[:,1],voidCentres[:,2],X2=massCentres[:,0],Y2=massCentres[:,1],Z2=massCentres[:,2],weights2=massValues,periodic=True,boxsize=boxsize)
+	# Get void volume sum:
+	rBinsUp = rBins[1:]
+	rBinsLow = rBins[0:-1]
+	volumes = 4*np.pi*(rBinsup**3 - rBinsLow**3)/3
+	volsum = np.sum(voidScales**3)*volumes
+
+def getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=12,tree=None,method="poisson",vorVolumes=None):
+	if (vorVolumes is None) and (method == "VTFE"):
+			raise Exception("Must provide voronoi volumes for VTFE.")
+	# Generate KDTree
+	boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+	if tree is None:
+		tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
+	# Volumes of the rBins
+	rBinsUp = rBins[1:]
+	rBinsLow = rBins[0:-1]
+	volumes = 4*np.pi*(rBinsUp**3 - rBinsLow**3)/3
+	# Find particles:
+	nPairsList = np.zeros((len(voidCentres),len(rBins[1:])),dtype=np.int64)
+	volumesList = np.outer(voidRadii**3,volumes)
+	if method != "VTFE":
+		for k in range(0,len(nPairsList)):
+			nPairsList[k,:] = tree.count_neighbors(scipy.spatial.cKDTree(voidCentres[[k],:],boxsize=boxsize),rBins*voidRadii[k],cumulative=False)[1:]
+	else:
+		for k in range(0,len(rBins)):
+			indices = tree.query_ball_point(voidCentres,rBins[k]*voidRadii,n_jobs=nThreads)
+			listLengths = np.array([len(list) for list in indices])
+			volSum = np.array([np.sum(vorVolumes[list]) for list in indices])
+			if k == 0:
+				nPairsList[:,k] = listLengths
+				volumesList[:,k] = volSum
+			else:
+				nPairsList[:,k] = listLengths - nPairsList[:,k-1]
+				volumesList[:,k] = volSum - volumesList[:,k-1]
+	return [nPairsList,volumesList]
+
+
+# Direct pair counting in rescaled variables:
+def stackScaledVoids(voidCentres,voidRadii,snap,rBins,nThreads=12,tree=None,method="poisson",vorVolumes=None,nPairsList=None,volumesList=None):
+	if (nPairsList is None) or (volumesList is None):
+		[nPairsList,volumesList] = getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=nThreads,tree=tree,method=method,vorVolumes=vorVolumes)
+	if method == "poisson":
+		nbarj = (np.sum(nPairsList,0) + 1)/(np.sum(volumesList,0))
+		sigmabarj = np.sqrt(len(voidCentres)*np.sum(nPairsList,0))/np.sum(volumesList,0)
+	elif method == "naive":
+		nbarj = np.sum(nPairsList/volumesList,0)/len(voidCentres)
+		sigmabarj = np.std(nPairsList/volumesList,0)/np.sqrt(len(voidCentres)-1)
+	elif method == "VTFE":
+		nbarj = np.sum(nPairsList,0)/(np.sum(volumesList,0))
+		sigmabarj = np.sqrt(len(voidCentres)*np.sum(nPairsList,0))/np.sum(volumesList,0)
+	else:
+		raise Exception("Unrecognised stacking method.")
+		
+	return [nbarj,sigmabarj]
+
+def stackVoidsWithFilter(voidCentres,voidRadii,filterToApply,snap,rBins=None,nPairsList=None,volumesList=None,nThreads=12,tree=None,method="poisson",vorVolumes=None):
+	if rBins is None:
+		rBins = np.linspace(0,3,31)
+	if (nPairsList is None) or (volumesList is None):
+		[nPairsList,volumesList] = getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=nThreads,tree=tree,method=method,vorVolumes=vorVolumes)
+	return stackScaledVoids(voidCentres[filterToApply,:],voidRadii[filterToApply],snap,rBins,nThreads=nThreads,tree=tree,method=method,nPairsList=nPairsList[filterToApply,:],volumesList=volumesList[filterToApply])
+		
+
+
+def meanDensityContrast(voidParticles,volumes,nbar):
+	return (len(voidParticles)/(nbar*np.sum(volumes[voidParticles]))) - 1.0
+
+def lambdaVoid(voidParticles,volumes,nbar,radius):
+	return meanDensityContrast(voidParticles,volumes,nbar)*((radius)**(1.2))
+
+# Central Density:
+def centralDensity(voidCentre,voidRadius,positions,volumes,masses,boxsize=None,tree=None,centralRatio = 4,nThreads=12):
+	if tree is None:
+		tree = scipy.spatial.cKDTree(positions,boxsize=boxsize)
+	central = tree.query_ball_point(voidCentre,voidRadius/centralRatio,n_jobs=nThreads)
+	rhoCentral = np.sum(masses[central])/np.sum(volumes[central])
+	return rhoCentral
+	
+
+
+def profileParamsNadathur(nbarj,rBins,nbar):
+	return [1.57,5.72,0.81,-0.69]
+
+def profileModel(r,model,modelArgs):
+	if model == "Hamaus":
+		return profileModelHamaus(r,modelArgs[0],modelArgs[1])
+	elif model == "Nadathur":
+		return profileModelNadathur(r,modelArgs[0],modelArgs[1],modelArgs[2],modelArgs[3])
+	else:
+		raise Exception("Unknown profile model.")
+
+# Compute the void profile model, from fitting parameters:
+def profileModelHamaus(r,rs,deltac):
+	rv = 1.0 # Mean effective radius is 1 in these units, by definition.
+	alpha = -2.0*(rs/rv) + 4.0
+	if rs/rv < 0.91:
+		beta = 17.5*(rs/rv) - 6.5
+	else:
+		beta = -9.8*(rs/rv) + 18.4
+	return deltac*(1 - (r/rs)**(alpha))/(1 + r**beta) + 1
+
+# Void profile parameters:
+def profileParamsHamaus(nbarj,sigmabarj,rBins,nbar,returnCovariance = False):
+	# Determine parameters:
+	rBinCentres = plot.binCentres(rBins)
+	[popt, pcov] = curve_fit(profileModelHamaus,rBinCentres,nbarj/nbar,sigma=sigmabarj,maxfev=10000, xtol=5.e-3,
+                         p0=[1.0,-1.0])
+	rs = popt[0]
+	deltac = popt[1]
+	perr = np.sqrt(np.diag(pcov))
+	if returnCovariance:
+		return [rs,deltac,perr[0],perr[1],pcov]
+	else:
+		return [rs,deltac,perr[0],perr[1]]
+
+
+def profileModelNadathur(r,alpha,beta,rs,deltac):
+	return deltac*(1 - (r/rs)**(alpha))/(1 + (r/rs)**beta) + 1
+	
+#Plot a void profile against its prediction:
+def plotProfileVsPrediction(nbarj,sigambarj,rBins,nbar,fontsize=14,ax=None,formatAxis=True,model="Hamaus"):
+	if model == "Hamaus":
+		[rs,dc,srs,sdc] = profileParamsHamaus(nbarj,sigambarj,rBins,nbar)
+		params = [rs,dc]
+	elif model == "Nadathur":
+		[alpha,beta,rs,deltac] = profileParamsNadathur(nbarj,rBins,nbar)
+		params = [alpha,beta,rs,deltac]
+	else:
+		raise Exception("Unknown profile model.")
+	if ax is None:
+		fig, ax = plt.subplots()
+	rBinCentres = plot.binCentres(rBins)
+	ax.errorbar(rBinCentres,nbarj/nbar,yerr = sigambarj/nbar,fmt='x-',color='r',label='Computed profile')
+	ax.plot(rBinCentres,profileModel(rBinCentres,model,params),'--',color='g',label='Predicted profile')
+	if model == "Hamaus":
+		paramspp = [rs + srs,dc + sdc]
+		paramspm = [rs + srs,dc - sdc]
+		paramsmp = [rs - srs,dc + sdc]
+		paramsmm = [rs - srs,dc - sdc]
+		profpp = profileModel(rBinCentres,model,paramspp)
+		profpm = profileModel(rBinCentres,model,paramspm)
+		profmp = profileModel(rBinCentres,model,paramsmp)
+		profmm = profileModel(rBinCentres,model,paramsmm)
+		proffComb = np.vstack((profpp,profpm,profmp,profmm))
+		profUpp = np.max(proffComb,0)
+		profLow = np.min(proffComb,0)
+		ax.fill_between(rBinCentres,profLow,profUpp,facecolor='g',alpha=0.5)
+	if formatAxis:
+		ax.set_xlabel('$r/r_{\\mathrm{eff}}$',fontsize=fontsize)
+		ax.set_ylabel('$\\rho/\\bar{\\rho}$',fontsize=fontsize)
+		ax.tick_params(axis='both',labelsize=fontsize)
+		ax.legend(prop={"size":fontsize})
+
+
+

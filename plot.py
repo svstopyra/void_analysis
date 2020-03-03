@@ -2,12 +2,15 @@
 from mayavi.mlab import points3d, text3d, plot3d, triangular_mesh
 from mayavi import mlab
 import pynbody
-from void_analysis import context
+from void_analysis import context, snapedit
 import numpy as np
 import imageio
 import os
 import gc
 import matplotlib.pylab as plt
+from matplotlib import cm
+from . import cosmology
+from scipy import integrate
 
 # Plot the positions in a snapshot:
 def subsnap_scatter(subsnap,color_spec=(1,1,1),scale=1.0,type='2dvertex'):
@@ -189,13 +192,13 @@ def createBins(values,nBins,log=False):
 		return np.linspace(np.min(values),np.max(values),nBins+1)
 
 # Plot a histogram, but include error bars for the confidence interval of the uncertainty
-def histWithErrors(p,sigma,bins,ax = None):
+def histWithErrors(p,sigma,bins,ax = None,label="Bin probabilities"):
 	x = (bins[1:len(bins)] + bins[0:(len(bins)-1)])/2
 	width = bins[1:len(bins)] - bins[0:(len(bins)-1)]
 	if ax is None:
-		return plt.bar(x,p,width=width,yerr=sigma,alpha=0.5)
+		return plt.bar(x,p,width=width,yerr=sigma,alpha=0.5,label=label)
 	else:
-		return ax.bar(x,p,width=width,yerr=sigma,alpha=0.5)
+		return ax.bar(x,p,width=width,yerr=sigma,alpha=0.5,label=label)
 
 # Histogram of halo densities
 def haloHistogram(logrho,logrhoBins,masses,massBins,massBinList = None,massBinsToPlot = None,density=True,logMassBase = None,subplots=True,subplot_shape=None):
@@ -317,8 +320,25 @@ def plotConvexHullFromPoints(pos,hull=None,color=(0,1,0),opacity=0.3,vertices=Fa
 		hull = spatial.ConvexHull(pos)
 	triangular_mesh(pos[:,0],pos[:,1],pos[:,2],hull.simplices,color=color,opacity=opacity,representation = 'wireframe')
 
+# Generate colours on the fly:
+def linearColour(n,nmax,colourMap=cm.jet):
+	return colourMap(np.int32(np.round((n/nmax)*256)))[0:3]
 
-		
 
+# Plot a halo relative to the centre of mass:
+def plotPointsRelative(pos,boxsize,centre = None,weights = None,color_spec=(1,1,1),type='2dvertex',scale=1.0):
+	if centre is None:
+		if weights is None:
+			weights = np.ones(len(pos))
+		centre = context.computePeriodicCentreWeighted(pos,weights,boxsize)
+	posAdjusted = snapedit.unwrap(snapedit.wrap(snapedit.unwrap(pos,boxsize)  - snapedit.unwrap(centre,boxsize),boxsize),boxsize)
+	point_scatter(posAdjusted,color_spec=color_spec,type=type,scale=scale)
+	
+def plotHaloRelative(halo,centre = None,weights = None,color_spec=(1,1,1),type='2dvertex',scale=1.0):
+	boxsize = halo.properties['boxsize'].ratio("Mpc a h**-1")
+	plotPointsRelative(halo['pos'],boxsize,centre=centre,weights = weights,color_spec=color_spec,type=type,scale=scale)
+
+
+	
 
 

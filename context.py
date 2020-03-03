@@ -44,8 +44,7 @@ def void_centres(sn,sr,hr):
 		void_centre_list[k,:] = periodicCentre(b(hr[k+1]),boxsize,units=units)
 	return void_centre_list
 
-# Get the centre of a system of points each with some weight (eg mass, volume), taking into account periodicity:
-def periodicCentreWeighted(snap,weight,periodicity,units = pynbody.units.Unit("Mpc a h**-1")):
+def computePeriodicCentreWeighted(positions,weight,periodicity):
 	if np.isscalar(periodicity):
 		period = (periodicity,periodicity,periodicity)
 	else:
@@ -53,10 +52,10 @@ def periodicCentreWeighted(snap,weight,periodicity,units = pynbody.units.Unit("M
 	if(len(period) != 3):
 		raise Exception("Periodicity must be a length 3 vector or a scalar.")
 	# Map everything into angles so that we can properly account for how close particles are:
-	theta = np.zeros((len(snap),3))
-	theta[:,0] = (snap['pos'][:,0].in_units(units))*2.0*np.pi/period[0]
-	theta[:,1] = (snap['pos'][:,1].in_units(units))*2.0*np.pi/period[1]
-	theta[:,2] = (snap['pos'][:,2].in_units(units))*2.0*np.pi/period[2]
+	theta = np.zeros((len(positions),3))
+	theta[:,0] = (positions[:,0])*2.0*np.pi/period[0]
+	theta[:,1] = (positions[:,1])*2.0*np.pi/period[1]
+	theta[:,2] = (positions[:,2])*2.0*np.pi/period[2]
 	M = np.sum(weight)
 	xi = np.cos(theta)
 	zeta = np.sin(theta)
@@ -65,7 +64,14 @@ def periodicCentreWeighted(snap,weight,periodicity,units = pynbody.units.Unit("M
 	zetabar = np.sum(weight[:,None]*zeta,0)/M
 	# Back to theta:
 	thetabar = np.arctan2(-zetabar,-xibar) + np.pi
-	return (period*thetabar/(2.0*np.pi))*units
+	return (period*thetabar/(2.0*np.pi))
+
+# Get the centre of a system of points each with some weight (eg mass, volume), taking into account periodicity:
+def periodicCentreWeighted(snap,weight,periodicity,units = pynbody.units.Unit("Mpc a h**-1")):
+	# Map everything into angles so that we can properly account for how close particles are:
+	positions = snap['pos'].in_units(units)
+	centre = computePeriodicCentreWeighted(positions,weight,periodicity)*units
+	return centre
 
 # Centre of mass, taking into account periodicity:
 def periodicCentre(snap,periodicity,units = pynbody.units.Unit("Mpc a h**-1")):
@@ -460,7 +466,9 @@ def get_containing_halos(snap,halos):
 	return [containing_halos[0][sortOrder],particles[sortOrder]]
 
 # Combine specified halos into a single subsnap:
-def combineHalos(snap,halos,to_include):
+def combineHalos(snap,halos,to_include = None):
+	if to_include is None:
+		to_include = range(0,len(halos))
 	lengths = np.zeros(len(to_include),dtype=int)
 	ntotal = 0
 	for k in range(0,len(to_include)):

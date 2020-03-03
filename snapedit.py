@@ -1,6 +1,7 @@
 # Python code to edit snapshots
 import numpy as np
 import pynbody
+import os
 
 # Attempt to figure out what type of particle arrangement we have:
 def gridTest(s,grid,lfl_corner=[0,0,0]):
@@ -318,6 +319,36 @@ def reorderSnap(snapname_in,snapname_out):
 	snew = s[sortedIndices]
 	snew.write(filename=snapname_out,fmt=type(s))
 	return snew
+
+# Create a new snapshot based on a set of positions and weights
+def newSnap(newFilename,dmPos,dmVel,dmMass = None,gasPos=None,gasVel=None,gasMass=None,properties=None,fmt=None):
+	includeGas = False
+	if gasPos is None:
+		snew = pynbody.new(dm=len(dmPos))
+	else:
+		includeGas = True
+		snew = pynbody.new(dm=len(dmPos),gas=len(gasPos))
+	snew.dm['pos'] = dmPos
+	snew.dm['vel'] = dmVel
+	if dmMass is not None:
+		snew.dm['mass'] = dmMass
+	if includeGas:
+		snew.gas['pos'] = gasPos
+		if gasVel is None:
+			gasVel = pynbody.array.SimArray(np.zeros(gasPos.shape),"km a**1/2 s**-1")
+		snew.gas['vel'] = gasVel
+		if (dmMass is not None):
+			if gasMass is None:
+				gasMass = pynbody.array.SimArray(np.zeros(len(gasPos)),"1e+10 Msol h**-1")
+			snew.gas['mass'] = gasMass
+		
+	if properties is not None:
+		snew.properties = properties
+	if os.path.isfile(newFilename):
+		os.system("rm " + newFilename)
+	snew.write(filename=newFilename,fmt=fmt)
+	return snew
+	
 
 # Pads the points from a snapshot periodically, adding duplicates of particles from one end of the box to the other.
 def periodicPadding(snapshot,width,boxsize):

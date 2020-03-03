@@ -4,6 +4,7 @@ import scipy.integrate as integrate
 import hmf, astropy
 from .import plot
 from scipy import interpolate
+import camb
 
 # Universal fitting function, for Tinker Mass Function:
 def fsigma(sigma,A,a,b,c):
@@ -356,5 +357,39 @@ def jacobian_spatialTH(sigma,M,rhobar,ki,Pki,order=0):
 	W = W_spatialTH(rk)
 	Wp = W_spatialTHp(rk)
 	return -(R/(6.0*np.pi**2*sigma**2))*integrate.simps(Pki*W*Wp*ki**(4 + 2*order),dx=dlnk,axis=-1)
-		
-		
+
+# Matter density in SI units:
+def rhoSI(Om):
+	G = 6.67e-11
+	pc = 3.0857e16
+	Mpc = 1e6*pc
+	H0si = 100*1e3/Mpc
+	return  Om*(3*H0si**2/(8*np.pi*G))
+
+# Matter density in (Msol/h)/(Mpc/h)^3
+def rhoCos(Om):
+	Mpc = 1e6*3.0857e16
+	Msol = 1.989e30
+	return rhoSI(Om)*Mpc**3/Msol
+
+
+# Compute power spectrum (Currently very indirect - could do this directly with CAMB):
+def powerSpectrum(h = 0.67,Om0=0.315568,Ob0 = 0.059235,sigma8=0.830,z = 0,kmin = 1e-4,kmax=2.0,npoints=200,Ok = 0.0,mnu=0.06,ns=0.96,As=2e-9,r=0,tau=0.06,nonLinear=True):
+	pars = camb.CAMBparams()
+	pars.set_cosmology(H0 = 100.0*h,ombh2=Ob0*h**2,omch2=Om0*h**2,mnu=mnu,omk=Ok,tau=tau)
+	pars.InitPower.set_params(As=As, ns=ns, r=r)
+	# Set redshift:
+	if np.isscalar(z):
+		redshifts =  [z]
+	else:
+		redshifts = z
+	pars.set_matter_power(redshifts=redshifts, kmax=kmax)
+	if nonLinear:
+		pars.NonLinear = camb.model.NonLinear_both
+	else:
+		pars.NonLinear = camb.model.NonLinear_none
+	results = camb.get_results(pars)
+	kh, z, pk = results.get_matter_power_spectrum(minkh=kmin, maxkh=kmax, npoints = npoints)
+	return [kh, pk]
+	
+
