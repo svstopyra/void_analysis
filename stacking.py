@@ -220,7 +220,7 @@ def profileModelNadathur(r,alpha,beta,rs,deltac):
 	return deltac*(1 - (r/rs)**(alpha))/(1 + (r/rs)**beta) + 1
 	
 #Plot a void profile against its prediction:
-def plotProfileVsPrediction(nbarj,sigambarj,rBins,nbar,fontsize=14,ax=None,formatAxis=True,model="Hamaus"):
+def plotProfileVsPrediction(nbarj,sigambarj,rBins,nbar,fontsize=14,ax=None,formatAxis=True,model="Hamaus",color='r',labelSuffix = ""):
 	if model == "Hamaus":
 		[rs,dc,srs,sdc] = profileParamsHamaus(nbarj,sigambarj,rBins,nbar)
 		params = [rs,dc]
@@ -232,8 +232,8 @@ def plotProfileVsPrediction(nbarj,sigambarj,rBins,nbar,fontsize=14,ax=None,forma
 	if ax is None:
 		fig, ax = plt.subplots()
 	rBinCentres = plot.binCentres(rBins)
-	ax.errorbar(rBinCentres,nbarj/nbar,yerr = sigambarj/nbar,fmt='x-',color='r',label='Computed profile')
-	ax.plot(rBinCentres,profileModel(rBinCentres,model,params),'--',color='g',label='Predicted profile')
+	ax.errorbar(rBinCentres,nbarj/nbar,yerr = sigambarj/nbar,fmt='x-',color=color,label='Computed profile' + labelSuffix)
+	ax.plot(rBinCentres,profileModel(rBinCentres,model,params),'--',color=color,label='Predicted profile' + labelSuffix)
 	if model == "Hamaus":
 		paramspp = [rs + srs,dc + sdc]
 		paramspm = [rs + srs,dc - sdc]
@@ -246,7 +246,7 @@ def plotProfileVsPrediction(nbarj,sigambarj,rBins,nbar,fontsize=14,ax=None,forma
 		proffComb = np.vstack((profpp,profpm,profmp,profmm))
 		profUpp = np.max(proffComb,0)
 		profLow = np.min(proffComb,0)
-		ax.fill_between(rBinCentres,profLow,profUpp,facecolor='g',alpha=0.5)
+		ax.fill_between(rBinCentres,profLow,profUpp,facecolor=color,alpha=0.5)
 	if formatAxis:
 		ax.set_xlabel('$r/r_{\\mathrm{eff}}$',fontsize=fontsize)
 		ax.set_ylabel('$\\rho/\\bar{\\rho}$',fontsize=fontsize)
