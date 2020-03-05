@@ -5,6 +5,7 @@ import numpy as np
 from . import snapedit
 import multiprocessing as mp
 from scipy.optimize import curve_fit
+thread_count = mp.cpu_count()
 
 # Compute correlation function for a given set of points (cross correlation if a second is specified)
 def simulationCorrelation(rBins,boxsize,data1,data2=None,nThreads = 1,weights1=None,weights2 = None):
@@ -178,7 +179,15 @@ def centralDensity(voidCentre,voidRadius,positions,volumes,masses,boxsize=None,t
 	rhoCentral = np.sum(masses[central])/np.sum(volumes[central])
 	return rhoCentral
 	
-
+def centralDensityNN(voidCentre,positions,masses,volumes,boxsize=None,tree = None,nThreads = thread_count,nNeighbours=64,rCut=None):
+	if tree is None:
+		tree = scipy.spatial.cKDTree(positions,boxsize=boxsize)
+	central = tree.query(voidCentre,k=nNeighbours,n_jobs=nThreads,distance_upper_bound = rCut)
+	if (len(central[0]) < 1) and (rCut is not None):
+		# Ignore the cut:
+		central = tree.query(voidCentre,k=nNeighbours,n_jobs=nThreads)
+	rhoCentral = np.sum(masses[central[1]])/np.sum(volumes[central[1]])
+	return rhoCentral
 
 def profileParamsNadathur(nbarj,rBins,nbar):
 	return [1.57,5.72,0.81,-0.69]
@@ -253,5 +262,32 @@ def plotProfileVsPrediction(nbarj,sigambarj,rBins,nbar,fontsize=14,ax=None,forma
 		ax.tick_params(axis='both',labelsize=fontsize)
 		ax.legend(prop={"size":fontsize})
 
-
+# Attempts to select voids from set1 such that the distribution of lambda matches that of set 2.
+def matchDistributionFilter(lambdas1,lambdas2,lambdaBins=None,randomSeed=None,binsToMatch=None,binValues1=None,binValues2=None):
+	if lambdaBins is None:
+		lambdaBins = np.linspace(np.min([np.min(lambdas1),np.min(lambdas2)]),np.max([np.max(lambdas1),np.max(lambdas2)]),101)
+	if randomSeed is not None:
+		np.random.seed(seed = randomSeed)
+	if binsToMatch is None:
+		inBinValue1 = [np.array(range(0,len(lambdas1)))]
+		noInBinValue1 = len(lambdas1)
+		inBinValue2 = [np.array(range(0,len(lambdas2)))]
+		noInBinValue2 = len(lambdas2)
+	else:
+		# Allow for matching lambdas only within the specified bins, not over all voids:
+		[inBinValue1,noInBinValue1] = plot.binValues(binValues1,binsToMatch)
+		[inBinValue2,noInBinValue2] = plot.binValues(binValues2,binsToMatch)
+	set1List = np.array([],dtype=np.int64)
+	for k in range(0,len(inBinValue1)):
+		[binList1,noInBins1] = plot.binValues(lambdas1[inBinValue1[k]],lambdaBins)
+		[binList2,noInBins2] = plot.binValues(lambdas2[inBinValue2[k]],lambdaBins)
+		fracs = noInBins2/len(lambdas2[inBinValue2[k]])
+		set1ToDrawMax = np.array(np.floor(fracs*len(lambdas1[inBinValue1[k]])),dtype=np.int64)
+		for l in range(0,len(fracs)):
+			if noInBins1[l] < set1ToDrawMax[l]:
+				set1List = np.hstack((set1List,np.array(inBinValue1[k][binList1[l]])))
+			else:
+				set1List = np.hstack((set1List,np.random.choice(inBinValue1[k][binList1[l]],size=set1ToDrawMax[l],replace=False)))
+	return set1List
+	
 
