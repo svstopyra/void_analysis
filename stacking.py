@@ -7,6 +7,16 @@ import multiprocessing as mp
 from scipy.optimize import curve_fit
 thread_count = mp.cpu_count()
 
+# Weighted mean of a variable:
+def weightedMean(xi,wi,biasFactor = 0,axis=None):
+	return (np.sum(xi*wi,axis=axis) + biasFactor)/np.sum(wi,axis=axis)
+
+# Weighted variance:
+def weightedVariance(xi,wi,biasFactor = 0,axis=None):
+	xibar = weightedMean(xi,wi,biasFactor=biasFactor,axis=axis)
+	M = np.count_nonzero(wi,axis=axis)
+	return np.sum(wi*(xi-xibar)**2,axis=axis)/(((M-1)/M)*np.sum(wi,axis=axis))
+
 # Compute correlation function for a given set of points (cross correlation if a second is specified)
 def simulationCorrelation(rBins,boxsize,data1,data2=None,nThreads = 1,weights1=None,weights2 = None):
 	
@@ -47,7 +57,7 @@ def simulationCorrelation(rBins,boxsize,data1,data2=None,nThreads = 1,weights1=N
 
 
 # Cross correlation of two sets of points:
-def getCrossCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,matterSnap,rMin = 0,rMax = np.inf,rRange = np.linspace(0.1,10,101),nThreads=12,boxsize = 200.0):
+def getCrossCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,matterSnap,rMin = 0,rMax = np.inf,rRange = np.linspace(0.1,10,101),nThreads=thread_count,boxsize = 200.0):
 	rFilter1 = np.where((ahRadii > rMin) & (ahRadii < rMax))[0]
 	rFilter2 = np.where((voidRadii > rMin) & (voidRadii < rMax))[0]
 	ahPos = ahCentres[rFilter1,:]
@@ -58,7 +68,7 @@ def getCrossCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,matterSnap,rMin
 	return [xiAM,xiVM,xiAV]
 
 # Auto correlation of a set of points:
-def getAutoCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,matterSnap,rMin = 0,rMax = np.inf,rRange = np.linspace(0.1,10,101),nThreads=12,boxsize = 200.0):
+def getAutoCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,matterSnap,rMin = 0,rMax = np.inf,rRange = np.linspace(0.1,10,101),nThreads=thread_count,boxsize = 200.0):
 	rFilter1 = np.where((ahRadii > rMin) & (ahRadii < rMax))[0]
 	rFilter2 = np.where((voidRadii > rMin) & (voidRadii < rMax))[0]
 	ahPos = ahCentres[rFilter1,:]
@@ -93,7 +103,7 @@ def plotCrossCorrelations(rBins,xiAM,xiVM,xiAV,ax=None,rMin=0,rMax = np.inf):
 
 
 # Stacking:
-def stackVoids(voidCentres,snap,rBins,nThreads=12,voidScales=None):
+def stackVoids(voidCentres,snap,rBins,nThreads=thread_count,voidScales=None):
 	if voidScales is None:
 		voidScales = np.ones(len(voidCentres))
 	boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
@@ -107,7 +117,7 @@ def stackVoids(voidCentres,snap,rBins,nThreads=12,voidScales=None):
 	volumes = 4*np.pi*(rBinsup**3 - rBinsLow**3)/3
 	volsum = np.sum(voidScales**3)*volumes
 
-def getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=12,tree=None,method="poisson",vorVolumes=None):
+def getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree=None,method="poisson",vorVolumes=None):
 	if (vorVolumes is None) and (method == "VTFE"):
 			raise Exception("Must provide voronoi volumes for VTFE.")
 	# Generate KDTree
@@ -139,29 +149,44 @@ def getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=12,tree=None,method=
 
 
 # Direct pair counting in rescaled variables:
-def stackScaledVoids(voidCentres,voidRadii,snap,rBins,nThreads=12,tree=None,method="poisson",vorVolumes=None,nPairsList=None,volumesList=None):
+def stackScaledVoids(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree=None,method="poisson",vorVolumes=None,nPairsList=None,volumesList=None,errorType="Mean"):
 	if (nPairsList is None) or (volumesList is None):
 		[nPairsList,volumesList] = getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=nThreads,tree=tree,method=method,vorVolumes=vorVolumes)
 	if method == "poisson":
 		nbarj = (np.sum(nPairsList,0) + 1)/(np.sum(volumesList,0))
-		sigmabarj = np.sqrt(len(voidCentres)*np.sum(nPairsList,0))/np.sum(volumesList,0)
+		if errorType == "Mean":
+			sigmabarj = np.sqrt(len(voidCentres)*np.sum(nPairsList,0))/np.sum(volumesList,0)
+		elif errorType == "Profile":
+			sigmabarj = np.sqrt(weightedVariance(nPairsList/volumesList,volumesList,axis=0))
+		else:
+			raise Exception("Invalid error type.")
 	elif method == "naive":
 		nbarj = np.sum(nPairsList/volumesList,0)/len(voidCentres)
-		sigmabarj = np.std(nPairsList/volumesList,0)/np.sqrt(len(voidCentres)-1)
+		if errorType == "Mean":
+			sigmabarj = np.std(nPairsList/volumesList,0)/np.sqrt(len(voidCentres)-1)
+		elif errorType == "Profile":
+			sigmabarj = np.std(nPairsList/volumesList,0)
+		else:
+			raise Exception("Invalid error type.")
 	elif method == "VTFE":
 		nbarj = np.sum(nPairsList,0)/(np.sum(volumesList,0))
-		sigmabarj = np.sqrt(len(voidCentres)*np.sum(nPairsList,0))/np.sum(volumesList,0)
+		if errorType == "Mean":
+			sigmabarj = np.sqrt(len(voidCentres)*np.sum(nPairsList,0))/np.sum(volumesList,0)
+		elif errorType == "Profile":
+			sigmabarj = np.sqrt(weightedVariance(nPairsList/volumesList,volumesList,axis=0))
+		else:
+			raise Exception("Invalid error type.")
 	else:
 		raise Exception("Unrecognised stacking method.")
 		
 	return [nbarj,sigmabarj]
 
-def stackVoidsWithFilter(voidCentres,voidRadii,filterToApply,snap,rBins=None,nPairsList=None,volumesList=None,nThreads=12,tree=None,method="poisson",vorVolumes=None):
+def stackVoidsWithFilter(voidCentres,voidRadii,filterToApply,snap,rBins=None,nPairsList=None,volumesList=None,nThreads=thread_count,tree=None,method="poisson",vorVolumes=None,errorType="Profile"):
 	if rBins is None:
 		rBins = np.linspace(0,3,31)
 	if (nPairsList is None) or (volumesList is None):
 		[nPairsList,volumesList] = getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=nThreads,tree=tree,method=method,vorVolumes=vorVolumes)
-	return stackScaledVoids(voidCentres[filterToApply,:],voidRadii[filterToApply],snap,rBins,nThreads=nThreads,tree=tree,method=method,nPairsList=nPairsList[filterToApply,:],volumesList=volumesList[filterToApply])
+	return stackScaledVoids(voidCentres[filterToApply,:],voidRadii[filterToApply],snap,rBins,nThreads=nThreads,tree=tree,method=method,nPairsList=nPairsList[filterToApply,:],volumesList=volumesList[filterToApply],errorType=errorType)
 		
 
 
@@ -172,7 +197,7 @@ def lambdaVoid(voidParticles,volumes,nbar,radius):
 	return meanDensityContrast(voidParticles,volumes,nbar)*((radius)**(1.2))
 
 # Central Density:
-def centralDensity(voidCentre,voidRadius,positions,volumes,masses,boxsize=None,tree=None,centralRatio = 4,nThreads=12):
+def centralDensity(voidCentre,voidRadius,positions,volumes,masses,boxsize=None,tree=None,centralRatio = 4,nThreads=thread_count):
 	if tree is None:
 		tree = scipy.spatial.cKDTree(positions,boxsize=boxsize)
 	central = tree.query_ball_point(voidCentre,voidRadius/centralRatio,n_jobs=nThreads)
@@ -191,6 +216,7 @@ def centralDensityNN(voidCentre,positions,masses,volumes,boxsize=None,tree = Non
 
 def profileParamsNadathur(nbarj,rBins,nbar):
 	return [1.57,5.72,0.81,-0.69]
+
 
 def profileModel(r,model,modelArgs):
 	if model == "Hamaus":
