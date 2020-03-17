@@ -6,6 +6,10 @@ from .import plot
 from scipy import interpolate
 import camb
 
+# Linear growth factor as a function of z:
+def fLinear(z,Om,Ol):
+	return ((Om*(1 + z)**3)/(Om*(1+z)**3 + (1 - Om - Ol)*(1 + z)**2 + Ol))**(4/7)
+
 # Universal fitting function, for Tinker Mass Function:
 def fsigma(sigma,A,a,b,c):
 	return A*((sigma/b)**(-a) + 1)*np.exp(-c/(sigma**2))

@@ -365,6 +365,51 @@ def getFilteredCatalog(cat,voidFilter):
 	if hasattr(cat,'zoneListStarts'):
 		newCat.zoneListStarts = cat.zoneListStarts
 	return newCat
+
+# Get ZONES only catalog. That is, catalogue where zones are never joined together.
+def zonesOnlyCatalog(cat,zoneCentres=None,zoneRadii = None):
+	newCat = Catalog()
+	# Each zone is regarded as a voids in its own right:
+	newCat.numVoids = cat.numZonesTot
+	# Copy other properties:
+	newCat.numPartTot = cat.numPartTot
+	newCat.volNorm = cat.volNorm
+	newCat.boxLen = cat.boxLen
+	newCat.numZonesTot = cat.numZonesTot
+	newCat.ranges = cat.ranges
+	newCat.voids = []
+	if (zoneCentres is None):
+		zoneCentres = np.zeros((cat.numZonesTot,3))
+		periodicity = [at.boxLen]*3
+		for k in range(0,cat.numZonesTot):
+			zoneParts = cat.zones2Parts(k)
+			zoneCentres[k,:] = computePeriodicCentreWeighted(snap[zoneParts]['pos'],volumes[zoneParts],periodicity)
+	for k in range(0,netCat.numVoids):
+		void = Bunch(iVoid = int(line[0]),
+		               voidID = int(line[1]),
+		               coreParticle = line[2],
+		               coreDens = line[3],
+		               zoneVol = line[4],
+		               zoneNumPart = line[5],
+		               numZones = int(line[6]),
+		               voidVol = line[7],
+		               numPart = int(line[8]),
+		               densCon = line[9],
+		               voidProb = -1,
+		               radius = zoneRadii[k], # this is read in later
+		               macrocenter = zoneCentres[k,:],
+		               redshift = 0,
+		               RA = 0,
+		               Dec = 0,
+		               parentID = 0,
+		               treeLevel = 0,
+		               numChildren = 0,
+		               centralDen = 0.,
+		               ellipticity = 0.,
+		               eigenVals = np.zeros((3)),
+		               eigenVecs = np.zeros((3,3)),
+		               )
+	return newCat
 	
 # Filter voids with a range of values for a given property (defaults to all voids):
 def filterVoidsOnRange(cat,filterProperty,rMin = -np.inf,rMax=np.inf):

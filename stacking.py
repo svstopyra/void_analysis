@@ -147,6 +147,45 @@ def getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree=No
 				volumesList[:,k] = volSum - volumesList[:,k-1]
 	return [nPairsList,volumesList]
 
+def getRadialVelocityAverages(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree=None,method="poisson",vorVolumes=None,parMode="void"):
+	if (vorVolumes is None) and (method == "VTFE"):
+			raise Exception("Must provide voronoi volumes for VTFE.")
+	# Generate KDTree
+	boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")	
+	if tree is None:
+		tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
+	rBinsUp = rBins[1:]
+	rBinsLow = rBins[0:-1]
+	volumes = 4*np.pi*(rBinsUp**3 - rBinsLow**3)/3
+	vRList = np.zeros((len(voidCentres),len(rBins)))
+	nPartList = np.zeros((len(voidCentres),len(rBins)),dtype=np.int64)
+	volumesList = np.outer(voidRadii**3,volumes)
+	for l in range(1,len(rBins)):
+		# Displacement of particles from the void:
+		if parMode== "radius":
+			print("Constructing index list for bin " + str(l) + " of " + str(len(rBins)))
+			indicesList = tree.query_ball_point(voidCentres,rBins[l]*voidRadii,n_jobs=nThreads)
+		for k in range(0,len(vRList)):
+			print("Doing bin " + str(l) + " of " + str(len(rBins)) + ", void " + str(k) + " of " + str(len(vRList)))
+			if parMode == "radius":
+				indices = indicesList[k]
+			elif parMode == "void":
+				indices = tree.query_ball_point(voidCentres[k,:],rBins[l]*voidRadii[k],n_jobs=nThreads)
+			else:
+				raise Exception("Invalid parallel mode.")
+			if len(indices) > 0:
+				disp = snap['pos'][indices,:] - voidCentres[k,:]
+				# Radial component of velocity:
+				norm = np.sqrt(np.sum(disp**2,1))
+				vR = np.sum(disp*snap['vel'][indices,:],1)/norm
+				vR = vR*vorVolumes[indices]
+				vRList[k,l] = np.sum(vR)/np.sum(vorVolumes[indices])
+				nPartList[k,l] = len(indices)
+	# Convert averages over ball to averages over sphere surface shells:
+	vRShells = np.zeros(vRList.shape)
+	for l in range(1,len(rBins)):
+		vRShells[:,l] = vRList[:,l]*nPartList[:,l]/(nPartList[:,l] - nPartList[:,l-1]) - vRList[:,l-1]*nPartList[:,l-1]/(nPartList[:,l] - nPartList[:,l-1])
+	return [vRShells[:,1:],volumesList]
 
 # Direct pair counting in rescaled variables:
 def stackScaledVoids(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree=None,method="poisson",vorVolumes=None,nPairsList=None,volumesList=None,errorType="Mean"):
@@ -157,7 +196,7 @@ def stackScaledVoids(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree
 		if errorType == "Mean":
 			sigmabarj = np.sqrt(len(voidCentres)*np.sum(nPairsList,0))/np.sum(volumesList,0)
 		elif errorType == "Profile":
-			sigmabarj = np.sqrt(weightedVariance(nPairsList/volumesList,volumesList,axis=0))
+			sigmabarj = np.sqrt(weightedVariance(nPairsList/volumesList,volumesList,axis=0))/np.sqrt(len(voidCentres)-1)
 		else:
 			raise Exception("Invalid error type.")
 	elif method == "naive":
@@ -165,7 +204,44 @@ def stackScaledVoids(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree
 		if errorType == "Mean":
 			sigmabarj = np.std(nPairsList/volumesList,0)/np.sqrt(len(voidCentres)-1)
 		elif errorType == "Profile":
-			sigmabarj = np.std(nPairsList/volumesList,0)
+			sigmabarj = np.std(nPairsList/volumesList,0)/np.sqrt(len(voidCentres)-1)
+		else:
+			raise Exception("Invalid error type.")
+	elif method == "VTFE":
+		nbarj = np.sum(nPairsList,0)/(np.sum(volumesList,0))
+		if errorType == "Mean":
+			sigmabarj = np.sqrt(len(voidCentres)*np.sum(nPairsList,0))/np.sum(volumesList,0)
+		elif errorType == "Profile":
+			sigmabarj = np.sqrt(weightedVariance(nPairsList/volumesList,volumesList,axis=0))
+		else:
+			raise Exception("Invalid error type.")
+	elif method == "cumulative":
+		nPairCum = (np.cumsum(nPairsList,axis=1)/np.cumsum(volumesList,axis=1))
+		nbarj = weightedMean(nPairCum,volumesList,axis=0)
+		sigmabarj = np.sqrt(weightedVariance(nPairCum,volumesList,axis=0)/(len(nPairCum)-1))
+	else:
+		raise Exception("Unrecognised stacking method.")
+		
+	return [nbarj,sigmabarj]
+
+# Stack radial velocities of voids (Incidentally, this is mostly the same as the normal stacking, just with a different variable - would be better to merge them):
+def stackScaledVoidsVelocities(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree=None,method="poisson",vorVolumes=None,nPairsList=None,volumesList=None,errorType="Mean"):
+	if (nPairsList is None) or (volumesList is None):
+		[nPairsList,volumesList] = getRadialVelocityAverages(voidCentres,voidRadii,snap,rBins,nThreads=nThreads,tree=tree,method=method,vorVolumes=vorVolumes)
+	if method == "poisson":
+		nbarj = (np.sum(nPairsList,0) + 1)/(np.sum(volumesList,0))
+		if errorType == "Mean":
+			sigmabarj = np.sqrt(len(voidCentres)*np.sum(nPairsList,0))/np.sum(volumesList,0)
+		elif errorType == "Profile":
+			sigmabarj = np.sqrt(weightedVariance(nPairsList/volumesList,volumesList,axis=0))/np.sqrt(len(voidCentres)-1)
+		else:
+			raise Exception("Invalid error type.")
+	elif method == "naive":
+		nbarj = np.sum(nPairsList/volumesList,0)/len(voidCentres)
+		if errorType == "Mean":
+			sigmabarj = np.std(nPairsList/volumesList,0)/np.sqrt(len(voidCentres)-1)
+		elif errorType == "Profile":
+			sigmabarj = np.std(nPairsList/volumesList,0)/np.sqrt(len(voidCentres)-1)
 		else:
 			raise Exception("Invalid error type.")
 	elif method == "VTFE":
@@ -181,6 +257,8 @@ def stackScaledVoids(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree
 		
 	return [nbarj,sigmabarj]
 
+
+# Apply a filter to a set of voids before stacking them:
 def stackVoidsWithFilter(voidCentres,voidRadii,filterToApply,snap,rBins=None,nPairsList=None,volumesList=None,nThreads=thread_count,tree=None,method="poisson",vorVolumes=None,errorType="Profile"):
 	if rBins is None:
 		rBins = np.linspace(0,3,31)
@@ -188,7 +266,13 @@ def stackVoidsWithFilter(voidCentres,voidRadii,filterToApply,snap,rBins=None,nPa
 		[nPairsList,volumesList] = getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=nThreads,tree=tree,method=method,vorVolumes=vorVolumes)
 	return stackScaledVoids(voidCentres[filterToApply,:],voidRadii[filterToApply],snap,rBins,nThreads=nThreads,tree=tree,method=method,nPairsList=nPairsList[filterToApply,:],volumesList=volumesList[filterToApply],errorType=errorType)
 		
-
+# Apply a filter to a stack of voids before summing their velocities.
+def stackVoidVelocitiesWithFilter(voidCentres,voidRadii,filterToApply,snap,rBins=None,nPairsList=None,volumesList=None,nThreads=thread_count,tree=None,method="poisson",vorVolumes=None,errorType="Profile"):
+	if rBins is None:
+		rBins = np.linspace(0,3,31)
+	if (nPairsList is None) or (volumesList is None):
+		[nPairsList,volumesList] = getRadialVelocityAverages(voidCentres,voidRadii,snap,rBins,nThreads=nThreads,tree=tree,method=method,vorVolumes=vorVolumes)
+	return stackScaledVoidsVelocities(voidCentres[filterToApply,:],voidRadii[filterToApply],snap,rBins,nThreads=nThreads,tree=tree,method=method,nPairsList=nPairsList[filterToApply,:],volumesList=volumesList[filterToApply],errorType=errorType)
 
 def meanDensityContrast(voidParticles,volumes,nbar):
 	return (len(voidParticles)/(nbar*np.sum(volumes[voidParticles]))) - 1.0
@@ -207,9 +291,12 @@ def centralDensity(voidCentre,voidRadius,positions,volumes,masses,boxsize=None,t
 def centralDensityNN(voidCentre,positions,masses,volumes,boxsize=None,tree = None,nThreads = thread_count,nNeighbours=64,rCut=None):
 	if tree is None:
 		tree = scipy.spatial.cKDTree(positions,boxsize=boxsize)
-	central = tree.query(voidCentre,k=nNeighbours,n_jobs=nThreads,distance_upper_bound = rCut)
+	if rCut is not None:
+		central = tree.query(voidCentre,k=nNeighbours,n_jobs=nThreads,distance_upper_bound = rCut)
+	else:
+		central = tree.query(voidCentre,k=nNeighbours,n_jobs=nThreads)
 	if (len(central[0]) < 1) and (rCut is not None):
-		# Ignore the cut:
+		# Try again, ignoring the cut:
 		central = tree.query(voidCentre,k=nNeighbours,n_jobs=nThreads)
 	rhoCentral = np.sum(masses[central[1]])/np.sum(volumes[central[1]])
 	return rhoCentral
