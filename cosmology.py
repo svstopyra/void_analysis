@@ -266,12 +266,16 @@ def tmf(M,ki,Pki,rhom,Omegam,deltaType='crit',Delta=200,z=0,A = None,a = None,b 
 	return fTinker(sigma,A,a,b,c)*(rhom/(M**2))*jacobian
 
 # Linear growth factor	
-def linearGrowthD(z,Omegam):
+def linearGrowthD(z,Omegam,Omegak = 0.0):
 	a = 1.0/(1.0 + z)
-	Omegal = 1.0 - Omegam
-	Hsq = Omegam/(a**3) + Omegal
+	Omegal = 1.0 - Omegam - Omegak
+	Hsq = Omegam/(a**3) + Omegal + Omegak/(a**2)
 	return 2.5*a*(Omegam/(a**3))/( Hsq * ( (Omegam/(Hsq*a**3))**(4.0/7.0) - Omegal/Hsq + (1.0 + 0.5*Omegam/(Hsq*a**3))*(1 + Omegal/(70.0*Hsq)) ) )
 
+def linearGrowthf(z,Omegam,Omegak = 0.0):
+	a = 1.0/(1.0 + z)
+	Omegal = 1.0 - Omegam - Omegak
+	return ((Omegam/(a**3))/(Omegam/(a**3) + Omegak/(a**2) + Omegal))**(4.0/7.0)
 
 def windowRtoM(R,rhobar,gammaf = 6*np.pi**2):
 	# Default is a top hat in frequency space.
@@ -395,5 +399,25 @@ def powerSpectrum(h = 0.67,Om0=0.315568,Ob0 = 0.059235,sigma8=0.830,z = 0,kmin =
 	results = camb.get_results(pars)
 	kh, z, pk = results.get_matter_power_spectrum(minkh=kmin, maxkh=kmax, npoints = npoints)
 	return [kh, pk]
-	
 
+# Estimate correlation function from power spectrum:
+def pkToxi(x,ki,pki):
+	xi = np.zeros(x.shape)
+	lnk = np.log(ki)
+	kix = np.outer(ki,x)
+	sinckx = np.sinc(kix)
+	for k in range(0,len(xi)):
+		xi[k] = integrate.simps(pki*ki**3*sinckx[:,k],x=lnk)
+	return xi
+
+# Linear velocity predicted for a given cumulative spherical density contrast
+def vLinear(r,Delta,Om,Ol,z=0):
+	f = fLinear(z,Om,Ol)
+	a = 1/(1 + z)
+	H0 = 100
+	H = H0*np.sqrt(Om*(1 + z)**3 + Ol)
+	return -(1/3)*f*a*H*r*Delta
+
+# Compute delta:
+def deltaCumulative(pairCounts,volLists,nbar):
+	return (np.cumsum(pairCounts,axis=1)/np.cumsum(volLists,axis=1))/nbar - 1

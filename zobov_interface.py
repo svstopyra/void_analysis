@@ -715,3 +715,26 @@ def convertHalos(snap,filename,unitFactor = 1000.0,printHeaderInfo = False):
 		haloFile.write(str(h[k+1].properties['VZc']) + " ")
 		haloFile.write(str(np.float32(np.sum(h[k+1]['mass']))*1e10) + "\n")
 	haloFile.close()
+
+# Turn the normalised volumes supplied by zobov into physical units appropriate to the supplied simulation:
+def zobovVolumesToPhysical(zobovVolumes,snap):
+	N = np.round(np.cbrt(len(snap))).astype(int)
+	boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+	if type(zobovVolumes) == type(""):
+		vols = np.fromfile(zobovVolumes,dtype=np.float32)
+	else:
+		vols = zobovVolumes
+	return vols[1:]*(boxsize/N)**3
+	
+# Compute the masses of zobov voids:
+def zobovVoidMasses(cat,particleMasses):
+	zobovMasses = np.zeros(len(cat.radius))
+	for k in range(0,len(zobovMasses)):
+		zobovMasses[k] = np.sum(particleMasses[cat.void2Parts(k)])
+	return zobovMasses
+
+
+
+
+
+

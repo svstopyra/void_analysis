@@ -5,6 +5,7 @@ import numpy as np
 from . import snapedit
 import multiprocessing as mp
 from scipy.optimize import curve_fit
+from . import plot
 thread_count = mp.cpu_count()
 
 # Weighted mean of a variable:
@@ -147,7 +148,7 @@ def getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree=No
 				volumesList[:,k] = volSum - volumesList[:,k-1]
 	return [nPairsList,volumesList]
 
-def getRadialVelocityAverages(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree=None,method="poisson",vorVolumes=None,parMode="void"):
+def getRadialVelocityAverages(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree=None,method="poisson",vorVolumes=None):
 	if (vorVolumes is None) and (method == "VTFE"):
 			raise Exception("Must provide voronoi volumes for VTFE.")
 	# Generate KDTree
@@ -157,35 +158,25 @@ def getRadialVelocityAverages(voidCentres,voidRadii,snap,rBins,nThreads=thread_c
 	rBinsUp = rBins[1:]
 	rBinsLow = rBins[0:-1]
 	volumes = 4*np.pi*(rBinsUp**3 - rBinsLow**3)/3
-	vRList = np.zeros((len(voidCentres),len(rBins)))
-	nPartList = np.zeros((len(voidCentres),len(rBins)),dtype=np.int64)
+	vRList = np.zeros((len(voidCentres),len(rBins)-1))
+	nPartList = np.zeros((len(voidCentres),len(rBins)-1),dtype=np.int64)
 	volumesList = np.outer(voidRadii**3,volumes)
-	for l in range(1,len(rBins)):
-		# Displacement of particles from the void:
-		if parMode== "radius":
-			print("Constructing index list for bin " + str(l) + " of " + str(len(rBins)))
-			indicesList = tree.query_ball_point(voidCentres,rBins[l]*voidRadii,n_jobs=nThreads)
-		for k in range(0,len(vRList)):
-			print("Doing bin " + str(l) + " of " + str(len(rBins)) + ", void " + str(k) + " of " + str(len(vRList)))
-			if parMode == "radius":
-				indices = indicesList[k]
-			elif parMode == "void":
-				indices = tree.query_ball_point(voidCentres[k,:],rBins[l]*voidRadii[k],n_jobs=nThreads)
-			else:
-				raise Exception("Invalid parallel mode.")
+	for k in range(0,len(vRList)):
+		indicesList = np.array(tree.query_ball_point(voidCentres[k,:],rBins[-1]*voidRadii[k],n_jobs=nThreads),dtype=np.int32)
+		disp = snap['pos'][indicesList,:] - voidCentres[k,:]
+		r = np.array(np.sqrt(np.sum(disp**2,1)))
+		sort = np.argsort(r)
+		indicesSorted = indicesList[sort]
+		boundaries = np.searchsorted(r[sort],rBins*voidRadii[k])
+		vR = np.sum(disp*snap['vel'][indicesList,:],1)*vorVolumes[indicesList]/r
+		print("Doing void " + str(k) + " of " + str(len(vRList)))
+		for l in range(0,len(rBins)-1):
+			indices = indicesSorted[boundaries[l]:boundaries[l+1]]
 			if len(indices) > 0:
-				disp = snap['pos'][indices,:] - voidCentres[k,:]
-				# Radial component of velocity:
-				norm = np.sqrt(np.sum(disp**2,1))
-				vR = np.sum(disp*snap['vel'][indices,:],1)/norm
-				vR = vR*vorVolumes[indices]
-				vRList[k,l] = np.sum(vR)/np.sum(vorVolumes[indices])
+				indicesSphere = sort[boundaries[l]:boundaries[l+1]]
+				vRList[k,l] = np.sum(vR[indicesSphere])/np.sum(vorVolumes[indices])
 				nPartList[k,l] = len(indices)
-	# Convert averages over ball to averages over sphere surface shells:
-	vRShells = np.zeros(vRList.shape)
-	for l in range(1,len(rBins)):
-		vRShells[:,l] = vRList[:,l]*nPartList[:,l]/(nPartList[:,l] - nPartList[:,l-1]) - vRList[:,l-1]*nPartList[:,l-1]/(nPartList[:,l] - nPartList[:,l-1])
-	return [vRShells[:,1:],volumesList]
+	return [vRList,volumesList]
 
 # Direct pair counting in rescaled variables:
 def stackScaledVoids(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree=None,method="poisson",vorVolumes=None,nPairsList=None,volumesList=None,errorType="Mean"):

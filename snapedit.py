@@ -2,6 +2,8 @@
 import numpy as np
 import pynbody
 import os
+import copy
+from . import cosmology
 
 # Attempt to figure out what type of particle arrangement we have:
 def gridTest(s,grid,lfl_corner=[0,0,0]):
@@ -346,7 +348,8 @@ def newSnap(newFilename,dmPos,dmVel,dmMass = None,gasPos=None,gasVel=None,gasMas
 		snew.properties = properties
 	if os.path.isfile(newFilename):
 		os.system("rm " + newFilename)
-	snew.write(filename=newFilename,fmt=fmt)
+	if newFilename is not None:
+		snew.write(filename=newFilename,fmt=fmt)
 	return snew
 	
 
@@ -368,4 +371,48 @@ def periodicPadding(snapshot,width,boxsize):
 	indices = np.hstack((indices,indices[plowx[0]],indices[puppx[0]]))
 	return [points_new,indices]
 
+
+def getDisplacements(ics,z = 0,perm=(0,1,2),factor = 1,lfl_corner=[0,0,0],centroids = None):
+	if centroids is None:
+		# Attempt to auto-determine the grid.
+		if perm == "auto":
+			perm = gridTest(ics,getGridFromZeldovich(ics,factor),lfl_corner=[0,0,0])
+			if perm == -1:
+				raise Exception("Could not determine grid order. Likely grid is non-cubic or has non-standard order.")
+		N = np.round(np.cbrt(len(ics))).astype(int)
+		Nex = np.cbrt(len(ics))
+		if (N - Nex) != 0:
+			raise Exception("Grid is not cubic - could not auto-determine centroids.")
+		centroid = snapedit.centroid(ics,N,perm=perm)
+	Psi = ics['pos'] - centroids
+	Omegam = ics.properties['omegaM0']
+	zic = 1.0/ics.properties['a'] - 1
+	Dic = cosmology.linearGrowthD(zic,Omegam)
+	Dz = cosmology.linearGrowthD(z,Omegam)
+	Psiz = Psi*Dz/Dic
+	return Psiz
+
+def extrapolateZeldovich(ics,z = 0,perm=(0,1,2),factor = 1,lfl_corner=[0,0,0],centroids = None,filename = None):
+	if centroids is None:
+		# Attempt to auto-determine the grid.
+		if perm == "auto":
+			perm = gridTest(ics,getGridFromZeldovich(ics,factor),lfl_corner=[0,0,0])
+			if perm == -1:
+				raise Exception("Could not determine grid order. Likely grid is non-cubic or has non-standard order.")
+		N = np.round(np.cbrt(len(ics))).astype(int)
+		Nex = np.cbrt(len(ics))
+		if (N - Nex) != 0:
+			raise Exception("Grid is not cubic - could not auto-determine centroids.")
+		centroids = centroid(ics,N,perm=perm)
+	Psiz = getDisplacements(ics,z,perm,factor,lfl_corner,centroids)
+	posz = centroids + Psiz
+	zic = 1.0/ics.properties['a'] - 1
+	Omegam = ics.properties['omegaM0']
+	velz = ics['vel']*cosmology.linearGrowthf(z,Omegam)/cosmology.linearGrowthf(zic,Omegam)
+	if filename == "auto":
+		filename = ics._filename + "_zeldovich_z" + str(z)
+	newProperties = copy.deepcopy(ics.properties)
+	newProperties['a'] = 1.0/(z + 1.0)
+	snew = newSnap(filename,posz,velz,dmMass = ics['mass'],fmt = type(ics),properties = newProperties)
+	return snew
 	

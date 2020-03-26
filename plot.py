@@ -338,7 +338,8 @@ def plotHaloRelative(halo,centre = None,weights = None,color_spec=(1,1,1),type='
 	boxsize = halo.properties['boxsize'].ratio("Mpc a h**-1")
 	plotPointsRelative(halo['pos'],boxsize,centre=centre,weights = weights,color_spec=color_spec,type=type,scale=scale)
 
-
+def float_formatter(x,d=2):
+	return str(np.around(x,decimals=d))
 	
 
 
