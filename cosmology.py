@@ -2,7 +2,7 @@
 import numpy as np
 import scipy.integrate as integrate
 import hmf, astropy
-from .import plot
+#from .import plot
 from scipy import interpolate
 import camb
 

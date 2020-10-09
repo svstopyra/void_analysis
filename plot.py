@@ -2,7 +2,7 @@
 from mayavi.mlab import points3d, text3d, plot3d, triangular_mesh
 from mayavi import mlab
 import pynbody
-from void_analysis import context, snapedit
+from void_analysis import context, snapedit, plot_utilities
 import numpy as np
 import imageio
 import os
@@ -13,6 +13,7 @@ from . import cosmology
 from scipy import integrate
 import pandas
 import seaborn as sns
+from .plot_utilities import binCentres, binValues
 
 # Plot the positions in a snapshot:
 def subsnap_scatter(subsnap,color_spec=(1,1,1),scale=1.0,type='2dvertex'):
@@ -168,32 +169,6 @@ def computeHistogram(x,bins,z=1.0,density = True):
 			else:
 				sigma[k] = z*np.sqrt(p*(1.0-p)*N)
 	return [prob,sigma,noInBins,inBins]
-
-# Put the specified values in the specified bins:
-# values - values to bin (array)
-# bins - boundaries of the bins to use (will be one fewer bins than there are boundaries)
-# Returns:
-# binList - list of arrays giving the indices of all the elements of values that are in each bin.
-# noInBins - number of elements in each bin
-def binValues(values,bins):
-	binList = []
-	noInBins = np.zeros(len(bins)-1,dtype=int)
-	for k in range(0,len(bins)-1):
-		inThisBin = np.where((values >= bins[k]) & (values < bins[k+1]))[0]
-		binList.append(inThisBin)
-		noInBins[k] = len(inThisBin)		
-	return [binList,noInBins]
-
-def binValues2d(values,bins):
-	binList = []
-	for k in range(0,len(bins)-1):
-		inThisBin = np.where((values >= bins[k]) & (values < bins[k+1]))
-		binList.append(inThisBin)		
-	return binList
-
-# Returns the centres of the bins, specified from their boundaries. Has one fewer elements.
-def binCentres(bins):
-	return (bins[1:len(bins)] + bins[0:(len(bins)-1)])/2
 
 # Create bins for a list of values:
 def createBins(values,nBins,log=False):
@@ -360,7 +335,7 @@ def floatsToStrings(floatArray,precision=2):
 
 # Violin plots
 def plotViolins(rho,radialBins,radiiFilter=None,ylim=1.4,ax = None,fontsize=14,fontname="serif",color=None,inner=None,linewidth=None,saturation=1.0,palette="colorblind"):
-	radii = plot.binCentres(radialBins)
+	radii = binCentres(radialBins)
 	if radiiFilter is None:
 		radiiFilter = np.arange(0,len(radii))
 	if ax is None:
