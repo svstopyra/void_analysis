@@ -2,6 +2,8 @@ import numpy as np
 import scipy.spatial as sp
 import networkx as nx
 import os
+import multiprocessing
+from multiprocessing import Pool
 
 # Pads the points from a snapshot periodically, adding duplicates of particles from one end of the box to the other.
 def periodicPadding(snapshot,width,boxsize):
@@ -43,6 +45,18 @@ def voronoiOfSnap(snapshot,widthFactor=0.025):
 	rho = mass/volumes
 	delta = (rho - rhobar)/rhobar
 	return [vor,chList,volumes,rho,rhobar,delta,points_new,indices]
+
+def createSubVoronoi(points,subBoxSize,boxsize,offset,widthFactor = 0.1):
+	overlap = widthFactor*subBoxSize
+	subPoints = np.where((points[:,0] >= offset[0]) & (points[0] <= offset[0] + subBoxSize) & (points[:,1] >= offset[1]) & (points[1] <= offset[1] + subBoxSize) & (points[:,2] >= offset[2]) & (points[2] <= offset[2] + subBoxSize))
+	bufferPoints = np.where((points[:,0] >= offset[0] - overlap) & (points[0] <= offset[0] + subBoxSize) & (points[:,1] >= offset[1]) & (points[1] <= offset[1] + subBoxSize) & (points[:,2] >= offset[2]) & (points[2] <= offset[2] + subBoxSize))
+
+# Parallel voronoi:
+def parallelVoronoiOfSnap(snap,widthFactor=0.1,divisions = 2):
+	boxsize = snapshot.properties['boxsize'].ratio("Mpc a h**-1")
+	width = widthFactor*boxsize
+	[points_new,indices] = periodicPadding(snapshot,width,boxsize)
+	subBoxWidth = boxsize/divisions
 
 # Extract information about the connectedness of points with density below a given threshold:
 def densityThresh(vor,indices,delta,deltaThresh,returnIntermediaries = False):

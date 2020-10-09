@@ -11,6 +11,8 @@ import matplotlib.pylab as plt
 from matplotlib import cm
 from . import cosmology
 from scipy import integrate
+import pandas
+import seaborn as sns
 
 # Plot the positions in a snapshot:
 def subsnap_scatter(subsnap,color_spec=(1,1,1),scale=1.0,type='2dvertex'):
@@ -109,15 +111,20 @@ def construct_color_list(n,ncolors):
 	return (i/(ncbrt-1),j/(ncbrt-1),k/(ncbrt-1))
 
 # Returns the specified number in scientific notation:
-def scientificNotation(x,latex=False,s=3):
-	log10x = np.log10(x)
+def scientificNotation(x,latex=False,s=3,powerRange = 0):
+	log10x = np.log10(np.abs(x))
 	z = np.floor(log10x).astype(int)
 	y = 10.0**(log10x - z)
-	resultString = "10^{" + "{0:0d}".format(z) + "}"
-	if y != 1.0:
-		resultString = ("{0:." + str(s) + "g}").format(y) + "\\times " + resultString
-	if latex:
-		resultString = "$" + resultString + "$"
+	if z > powerRange:
+		resultString = "10^{" + "{0:0d}".format(z) + "}"
+		if y != 1.0:
+			resultString = ("{0:." + str(s) + "g}").format(y) + "\\times " + resultString
+		if latex:
+			resultString = "$" + resultString + "$"
+	else:
+		resultString = ("{0:." + str(s) + "g}").format(y*(10.0**z))
+	if x < 0:
+		resultString = "-" + resultString
 	return resultString
 
 # Plot binned halo densities as a function of redshift
@@ -139,7 +146,7 @@ def plot_halo_void_densities(z,rhoVnav,rhoVnsd,rhoVrav,rhoVrsd,bins):
 	plt.legend(legendList)
 	plt.show()
 
-def computeHistogram(x,bins,z=1.0):
+def computeHistogram(x,bins,z=1.0,density = True):
 	noInBins = np.zeros(len(bins)-1,dtype=int)
 	N = len(x)
 	prob = np.zeros(len(bins)-1)
@@ -151,9 +158,15 @@ def computeHistogram(x,bins,z=1.0):
 			noInBins[k] = len(inBins[k])
 			# Estimate of the probability density for this bin:
 			p = len(inBins[k])/N
-			prob[k] = p/(bins[k+1] - bins[k])
+			if density:
+				prob[k] = p/(bins[k+1] - bins[k])
+			else:
+				prob[k] = len(inBins[k])
 			# Normal distribution approximation of the confidence interval on this density:
-			sigma[k] = z*np.sqrt(p*(1.0-p)/N)/(bins[k+1] - bins[k])
+			if density:
+				sigma[k] = z*np.sqrt(p*(1.0-p)/N)/(bins[k+1] - bins[k])
+			else:
+				sigma[k] = z*np.sqrt(p*(1.0-p)*N)
 	return [prob,sigma,noInBins,inBins]
 
 # Put the specified values in the specified bins:
@@ -340,6 +353,56 @@ def plotHaloRelative(halo,centre = None,weights = None,color_spec=(1,1,1),type='
 
 def float_formatter(x,d=2):
 	return str(np.around(x,decimals=d))
+	
+# Convert an array of floats into an array of strings:
+def floatsToStrings(floatArray,precision=2):
+	return [("%." + str(precision) + "f") % number for number in floatArray]
+
+# Violin plots
+def plotViolins(rho,radialBins,radiiFilter=None,ylim=1.4,ax = None,fontsize=14,fontname="serif",color=None,inner=None,linewidth=None,saturation=1.0,palette="colorblind"):
+	radii = plot.binCentres(radialBins)
+	if radiiFilter is None:
+		radiiFilter = np.arange(0,len(radii))
+	if ax is None:
+		fig, ax = plt.subplots()
+	panData = pandas.DataFrame(data=rho[:,radiiFilter],columns=floatsToStrings(radii[radiiFilter]))
+	sns.violinplot(data=panData,ax=ax,color=color,inner=inner,linewidth=linewidth,saturation=saturation,palette=palette)
+	ax.set_xlabel('$R/R_{\\mathrm{eff}}$',fontsize=fontsize,fontfamily=fontname)
+	ax.set_ylabel('$\\rho/\\bar{\\rho}$',fontsize=fontsize,fontfamily=fontname)
+	ax.set_ylim([0,ylim])
+	xlim = ax.get_xlim()
+	ax.tick_params(axis='both',labelsize=fontsize)
+	ax.axhline(y = 1.0,color='0.75',linestyle=':')
+
+class LinearMapper:
+	def __init__(self,inMin,inMax,outMin=0,outMax=1):
+		self.inMin = inMin
+		self.inMax = inMax
+		self.outMin = outMin
+		self.outMax = outMax
+	def __call__(self,x,clip=False):
+		return self.outMin + (self.outMax - self.outMin)*(x - self.inMin)/(self.inMax - self.inMin)
+	def autoscale(self,A):
+		self.inMin = np.min(A)
+		self.inMax = np.max(A)
+	def inverse(self,x):
+		return self.inMin + (self.inMax - self.inMin)*(x - self.outMin)/(self.outMax - self.outMin)
+
+
+class LogMapper:
+	def __init__(self,inMin,inMax,outMin=0,outMax=1,logMin = 1.0):
+		self.inMin = np.log(logMin + inMin)
+		self.inMax = np.log(logMin + inMax)
+		self.outMin = outMin
+		self.outMax = outMax
+		self.logMin = logMin
+	def __call__(self,x,clip=False):
+		return self.outMin + (self.outMax - self.outMin)*(np.log(self.logMin + x) - self.inMin)/(self.inMax - self.inMin)
+	def autoscale(self,A):
+		self.inMin = np.min(A)
+		self.inMax = np.max(A)
+
+
 	
 
 

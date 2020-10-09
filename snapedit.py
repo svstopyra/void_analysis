@@ -78,13 +78,14 @@ def getGridFromZeldovich(s,factor):
 	return wrap((s['pos'].in_units("Mpc a h**-1") - (s['vel']/fac)),boxsize)
 
 # Test whether a set of initial conditions uses the zeldovich approximation
-def zeldovich_test(s,factor=1,tol=1e-4,lfl=[0,0,0]):
+def zeldovich_test(s,factor=1,tol=1e-4,lfl=[0,0,0],grid = None):
 	
 	units = s['pos'].units
 	boxsize = s.properties['boxsize'].in_units(units)
 
 	# Get positions of particles subtracting off what the offsets would be if we were using the zeldovich approximation:
-	grid = getGridFromZeldovich(s,factor)
+	if grid is None:
+		grid = getGridFromZeldovich(s,factor)
 
 	# centroids of grid points:
 	perm = gridTest(s,grid)
@@ -323,7 +324,7 @@ def reorderSnap(snapname_in,snapname_out):
 	return snew
 
 # Create a new snapshot based on a set of positions and weights
-def newSnap(newFilename,dmPos,dmVel,dmMass = None,gasPos=None,gasVel=None,gasMass=None,properties=None,fmt=None):
+def newSnap(newFilename,dmPos,dmVel,dmMass = None,gasPos=None,gasVel=None,gasMass=None,properties=None,fmt=None,indices=None,gasIndices=None):
 	includeGas = False
 	if gasPos is None:
 		snew = pynbody.new(dm=len(dmPos))
@@ -343,7 +344,14 @@ def newSnap(newFilename,dmPos,dmVel,dmMass = None,gasPos=None,gasVel=None,gasMas
 			if gasMass is None:
 				gasMass = pynbody.array.SimArray(np.zeros(len(gasPos)),"1e+10 Msol h**-1")
 			snew.gas['mass'] = gasMass
-		
+	# Output indices:
+	if indices is None:
+		indices = pynbody.array.SimArray(np.arange(0,len(dmPos)))
+	snew.dm['iord'] = indices
+	if includeGas:
+		if gasIndices == None:
+			gasIndices = pynbody.array.SimArray(np.arange(0,len(dmPos)))
+		snew.gas['iord'] = gasIndices
 	if properties is not None:
 		snew.properties = properties
 	if os.path.isfile(newFilename):
@@ -383,8 +391,9 @@ def getDisplacements(ics,z = 0,perm=(0,1,2),factor = 1,lfl_corner=[0,0,0],centro
 		Nex = np.cbrt(len(ics))
 		if (N - Nex) != 0:
 			raise Exception("Grid is not cubic - could not auto-determine centroids.")
-		centroid = snapedit.centroid(ics,N,perm=perm)
-	Psi = ics['pos'] - centroids
+		centroids = snapedit.centroid(ics,N,perm=perm)
+	boxsize = ics.properties['boxsize'].ratio("Mpc a h**-1")
+	Psi = unwrap(ics['pos'] - centroids,boxsize)
 	Omegam = ics.properties['omegaM0']
 	zic = 1.0/ics.properties['a'] - 1
 	Dic = cosmology.linearGrowthD(zic,Omegam)
@@ -405,7 +414,8 @@ def extrapolateZeldovich(ics,z = 0,perm=(0,1,2),factor = 1,lfl_corner=[0,0,0],ce
 			raise Exception("Grid is not cubic - could not auto-determine centroids.")
 		centroids = centroid(ics,N,perm=perm)
 	Psiz = getDisplacements(ics,z,perm,factor,lfl_corner,centroids)
-	posz = centroids + Psiz
+	boxsize = ics.properties['boxsize'].ratio("Mpc a h**-1")
+	posz = wrap(centroids + Psiz,boxsize)
 	zic = 1.0/ics.properties['a'] - 1
 	Omegam = ics.properties['omegaM0']
 	velz = ics['vel']*cosmology.linearGrowthf(z,Omegam)/cosmology.linearGrowthf(zic,Omegam)
@@ -413,6 +423,6 @@ def extrapolateZeldovich(ics,z = 0,perm=(0,1,2),factor = 1,lfl_corner=[0,0,0],ce
 		filename = ics._filename + "_zeldovich_z" + str(z)
 	newProperties = copy.deepcopy(ics.properties)
 	newProperties['a'] = 1.0/(z + 1.0)
-	snew = newSnap(filename,posz,velz,dmMass = ics['mass'],fmt = type(ics),properties = newProperties)
+	snew = newSnap(filename,posz,velz,dmMass = ics['mass'],fmt = type(ics),properties = newProperties,indices= ics.dm['iord'])
 	return snew
 	

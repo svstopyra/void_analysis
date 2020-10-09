@@ -160,9 +160,9 @@ def TMF(M,A,a,b,c,z,rhoB,Tki,ki,ns,sigma8):
 # Mmin - log10 of minimum mass, in units of Msol
 # Mmax - log10 of maximum halo mass, in units of Msol
 # dlog10m - step between Mmin and Mmax, in log10 space.
-def TMF_from_hmf(Mmin,Mmax,dlog10m=0.01,h = 0.677,Tcmb0 = 2.725,Om0=0.307,Ob0 = 0.0486,returnObjects = False,sigma8 = 0.8159,delta_wrt='crit',Delta=500,z=0):
+def TMF_from_hmf(Mmin,Mmax,dlog10m=0.01,h = 0.677,Tcmb0 = 2.725,Om0=0.307,Ob0 = 0.0486,returnObjects = False,sigma8 = 0.8159,delta_wrt='SOCritical',Delta=500,z=0):
 	cosmo = astropy.cosmology.FlatLambdaCDM(H0 = 100*h,Om0 = Om0, Tcmb0 = Tcmb0, Ob0 = Ob0)
-	tmf = hmf.hmf.MassFunction(Mmin=np.log10(Mmin),Mmax=np.log10(Mmax),hmf_model=hmf.fitting_functions.Tinker08,cosmo_model=cosmo,sigma_8 = sigma8,delta_wrt=delta_wrt,delta_h=Delta,z=z)
+	tmf = hmf.hmf.MassFunction(Mmin=np.log10(Mmin),Mmax=np.log10(Mmax),hmf_model=hmf.fitting_functions.Tinker08,cosmo_model=cosmo,sigma_8 = sigma8,mdef_model=delta_wrt,z=z)
 	if returnObjects:
 		return [tmf.dndm,tmf.m,tmf,cosmo]
 	else:

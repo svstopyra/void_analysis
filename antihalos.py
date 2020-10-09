@@ -111,6 +111,16 @@ def getOverlapFractions(antiHaloParticles,cat,voidList,volumes,mode = 0):
 	else:
 		return fraction[:,mode]
 
+def getVoidOverlapFractionsWithAntihalos(voidParticles,hr,antiHaloList,volumes,mode = 0):
+	fraction = np.zeros((len(antiHaloList),2))
+	for k in range(0,len(fraction)):
+		overlap = getAntihaloOverlapWithVoid(hr[antiHaloList[k]+1]['iord'],voidParticles,volumes)
+		fraction[k,:] = overlap
+	if mode == "both":
+		return fraction
+	else:
+		return fraction[:,mode]
+
 # Remove any voids from the set that are actually subvoids of another in the set:
 def removeSubvoids(cat,voidSet):
 	# Get ID list:
@@ -289,6 +299,7 @@ def getAutoCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,matterSnap,rMin 
 def getStacks(ahRadius,ahMasses,antiHaloCentres,zvRadius,zvMasses,voidCentres,snap,pairCountsAH,pairCountsZV,volumesListAH,volumesListZV,conditionAH = None,conditionZV = None,showPlot=True,ax=None,rBins = np.linspace(0,3,31),sizeBins = [2,4,10,21],plotAH=True,plotZV=True,binType="radius",tree=None,sumType='poisson',yUpper = 1.3,valuesAH = None,valuesZV = None,binLabel="",errorType="Profile"):
 	AHfilters = []
 	ZVfilters = []
+	nbar = len(snap)/(snap.properties['boxsize'].ratio("Mpc a h**-1"))**3
 	for k in range(0,len(sizeBins)-1):
 		if (valuesAH is None) or (valuesZV is None):
 			if binType == "radius":
@@ -315,16 +326,18 @@ def getStacks(ahRadius,ahMasses,antiHaloCentres,zvRadius,zvMasses,voidCentres,sn
 	sigmaBarsAH = []
 	sigmaBarsZV = []
 	for k in range(0,len(sizeBins)-1):
-		[nbarj_AH,sigma_AH] = stackVoidsWithFilter(antiHaloCentres,ahRadius,AHfilters[k][0],snap,rBins,tree=tree,method=sumType,nPairsList=pairCountsAH,volumesList=volumesListAH,errorType=errorType)
-		[nbarj_ZV,sigma_ZV] = stackVoidsWithFilter(voidCentres,zvRadius,ZVfilters[k][0],snap,rBins,tree=tree,method=sumType,nPairsList=pairCountsZV,volumesList=volumesListZV,errorType=errorType)
+		[nbarj_AH,sigma_AH] = stacking.stackVoidsWithFilter(antiHaloCentres,ahRadius,AHfilters[k][0],snap,rBins,tree=tree,method=sumType,nPairsList=pairCountsAH,volumesList=volumesListAH,errorType=errorType)
+		[nbarj_ZV,sigma_ZV] = stacking.stackVoidsWithFilter(voidCentres,zvRadius,ZVfilters[k][0],snap,rBins,tree=tree,method=sumType,nPairsList=pairCountsZV,volumesList=volumesListZV,errorType=errorType)
 		nBarsAH.append(nbarj_AH)
 		nBarsZV.append(nbarj_ZV)
 		sigmaBarsAH.append(sigma_AH)
 		sigmaBarsZV.append(sigma_ZV)
 	if showPlot:
-		anti_halo_plot.plotStacks(rBins,nBarsAH,nBarsZV,sigmaBarsAH,sigmaBarsZV,sizeBins,binType,nbar,plotAH=plotAH,plotZV=plotZV,yUpper = yUpper,binLabel=binLabel)
+		plotStacks(rBins,nBarsAH,nBarsZV,sigmaBarsAH,sigmaBarsZV,sizeBins,binType,nbar,plotAH=plotAH,plotZV=plotZV,yUpper = yUpper,binLabel=binLabel)
 	
 	return [nBarsAH,nBarsZV,sigmaBarsAH,sigmaBarsZV]
 
+
+# Pair counts about void centres:
 
 

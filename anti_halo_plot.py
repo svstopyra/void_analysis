@@ -251,6 +251,50 @@ def plotLambdaDistribution(lambdaAH,lambdaZV,filterAH = None,filterZV = None,fon
 	else:
 		if returnData:
 			return [dataStructAH,dataStructZV]
+
+from void_analysis.plot import computeHistogram
+def plotDeltaBarDistribution(deltaBarAH,deltaBarZV,filterAH = None,filterZV = None,fontsize = 14,title = None,deltaBarBins = np.linspace(-1,2,101),returnAx = False,returnData = False,mode = "density"):
+	if filterAH is None:
+		filterAH = slice(len(deltaBarAH))
+	if filterZV is None:
+		filterZV = slice(len(deltaBarZV))
+	[pdeltaBarAH,sigmaDeltaAH,noInBinsDeltaAH,inBinsDeltaAH] = computeHistogram(deltaBarAH[filterAH],deltaBarBins,density = (mode == "density"))
+	[pdeltaBarZV,sigmaDeltaZV,noInBinsDeltaZV,inBinsDeltaZV] = computeHistogram(deltaBarZV[filterZV],deltaBarBins,density = (mode == "density"))
+	fig, ax = plt.subplots()
+	if mode == "density":
+		plot.histWithErrors(pdeltaBarAH,sigmaDeltaAH,deltaBarBins,ax=ax,label="Anti-Halos $\\bar{\\delta}_v$")
+		plot.histWithErrors(pdeltaBarZV,sigmaDeltaZV,deltaBarBins,ax=ax,label="ZOBOV Voids $\\bar{\\delta}_v$")
+		ax.set_ylabel("Probability density",fontsize=fontsize)
+		if returnData:
+			dataStructAH = [pdeltaBarAH,sigmaDeltaAH,noInBinsDeltaAH,inBinsDeltaAH]
+			dataStructZV = [pdeltaBarZV,sigmaDeltaZV,noInBinsDeltaZV,inBinsDeltaZV]
+	elif mode == "absolute":
+		NAH = len(deltaBarAH[filterAH])
+		NZV = len(deltaBarZV[filterZV])
+		nDeltaBarAH = NAH*pdeltaBarAH
+		nDeltaBarZV = NZV*pdeltaBarZV
+		sigmanDeltaAH = NAH*sigmaDeltaAH
+		sigmanDeltaZV = NZV*sigmaDeltaZV
+		plot.histWithErrors(nDeltaBarAH,sigmanDeltaAH,deltaBarBins,ax=ax,label="Anti-Halos")
+		plot.histWithErrors(nDeltaBarZV,sigmanDeltaZV,deltaBarBins,ax=ax,label="ZOBOV Voids")
+		ax.set_ylabel("Number of voids",fontsize=fontsize)
+		if returnData:
+			dataStructAH = [nDeltaBarAH,sigmanDeltaAH,noInBinsDeltaAH,inBinsDeltaAH]
+			dataStructZV = [nDeltaBarZV,sigmanDeltaZV,noInBinsDeltaZV,inBinsDeltaZV]
+	else:
+		raise Exception("Invalid plot mode.")
+	ax.set_xlabel("$\\delta$",fontsize=fontsize)
+	ax.legend(prop={"size":fontsize})
+	ax.set_title(title,fontsize=fontsize)
+	ax.tick_params(axis='both',labelsize=fontsize)
+	if returnAx:
+		if returnData:
+			return [ax,dataStructAH,dataStructZV]
+		else:
+			return ax
+	else:
+		if returnData:
+			return [dataStructAH,dataStructZV]
 	
 # Scatter plot for void/anti-halos masses and radii:
 def scatterMassRadius(antiHaloMasses,antiHaloRadii,zobovMasses,zobovRadii,a,b):
@@ -264,30 +308,30 @@ def scatterMassRadius(antiHaloMasses,antiHaloRadii,zobovMasses,zobovRadii,a,b):
 	ax.set_ylabel('Radius, $[\\mathrm{MPc}/h]$')
 	ax.legend()
 
-
-def plotStacks(rBins,nBarsAH,nBarsZV,sigmaBarsAH,sigmaBarsZV,sizeBins,binType,nbar,ax=None,colorList = ['r','g','b'],fontsize=14,plotAH=True,plotZV=True,yUpper = 1.3,binLabel=""):
+from void_analysis.plot import scientificNotation
+def plotStacks(rBins,nBarsAH,nBarsZV,sigmaBarsAH,sigmaBarsZV,sizeBins,binType,nbar,ax=None,colorList = ['r','g','b'],fontsize=14,plotAH=True,plotZV=True,yUpper = 1.3,binLabel="",labelAH = 'Anti-halos ',labelZV = 'ZOBOV Voids ',title = "Stacked void profiles",powerRange = 3):
 	if ax is None:
 		fig, ax = plt.subplots()
 	rBinStackCentres = plot.binCentres(rBins)
-	nbar = len(snap)/(snap.properties['boxsize'].ratio("Mpc a h**-1")**3)
+	#nbar = len(snap)/(snap.properties['boxsize'].ratio("Mpc a h**-1")**3)
 	for k in range(0,len(sizeBins)-1):
 		if binType == "radius":
 			rangeLabel = str(sizeBins[k]) + "$ < R_{\mathrm{eff}} < $" + str(sizeBins[k+1])
 		elif (binType == "mass") or (binType == "RtoM"):
-			rangeLabel = scientificFormat(sizeBins[k]) + "$ < M < $" + scientificFormat(sizeBins[k+1])
+			rangeLabel = '$' +  scientificNotation(sizeBins[k],powerRange = powerRange) + " < M/M_{\\mathrm{sol}} < " + scientificNotation(sizeBins[k+1],powerRange = powerRange) + '$'
 		else:
-			rangeLabel = str(sizeBins[k]) + "$ < " + binLabel + " < $" + str(sizeBins[k+1])
+			rangeLabel = '$' + scientificNotation(sizeBins[k],powerRange = powerRange) + " < " + binLabel + " < " + scientificNotation(sizeBins[k+1],powerRange = powerRange) + '$'
 		if k < len(colorList):
 			color = colorList[k]
 		else:
 			color = None
 		if plotAH:
-			ax.errorbar(rBinStackCentres,nBarsAH[k]/nbar,yerr=sigmaBarsAH[k]/nbar,label='Anti-halos ' + rangeLabel,color=color,fmt='-')
+			ax.errorbar(rBinStackCentres,nBarsAH[k]/nbar,yerr=sigmaBarsAH[k]/nbar,label=labelAH + rangeLabel,color=color,fmt='-')
 		if plotZV:
-			ax.errorbar(rBinStackCentres,nBarsZV[k]/nbar,yerr=sigmaBarsZV[k]/nbar,label='ZOBOV Voids ' + rangeLabel,color=color,fmt='--')
+			ax.errorbar(rBinStackCentres,nBarsZV[k]/nbar,yerr=sigmaBarsZV[k]/nbar,label=labelZV + rangeLabel,color=color,fmt='--')
 	ax.plot(rBinStackCentres,np.ones(rBinStackCentres.shape),'k--')
 	ax.plot([1,1],[0,3],'k--')
-	ax.set_title("Stacked void profiles")
+	ax.set_title(title)
 	ax.set_xlabel("$R/R_{\mathrm{eff}}$",fontsize=fontsize)
 	ax.set_ylabel("$\\rho/\\bar{\\rho}$",fontsize=fontsize)
 	ax.tick_params(axis='both',labelsize=fontsize)
