@@ -1,4 +1,5 @@
 # This holds code used by plot that doesn't need to integrate with any graphical backends. This avoids having to load those backends on systems (such as clusters) that might not support them
+import numpy as np
 
 # Returns the centres of the bins, specified from their boundaries. Has one fewer elements.
 def binCentres(bins):
