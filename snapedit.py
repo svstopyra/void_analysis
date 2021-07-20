@@ -3,7 +3,7 @@ import numpy as np
 import pynbody
 import os
 import copy
-from . import cosmology
+from . import cosmology, snapedit
 
 # Attempt to figure out what type of particle arrangement we have:
 def gridTest(s,grid,lfl_corner=[0,0,0]):
@@ -31,9 +31,9 @@ def gridTest(s,grid,lfl_corner=[0,0,0]):
 # Wrap positions so that they lie in the periodic domain:
 def wrap(pos,boxsize):
 	wrap_up = np.where(pos < 0.0)
-	wrap_down = np.where(pos > boxsize)
 	wrap = pos[:]*1.0
 	wrap[wrap_up] = wrap[wrap_up] + boxsize
+	wrap_down = np.where(wrap >= boxsize)
 	wrap[wrap_down] = wrap[wrap_down] - boxsize
 	return wrap
 
@@ -331,8 +331,8 @@ def newSnap(newFilename,dmPos,dmVel,dmMass = None,gasPos=None,gasVel=None,gasMas
 	else:
 		includeGas = True
 		snew = pynbody.new(dm=len(dmPos),gas=len(gasPos))
-	snew.dm['pos'] = dmPos
-	snew.dm['vel'] = dmVel
+	snew.dm['pos'] = pynbody.array.SimArray(dmPos,"Mpc a h**-1")
+	snew.dm['vel'] = pynbody.array.SimArray(dmVel,"km a**1/2 s**-1")
 	if dmMass is not None:
 		snew.dm['mass'] = dmMass
 	if includeGas:

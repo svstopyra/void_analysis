@@ -1,10 +1,13 @@
 # Functions related to cosmological parameters
 import numpy as np
 import scipy.integrate as integrate
+from scipy.optimize import brentq
 import hmf, astropy
 #from .import plot
 from scipy import interpolate
 import camb
+import scipy
+import pynbody
 
 # Linear growth factor as a function of z:
 def fLinear(z,Om,Ol):
@@ -152,21 +155,73 @@ def TMF(M,A,a,b,c,z,rhoB,Tki,ki,ns,sigma8):
 	sigmap = computeDSigmaDM(z,M,rhoB,Tki,ki,ns,amp)
 	return fsigma(sigma,A,a,b,c)*(rhoB/M)*(-sigmap/sigma)
 
+# Extension of HMF to include Horizon Run fitting function:
+
+# New fitting function for Horizon Run simulation (arxiv:1508.05107)
+from hmf.mass_function.fitting_functions import Bhattacharya
+from hmf.mass_function.fitting_functions import Tinker08
+
+class HorizonRunFittingFunction(Bhattacharya):
+	def __init__(self,**kwargs):
+		super(HorizonRunFittingFunction,self).__init__(**kwargs)
+	
+	@property
+	def fsigma(self):
+		r"""
+		Calculate :math:'f(\sigma)' for the Horizon Run 2015 fitting function.
+		
+		Juhan et al. June 2015, Journal of The Korean Astronomical Society
+		Volume 48 Issue 4 / Pages.213-228 / 2015 
+		https://doi.org/10.5303/JKAS.2015.48.4.213
+		"""
+		a = self.params["a"]
+		A = self.norm()
+		p = self.params["p"]
+		q = self.params["q"]
+		
+		chiB = np.sqrt(self.params["a"]) * self.nu
+		chiSz = 0.09*np.tanh(0.9*self.z) + 0.01
+		phiz = np.exp(-self.z/10) + 0.025
+		chiHR = chiB - chiSz
+		
+		return A*phiz*np.sqrt( 2.0 / np.pi )*(chiHR**q)*(1.0 + chiHR**(-2.0*p))*np.exp( - chiHR**2 / 2.0 )
+
+
+
 # Function to create a mass function using the hmf package, assuming a flat cosmology.
 # h - dimensionless Hubble parameter
 # Tcmb0 - Temperature of the CMB, in Kelvin
 # Om0 - matter density fraction
 # Ob0 - baryon density fraction
-# Mmin - log10 of minimum mass, in units of Msol
-# Mmax - log10 of maximum halo mass, in units of Msol
+# Mmin - log10 of minimum mass, in units of Msol/h
+# Mmax - log10 of maximum halo mass, in units of Msol/h
 # dlog10m - step between Mmin and Mmax, in log10 space.
-def TMF_from_hmf(Mmin,Mmax,dlog10m=0.01,h = 0.677,Tcmb0 = 2.725,Om0=0.307,Ob0 = 0.0486,returnObjects = False,sigma8 = 0.8159,delta_wrt='SOCritical',Delta=500,z=0):
-	cosmo = astropy.cosmology.FlatLambdaCDM(H0 = 100*h,Om0 = Om0, Tcmb0 = Tcmb0, Ob0 = Ob0)
-	tmf = hmf.hmf.MassFunction(Mmin=np.log10(Mmin),Mmax=np.log10(Mmax),hmf_model=hmf.fitting_functions.Tinker08,cosmo_model=cosmo,sigma_8 = sigma8,mdef_model=delta_wrt,z=z)
-	if returnObjects:
-		return [tmf.dndm,tmf.m,tmf,cosmo]
+def TMF_from_hmf(Mmin,Mmax,dlog10m=0.01,h = 0.677,Tcmb0 = 2.725,Om0=0.307,Ob0 = 0.0486,returnObjects = False,sigma8 = 0.8159,delta_wrt='SOCritical',Delta=500,z=0,mass_function = "Tinker",Ol0 = None):
+	if Ol0 is None:
+		cosmo = astropy.cosmology.FlatLambdaCDM(H0 = 100*h,Om0 = Om0, Tcmb0 = Tcmb0, Ob0 = Ob0)
 	else:
-		return [tmf.dndm,tmf.m]
+		#Ok0 = 1 - Om0 - Ol0
+		cosmo = astropy.cosmology.LambdaCDM(H0 = 100*h,Om0 = Om0, Ode0 = Ol0,Tcmb0 = Tcmb0, Ob0 = Ob0)
+	if mass_function == "Tinker" or mass_function == "Tinker08":
+		hmf_model = hmf.fitting_functions.Tinker08
+		hfactor = 1
+	elif mass_function == "Tinker10":
+		hmf_model = hmf.fitting_functions.Tinker10
+		hfactor = 1
+	elif mass_function == "Bhattacharya":
+		hmf_model = hmf.fitting_functions.Bhattacharya
+		hfactor = h
+	elif mass_function == "HR4":
+		hmf_model = HorizonRunFittingFunction
+		hfactor = h
+	else:
+		raise Exception("Unrecognised fitting function requested.")
+	hfactor = 1
+	tmf = hmf.hmf.MassFunction(Mmin=np.log10(Mmin/hfactor),Mmax=np.log10(Mmax/hfactor),hmf_model=hmf_model,cosmo_model=cosmo,sigma_8 = sigma8,mdef_model=delta_wrt,z=z)
+	if returnObjects:
+		return [tmf.dndm,tmf.m*hfactor,tmf,cosmo]
+	else:
+		return [tmf.dndm,tmf.m*hfactor]
 
 def PSMF(Mmin,Mmax,dlog10m=0.01,h = 0.677,Tcmb0 = 2.725,Om0=0.307,Ob0 = 0.0486,returnObjects = False,sigma8 = 0.8159,delta_c=None):
 	cosmo = astropy.cosmology.FlatLambdaCDM(H0 = 100*h,Om0 = Om0, Tcmb0 = Tcmb0, Ob0 = Ob0)
@@ -421,3 +476,265 @@ def vLinear(r,Delta,Om,Ol,z=0):
 # Compute delta:
 def deltaCumulative(pairCounts,volLists,nbar):
 	return (np.cumsum(pairCounts,axis=1)/np.cumsum(volLists,axis=1))/nbar - 1
+
+# Convert luminosity distance to comoving distance
+def luminosityToComoving(lumDist,cosmo):
+	h = cosmo.H0.value/100
+	rl = lumDist*astropy.units.Mpc
+	z = astropy.cosmology.z_at_value(cosmo.luminosity_distance,rl)
+	rc = cosmo.comoving_distance(z).value*h
+	return rc
+
+# Convert comoving distance to luminosity distance.
+def comovingToLuminosity(comovingDistance,cosmo,Ninterp=1000):
+	h = cosmo.H0.value/100
+	rq = comovingDistance*astropy.units.Mpc/h
+	zqMin = astropy.cosmology.z_at_value(cosmo.comoving_distance,np.min(rq))
+	zqMax = astropy.cosmology.z_at_value(cosmo.comoving_distance,np.max(rq))
+	zgrid = np.linspace(zqMin,zqMax,Ninterp)
+	Dgrid = cosmo.comoving_distance(zgrid)
+	zq = np.interp(rq.value,Dgrid.value,zgrid)
+	rl = cosmo.luminosity_distance(zq).value
+	return rl
+
+# Compute the power spectrum for a snapshot, saving the result to a file for later loading.
+def computePowerSpectrum(snap,recompute=False):
+	directory = os.path.dirname(snap.filename)
+	if not os.path.isfile(directory + "/PK-DM-" + os.path.basename(snap.filename)):
+		os.system('gen-pk -i ' + snap.filename + ' -o ' + directory)
+	pkdata = np.loadtxt(directory + "/PK-DM-" + os.path.basename(snap.filename))	
+	boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+	k = (2*np.pi/boxsize)*pkdata[:,0]
+	Pk = (boxsize/(2*np.pi))**3*pkdata[:,1]
+	N = np.array(pkdata[:,2],dtype=np.int)
+	return [k,Pk,N]
+
+# Error in a power spectrum estimate:
+def sigmaPk(pk,Nk,Np):
+	return pk*np.sqrt((1 + 2/(Np*pk) + 1/(Np**2*pk**2))/Nk)
+
+# Comput the overdensity for mass within a specified radius.
+def overdensity(snap,radius,centres=np.array([0,0,0]),rhomean=None,tree=None,n_jobs=-1):
+	boxsize = snap.properties['boxsize'].in_units("Mpc a h**-1")
+	if tree is None:
+		tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
+	if rhomean is None:
+		rhomean = (np.sum(np.array(snap['mass'].in_units("Msol h**-1")))/((snap.properties['boxsize'].in_units("Mpc a h**-1"))**3))
+	mass = snap['mass'].in_units("Msol h**-1")[0]
+	massTotal = mass*tree.query_ball_point(centres,radius,n_jobs=n_jobs,return_length=True)
+	density = (massTotal/((4*np.pi*(radius)**3/3)*(rhomean))) -1
+	return density
+
+# Slower, but uses less memor than overdensity
+def lowMemoryOverdensity(snap,radius,centre=np.array([0,0,0]),rhomean=None):
+	filt = pynbody.filt.Sphere(radius,centre)
+	if rhomean is None:
+		rhomean = (np.sum(np.array(snap['mass'].in_units("Msol h**-1")))/((snap.properties['boxsize'].in_units("Mpc a h**-1"))**3))
+	return np.sum(np.array(snap[filt]['mass'].in_units("Msol h**-1")))/((4*np.pi*(radius)**3/3)*(rhomean)) - 1
+
+def sampleOverdensities(snap,radius,samples,tree=None):
+	boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+	# Randomised centres:
+	centres = np.random.rand(samples,3)*boxsize
+	if tree is None:
+		tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
+	deltaList = overdensity(snap,radius,centres=centres,tree=tree)
+	return [centres,deltaList]
+
+# Compute the underdensity in a set of radial bins about a specified point.
+def computeLocalUnderdensity(snap,rBins,centre=np.array([0]*3),tree=None,workers=-1):
+	boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+	if tree is None:
+		tree = scipy.spatial.cKDTree(wrap(snap['pos'],boxsize),boxsize=boxsize)
+	rBinsUpper = rBins[1:]
+	centres = np.zeros((len(rBinsUpper),3))
+	centres[:,:] = centre
+	points = tree.query_ball_point(centres,rBinsUpper,workers=workers)
+	nParts = np.zeros(len(rBinsUpper),dtype=np.int)
+	for k in range(0,len(rBinsUpper)):
+		nParts[k] = len(points[k])
+	volumeSpheres = 4*np.pi*rBinsUpper**3/3
+	volumeShells = np.zeros(len(volumeSpheres))
+	volumeShells[0] = volumeSpheres[0]
+	volumeShells[1:] = volumeSpheres[1:] - volumeSpheres[0:-1]
+	nPartsShells = np.zeros(nParts.shape,dtype=np.int)
+	nPartsShells[0] = nParts[0]
+	nPartsShells[1:] = nParts[1:] - nParts[0:-1]
+	nbar = len(snap)/boxsize**3
+	deltaSpheres = nParts/(nbar*volumeSpheres) - 1
+	deltaShells = nParts/(nbar*volumeShells) - 1
+	return [deltaSpheres,deltaShells]
+
+# Mass profiles around a particular halo:
+def getMassProfile(radii,centre,snap):
+	mprof = np.zeros(len(radii))
+	for k in range(0,len(radii)):
+		mprof[k] = np.sum(snap[pynbody.filt.Sphere(radii[k],centre)]['mass']).in_units("Msol h**-1")
+	return mprof
+
+# Bhattarchrya Fitting function for the c-M relationship (based on Bhattarchya et al. (2013)). 
+# Input mass should be in Msol, not Msol/h.
+def cMBhattacharya(M,z=0,Om=0.3,Ol = 0.7,h=0.7,convertType='critical',relaxed=False,\
+		Or = 5e-5,Ok=0):
+	f = Om**(4.0/7.0) + (1 + Om/2)*(Ol/70)
+	#Dz = 1.0/((1.0 + z)**f)
+	Omz = (Om*(1 + z)**3)/(Or*(1 + z)**4 + Om*(1 + z)**3 + Ok*(1 + z)**2 + Ol)
+	Olz = Ol/(Or*(1 + z)**4 + Om*(1 + z)**3 + Ok*(1 + z)**2 + Ol)
+	#Dz = 2.5*Omz/(Omz**(4.0/7.0) - Olz + (1 + Omz/2)*(1 + Olz/70))
+	Dz = linearGrowthD(z,Om)
+	#Dz0 = 2.5*Om/(Om**(4.0/7.0) - Ol + (1 + Om/2)*(1 + Ol/70))
+	Dz0 = linearGrowthD(0,Om)
+	nuMz = (1.12*(M/(5e13/h))**0.3 + 0.53)*Dz0/Dz
+	if convertType == 'critical':
+		if relaxed:
+			return ((Dz/Dz0)**0.53)*6.6*(nuMz**(-0.41))
+		else:
+			return ((Dz/Dz0)**0.54)*5.9*(nuMz**(-0.35))
+	elif convertType == 'mean':
+		if relaxed:
+			return ((Dz/Dz0)**1.2)*10.1*(nuMz**(-0.34))
+		else:
+			return ((Dz/Dz0)**1.15)*9.0*(nuMz**(-0.29))
+	elif convertType == 'virial':
+		if relaxed:
+			return ((Dz/Dz0)**1.01)*8.9*(nuMz**(-0.34))
+		else:
+			return ((Dz/Dz0)**0.9)*7.7*(nuMz**(-0.29))
+	else:
+		raise Exception('Unknown convertType.')
+
+# Function used for computing masses within a given radius for an NFW profile:
+def mNFW(y):
+	return np.log(1.0 + y) - y/(1.0 + y)
+
+# Function to find zeros of when converting between critical masses:
+def criticalFunction(x,M1,D1,D2,z=0,Om=0.3,Ol = 0.7,h=0.7,Or = 5e-5,Ok=0,\
+		cD1 = None,cErrFrac = 0,convertType='critical'):
+	# x = M_D2/M_D1
+	# cD1 = concenctration parameter at Delta1
+	# D1 = Delta1 (initial Density contrast parameter)
+	# D2 = Delta2 (density contrast parameter we want to convert to)
+	if cD1 is None:
+		M2 = x*M1
+		cD1 = cMBhattacharya(M2,z=z,Om=Om,Ol=Ol,h=h,Or=Or,Ok=Ok,convertType=convertType)
+		cD1 = cD1*(1 + cErrFrac)
+	return x - mNFW(cD1)/mNFW(cD1*(D2/D1)**(1/3)*x**(-1/3))
+
+def convertDeltaToCritical(delta,deltaType,z = 0,Om=0.3,Ol=0.7,Or=5e-5,Ok=0):
+	if deltaType == 'mean':
+		Omz = (Om*(1 + z)**3)/(Or*(1 + z)**4 + Om*(1 + z)**3 + Ok*(1 + z)**2 + Ol)
+		return Omz*delta
+	elif deltaType == 'critical':
+		return delta
+	elif deltaType == 'virial':
+		Omz = (Om*(1 + z)**3)/(Or*(1 + z)**4 + Om*(1 + z)**3 + Ok*(1 + z)**2 + Ol)
+		x = Omz - 1
+		return 18*np.pi**2 + 82*x - 39*x**2
+	else:
+		raise Exception('D1 type not recognised.')
+
+def getBoundedInterval(m,d1,d2,bounds = np.array([0.1,10]),countMax = 10,
+		z = 0,Om=0.3,Ol = 0.7,h=0.7,Or = 5e-5,Ok=0,cErrFrac=0,
+		convertType = 'critical'):
+	if not np.isscalar(m):
+		bounds = np.outer(bounds,np.ones(m.shape))
+	fBounds = criticalFunction(bounds,m,d1,d2,Om=Om,Ol=Ol,h=h,Or=Or,Ok=Ok,cErrFrac=cErrFrac,\
+		convertType = convertType)
+	countMax = 10
+	counter = 0
+	if np.isscalar(m):
+		while (fBounds[0]*fBounds[1] > 0) and (counter < countMax):
+			bounds[0] = bounds[0]/10
+			bounds[1] = bounds[1]*10
+			fBounds = criticalFunction(bounds,m,d1,d2,Om=Om,Ol=Ol,h=h,Or=Or,Ok=Ok,\
+				cErrFrac=cErrFrac,convertType=convertType)
+			counter = counter + 1
+		if (fBounds[0]*fBounds[1] > 0):
+			raise Exception("Could not find interval for root finding.")
+	else:
+		while np.any(fBounds[0,:]*fBounds[1,:] > 0) and (counter < countMax):
+			notBounded = np.where(fBounds[0,:]*fBounds[1,:] > 0)[0]
+			bounds[0,notBounded] = bounds[0]/10
+			bounds[1,notBounded] = bounds[1]*10
+			fBounds[:,notBounded] = criticalFunction(bounds[:,notBounded],\
+				m[notBounded],d1,d2,Om=Om,Ol=Ol,\
+				h=h,Or=Or,Ok=Ok,cErrFrac=cErrFrac,convertType=convertType)
+			counter = counter + 1
+		if np.any(fBounds[0,:]*fBounds[1,:] > 0):
+			raise Exception("Could not find interval for root finding.")
+	return bounds
+
+# Function to convert between critical mass definitions:
+def convertCriticalMass(M1,D1,D2=200,z = 0,Om=0.3,Ol=0.7,Or=5e-5,Ok=0,h = 0.7,
+		type1='critical',type2='critical',relaxed=False,cErrFrac = 0.33,\
+		returnError=False):
+	# If one of the input Deltas is a mean, we need to convert it to a critical Delta:
+	d1 = convertDeltaToCritical(D1,type1,z=z,Om=Om,Ol=Ol,Or=Or,Ok=Ok)
+	d2 = convertDeltaToCritical(D2,type2,z=z,Om=Om,Ol=Ol,Or=Or,Ok=Ok)
+	# Estimate the concentration parameter:
+	#cD1 = cMBhattacharya(M1,convertType=type2,relaxed=relaxed,z=z,Om=Om,Ol=Ol,h=h,\
+	#	Or=Or,Ok=Ok)
+	# Zero finding:
+	boundMid = getBoundedInterval(M1,d1,d2,z=z,Om=Om,Ol=Ol,h=h,Or=Or,Ok=Ok)
+	boundLow = getBoundedInterval(M1,d1,d2,\
+		cErrFrac=cErrFrac,z=z,Om=Om,Ol=Ol,h=h,Or=Or,Ok=Ok)
+	boundUpp = getBoundedInterval(M1,d1,d2,\
+		cErrFrac=-cErrFrac,z=z,Om=Om,Ol=Ol,h=h,Or=Or,Ok=Ok)
+	if np.isscalar(M1):	
+		rootsMid = brentq(lambda x: criticalFunction(x,M1,d1,d2,\
+			z=z,Om=Om,Ol=Ol,h=h,Or=Or,Ok=Ok,cErrFrac=0,convertType=type2),\
+			boundMid[0],boundMid[1])
+		rootsLow = brentq(lambda x: criticalFunction(x,M1,\
+			d1,d2,z=z,Om=Om,Ol=Ol,h=h,Or=Or,Ok=Ok,\
+			cErrFrac=cErrFrac,convertType=type2),\
+			boundLow[0],boundLow[1])
+		rootsUpp = brentq(lambda x: criticalFunction(x,M1,\
+			d1,d2,z=z,Om=Om,Ol=Ol,h=h,Or=Or,Ok=Ok,\
+			cErrFrac=-cErrFrac,convertType=type2),\
+			boundUpp[0],boundUpp[1])
+	else:
+		rootsMid = np.zeros(M1.shape)
+		rootsLow = np.zeros(M1.shape)
+		rootsUpp = np.zeros(M1.shape)
+		for k in range(0,len(M1)):
+			rootsMid[k] = brentq(lambda x: criticalFunction(x,M1[k],d1,d2,\
+				z=z,Om=Om,Ol=Ol,h=h,Or=Or,Ok=Ok,cErrFrac=0,convertType=type2),\
+				boundMid[0,k],boundMid[1,k])
+			rootsLow[k] = brentq(lambda x: criticalFunction(x,M1[k],\
+				d1,d2,z=z,Om=Om,Ol=Ol,h=h,Or=Or,Ok=Ok,\
+				cErrFrac=cErrFrac,convertType=type2),\
+				boundUpp[0,k],boundUpp[1,k])
+			rootsUpp[k] = brentq(lambda x: criticalFunction(x,M1[k],\
+				d1,d2,z=z,Om=Om,Ol=Ol,h=h,Or=Or,Ok=Ok,\
+				cErrFrac=-cErrFrac,convertType=type2),\
+				boundUpp[0,k],boundUpp[1,k])
+	# Sometimes it can happen that the bounds are the wrong way round, because c-M
+	# relationships can be funny that way:
+	if np.any(rootsLow > rootsUpp):
+		if not np.isscalar(M1):
+			toSwap = np.where(rootsLow > rootsUpp)
+			temp = rootsLow[toSwap]
+			rootsLow[toSwap] = rootsUpp[toSwap]
+			rootsUpp[toSwap] = temp
+		else:
+			temp = rootsLow
+			rootsLow = rootsUpp
+			rootsUpp = temp
+	if returnError:
+		return [M1*rootsMid,M1*(rootsMid - rootsLow),M1*(rootsUpp - rootsMid)]
+	else:
+		return M1*rootsMid
+
+
+
+
+
+
+
+
+
+
+
+
+
+

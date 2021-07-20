@@ -2,6 +2,7 @@
 import numpy as np
 import pynbody
 import pickle
+import astropy
 
 # Returns the nearest neighbour halos to the specified halo
 def get_nearest_halos(centre,halo_list,coms='None',neighbours=1):
@@ -176,35 +177,41 @@ def cluster_fit(cluster,r1,r2,r3,R1,R2,R3):
 	# Finally, add back in R1:
 	return clusterp + R1
 
-# Converts equitorial co-ordinate data into 3d positions in kpc/h:
-def position3d(equitorial):
-	# equitorial - N x 3 matrix, with first column the right ascension, second column the declension, and 3rd column the observed redshift.
-	c = 299792458
-	kpc = 3.086e+19
-	# Hubble rate, H0/h:
-	H0 = 3.240440699935191e-18
+# Converts equatorial co-ordinate data into 3d positions in kpc/h:
+def position3d(equatorial,distType="redshift",distUnit = 3.086e+19,H0 = 3.240440699935191e-18,c = 299792458):
+	# equatorial - N x 3 matrix, with first column the right ascension, second column the declension, and 3rd column the observed redshift.
 	# Distance in kpc, using Hubble's law:
-	pos = np.zeros(equitorial.shape)
-	if(equitorial.ndim > 1):
-		D = c*equitorial[:,2]/(H0*kpc)
+	pos = np.zeros(equatorial.shape)
+	if(equatorial.ndim > 1):
+		if distType == "redshift":
+			D = c*equatorial[:,2]/(H0*distUnit)
+		elif distType == "velocity":
+			D = equatorial[:,2]/(H0*distUnit)
+		else:
+			D = equatorial[:,2]
 		# Angular co-ordinates:
-		phi = equitorial[:,0]*np.pi/180.0
-		theta = (90.0 - equitorial[:,1])*np.pi/180.0
+		phi = equatorial[:,0]*np.pi/180.0
+		theta = (90.0 - equatorial[:,1])*np.pi/180.0
 		pos[:,0] = D*np.sin(theta)*np.cos(phi)
 		pos[:,1] = D*np.sin(theta)*np.sin(phi)
 		pos[:,2] = D*np.cos(theta)
 	else:
-		D = c*equitorial[2]/(H0*kpc)
+		if distType == "redshift":
+			D = c*equatorial[:,2]/(H0*distUnit)
+		elif distType == "velocity":
+			D = equatorial[:,2]/(H0*distUnit)
+		else:
+			D = equatorial[:,2]
 		# Angular co-ordinates:
-		phi = equitorial[0]*np.pi/180.0
-		theta = (90.0 - equitorial[1])*np.pi/180.0
+		phi = equatorial[0]*np.pi/180.0
+		theta = (90.0 - equatorial[1])*np.pi/180.0
 		pos[0] = D*np.sin(theta)*np.cos(phi)
 		pos[1] = D*np.sin(theta)*np.sin(phi)
 		pos[2] = D*np.cos(theta)
 	return pos
 
-# Converts galactic co-ordinates into equitorial co-ordinates:
-def galactic_to_equitorial(galactic):
+# Converts galactic co-ordinates into equatorial co-ordinates:
+def galactic_to_equatorial(galactic):
 	# galactic - N x 2 array with galactic longitude in column 1, galactic latitude in column 2
 	# Ascension and Declination of the North Galactic Pole in radians):
 	aNGP = 192.85948*np.pi/180.0
@@ -245,29 +252,29 @@ def galactic_to_equitorial(galactic):
 	delta = np.arcsin(sind)
 	
 	# Final result (in degrees):
-	equitorial = np.zeros(galactic.shape)
+	equatorial = np.zeros(galactic.shape)
 	if galactic.ndim > 1:
-		equitorial[:,0] = alpha*(180.0/np.pi)
-		equitorial[:,1] = delta*(180.0/np.pi)
+		equatorial[:,0] = alpha*(180.0/np.pi)
+		equatorial[:,1] = delta*(180.0/np.pi)
 	else:
-		equitorial[0] = alpha*(180.0/np.pi)
-		equitorial[1] = delta*(180.0/np.pi)
-	return equitorial
+		equatorial[0] = alpha*(180.0/np.pi)
+		equatorial[1] = delta*(180.0/np.pi)
+	return equatorial
 
-# Inverse of the galactic_to_equitorial function:
-def equitorial_to_galactic(equitorial):
+# Inverse of the galactic_to_equatorial function:
+def equatorial_to_galactic(equatorial):
 	# Ascension and Declination of the North Galactic Pole in radians):
 	aNGP = 192.85948*np.pi/180.0
 	dNGP = 27.12825*np.pi/180.0
 	# And the north celestial pole in galactic longitude:
 	lNCP = 122.93192*np.pi/180.0
 	# Equitorial co-ordinates in radians:
-	if equitorial.ndim > 1:
-		a = equitorial[:,0]*np.pi/180.0
-		d = equitorial[:,1]*np.pi/180.0
+	if equatorial.ndim > 1:
+		a = equatorial[:,0]*np.pi/180.0
+		d = equatorial[:,1]*np.pi/180.0
 	else:
-		a = equitorial[0]*np.pi/180.0
-		d = equitorial[1]*np.pi/180.0
+		a = equatorial[0]*np.pi/180.0
+		d = equatorial[1]*np.pi/180.0
 	# Intermediates:
 	sindNGP = np.sin(dNGP)
 	cosdNGP = np.cos(dNGP)
@@ -285,14 +292,14 @@ def equitorial_to_galactic(equitorial):
 	coslp = (cosdNGP*sind - sindNGP*cosd*cosap)/cosb
 	negrange = np.where(sinlp < 0)
 	lp = (np.arccos(coslp))
-	if equitorial.ndim > 1:
+	if equatorial.ndim > 1:
 		lp[negrange] = (2.0*np.pi - lp[negrange])
 	elif sinlp < 0.0:
 		lp = 2.0*np.pi - lp
 	# Get the longitude in the right range:
 	l = np.mod(lNCP - lp,2.0*np.pi)
 	# Final result (in degrees):	
-	galactic = np.zeros(equitorial.shape)
+	galactic = np.zeros(equatorial.shape)
 	if galactic.ndim > 1:
 		galactic[:,0] = l*(180.0/np.pi)
 		galactic[:,1] = b*(180.0/np.pi)
@@ -548,7 +555,8 @@ def spheresMonteCarlo(centres,radii,boundBox,tol=1e-3,count_max=100,nRand=None,n
 			rand[:,j] = rand[:,j]*boundBox[j]
 		included = np.zeros(nRand,dtype=int)
 		for k in range(0,len(radii)):
-			inSphere = np.where(np.sqrt(np.sum((rand - centres[k,:])**2,1)) < radii[k])[0]
+			inSphere = np.where(np.sqrt(np.sum((rand - centres[k,:])**2,1)) <\
+				radii[k])[0]
 			included[inSphere] = 1
 		noIncluded = np.sum(included)
 		totalIncluded = totalIncluded + noIncluded
@@ -572,8 +580,74 @@ def spheresMonteCarlo(centres,radii,boundBox,tol=1e-3,count_max=100,nRand=None,n
 		print("Warning, failed to converge after " + str(count_max) + " iterations.")
 	volume = fracGuess*boundVolume
 	return volume
-	
-	
+
+# Wrappers for astropy to convert between different sky-coordinates:
+def mapEquatorialSnapshotToGalactic(snap,snapCoord=None):
+	h = snap.properties['h']
+	snap['pos'].convert_units("Mpc a h**-1")
+	if snapCoord is None:
+		R = np.sqrt(np.sum(snap['pos']**2,1))
+		ra = np.arctan2(snap['pos'][:,1],snap['pos'][:,0])
+		dec = np.arcsin(snap['pos'][:,2]/R)
+		snapCoord = astropy.coordinates.SkyCoord(ra=ra*astropy.units.rad,
+			dec=dec*astropy.units.rad,distance=R*astropy.units.Mpc/h)
+	snap['pos'][:,0] = snapCoord.galactic.cartesian.x.value*h
+	snap['pos'][:,1] = snapCoord.galactic.cartesian.y.value*h
+	snap['pos'][:,2] = snapCoord.galactic.cartesian.z.value*h
+
+def mapGalacticSnapshotToEquatorial(snap,snapCoord=None):
+	h = snap.properties['h']
+	snap['pos'].convert_units("Mpc a h**-1")
+	if snapCoord is None:
+		R = np.sqrt(np.sum(snap['pos']**2,1))
+		l = np.arctan2(snap['pos'][:,1],snap['pos'][:,0])
+		b = np.arcsin(snap['pos'][:,2]/R)
+		snapCoord = astropy.coordinates.SkyCoord(l=l*astropy.units.rad,
+			b=b*astropy.units.rad,distance=R*astropy.units.Mpc/h)
+	snap['pos'][:,0] = snapCoord.icrs.cartesian.x.value*h
+	snap['pos'][:,1] = snapCoord.icrs.cartesian.y.value*h
+	snap['pos'][:,2] = snapCoord.icrs.cartesian.z.value*h
+
+def mapEquatorialToGalactic(points,h = 0.705):
+	R = np.sqrt(np.sum(points**2,1))
+	ra = np.arctan2(points[:,1],points[:,0])
+	dec = np.arcsin(points[:,2]/R)
+	snapCoord = astropy.coordinates.SkyCoord(ra=ra*astropy.units.rad,
+		dec=dec*astropy.units.rad,distance=R*astropy.units.Mpc/h)
+	pointsGalactic = np.zeros(points.shape)
+	pointsGalactic[:,0] = snapCoord.galactic.cartesian.x.value*h
+	pointsGalactic[:,1] = snapCoord.galactic.cartesian.y.value*h
+	pointsGalactic[:,2] = snapCoord.galactic.cartesian.z.value*h
+	return pointsGalactic
+
+def mapGalacticToEquatorial(points,h = 0.705):
+	R = np.sqrt(np.sum(points**2,1))
+	l = np.arctan2(points[:,1],points[:,0])
+	b = np.arcsin(points[:,2]/R)
+	snapCoord = astropy.coordinates.SkyCoord(l=l*astropy.units.rad,
+		b=b*astropy.units.rad,distance=R*astropy.units.Mpc/h)
+	pointsEquatorial = np.zeros(points.shape)
+	pointsEquatorial[:,0] = snapCoord.icrs.cartesian.x.value*h
+	pointsEquatorial[:,1] = snapCoord.icrs.cartesian.y.value*h
+	pointsEquatorial[:,2] = snapCoord.icrs.cartesian.z.value*h
+	return pointsEquatorial
+
+# Convert Cartesian co-ordinates to RA and DEC in the equatorial system, then generate an 
+# astropy SkyCoord object to handle them.
+def equatorialXYZToSkyCoord(points,h = 0.705):
+	if len(points.shape) == 1:
+		R = np.sqrt(np.sum(points**2))
+		ra = np.arctan2(points[1],points[0])
+		dec = np.arcsin(points[2]/R)
+	else:
+		R = np.sqrt(np.sum(points**2,1))
+		ra = np.arctan2(points[:,1],points[:,0])
+		dec = np.arcsin(points[:,2]/R)
+	skycoord = astropy.coordinates.SkyCoord(ra=ra*astropy.units.rad,
+		dec=dec*astropy.units.rad,distance=R*astropy.units.Mpc/h)
+	return skycoord
+
+
 	
 	
 

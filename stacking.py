@@ -474,7 +474,29 @@ def testNormAcrossBins(rho,arguments="fit"):
 		pvals[k] = test[1]
 	return pvals
 	
-
+# Compute mean stacks for a set of snapshots:
+def computeMeanStacks(centresList,radiiList,massesList,conditionList,pairsList,volumesList,
+		snapList,nbar,rBins,rMin,rMax,mMin,mMax,
+		method="poisson",errorType = "Weighted",toInclude = "all"):
+	if toInclude == "all":
+		toInclude = range(0,len(centresList))
+	nToStack = len(toInclude)
+	nbarjStack = np.zeros((nToStack,len(rBins) - 1))
+	sigmaStack = np.zeros((nToStack,len(rBins) - 1))
+	for k in range(0,nToStack):
+		[nbarj,sigma] = stackVoidsWithFilter(
+			centresList[toInclude[k]],radiiList[toInclude[k]],
+			np.where((radiiList[toInclude[k]] > rMin) & \
+			(radiiList[toInclude[k]] < rMax) & \
+			conditionList[toInclude[k]] & (massesList[toInclude[k]] > mMin) & \
+			(massesList[toInclude[k]] <= mMax))[0],snapList[toInclude[k]],rBins,
+			nPairsList = pairsList[toInclude[k]],
+			volumesList=volumesList[toInclude[k]],
+			method=method,errorType=errorType)
+		nbarjStack[k,:] = nbarj
+		sigmaStack[k,:] = sigma
+	return [nbarjStack,sigmaStack]
+		
 
 
 

@@ -368,7 +368,7 @@ def plotStackComparison(listRanges,snap,nbar,antiHaloRadii,antiHaloCentres,voidR
 
 
 # Compare profiles to predictions:
-from void_analysis.stacking import plotProfileVsPrediction
+from void_analysis.stacking_plots import plotProfileVsPrediction
 def compareProfilePredictions(filterList,radii,centres,snap,rBins,pairCounts,volumesList,nbar,listRanges,colourList,listType="radius",fontsize=15):
 	if listType == "radius":
 		rangeText = "r/r_{\\mathrm{eff}}"
