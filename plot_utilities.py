@@ -4,6 +4,7 @@ import numpy as np
 from . import context, snapedit
 import healpy
 import pynbody
+import numpy as np
 # Returns the centres of the bins, specified from their boundaries. Has one fewer elements.
 def binCentres(bins):
 	return (bins[1:len(bins)] + bins[0:(len(bins)-1)])/2
