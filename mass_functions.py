@@ -273,12 +273,14 @@ def getTinkerParams(halo_density_mean,z=0):
 def dndm(M,fittingFunction,Delta=200,massDef = 'critical',\
 		ffParams=None,z=0,h=0.674,Om0=0.315,Ob0 = 0.0486,sigma8 = 0.811,\
 		kmin = 1e-4,kmax = 2,Ok=0,mnu = 0.06,ns=0.9649,As=2.099e-9,r = 0,tau=0.0544,
-		nonLinear=False,npoints=200,neff=3.044,Tcmb0 = 2.725,w0=-1,delta_c=1.686):
+		nonLinear=False,npoints=200,neff=3.044,Tcmb0 = 2.725,w0=-1,delta_c=1.686,\
+		kh = None,pkh=None):
 	#[kh,pkh] = powerSpectrum(h=h,Om0=Om0,Ob0=Ob0,sigma8=sigma8,z=z,kmin=kmin,kmax=kmax,\
 	#	Ok=Ok,mnu=mnu,ns=ns,As=As,r=r,tau=tau,nonLinear=nonLinear,npoints=npoints)
-	[kh,pkh] = powerSpectrumFromCamb(h=h,Om0=Om0,Ob0=Ob0,sigma8=sigma8,z=z,\
-		kmin=kmin,kmax=kmax,Ok=Ok,mnu=mnu,ns=ns,
-		As=As,r=r,tau=tau,npoints=npoints)
+	if (kh is None) or (pkh is None):
+		[kh,pkh] = powerSpectrumFromCamb(h=h,Om0=Om0,Ob0=Ob0,sigma8=sigma8,z=z,\
+			kmin=kmin,kmax=kmax,Ok=Ok,mnu=mnu,ns=ns,
+			As=As,r=r,tau=tau,npoints=npoints)
 	# Normalise power spectrum:
 	sigma8un = sigmaR(8,kh,pkh)
 	pkhNorm = growthFactor(z,Om0)**2*sigma8**2*pkh/sigma8un**2

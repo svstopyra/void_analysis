@@ -1,7 +1,5 @@
 #
 from . import plot_utilities, context, snapedit, stacking, tools
-from mayavi.mlab import points3d, text3d, plot3d, triangular_mesh
-from mayavi import mlab
 import pynbody
 import numpy as np
 import imageio
@@ -26,100 +24,10 @@ import astropy.units as u
 from astropy import stats
 from descartes import PolygonPatch
 import seaborn as sns
+from matplotlib.ticker import NullFormatter
 # Use seaborn colours:
 seabornColormap = sns.color_palette("colorblind",as_cmap=True)
 
-# Plot the positions in a snapshot:
-def subsnap_scatter(subsnap,color_spec=(1,1,1),scale=1.0,type='2dvertex'):
-	r = subsnap['pos']
-	points3d(r[:,0],r[:,1],r[:,2],mode=type,color=color_spec,scale_factor=scale)
-
-# Plot a set of specified points (wrapper for points3d):
-def point_scatter(r,color_spec=(1,1,1),scale=1.0,type='2dvertex'):
-	if len(r.shape) == 2:
-		points3d(r[:,0],r[:,1],r[:,2],mode=type,color=color_spec,scale_factor=scale)
-	else:
-		points3d(r[0],r[1],r[2],mode=type,color=color_spec,scale_factor=scale)
-
-# Returns a subsnap contains the particles within halos only that satisfy the specified filter
-#def halo_filter(halo_list,filt):
-	
-
-# Plot the surroundings of the specified halo	
-def surroundings(halo,s,radius,color=(1,1,1),scale=1.0):
-	centre = pynbody.analysis.halo.center_of_mass(halo)
-	filt = pynbody.filt.Sphere(radius,centre)
-	subsnap_scatter(s[filt],color_spec=color,scale_factor=scale)
-
-# Plot numbered halos:
-def plot_numbered_halos(h,to_plot,halo_centres,
-	halo_colour=(0,0,1),text_scale=1000,text_colour=(1,1,1)):
-	# h - halo catalogue
-	# to_plot - indices (starting from zero - NOT the same as halo number)
-	# halo_centres - positions of the centres of mass of the specified halos.
-	for k in range(0,len(to_plot)):
-		r = halo_centres[to_plot[k]]
-		subsnap_scatter(h[to_plot[k]+1],color_spec=halo_colour)
-		text3d(r[0],r[1],r[2],str(to_plot[k]+1),scale=text_scale,color=text_colour)
-
-
-# Plot a list of clusters, together with their names:
-def plot_named_clusters(cluster_pos,cluster_names,color_spec=(0,1,0),
-	point_type='sphere',scale=1000,text_colour=(0,1,0),text_scale=1000):
-	points3d(cluster_pos[:,0],cluster_pos[:,1],
-		cluster_pos[:,2],color=color_spec,mode=point_type,scale_factor=scale)
-	for k in range(0,len(cluster_names)):
-		text3d(cluster_pos[k,0],cluster_pos[k,1],
-			cluster_pos[k,2],cluster_names[k],color=text_colour,scale=text_scale)
-
-def plot_numbered_voids(hr,to_plot,void_centres,bridge,
-	void_colour=(1,0,0),text_scale=1000,text_colour=(1,0,0)):
-	for k in range(0,len(to_plot)):
-		r = void_centres[to_plot[k]]
-		subsnap_scatter(
-			bridge(hr[to_plot[k]+1]),color_spec=void_colour,type='sphere',scale=500)
-		text3d(r[0],r[1],r[2],str(to_plot[k]+1),scale=text_scale,color=text_colour)
-
-def recentre(centre):
-	f = mlab.gcf()
-	camera = f.scene.camera
-	camera.focal_point = centre
-
-def line_plot(line,color=(1,0,0),line_width=10,reset_zoom=False):
-	plot3d(line[:,0],line[:,1],
-		line[:,2],line_width=line_width,reset_zoom=reset_zoom,
-		color=color,representation='wireframe')
-
-def plotHistory(sn,sr,halo_list,halo,color_list,highlight_mode='point3d',scalefactor=1):
-	childList = np.array(halo.properties['children']) - 1
-	children = context.combineHalos(sn,halo_list,childList)
-	extras = halo.setdiff(children)
-	b = pynbody.bridge.Bridge(sn,sr)
-	subsnap_scatter(b(extras),color_spec=(1,1,1))
-	for k in range(0,len(childList)):
-		subsnap_scatter(
-		b(halo_list[childList[k]+1]),color_spec=color_list[np.mod(k,len(color_list))],
-		scale=scalefactor,type=highlight_mode)
-
-# Animate the evolution of the specified snapshots:
-def animate(snaplist,plot_command,save_directory="./",size=None,scaling=1):
-	filenames = []
-	for k in snaplist:
-		filenames.append(save_directory + "snapshot_" + "{:0>3d}".format(k) + ".png")
-		plot_command(k)
-		fig = mlab.gcf().scene
-		if size is None:
-			sceneSize = np.array(fig.get_size())*scaling
-		else:
-			sceneSize = np.array(size)*scaling
-		mlab.savefig(save_directory + "snapshot_" + \
-		"{:0>3d}".format(k) + ".png",size=sceneSize)
-		mlab.clf()
-	# Construct gif:
-	with imageio.get_writer(save_directory + "animation.gif",mode='I',duration=1) as writer:
-		for filename in filenames:
-			image = imageio.imread(filename)
-			writer.append_data(image)
 
 # Halves the RGB values of a specified color
 def half_color(color):
@@ -241,7 +149,7 @@ def haloHistogram(logrho,logrhoBins,masses,massBins,massBinList = None,
 		massBinsToPlot = range(0,len(massBins)-1)
 	# Bin the masses of the halos if this has not already been supplied.
 	if massBinList is None:
-		[massBinList,noInBins] = binValues(masses,massBins)
+		[massBinList,noInBins] = plot_utilities.binValues(masses,massBins)
 	legendList = []
 	if subplots:
 		if subplot_shape is not None:
@@ -353,22 +261,7 @@ def linearRegression(x,y,full=False,errors=False):
 	else:
 		return [a,b]
 
-# Plot the convex hull around a set of points:
-def plotConvexHull(snap,hull=None,color=(0,1,0),opacity=0.3,vertices=False):
-	if hull is None:
-		hull = halo_analysis.getConvexHull(snap)
-	if vertices:
-		point_scatter(snap['pos'][hull.vertices],color_spec=color,type='sphere')
-	triangular_mesh(snap['pos'][:,0],snap['pos'][:,1],
-		snap['pos'][:,2],hull.simplices,color=color,opacity=opacity,
-		representation = 'wireframe')
 
-def plotConvexHullFromPoints(pos,hull=None,color=(0,1,0),opacity=0.3,vertices=False):
-	if hull is None:
-		hull = spatial.ConvexHull(pos)
-	triangular_mesh(pos[:,0],pos[:,1],
-		pos[:,2],hull.simplices,color=color,
-		opacity=opacity,representation = 'wireframe')
 
 # Generate colours on the fly:
 def linearColour(n,nmax,colourMap=cm.jet):
@@ -567,9 +460,9 @@ def plotHMF(hmasses,snap,massLower=1e12,massUpper = 1e16,nBins=101,ylim=[1e-1,1e
 		delta_wrt=dens_type,mass_function=mass_function)
 	massBins = 10**np.linspace(np.log10(massLower),np.log10(massUpper),nBins)
 	n = cosmology.dndm_to_n(m,dndm,massBins)
-	[binList,noInBins] = plot.binValues(hmasses,massBins)
+	[binList,noInBins] = plot_utilities.binValues(hmasses,massBins)
 	sigmaBins = np.sqrt(noInBins)
-	massBinCentres = plot.binCentres(massBins)
+	massBinCentres = plot_utilities.binCentres(massBins)
 	if ax is None:
 		fig, ax = plt.subplots()
 	ax.errorbar(massBinCentres,noInBins,yerr=sigmaBins,marker=marker,linestyle=linestyle,label=label,color=color)
@@ -636,6 +529,31 @@ def plotVoidsInSlice(zslice,width,thickness,snap,hr,hrcentres,
 	plt.xlim([-width/2,width/2])
 	plt.ylim([-width/2,width/2])
 
+def sphericalSlice(snap,radius,centre=np.array([0,0,0]),thickness=15,nside=64,fillZeros = 1e-3):
+	annulus = pynbody.filt.Annulus(radius-thickness/2,radius+thickness/2,cen=centre)
+	posXYZ = snap[annulus]['pos']
+	boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+	# Wrapped displacements:
+	dispXYZ = snapedit.unwrap(posXYZ - centre,boxsize)
+	# Angular coordinates
+	r = np.sqrt(np.sum(dispXYZ**2,1))
+	phi = np.arctan2(dispXYZ[:,1],dispXYZ[:,0])
+	theta = np.pi/2 - np.arcsin(dispXYZ[:,2]/r)# Assuming input is a declination.
+	# Healpix conversion:
+	npix = healpy.nside2npix(nside)
+	ind = healpy.ang2pix(nside,theta,phi)
+	# Density:
+	hpxMap = np.zeros(npix)
+	voxelVolume = (4*np.pi*(radius+thickness/2)**3/3 - 4*np.pi*(radius-thickness/2)**3/3)/npix
+	#np.add.at(hpxMap,ind,snap[annulus]['rho'])
+	np.add.at(hpxMap,ind,snap[annulus]['mass'].in_units("Msol h**-1")/voxelVolume)
+	if fillZeros is not None:
+		hpxMap[np.where(hpxMap == 0.0)] += fillZeros
+	return hpxMap
+
+def filterPolarPointsToAnnulus(lonlat,r,radius,thickness = 15):
+	return lonlat[np.where((r >= radius - thickness/2) & (r <= radius + thickness/2))[0],:]
+
 def plotMollweide(radius,snap,galaxyAngles=None,galaxyDistances=None,
 		centre=np.array([0,0,0]),thickness=15,vmin=1e-2,vmax=1e2,cmap='PuOr_r',
 		shrink=0.5,pad=0.05,nside=64,showGalaxies=True,ax=None,title=None,
@@ -683,7 +601,6 @@ def plotMollweide(radius,snap,galaxyAngles=None,galaxyDistances=None,
 		pad=pad,label='$\\rho/\\bar{\\rho}$',shrink=shrink)
 	cbar.ax.tick_params(axis='both',labelsize=fontsize)
 	cbar.set_label(label = '$\\rho/\\bar{\\rho}$',fontsize = fontsize,fontfamily = fontname)
-	
 
 # Scatter points at the specified angles in a Mollweide projection.
 def mollweideScatter(angles,color='r',s=1,marker='.',angleCoord="ra_dec",
@@ -714,7 +631,11 @@ def mollweideScatter(angles,color='r',s=1,marker='.',angleCoord="ra_dec",
 	else:
 		ax.scatter(sgMW[0],sgMW[1],marker=marker,s=s,color=color)
 	if text is not None:
-		for k in range(0,len(sgMW[0])):
+		if np.isscalar(sgMW[0]):
+			lensgMW = 1
+		else:
+			lensgMW = len(sgMW[0])
+		for k in range(0,lensgMW):
 			if type(horizontalalignment) == type('string'):
 				ha = horizontalalignment
 			else:
@@ -735,8 +656,14 @@ def mollweideScatter(angles,color='r',s=1,marker='.',angleCoord="ra_dec",
 				else:
 					textCoordToUse = textcoords
 					arrow=arrowprops
-			plt.annotate(text[k],np.array([sgMW[0][k],
-				sgMW[1][k]]),fontfamily=fontname,fontsize=fontsize,
+			if np.isscalar(sgMW[0]):
+				sgVal0 = sgMW[0]
+				sgVal1 = sgMW[1]
+			else:
+				sgVal0 = sgMW[0][k]
+				sgVal1 = sgMW[1][k]
+			plt.annotate(text[k],np.array([sgVal0,
+				sgVal1]),fontfamily=fontname,fontsize=fontsize,
 				horizontalalignment=ha,verticalalignment=va,xytext=xytext,
 				textcoords=textCoordToUse,arrowprops=arrow,
 				bbox = dict(pad=arrowpad,fc='none',ec='none'))
@@ -1106,61 +1033,6 @@ def plotAllSampleHMFs(massBinCentres,n,noInSampleBins1,vol1,colorList,sampleName
 	ax.set_ylim(ylim)
 
 
-# Plot a 3D interactive scatter of Abell clusters, 2M++ catalogue, and BORG halos:
-
-def plotLocalUniverse(points2MPP,centres,masses,
-		l_clusters,b_clusters,d_clusters,abell_d,abell_n,p_clusters,p_voids,p_abell,
-		cluster_names,void_names,h=0.705,bgcolor=(0,0,0),rCut = 135,
-		mUpper=1e16,mMid = 1e15,mLower = 5e14,upperScale=5,lowerScale=3,textScale=2,
-		lowerColour=(1,0,1),upperColour=(0,0,1),clusterColour=(1,0,0),
-		voidColour = (0,1,0),clusterTextScale=10,voidTextScale=10,
-		abellColour=(1,1,0),abellScale=0.5):
-	mlab.figure(bgcolor=bgcolor)
-	point_scatter(points2MPP)
-	# Add Halos:
-	if rCut is not None:
-		maskCondition = (np.sqrt(np.sum(centres**2,1)) <= rCut)
-	else:
-		maskCondition = np.ones(masses.shape,dtype=bool)
-	plotCondition = np.where(maskCondition & (masses > mMid) & (masses < mUpper))[0]
-	plotCondition2 = np.where(maskCondition & (masses > mLower) & (masses < mMid))[0]
-	point_scatter(centres[plotCondition,:]/h,
-		color_spec=upperColour,type='sphere',scale=upperScale)
-	point_scatter(centres[plotCondition2,:]/h,
-		color_spec=lowerColour,type='sphere',scale=lowerScale)
-	for k in range(0,len(plotCondition)):
-		mlab.text3d(centres[plotCondition[k],0]/h,
-			centres[plotCondition[k],1]/h,centres[plotCondition[k],2]/h,
-			str(plotCondition[k]),color=upperColour,scale=upperScale)
-	for k in range(0,len(plotCondition2)):
-		mlab.text3d(centres[plotCondition2[k],0]/h,centres[plotCondition2[k],1]/h,
-			centres[plotCondition2[k],2]/h,
-			str(plotCondition2[k]),color=lowerColour,scale=upperScale)
-
-	# Supercluster expected locations:
-	point_scatter(p_clusters,type='sphere',color_spec=clusterColour,scale=1)
-	for k in range(0,len(cluster_names)):
-		mlab.text3d(p_clusters[k,0],p_clusters[k,1],
-			p_clusters[k,2],cluster_names[k],color=clusterColour,
-			scale=clusterTextScale)
-	#Voids:
-	point_scatter(p_voids,type='sphere',color_spec=voidColour,scale=1)
-	for k in range(0,len(void_names)):
-		mlab.text3d(p_voids[k,0],p_voids[k,1],p_voids[k,2],
-			void_names[k],color=voidColour,scale=voidTextScale)
-	# Abell clusters:
-	# cluster expected locations:
-	if rCut is not None:
-		abellToPlot = np.where(abell_d < rCut)[0]
-	else:
-		abellToPlot = np.ones(abell_d.shape,dtype=int)
-	point_scatter(p_abell[abellToPlot]/h,type='sphere',
-		color_spec=abellColour,scale=abellScale)
-	for k in range(0,len(p_abell[abellToPlot])):
-		mlab.text3d(p_abell[abellToPlot][k,0]/h,p_abell[abellToPlot][k,1]/h,
-			p_abell[abellToPlot][k,2]/h,str(abell_n[abellToPlot][k]),
-			color=abellColour,scale=textScale)
-	mlab.show()
 
 # Plot an anlpha shape around points that have been mapped onto a Mollweide projection:
 def plotMollweideAlphaShape(positions,alpha_shape=None,origin=None,posMW=None,
@@ -1647,22 +1519,612 @@ def plotCatalogueComparison(mass1,mass1err,name1,mass2,mass2err,name2,\
 	plt.show()
 
 
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
+# Plot a density slice from a density field
+def plotDensitySlice(ax,den,centre,width,boxsize,N,thickness,pslice,vmin,vmax,\
+        cmap,markCentre=False,axesToShow = [0,2],losAxis=1,flip=False,\
+        flipud=False,fliplr=False,swapXZ = False):
+    [left,right,bottom,top] = [centre[axesToShow[0]] - width/2,\
+        centre[axesToShow[0]] + width/2,\
+        centre[axesToShow[1]] - width/2,\
+        centre[axesToShow[1]] + width/2]
+    if ax is None:
+        fig, ax = plt.subplots()
+    indLow = int((pslice + boxsize/2)*N/boxsize) - int((thickness/2)*N/(boxsize))
+    indUpp = int((pslice + boxsize/2)*N/boxsize) + int((thickness/2)*N/(boxsize))
+    if losAxis == 0:
+        if swapXZ:
+            denToPlot = np.mean(den[:,:,indLow:indUpp],2)
+        else:
+            denToPlot = np.mean(den[indLow:indUpp,:,:],0)
+    elif losAxis == 1:
+        denToPlot = np.mean(den[:,indLow:indUpp,:],1)
+    else:
+        if swapXZ:
+            denToPlot = np.mean(den[indLow:indUpp,:,:],0)
+        else:
+            denToPlot = np.mean(den[:,:,indLow:indUpp],2)
+    if flip:
+        denToPlot = denToPlot.transpose()
+    if flipud:
+        denToPlot = np.flipud(denToPlot)
+    if fliplr:
+        denToPlot = np.fliplr(denToPlot)
+    ax.imshow(denToPlot,\
+        extent=(-boxsize/2,boxsize/2,-boxsize/2,boxsize/2),\
+        norm = colors.LogNorm(vmin=vmin, vmax=vmax),cmap=cmap,\
+        origin='lower')
+    if markCentre:
+        ax.scatter([centre[axesToShow[0]]],[centre[axesToShow[1]]],marker='x',\
+            c='r')
+    return [left,right,bottom,top,indLow,indUpp]
+
+# Compare two density slices from different density fields.
+def plotDensityComparison(denCompareLeft,denCompareRight,clusterNum = 6,N = 256,\
+        boxsize = 677.7,showGalaxies = False,savename = None,show=True,\
+        showDiff = False,fontsize = 9,titleFontSize = 9,fontname = 'serif',textwidth=7.1014,\
+        textheight=9.0971,cmap = 'PuOr_r',textLeft = "Field 1",textRight = "Field 2",\
+        width = 200,centre1 = [0,0,0],centre2 = [0,0,0],thickness = 8,\
+        vmin = 1/70,vmax = 70,pslice1 = None,pslice2 = None,\
+        title = "BORG PM vs GADGET2 simulation",markCentre=False,\
+        losAxis = 1,flip=False,invertAxis=False,flipCentre=False,\
+        invertCentre = False,flipud=False,fliplr=False,galOffset = [0,0,0],\
+        swapXZ = False,gal_position=None,returnAx = False):
+    sort = {0:[1,2],1:[0,2],2:[0,1]}
+    if flipCentre:
+        centreUse1 = np.flipud(centre1)
+        centreUse2 = np.flipud(centre2)
+    else:
+        centreUse1 = centre1
+        centreUse2 = centre2
+    axLabels = ['X','Y','Z']
+    axesToShow = sort[losAxis]
+    if pslice1 is None:
+        pslice1 = centreUse1[losAxis]
+    if pslice2 is None:
+        pslice2 = centreUse2[losAxis]
+    if invertAxis:
+        pslice1 = - pslice1
+        pslice2 = - pslice2
+    if type(flipud) == bool:
+        flipud = [flipud,flipud]
+    if type(fliplr) == bool:
+        fliplr = [fliplr,fliplr]
+    if showDiff:
+        fig, ax = plt.subplots(1,3,figsize=(textwidth,0.5*textwidth))
+    else:
+        fig, ax = plt.subplots(1,2,figsize=(textwidth,0.5*textwidth))
+    [left1,right1,bottom1,top1,indLow1,indUpp1] = plotDensitySlice(ax[0],
+        denCompareLeft,centreUse1,width,boxsize,N,thickness,pslice1,vmin,vmax,\
+        cmap,markCentre=markCentre,axesToShow=axesToShow,losAxis=losAxis,\
+        flip = flip,flipud=flipud[0],fliplr=fliplr[0],swapXZ=swapXZ)
+    [left2,right2,bottom2,top2,indLow2,indUpp2] = plotDensitySlice(ax[1],
+        denCompareRight,centreUse2,width,boxsize,N,thickness,pslice2,vmin,vmax,\
+        cmap,markCentre=markCentre,axesToShow=axesToShow,losAxis=losAxis,\
+        flip = flip,flipud=flipud[1],fliplr=fliplr[1],swapXZ=swapXZ)
+    if showDiff:
+        ax[2].imshow(np.mean(denCompareLeft[:,indLow1:indUpp1,:],1)/ \
+            np.mean(denCompareRight[:,indLow2:indUpp2,:],1),\
+            extent=(-boxsize/2,boxsize/2,-boxsize/2,boxsize/2),\
+            norm = colors.LogNorm(vmin=vmin, vmax=vmax),cmap=cmap,origin='lower')
+    if showGalaxies:
+        if gal_position is None:
+            raise Exception("Need to supply galaxy positions.")
+        galPos = galOffset + gal_position
+        condition1 = np.where((galPos[:,losAxis] > centreUse1[losAxis] - \
+            thickness/2) & (galPos[:,losAxis] <= centreUse1[losAxis] + \
+            thickness/2))[0]
+        condition2 = np.where((galPos[:,losAxis] > centreUse2[losAxis] - \
+            thickness/2) & (galPos[:,losAxis] <= centreUse2[losAxis] + \
+            thickness/2))[0]
+        ax[0].scatter(galPos[condition1,axesToShow[0]],\
+            galPos[condition1,axesToShow[1]],marker='.',c='r')
+        ax[1].scatter(galPos[condition2,axesToShow[0]],\
+            galPos[condition2,axesToShow[1]],marker='.',c='r')
+    axData = [[left1,right1,bottom1,top1,indLow1,indUpp1],\
+        [left2,right2,bottom2,top2,indLow2,indUpp2],\
+        [left1,right1,bottom1,top1,indLow1,indUpp1]]
+    for k in range(0,len(ax)):
+        ax[k].set_xlim((axData[k][0],axData[k][1]))
+        ax[k].set_ylim((axData[k][2],axData[k][3]))
+        ax[k].set_xlabel('Equatorial ' + axLabels[axesToShow[0]] + \
+            ' $[\\mathrm{Mpc}h^{-1}]$',\
+            fontsize=fontsize,fontfamily=fontname)
+        ax[k].set_ylabel('Equatorial ' + axLabels[axesToShow[1]] + \
+            ' $[\\mathrm{Mpc}h^{-1}]$',\
+            fontsize=fontsize,fontfamily=fontname)
+        ax[k].tick_params(axis='both',labelsize=fontsize)
+    if textLeft is None:
+        ax[0].set_title('BORG posterior density, (1000 realisations)',\
+            fontsize=titleFontSize,fontfamily=fontname)
+    else:
+        ax[0].set_title(textLeft,\
+            fontsize=titleFontSize,fontfamily=fontname)
+    if textRight is None:
+        ax[1].set_title('Simulation Density (6 realisations)',\
+            fontsize=titleFontSize,fontfamily=fontname)
+    else:
+        ax[1].set_title(textRight,\
+            fontsize=titleFontSize,fontfamily=fontname)
+    plt.subplots_adjust(top=0.88,bottom=0.11,left=0.11,right=0.85,hspace=0.155,wspace=0.315)
+    sm = cm.ScalarMappable(colors.LogNorm(vmin=vmin,vmax=vmax),cmap=cmap)
+    cbax = fig.add_axes([0.87,0.17,0.02,0.64])
+    cbar = plt.colorbar(sm, orientation="vertical",label='$\\rho/\\bar{\\rho}$',cax=cbax)
+    #plt.savefig(textRight + '_lowres.pdf')
+    #plt.suptitle("BORG Posterior vs Simulation Density (low-res)",fontsize=12,fontfamily='serif')
+    #plt.suptitle("BORG Posterior vs Simulation Density",fontsize=12,fontfamily='serif')
+    #plt.suptitle("BORG Posterior: Ensemble vs Single Realisation",fontsize=12,fontfamily='serif')
+    plt.suptitle(title,fontsize=12,fontfamily='serif')
+    if savename is not None:
+        plt.savefig(savename)
+    if show:
+        plt.show()
+    if returnAx:
+        return ax
+
+def plotAalphaSkyDistribution(effAalpha,mBin,nSlice,ns,coordAbell,abell_d,\
+        clusterInd,rLimits,snapNumList,figsize = (8,4),\
+        showDeviation = False,boundaryOff = True,pad=0.05,showClusters = True,\
+        deviationCmap = "PuOr_r",normalCmap='GnBu',cmap=None,\
+        margins = (0,0,0,0),xsize=800,guideColor='grey',shrink=0.5,\
+        fontsize = 7,titleFontSize=7,fontname='serif',includeZOA = True,\
+        nRadialSlices = 10,nside = 4,clusterColour = 'r',\
+        ha = ['right','left','left','left','left','center','right',\
+        'right','right'],va = ['center','bottom','bottom','bottom','top',\
+        'top','center','center','center'],annotationPos = [[-1.2,0.9],\
+        [1.3,0.8],[1.8,0.5],[1.5,-1.2],[1.7,-0.7],[-1,0.2],[0.8,0.6],\
+        [1.0,0.1],[-1.8,0.5]],nAbsBins = 8,absRange = None,\
+        appRange = ['$m \\leq 11.5$','$11.5 < m \\leq 12.5$'],\
+        nameList = None,title=None,galacticCentreZOA = [-30,30],\
+        bRangeCentre = [-10,10],bRange = [-5,5],nPointsEdgeZOA = 21,\
+        nPointsZOA = 201,show=True,savename=None):
+    if cmap is None:
+        if showDeviation:
+            cmap = deviationCmap
+        else:    
+            cmap= normalCmap
+    if showDeviation:
+        vmin = -5
+        vmax = 5
+        norm = colors.Normalize(vmin=vmin,vmax=vmax)
+    else:
+        vmin = 0
+        vmax = 120
+        norm = colors.SymLogNorm(vmin=vmin,vmax=vmax,linthresh=1,linscale=1)
+    sm = cm.ScalarMappable(norm,cmap=cmap)
+    npixels = 12*nside**2
+    hpxMaps = np.zeros((nRadialSlices,npixels))
+    if absRange is None:
+        absRange = ['$' + str(-21 - (k+1)*0.5) + ' \\leq M \\leq ' \
+            + str(-21 - k*0.5) + '$' for k in range(0,nAbsBins)]
+    if nameList is None:
+        clusterNames = np.array([['Perseus-Pisces (A426)'],
+           ['Hercules B (A2147)'],
+           ['Coma (A1656)'],
+           ['Norma (A3627)'],
+           ['Shapley (A3571)'],
+           ['A548'],
+           ['Hercules A (A2199)'],
+           ['Hercules C (A2063)'],
+           ['Leo (A1367)']], dtype='<U21')
+        nameList = [name[0] for name in clusterNames]
+    for k in range(0,nRadialSlices):
+        if np.isscalar(ns):
+            hpxMaps[k,:] = effAalpha[ns,mBin,npixels*k:npixels*(k+1)]
+        else:
+            hpxMaps[k,:] = np.mean(effAalpha[ns,mBin,npixels*k:npixels*(k+1)],0)
+    fig, ax = plt.subplots(1,1,figsize = figsize)
+    if showDeviation:
+        hpMap = np.zeros(npixels)
+        neighbours = healpy.pixelfunc.get_all_neighbours(\
+            nside,np.arange(0,npixels))
+        for k in range(0,npixels):
+            nonZeroPixels = np.where(\
+                hpxMaps[nSlice,neighbours[:,k]] != 0.0)
+            if len(nonZeroPixels[0]) == 0:
+                continue
+            meanAlpha = np.mean(hpxMaps[nSlice,neighbours[:,k]][nonZeroPixels])
+            stdAlpha = np.std(hpxMaps[nSlice,neighbours[:,k]][nonZeroPixels])
+            if stdAlpha != 0.0 and hpxMaps[nSlice,k] != 0.0:
+                hpMap[k] = (hpxMaps[nSlice,k] - meanAlpha)/stdAlpha
+    else:
+        hpMap = hpxMaps[nSlice,:]
+    healpy.mollview(hpMap,cmap=cmap,cbar=False,\
+        norm = norm,\
+        hold=True,fig=fig,margins=margins,xsize=xsize,sub=0,bgcolor='white',\
+        badcolor='white',min=vmin,max=vmax)
+    ax.set_autoscale_on(True)
+    healpy.graticule(color=guideColor)
+    ax = plt.gca()
+    # Hacky solution to make the boundary grey, since healpy hardcodes this:
+    lines = ax.get_lines()
+    for l in lines:
+        if l.get_color() != guideColor:
+            l.set_color(guideColor)
+    if boundaryOff:
+        # Very hacky, and liable to break if healpy changes, 
+        # but not clear how else we would identify which line is the boundary...
+        for l in range(20,len(lines)):
+            lines[l].set_linestyle('None')
+    # Colorbar:
+    if showDeviation:
+        cbar = plt.colorbar(sm, orientation="horizontal",
+            pad=pad,\
+            label='$A_{\\alpha}$ standard deviations from local mean',\
+            shrink=shrink)
+        cbar.ax.tick_params(axis='both',labelsize=fontsize)
+        cbar.set_label(\
+            label = '$A_{\\alpha}$ standard deviations from local mean',\
+            fontsize = fontsize,fontfamily = fontname)
+    else:
+        cbar = plt.colorbar(sm, orientation="horizontal",
+            pad=pad,label='$A_{\\alpha}$',shrink=shrink)
+        cbar.ax.tick_params(axis='both',labelsize=fontsize)
+        cbar.set_label(label = '$A_{\\alpha}$',fontsize = fontsize,\
+            fontfamily = fontname)
+    MInd = int(mBin/2)
+    mInd = np.mod(mBin,2)
+    if title is None:
+        if np.isscalar(ns):
+            nsName = str(snapNumList[ns])
+        else:
+            nsName = ",".join([str(snapNumList[ind]) for ind in ns])
+        plt.title("$A_{\\alpha}$, Sample " + nsName + \
+            ", " + "$" + str(rLimits[nSlice])  + \
+            " \\leq r/\\mathrm{Mpc}h^{-1} < " \
+            + str(rLimits[nSlice+1]) + "$"+ ", Bin " \
+            + str(mBin) + "(" + \
+            absRange[MInd] + ', ' + appRange[mInd] + ")")
+    else:
+        plt.title(title)
+    if showClusters:
+        anglesToPlotClusters = np.vstack((coordAbell.icrs.ra.value,
+            coordAbell.icrs.dec.value)).T
+        inRadialBin = np.where((abell_d[clusterInd] >= rLimits[nSlice]) & \
+            (abell_d[clusterInd] < rLimits[nSlice+1]))[0]
+        mollweideScatter(anglesToPlotClusters[\
+            np.array(clusterInd)[inRadialBin],:],\
+            color=clusterColour,s=30,
+            marker='c',
+            text=np.array(nameList)[inRadialBin],fontsize=fontsize,
+            horizontalalignment=ha,
+            verticalalignment=va,ax=ax,textPos=annotationPos,
+            arrowprops= dict(arrowstyle = '->',shrinkA=5,
+                color='k',shrinkB = 5,
+                connectionstyle="arc3,rad=0."),
+            arrowpad = 1)
+    if includeZOA:
+        # Zone of avoidance?
+        lZOA = np.linspace(-np.pi,np.pi,nPointsZOA)
+        zoaCentral = np.where((lZOA*180/np.pi > galacticCentreZOA[0]) & \
+            (lZOA*180/np.pi < galacticCentreZOA[1]))
+        bZOAupp = (np.pi*bRange[1]/180)*np.ones(lZOA.shape)
+        bZOAupp[zoaCentral] = (np.pi*bRangeCentre[1]/180)
+        bZOAlow = (np.pi*bRange[0]/180)*np.ones(lZOA.shape)
+        bZOAlow[zoaCentral] = (np.pi*bRangeCentre[0]/180)
+        zoaUppCoord = SkyCoord(l=lZOA*u.rad,b=bZOAupp*u.rad,frame='galactic')
+        zoaLowCoord = SkyCoord(l=lZOA*u.rad,b=bZOAlow*u.rad,frame='galactic')
+        raZOAUpp = zoaUppCoord.icrs.ra.value
+        decZOAUpp = zoaUppCoord.icrs.dec.value
+        raZOALow = zoaLowCoord.icrs.ra.value
+        decZOALow = zoaLowCoord.icrs.dec.value
+        MW = healpy.projector.MollweideProj()
+        angleFactor = np.pi/180.0
+        XYUpp = MW.ang2xy(theta = np.pi/2 - angleFactor*decZOAUpp,
+            phi=angleFactor*raZOAUpp,lonlat=False)
+        XYLow = MW.ang2xy(theta = np.pi/2 - angleFactor*decZOALow,
+            phi=angleFactor*raZOALow,lonlat=False)
+        # Roll around to prevent sudden jumps in the lines:
+        rollNumUpp = np.where(XYUpp[0][0:-1]*XYUpp[0][1:] < 0)[0][0] + 1
+        rollNumLow = np.where(XYLow[0][0:-1]*XYLow[0][1:] < 0)[0][0] + 1
+        # mollweide boundary part of ZOA:
+        zoaBoundUpp = MW.xy2ang(XYUpp[0][(rollNumUpp-1):(rollNumUpp+1)],
+            XYUpp[1][(rollNumUpp-1):(rollNumUpp+1)])
+        zoaBoundLow = MW.xy2ang(XYLow[0][(rollNumLow-1):(rollNumLow+1)],
+            XYLow[1][(rollNumLow-1):(rollNumLow+1)])
+        zoaBoundLeft = np.linspace(zoaBoundUpp[0,0],zoaBoundLow[0,0],\
+            nPointsEdgeZOA)
+        zoaBoundRight = np.linspace(zoaBoundLow[0,1],zoaBoundUpp[0,1],\
+            nPointsEdgeZOA)
+        leftXY = MW.ang2xy(zoaBoundLeft,(-np.pi -1e-2)*np.ones(zoaBoundLeft.shape))
+        rightXY = MW.ang2xy(zoaBoundRight,np.pi*np.ones(zoaBoundRight.shape))
+        #Polygon defining ZOA:
+        polyX = np.hstack((leftXY[0],np.flip(np.roll(XYLow[0],
+            -rollNumLow)),rightXY[0],np.roll(XYUpp[0],-rollNumUpp)))
+        polyY = np.hstack((leftXY[1],np.flip(np.roll(XYLow[1],
+            -rollNumLow)),rightXY[1],np.roll(XYUpp[1],-rollNumUpp)))
+        polyXY = np.vstack((polyX,polyY)).T
+        polygon = patches.Polygon(polyXY,fc='grey',ec='None',alpha=0.5,
+            label='Zone of Avoidance')
+        ax.add_patch(polygon)
+    handles = []
+    if (coordAbell is not None) and showClusters:
+        clusterMarkerHandle = mlines.Line2D([],[],linestyle='',marker='o',
+            mec=clusterColour,mfc=None,label='Cluster locations')
+        handles.append(clusterMarkerHandle)
+    if includeZOA:
+        handles.append(polygon)
+    bbox_to_anchor=(-0.1, -0.2)
+    legLoc='lower left'
+    ax.legend(handles=handles,frameon=False,
+        prop={"size":7,"family":"serif"},
+        loc=legLoc,bbox_to_anchor=bbox_to_anchor)
+    if savename is not None:
+        plt.savefig(savename)
+    if show:
+        plt.show()
+
+def computeAndPlotPPTProfile(ax,expectedLine,realisedLine,rBins,rescale=False,\
+        style1 = 'k-',style2 = 'k:',title1 = "2M++ Galaxies",\
+        title2 = "Posterior prediction",error=None,intervalColour='grey',\
+        intervalLabel = "95% Poisson \nInterval"):
+    if rescale:
+        factorExp = expectedLine[-1]
+        factorReal = realisedLine[-1]
+        ylabel = "$n_{\\mathrm{gal}}(<r)/" + \
+            "n_{\\mathrm{gal}}(<20\\mathrm{Mpc}h^{-1})$"
+    else:
+        factorExp = 1
+        factorReal = 1
+    nz1 = np.where(expectedLine > 0)[0]
+    nz2 = np.where(realisedLine > 0)[0]
+    h1 = ax.semilogy(binCentres(rBins)[nz1],expectedLine[nz1]\
+        /factorExp,style1,\
+        label=title1)
+    h2 = ax.semilogy(binCentres(rBins)[nz2],realisedLine[nz2]\
+        /factorReal,style2,\
+        label = title2)
+    if error is None:
+        bounds = (scipy.stats.poisson(realisedLine[nz2]*\
+            (4*np.pi*rBins[1:][nz2]**3/3)).interval(0.95)/\
+            (4*np.pi*rBins[1:][nz2]**3/3))/factorReal
+    else:
+        # Standard deviation of the mean:
+        bounds = [(realisedLine[nz2] - error[nz2])/factorReal,\
+            (realisedLine[nz2] + error[nz2])/factorReal]
+    h3 = ax.fill_between(binCentres(rBins)[nz2],bounds[0],bounds[1],\
+        facecolor=intervalColour,\
+        alpha = 0.5,label = intervalLabel)
+    return [h1,h2,h3]
+
+# Adjusts the formatting of a grid of plots:
+def formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim):
+    if nRows < 2:
+        axij = ax[j]
+    else:
+        axij = ax[i,j]
+    if j > 0:
+        axij.yaxis.label.set_visible(False)
+        axij.yaxis.set_major_formatter(NullFormatter())
+        axij.yaxis.set_minor_formatter(NullFormatter())
+    if (i == ylabelRow) and (j == 0):
+        axij.set_ylabel(ylabel)
+    if i < nRows - 1:
+        axij.xaxis.label.set_visible(False)
+        axij.xaxis.set_major_formatter(NullFormatter())
+        axij.xaxis.set_minor_formatter(NullFormatter())
+    if (j == xlabelCol) and (i == nRows-1):
+        axij.set_xlabel(xlabel)
+    axij.set_ylim(ylim)
+
+
+# Plot the Posterior Predictive Test for a set of clusters. That is, we compare
+# the galaxy count from a survey (2M++) to the expected galaxy count given the
+# inferred dark matter density field.
+def plotPPTProfiles(expectedLine,realisedLine,title1 = "2M++ Galaxies",\
+        title2 = "Posterior prediction",\
+        style1 = 'k-',style2 = 'k:',intervalLabel = "95% Poisson \nInterval",\
+        intervalColour='grey',fontfamily='serif',fontsize=8,\
+        ylabel = '$n_{\\mathrm{gal}}(<r)$ $[h^{3}\\mathrm{Mpc}^{-3}]$',\
+        xlabel = '$r$ $[\\mathrm{Mpc}h^{-1}]$',ylim=[0.01,2],\
+        wspace=0,hspace=0.2,show=True,savename=None,\
+        title = "Simulation Density (Eulerian space) " + \
+        "vs 2M++ Galaxy number density",\
+        titleSize = 12,nRows=3,nCols=3,legPos = [1,2],ylabelRow = 1,\
+        xlabelCol = 1,rBins=None,clusterNames=None,rescale=False,\
+        returnAx=False,error=None):
+    if rBins is None:
+        rBins = np.linspace(0,20,21)
+    if clusterNames is None:
+        clusterNames = [str(k+1) for k in range(0,nRows*nCols)]
+    fig, ax = plt.subplots(nRows,nCols)
+    for l in range(0,nCols*nRows):
+        i = int(l/nCols)
+        j = l - nRows*i
+        [h1,h2,h3] = computeAndPlotPPTProfile(ax[i,j],expectedLine[:,l],\
+            realisedLine[:,l],rBins,rescale=rescale,style1 = style1,\
+            style2 = style2,title1 = title1,title2 = title2,\
+            error=error,intervalColour=intervalColour,\
+            intervalLabel = intervalLabel)
+        ax[i,j].set_title(clusterNames[l][0],fontsize=fontsize,\
+            fontfamily=fontfamily)
+        formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim)
+    plt.subplots_adjust(wspace=wspace,hspace=hspace)
+    ax[legPos[0],legPos[1]].legend(prop={"size":fontsize,"family":fontfamily},\
+        frameon=False)
+    fig.suptitle(title, fontsize=titleSize,fontfamily=fontfamily)
+    if savename is not None:
+        plt.savefig(savename)
+    if show:
+        plt.show()
+    if returnAx:
+        return ax
+
+def plotPPTProfileProgressive(expectedLine,realisedLine,clusterName=None,\
+        nCols = 3,sampleNumList = None,returnAx=False,\
+        ylabel = '$n_{\\mathrm{gal}}(<r)$ $[h^{3}\\mathrm{Mpc}^{-3}]$',\
+        xlabel = '$r$ $[\\mathrm{Mpc}h^{-1}]$',ylim=[0.01,2],\
+        title = "Simulation Density (Eulerian space) " + \
+        "vs 2M++ Galaxy number density",\
+        title1 = "2M++ Galaxies",fontsize=8,fontfamily='serif',\
+        title2 = "Posterior prediction",\
+        intervalLabel = "95% Poisson \nInterval",\
+        titleSize = 12,legPos = None,ylabelRow = None,\
+        xlabelCol = None,error=None,rBins=None,\
+        wspace=0,hspace=0.2,show=True,savename=None,rescale=False,\
+        style1 = 'k-',style2 = 'k:',intervalColour='grey',\
+        bbox_to_anchor = None):
+    nsamples = realisedLine.shape[1]
+    if rBins is None:
+        rBins = np.linspace(0,20,21)
+    if clusterName is None:
+        clusterName = "Cluster"
+    if sampleNumList is None:
+        sampleNumList = np.arange(0,nsamples)
+    nRows = int(np.ceil(nsamples/3))
+    if nRows < 2:
+        nCols = nsamples
+    if ylabelRow is None:
+        ylabelRow = int(nRows/2)
+    if xlabelCol is None:
+        xlabelCol = int(nCols/2)
+    if legPos is None:
+        legPos = [int(nRows/2),nCols-1]
+    fig, ax = plt.subplots(nRows,nCols)
+    for l in range(0,nRows*nCols):
+        i = int(l/nCols)
+        j = l - nRows*i
+        if nRows < 2:
+            axij = ax[j]
+        else:
+            axij = ax[i,j]
+        if l < nsamples:
+            [h1,h2,h3] = computeAndPlotPPTProfile(axij,expectedLine,\
+                realisedLine[:,l],rBins,rescale=rescale,style1 = style1,\
+                style2 = style2,title1 = title1,title2 = title2,\
+                error=error,intervalColour=intervalColour,\
+                intervalLabel = intervalLabel)
+            axij.set_title("Sample " +str(sampleNumList[l]),\
+                fontsize=fontsize,fontfamily=fontfamily)
+        formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim)
+    plt.subplots_adjust(wspace=wspace,hspace=hspace)
+    if nRows < 2:
+        axij = ax[legPos[1]]
+    else:
+        axij = ax[legPos[0],legPos[1]]
+    
+    axij.legend(handles = [h1[0],h2[0],h3],\
+        prop={"size":fontsize,"family":fontfamily},frameon=False,\
+        bbox_to_anchor = bbox_to_anchor)
+    fig.suptitle("PPT in different samples, " + clusterName,\
+        fontsize=titleSize,fontfamily=fontfamily)
+    if savename is not None:
+        plt.savefig(savename)
+    if show:
+        plt.show()
+    if returnAx:
+        return ax
+
+
+# Compare 1D dark matter density profiles for a set of clusters.
+def compareDensities(rBins,densities,clusterNames,labels = None,styles= None,\
+        fontsize = 8, colors = None,fontfamily = "serif",ylabel="$\\rho/\\bar{\\rho}$",\
+        xlabel = '$r$ $[\\mathrm{Mpc}h^{-1}]$',nRows=3,nCols=3,ylim=[1,500],\
+        title = "BORG vs Simulation Density",wspace=0,hspace=0.2,show=True,\
+        savename = None):
+    if labels is None:
+        labels = ["Line " + str(k) for k in range(0,len(densities))]
+    if colors is None:
+        colors = ['tab:blue','tab:orange','tab:green','tab:red','tab:purple',\
+        'tab:brown','tab:pink','tab:gray','tab:olive','tab:cyan']
+    if type(colors) == type(""):
+        colors = [colors for k in range(0,len(densities))]
+    if styles is None:
+        if len(densities) <= 4:
+            styles = ['-',':','--','-.']
+        else:
+            styles = ['-' for k in range(0,len(densities))]
+    fig, ax = plt.subplots(nRows,nCols)
+    for l in range(0,nRows*nCols):
+        i = int(l/nCols)
+        j = l - nRows*i
+        for m in range(0,len(densities)):
+            nz = np.where(densities[m][:,1] > 0)[0]
+            ax[i,j].semilogy(binCentres(rBins)[nz],densities[m][nz,l],color=colors[m],\
+                linestyle = styles[m],label=labels[m])
+        ax[i,j].set_title(clusterNames[l][0],fontsize=fontsize,fontfamily=fontfamily)
+        if j > 0:
+            ax[i,j].yaxis.label.set_visible(False)
+            ax[i,j].yaxis.set_major_formatter(NullFormatter())
+            ax[i,j].yaxis.set_minor_formatter(NullFormatter())
+        else:
+            ax[i,j].set_ylabel(ylabel)
+        if i < nCols - 1:
+            ax[i,j].xaxis.label.set_visible(False)
+            ax[i,j].xaxis.set_major_formatter(NullFormatter())
+            ax[i,j].xaxis.set_minor_formatter(NullFormatter())
+        else:
+            ax[i,j].set_xlabel(xlabel)
+        ax[i,j].set_ylim(ylim)
+    plt.subplots_adjust(wspace=wspace,hspace=hspace)
+    ax[1,2].legend(prop={"size":fontsize,"family":fontfamily},frameon=False)
+    plt.suptitle(title)
+    if savename is not None:
+        plt.savefig(savename)
+    if show:
+        plt.show()
+
+
+def plotAverageHMF(haloMasses,snap,\
+        massLower=1e12,massUpper = 1e16,nBins=31,ylim=[1e-1,1e5],\
+        ax=None,Delta=200,marker='x',color=None,\
+        linestyle='',tmfcolor='r',tmfstyle=':',mass_function="Tinker",\
+        label='Halos',labelLine='TMF prediction',\
+        poisson_interval=0.95,volSim=None,\
+        fill_alpha = 0.5,showLegend=True,legendFontsize=10,font="serif",\
+        fontsize=15,labelRight=True,gridcolor='grey',\
+        gridstyle=':',gridalpha=0.5,show=True,returnAx=False,\
+        xlabel="Mass bin centre [$M_{\odot}h^{-1}$]",\
+        ylabel="Number of Halos",title="Halo Mass function",\
+        legendLoc='lower left',bbox_to_anchor=None,\
+        savename = None):
+    [dndm,m] = cosmology.TMF_from_hmf(massLower,massUpper,\
+        h=snap.properties['h'],
+        Om0=snap.properties['omegaM0'],Delta=200,
+        delta_wrt='SOCritical',mass_function=mass_function)
+    boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+    if volSim is None:
+        volSim = boxsize**3
+    nSamples = len(haloMasses)
+    massBins = 10**np.linspace(np.log10(massLower),np.log10(massUpper),nBins)
+    n = cosmology.dndm_to_n(m,dndm,massBins)
+    binLists = [plot_utilities.binValues(hnmasses,massBins) \
+        for hnmasses in haloMasses]
+    sigmaBins = np.std([bins[1] for bins in binLists],0)\
+        /np.sqrt(len(haloMasses))
+    noInBins = np.mean([bins[1] for bins in binLists],0)
+    massBinCentres = plot_utilities.binCentres(massBins)
+    bounds = scipy.stats.poisson(n*volSim*nSamples).interval(poisson_interval)
+    if ax is None:
+        fig, ax = plt.subplots()
+    ax.errorbar(massBinCentres,noInBins,yerr=sigmaBins,\
+        marker=marker,linestyle=linestyle,label=label,color=color)
+    ax.plot(massBinCentres,n*volSim,tmfstyle,label=labelLine,color=tmfcolor)
+    ax.fill_between(massBinCentres,
+        bounds[0]/nSamples,bounds[1]/nSamples,
+        facecolor=tmfcolor,alpha=fill_alpha,
+        interpolate=True,label=("%.2g" % (100*poisson_interval)) + \
+        '% Poisson interval')
+    if showLegend:
+        ax.legend(prop={"size":legendFontsize,"family":font},
+        loc=legendLoc,frameon=False,bbox_to_anchor=bbox_to_anchor)
+    ax.set_title(title,fontsize=fontsize,fontfamily=font)
+    ax.set_xlabel(xlabel,fontsize=fontsize,fontfamily=font)
+    ax.set_ylabel(ylabel,fontsize=fontsize,fontfamily=font)
+    ax.tick_params(axis='both',labelsize=fontsize,labelright=labelRight,\
+        right=labelRight)
+    ax.tick_params(axis='both',which='minor',bottom=True,labelsize=fontsize)
+    ax.tick_params(axis='y',which='minor')
+    ax.yaxis.grid(color=gridcolor,linestyle=gridstyle,alpha=gridalpha)
+    ax.set_ylim(ylim)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    plt.tight_layout()
+    if savename is not None:
+        plt.savefig(savename)
+    if show:
+        plt.show()
+    if returnAx:
+        return ax
+
+
 

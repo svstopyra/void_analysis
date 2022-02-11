@@ -29,12 +29,16 @@ def gridTest(s,grid,lfl_corner=[0,0,0]):
 			return (first[0][0],second[0][0],third[0][0])
 
 # Wrap positions so that they lie in the periodic domain:
-def wrap(pos,boxsize):
-	wrap_up = np.where(pos < 0.0)
-	wrap = pos[:]*1.0
-	wrap[wrap_up] = wrap[wrap_up] + boxsize
-	wrap_down = np.where(wrap >= boxsize)
-	wrap[wrap_down] = wrap[wrap_down] - boxsize
+def wrap(pos,boxsize,old_method=False):
+	if old_method:
+		wrap_up = np.where(pos < 0.0)
+		wrap = pos[:]*1.0
+		wrap[wrap_up] = wrap[wrap_up] + boxsize
+		wrap_down = np.where(wrap >= boxsize)
+		wrap[wrap_down] = wrap[wrap_down] - boxsize
+	else:
+		wrap = np.mod(pos,boxsize)
+		wrap[np.where(wrap >= boxsize)] -= boxsize # To deal with rounding errors
 	return wrap
 
 # Unwrap positions so that all points lie within (-boxsize/2,boxsize/2]:
@@ -354,9 +358,9 @@ def newSnap(newFilename,dmPos,dmVel,dmMass = None,gasPos=None,gasVel=None,gasMas
 		snew.gas['iord'] = gasIndices
 	if properties is not None:
 		snew.properties = properties
-	if os.path.isfile(newFilename):
-		os.system("rm " + newFilename)
 	if newFilename is not None:
+		if os.path.isfile(newFilename):
+			os.system("rm " + newFilename)
 		snew.write(filename=newFilename,fmt=fmt)
 	return snew
 	

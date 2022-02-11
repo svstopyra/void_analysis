@@ -485,17 +485,21 @@ def luminosityToComoving(lumDist,cosmo):
 	rc = cosmo.comoving_distance(z).value*h
 	return rc
 
-# Convert comoving distance to luminosity distance.
-def comovingToLuminosity(comovingDistance,cosmo,Ninterp=1000):
-	h = cosmo.H0.value/100
-	rq = comovingDistance*astropy.units.Mpc/h
-	zqMin = astropy.cosmology.z_at_value(cosmo.comoving_distance,np.min(rq))
-	zqMax = astropy.cosmology.z_at_value(cosmo.comoving_distance,np.max(rq))
-	zgrid = np.linspace(zqMin,zqMax,Ninterp)
-	Dgrid = cosmo.comoving_distance(zgrid)
-	zq = np.interp(rq.value,Dgrid.value,zgrid)
-	rl = cosmo.luminosity_distance(zq).value
-	return rl
+# Convert comoving distance to luminosity distance, units of Mpc.
+# Input is expected in units of Mpc/h
+def comovingToLuminosity(comovingDistance,cosmo,Ninterp=1000,return_z = False):
+    h = cosmo.H0.value/100
+    rq = comovingDistance*astropy.units.Mpc/h # Convert Mpc/h input to Mpc
+    zqMin = astropy.cosmology.z_at_value(cosmo.comoving_distance,np.min(rq))
+    zqMax = astropy.cosmology.z_at_value(cosmo.comoving_distance,np.max(rq))
+    zgrid = np.linspace(zqMin,zqMax,Ninterp)
+    Dgrid = cosmo.comoving_distance(zgrid)
+    zq = np.interp(rq.value,Dgrid.value,zgrid)
+    rl = cosmo.luminosity_distance(zq).value
+    if return_z:
+        return [rl,zq]
+    else:
+        return rl
 
 # Compute the power spectrum for a snapshot, saving the result to a file for later loading.
 def computePowerSpectrum(snap,recompute=False):
@@ -725,7 +729,51 @@ def convertCriticalMass(M1,D1,D2=200,z = 0,Om=0.3,Ol=0.7,Or=5e-5,Ok=0,h = 0.7,
 	else:
 		return M1*rootsMid
 
-
+# Convert eulerian co-ordinate to redshift space co-ordinates:
+def eulerToZ(pos,vel,cosmo,boxsize,h,centre = None,Ninterp=1000,\
+        l = 268,b = 38,vl=540,localCorrection = True,velFudge = 1):
+    # Compute comoving distance:
+    if centre is not None:
+        dispXYZ = snapedit.unwrap(pos - centre,boxsize)
+    else:
+        dispXYZ = pos
+    r = np.sqrt(np.sum(dispXYZ**2,1))
+    rq = r*astropy.units.Mpc/h
+    # Compute relationship between comoving distance and redshift at discrete points.
+    # For speed, we will interpolate any other points as computing it for each point
+    # individually requires an expensive function inversion:
+    zqMin = astropy.cosmology.z_at_value(cosmo.comoving_distance,np.min(rq))
+    zqMax = astropy.cosmology.z_at_value(cosmo.comoving_distance,np.max(rq))
+    # Grid of redshifts vs comoving distances used for interpolation:
+    zgrid = np.linspace(zqMin,zqMax,Ninterp)
+    Dgrid = cosmo.comoving_distance(zgrid)
+    # Interpolate the redshifts for each comoving distance
+    zq = np.interp(rq.value,Dgrid.value,zgrid)
+    # Now get the angular co-ordinates:
+    phi = np.arctan2(dispXYZ[:,1],dispXYZ[:,0])
+    theta = np.pi/2 - np.arcsin(dispXYZ[:,2]/r)
+    # Construct z-space Euclidean co-ordinates:
+    posZ = np.zeros(pos.shape)
+    c = 3e5
+    rz = c*zq/(100)
+    # RSDs:
+    # Get local peculiar velocity correction:
+    if localCorrection:
+        local = SkyCoord(l=l*u.deg,b=b*u.deg,distance=1*u.Mpc,frame='galactic')
+        vhat = np.array([local.icrs.cartesian.x.value,local.icrs.cartesian.y.value,\
+            local.icrs.cartesian.z.value])
+        vd = velFudge*np.sum(pos*(vel - vl*vhat),1)/r
+    else:
+        vd = np.sum(pos*vel,1)/r
+    rsd = rz + vd/100
+    posZ[:,0] = rsd*np.sin(theta)*np.cos(phi)
+    posZ[:,1] = rsd*np.sin(theta)*np.sin(phi)
+    posZ[:,2] = rsd*np.cos(theta)
+    # Need to make sure things that are outside the periodic domain are now 
+    # wrapped back into it:
+    posZ[np.where(posZ <= -boxsize/2)] += boxsize
+    posZ[np.where(posZ > boxsize/2)] -= boxsize
+    return posZ
 
 
 
