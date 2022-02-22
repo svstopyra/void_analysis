@@ -1,6 +1,7 @@
 # A collection of tools used for various aspects of the analysis.
 import scipy
 import numpy as np
+import numexpr as ne
 import alphashape
 import pynbody
 from . import snapedit, plot_utilities
@@ -347,7 +348,7 @@ def testComputation(filename,func,*args,_testTolerance = 1e-5,\
 
 # Runs a function to compute something, and saves test data for later
 # comparison
-def createTestData(filename,func,*args,_returnResult = True,\
+def createTestData(filename,func,*args,_return_result = True,\
         _overwritePrevious=False,_result=None,**kwargs):
     if os.path.isfile(filename) and not _overwritePrevious:
         raise Exception("Previous test data found. Specify " + \
@@ -355,7 +356,7 @@ def createTestData(filename,func,*args,_returnResult = True,\
     if _result is None:
         _result = func(*args,**kwargs)
     pickle.dump(_result,open(filename,"wb"))
-    if _returnResult:
+    if _return_result:
         return _result
 
 # Convert an MCMC file into a white noise file:
@@ -419,5 +420,16 @@ def getKDTree(snap,cacheTree = True,reconstructTree = False):
         tree = snap.tree
     return tree
 
-
+# Compute the galaxy counts in healpix slices:
+def getCountsInHealpixSlices(ng,hpIndices,nside = 4,nMagBins = 16,nslices=10,\
+        rmax=600,rmin = 0,nres = 256,count_type=float):
+    npixels = 12*(nside**2)
+    rLimits = np.linspace(rmin,rmax,nslices+1)
+    ngHP = np.zeros((nMagBins,npixels*nslices),dtype=count_type)
+    reshapedNG = ng.reshape((nMagBins,nres,nres,nres))
+    for k in range(0,npixels*nslices):
+        filterK = ne.evaluate("hpIndices == k")
+        for l in range(0,nMagBins):
+            ngHP[l,k] = np.sum(reshapedNG[l][filterK])
+    return ngHP
 

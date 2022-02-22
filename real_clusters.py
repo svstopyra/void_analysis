@@ -151,3 +151,9 @@ def getGriddedDensity(snap,N,redshiftSpace= False,velFudge = 1,snapPos = None,sn
 	density = np.reshape(np.reshape(density,256**3),(256,256,256),order='F')
 	return density
 
+
+
+
+
+
+

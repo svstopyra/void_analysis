@@ -3,7 +3,11 @@ import pynbody
 import numpy as np
 import astropy
 import numexpr as ne
-
+from .halos import massCentreAboutPoint
+import scipy
+from . import tools, snapedit
+import pickle
+import os
 
 # Convert eulerian co-ordinate to redshift space co-ordinates:
 def eulerToZ(pos,vel,cosmo,boxsize,h,centre = None,Ninterp=1000,\
@@ -267,5 +271,151 @@ def ngPerLBin(bias,lumBins = 16,nReal = 6,N = 256,returnError = False,\
     else:
         return [np.mean(ng,0),np.std(ng,0)/np.sqrt(len(smapleList))]
 
+def matchClustersAndHalos(clusterPos,haloPos,haloMass,boxsize,catalogPos,\
+        gatherRadius = 5,neighbourRadius = 10,massProxy = None):
+    treeCat = scipy.spatial.cKDTree(snapedit.wrap(catalogPos,boxsize),\
+        boxsize=boxsize)
+    treeClusters = scipy.spatial.cKDTree(snapedit.wrap(clusterPos,boxsize),\
+        boxsize=boxsize)
+    treeHalos = scipy.spatial.cKDTree(snapedit.wrap(haloPos,boxsize),\
+        boxsize=boxsize)
+    if massProxy is None:
+        massProxy = treeCat.query_ball_point(snapedit.wrap(clusterPos,boxsize),\
+            gatherRadius,workers=-1,return_length=True)
+    counterpartClusters = -np.ones(len(haloPos),dtype=int)
+    counterpartHalos = -np.ones(len(clusterPos),dtype=int)
+    neighbourHalos = treeHalos.query_ball_point(\
+        snapedit.wrap(clusterPos,boxsize),\
+        neighbourRadius,workers=-1)
+    neighbourClusters = treeClusters.query_ball_point(\
+        snapedit.wrap(clusterPos,boxsize),neighbourRadius,workers=-1)
+    maxNeighbourCluster = np.array(\
+        [clusterList[np.argmax(massProxy[clusterList])] \
+        for clusterList in neighbourClusters])
+    for k in range(0,len(clusterPos)):
+        if maxNeighbourCluster[k] == k:
+            sortedNearbyClusters = np.flip(\
+                np.argsort(massProxy[neighbourClusters[k]]))
+            sortedNearbyHalos = np.flip(\
+                np.argsort(haloMass[neighbourHalos[k]]))
+            descendingClusters = np.array(\
+                neighbourClusters[k],dtype=int)[sortedNearbyClusters]
+            descendingHalos = np.array(\
+                neighbourHalos[k],dtype=int)[sortedNearbyHalos]
+            matchableNum = np.min([len(descendingClusters),\
+                len(descendingHalos)])
+            counterpartClusters[descendingHalos[0:matchableNum]] = \
+                 descendingClusters[0:matchableNum]
+            counterpartHalos[descendingClusters[0:matchableNum]] = \
+                 descendingHalos[0:matchableNum]
+    return [counterpartClusters,counterpartHalos]
 
+def getHaloCentresAndMassesFromCatalogue(h,boxsize=677.7):
+    hcentres = np.zeros((len(h),3))
+    hmasses = np.zeros(len(h))
+    for k in range(0,len(h)):
+        hcentres[k,0] = h[k+1].properties['Xc']/1000
+        hcentres[k,1] = h[k+1].properties['Yc']/1000
+        hcentres[k,2] = h[k+1].properties['Zc']/1000
+        hmasses[k] = h[k+1].properties['mass']
+    hcentres = tools.remapAntiHaloCentre(hcentres,boxsize)
+    return [hcentres,hmasses]
+
+def getHaloCentresAndMassesRecomputed(h,boxsize=677.7,fixedMass=True):
+    hcentres = np.zeros((len(h),3))
+    hmasses = np.zeros(len(h))
+    mUnit = h[1]['mass'].in_units("Msol h**-1")[0]*1e10
+    for k in range(0,len(h)):
+        if fixedMass:
+            hcentres[k,:] = context.computePeriodicCentreWeighted(\
+                h[k+1]['pos'],mUnit*np.ones(len(h[k+1])),\
+                boxsize,accelerate=True)
+            hmasses[k] = mUnit*len(h[k+1])
+        else:
+            hcentres[k,:] = context.computePeriodicCentreWeighted(\
+                h[k+1]['pos'],h[k+1]['mass'],\
+                boxsize,accelerate=True)
+            hmasses[k] = np.sum(h[k+1]['mass'].in_units("Msol h**-1"))
+    hcentres = tools.remapAntiHaloCentre(hcentres,boxsize)
+    return [hcentres,hmasses]
+
+# Recentre clusters to account for simulation drift of cluster locations:
+def getClusterCentres(approxCentre,snap=None,snapPath="snapshot_001",
+        positions=None,density=None,recompute=True,fileSuffix='clusters',\
+        reductions=3,iterations=10,method=None,\
+        haloPos = None,haloMass = None,catalogPos=None,\
+        gatherRadius = 5,neighbourRadius = 10,massProxy = None,\
+        boxsize = None,cache=True,positionTree=None):
+    if os.path.isfile(snapPath + "." + fileSuffix) and (not recompute):
+        refinedPos =  pickle.load(open(snapPath + "." + fileSuffix,"rb"))
+    else:
+        # Select a method if none specified:
+        if method is None:
+            # Pick the first available method:
+            if os.path.isfile(snapPath):
+                method = "snapshot"
+            elif ((density is not None) and (positions is not None)):
+                method = "density"
+            elif ((haloPos is not None) and (haloMass is not None) and \
+                (catalogPos is not None) and (boxsize is not None)):
+                method = "halo_match"
+            elif os.path.isfile(snapPath + "." + fileSuffix):
+                method = "load"
+            else:
+                raise Exception("No valid method is available.")
+        # Verify that the data needed for each method has been provided:
+        if not os.path.isfile(snapPath) and method == "snapshot":
+            raise Exception("Snapshot is not available.")
+        if ((density is None) or (positions is None) or (boxsize is None)) \
+                and (method == "density"):
+            raise Exception("Positions and Density field must be supplied.")
+        if ((haloPos is None) or (haloMass is None) or (catalogPos is None) \
+                or boxsize is None) and (method == "halo_match"):
+            raise Exception(\
+                "haloPos, haloMass, catalogPos, and boxsize must be supplied.")
+        if not os.path.isfile(snapPath + "." + fileSuffix) \
+                and method == "load":
+            raise Exception("File with cluster locations must be provided.")
+        # Compute the cluster centres using the relevant method:
+        if method == "snapshot":
+            if snap is None:
+                snap = pynbody.load(snapPath)
+                tools.remapBORGSimulation(snap)
+            boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+            refinedPos = massCentreAboutPoint(\
+                snapedit.wrap(approxCentre,boxsize),snap['pos'],\
+                boxsize,reductions=reductions,iterations=iterations,\
+                tree = tools.getKDTree(snap))
+        elif method == "density":
+            if positionTree is None:
+                positionTree = scipy.spatial.cKDTree(\
+                    snapedit.wrap(positions,boxsize),boxsize=boxsize)
+            refinedPos = massCentreAboutPoint(\
+                snapedit.wrap(approxCentre,boxsize),positions,\
+                boxsize,reductions=reductions,iterations=iterations,\
+                tree = positionTree,weights=density)
+        elif method == "halo_match":
+            [counterpartClusters,counterpartHalos] = \
+                matchClustersAndHalos(\
+                    approxCentre,haloPos,haloMass,boxsize,catalogPos,\
+                    gatherRadius = gatherRadius,\
+                    neighbourRadius = neighbourRadius,massProxy = massProxy)
+            refinedPos = np.zeros(approxCentre.shape)
+            for k in range(0,len(approxCentre)):
+                if counterpartHalos[k] < 0:
+                    print("Warning - could not find counterpart halo for " + \
+                        "cluster " + str(k+1) + ". Using input position.")
+                    refinedPos[k,:] = approxCentre[k,:]
+                else:
+                    refinedPos[k,:] = haloPos[counterpartHalos[k],:]
+        elif method == "load":
+            refinedPos = pickle.load(open(snapPath + "." + fileSuffix,"rb"))
+            if refinedPos.shape != approxCentre.shape:
+                raise Exception("Cached cluster locations are not a match " + \
+                    "for supplied clusters.")
+        else:
+            raise Exception("Invalid method requested.")
+        if cache:
+            pickle.dump(refinedPos,open(snapPath + "." + fileSuffix,"wb"))
+    return refinedPos
 

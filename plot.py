@@ -1854,9 +1854,9 @@ def plotAalphaSkyDistribution(effAalpha,mBin,nSlice,ns,coordAbell,abell_d,\
         plt.show()
 
 def computeAndPlotPPTProfile(ax,expectedLine,realisedLine,rBins,rescale=False,\
-        style1 = 'k-',style2 = 'k:',title1 = "2M++ Galaxies",\
+        style1 = '-',style2 = ':',title1 = "2M++ Galaxies",\
         title2 = "Posterior prediction",error=None,intervalColour='grey',\
-        intervalLabel = "95% Poisson \nInterval"):
+        intervalLabel = "95% Poisson \nInterval",color1='k',color2='k'):
     if rescale:
         factorExp = expectedLine[-1]
         factorReal = realisedLine[-1]
@@ -1868,10 +1868,10 @@ def computeAndPlotPPTProfile(ax,expectedLine,realisedLine,rBins,rescale=False,\
     nz1 = np.where(expectedLine > 0)[0]
     nz2 = np.where(realisedLine > 0)[0]
     h1 = ax.semilogy(binCentres(rBins)[nz1],expectedLine[nz1]\
-        /factorExp,style1,\
+        /factorExp,linestyle=style1,color=color1,\
         label=title1)
     h2 = ax.semilogy(binCentres(rBins)[nz2],realisedLine[nz2]\
-        /factorReal,style2,\
+        /factorReal,linestyle=style2,color=color2,\
         label = title2)
     if error is None:
         bounds = (scipy.stats.poisson(realisedLine[nz2]*\
@@ -1910,44 +1910,70 @@ def formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim):
 # Plot the Posterior Predictive Test for a set of clusters. That is, we compare
 # the galaxy count from a survey (2M++) to the expected galaxy count given the
 # inferred dark matter density field.
-def plotPPTProfiles(expectedLine,realisedLine,title1 = "2M++ Galaxies",\
-        title2 = "Posterior prediction",\
-        style1 = 'k-',style2 = 'k:',intervalLabel = "95% Poisson \nInterval",\
+def plotPPTProfiles(expectedLine,realisedLine,title1 = "2M++ \nGalaxies",\
+        title2 = "Posterior \nprediction",\
+        style1 = '-',style2 = ':',intervalLabel = "95% Poisson \nInterval",\
         intervalColour='grey',fontfamily='serif',fontsize=8,\
         ylabel = '$n_{\\mathrm{gal}}(<r)$ $[h^{3}\\mathrm{Mpc}^{-3}]$',\
         xlabel = '$r$ $[\\mathrm{Mpc}h^{-1}]$',ylim=[0.01,2],\
         wspace=0,hspace=0.2,show=True,savename=None,\
         title = "Simulation Density (Eulerian space) " + \
-        "vs 2M++ Galaxy number density",\
+        "vs 2M++ Galaxy number density",showLegend=True,\
         titleSize = 12,nRows=3,nCols=3,legPos = [1,2],ylabelRow = 1,\
         xlabelCol = 1,rBins=None,clusterNames=None,rescale=False,\
-        returnAx=False,error=None):
+        returnHandles=False,error=None,text=None,textPos=[0.1,0.1],\
+        splitLegend=True,legLoc=[0.3,0.7],color1='k',color2='k',\
+        top=0.845,bottom=0.110,left=0.125,right=0.900,ax=None,fig=None):
     if rBins is None:
         rBins = np.linspace(0,20,21)
     if clusterNames is None:
         clusterNames = [str(k+1) for k in range(0,nRows*nCols)]
-    fig, ax = plt.subplots(nRows,nCols)
+    if ax is None or fig is None:
+        fig, ax = plt.subplots(nRows,nCols)
     for l in range(0,nCols*nRows):
         i = int(l/nCols)
-        j = l - nRows*i
+        j = l - nCols*i
+        if error is None:
+            errorToPass = error
+        else:
+            errorToPass = error[:,l]
         [h1,h2,h3] = computeAndPlotPPTProfile(ax[i,j],expectedLine[:,l],\
             realisedLine[:,l],rBins,rescale=rescale,style1 = style1,\
             style2 = style2,title1 = title1,title2 = title2,\
-            error=error,intervalColour=intervalColour,\
-            intervalLabel = intervalLabel)
+            error=errorToPass,intervalColour=intervalColour,\
+            intervalLabel = intervalLabel,color1=color1,color2=color2)
         ax[i,j].set_title(clusterNames[l][0],fontsize=fontsize,\
             fontfamily=fontfamily)
         formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim)
+        if text is not None and textPos is not None:
+            ax[i,j].text(textPos[0]*ax[i,j].get_xlim()[1],\
+                ax[i,j].get_ylim()[0]*10**(\
+                textPos[1]*np.log10(\
+                ax[i,j].get_ylim()[1]/ax[i,j].get_ylim()[0])),\
+                text[l],fontsize=fontsize,fontfamily=fontfamily)
     plt.subplots_adjust(wspace=wspace,hspace=hspace)
-    ax[legPos[0],legPos[1]].legend(prop={"size":fontsize,"family":fontfamily},\
-        frameon=False)
+    if showLegend:
+        if splitLegend:
+            handleList = [[] for k in range(0,nRows)]
+            handleList[np.mod(0,nRows)].append(h1[0])
+            handleList[np.mod(1,nRows)].append(h2[0])
+            handleList[np.mod(2,nRows)].append(h3)
+            for k in range(0,nRows):
+                if len(handleList[k]) > 0:
+                    ax[k,legPos[1]].legend(loc=legLoc,handles=handleList[k],\
+                        prop={"size":fontsize,"family":fontfamily},\
+                        frameon=False)
+        else:
+            ax[legPos[0],legPos[1]].legend(\
+                prop={"size":fontsize,"family":fontfamily},frameon=False)
     fig.suptitle(title, fontsize=titleSize,fontfamily=fontfamily)
+    plt.subplots_adjust(top=top,bottom=bottom,left=left,right=right)
     if savename is not None:
         plt.savefig(savename)
     if show:
         plt.show()
-    if returnAx:
-        return ax
+    if returnHandles:
+        return [fig,ax,h1,h2,h3]
 
 def plotPPTProfileProgressive(expectedLine,realisedLine,clusterName=None,\
         nCols = 3,sampleNumList = None,returnAx=False,\
@@ -1982,16 +2008,20 @@ def plotPPTProfileProgressive(expectedLine,realisedLine,clusterName=None,\
     fig, ax = plt.subplots(nRows,nCols)
     for l in range(0,nRows*nCols):
         i = int(l/nCols)
-        j = l - nRows*i
+        j = l - nCols*i
         if nRows < 2:
             axij = ax[j]
         else:
             axij = ax[i,j]
         if l < nsamples:
+            if error is None:
+                errorToPass = error
+            else:
+                errorToPass = error[:,l]
             [h1,h2,h3] = computeAndPlotPPTProfile(axij,expectedLine,\
                 realisedLine[:,l],rBins,rescale=rescale,style1 = style1,\
                 style2 = style2,title1 = title1,title2 = title2,\
-                error=error,intervalColour=intervalColour,\
+                error=errorToPass,intervalColour=intervalColour,\
                 intervalLabel = intervalLabel)
             axij.set_title("Sample " +str(sampleNumList[l]),\
                 fontsize=fontsize,fontfamily=fontfamily)
@@ -2001,7 +2031,6 @@ def plotPPTProfileProgressive(expectedLine,realisedLine,clusterName=None,\
         axij = ax[legPos[1]]
     else:
         axij = ax[legPos[0],legPos[1]]
-    
     axij.legend(handles = [h1[0],h2[0],h3],\
         prop={"size":fontsize,"family":fontfamily},frameon=False,\
         bbox_to_anchor = bbox_to_anchor)
@@ -2076,7 +2105,7 @@ def plotAverageHMF(haloMasses,snap,\
         xlabel="Mass bin centre [$M_{\odot}h^{-1}$]",\
         ylabel="Number of Halos",title="Halo Mass function",\
         legendLoc='lower left',bbox_to_anchor=None,\
-        savename = None):
+        savename = None,showTheory=True,binError = "standard"):
     [dndm,m] = cosmology.TMF_from_hmf(massLower,massUpper,\
         h=snap.properties['h'],
         Om0=snap.properties['omegaM0'],Delta=200,
@@ -2089,21 +2118,39 @@ def plotAverageHMF(haloMasses,snap,\
     n = cosmology.dndm_to_n(m,dndm,massBins)
     binLists = [plot_utilities.binValues(hnmasses,massBins) \
         for hnmasses in haloMasses]
-    sigmaBins = np.std([bins[1] for bins in binLists],0)\
-        /np.sqrt(len(haloMasses))
     noInBins = np.mean([bins[1] for bins in binLists],0)
+    if binError == "standard":
+        sigmaBins = np.std([bins[1] for bins in binLists],0)\
+            /np.sqrt(len(haloMasses))
+    elif binError == "poisson":
+        #sigmaBins =  np.array(scipy.stats.poisson(np.mean(\
+        #    [bins[1] for bins in binLists],0)).interval(\
+        #    poisson_interval))
+        alphaO2 = (1.0 - poisson_interval)/2.0
+        nCount = np.sum([bins[1] for bins in binLists],0)
+        sigmaBins = np.abs(np.array([scipy.stats.chi2.ppf(\
+            alphaO2,2*nCount)/2,\
+            scipy.stats.chi2.ppf(1.0 - alphaO2,2*(nCount+1))/2])/len(haloMasses) - noInBins)
+    elif binError == "gaussian":
+        zalphaO2 = scipy.stats.norm().interval(poisson_interval)[1]
+        sigmaBins = zalphaO2*np.sqrt(np.mean(\
+            [bins[1] for bins in binLists],0)/len(haloMasses))
+    else:
+        raise Exception("Unknown bin error requested.")
     massBinCentres = plot_utilities.binCentres(massBins)
     bounds = scipy.stats.poisson(n*volSim*nSamples).interval(poisson_interval)
     if ax is None:
         fig, ax = plt.subplots()
     ax.errorbar(massBinCentres,noInBins,yerr=sigmaBins,\
         marker=marker,linestyle=linestyle,label=label,color=color)
-    ax.plot(massBinCentres,n*volSim,tmfstyle,label=labelLine,color=tmfcolor)
-    ax.fill_between(massBinCentres,
-        bounds[0]/nSamples,bounds[1]/nSamples,
-        facecolor=tmfcolor,alpha=fill_alpha,
-        interpolate=True,label=("%.2g" % (100*poisson_interval)) + \
-        '% Poisson interval')
+    if showTheory:
+        ax.plot(massBinCentres,n*volSim,tmfstyle,label=labelLine,\
+            color=tmfcolor)
+        ax.fill_between(massBinCentres,
+            bounds[0]/nSamples,bounds[1]/nSamples,
+            facecolor=tmfcolor,alpha=fill_alpha,
+            interpolate=True,label=("%.2g" % (100*poisson_interval)) + \
+            '% Poisson interval')
     if showLegend:
         ax.legend(prop={"size":legendFontsize,"family":font},
         loc=legendLoc,frameon=False,bbox_to_anchor=bbox_to_anchor)

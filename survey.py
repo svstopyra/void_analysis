@@ -1,10 +1,14 @@
 # Tools for computing properties of galaxy surveys
 import scipy
 import numpy as np
+import numexpr as ne
 from .cosmology import comovingToLuminosity
 import scipy.special as special
 import healpy
 import astropy
+from .simulation_tools import getGriddedGalCount
+from .cosmology import comovingToLuminosity
+from .import snapedit
 
 # Incomplete gamma function, needed for doing survey completeness integrals.
 def incompleteGamma(a,x):
@@ -42,7 +46,8 @@ def surveyMask(points,mask11,mask12,cosmo,alpha,Mstar,\
         Mmax = -21,mmax=12.5,mmin=None,Mcut = 11.5,Ninterp=1000,\
         nstar=1.14e-2*(0.705**3),\
         keCorr = None,numericalIntegration=False,interpolateMask = True,\
-        splitApparent = True,splitAbsolute=True,nLumBins=8,nAppMagBins=2):
+        splitApparent = True,splitAbsolute=True,nLumBins=8,nAppMagBins=2,\
+        returnComponents = False):
     equatorial = pointsToEquatorial(points,boxsize=boxsize,centre=centre)
     theta = np.pi/2 - equatorial[:,2]
     # Now need to get luminosity distance:
@@ -91,11 +96,18 @@ def surveyMask(points,mask11,mask12,cosmo,alpha,Mstar,\
                     Mmin,Mmax,cosmo,nstar,keCorr,\
                     numericalIntegration,interpolateMask,Ninterp,alpha,Mstar)
     angularMask = np.zeros(len(rl),dtype=np.float32)
-    condition_highM = (Mr < Mmax) & (Mr >= Mcut)
+    condition_highM = (Mr < mmax) & (Mr >= Mcut)
     condition_lowM = (Mr < Mcut)
+    maskHigh = np.zeros(len(rl),dtype=np.float32)
+    maskLow = np.zeros(len(rl),dtype=np.float32)
     angularMask[condition_highM] = mask12[ind[condition_highM]]
+    maskHigh[condition_highM] = mask12[ind[condition_highM]]
     angularMask[condition_lowM] = mask11[ind[condition_lowM]]
-    return angularMask*c
+    maskLow[condition_lowM] = mask11[ind[condition_lowM]]
+    if returnComponents:
+        return [angularMask*c,angularMask,c,maskHigh,maskLow]
+    else:
+        return angularMask*c
 
 # Convert a set of cartesian points to comoving distance, and equatorial
 # (right ascension, declanation) co-ordinates.
@@ -152,4 +164,55 @@ def radialCompleteness(rl,alpha,Mstar,Mmin,Mmax,mmax,cosmo,nstar=1.14e-2,\
         Phi0 = incompleteGamma(1.0 + alpha,xl0) - incompleteGamma(1.0 + alpha,xu0)
         Phi1 = incompleteGamma(1.0 + alpha,xl1) - incompleteGamma(1.0 + alpha,xu1)
     return np.maximum(0.0,Phi0/Phi1)
+
+
+# Load 2M++ catalogue data and return the galaxy counts in
+# each magnitude bin and voxel:
+def griddedGalCountFromCatalogue(cosmo,tmppFile="2mpp_data/2MPP.txt",\
+        nAbsBins=8,N=256,nAppBins=2,MMin=-25,MMax=-21,boxsize=677.7,\
+        Kcorrection = True,recomputeAbsolute = True):
+    tmpp = np.loadtxt(tmppFile)
+    # Comoving distance in Mpc/h
+    h = cosmo.h
+    d = cosmo.comoving_distance(tmpp[:,3]).value*h
+    dL = comovingToLuminosity(d[np.where(d > 0)],cosmo)
+    posD = np.where(d > 0)[0]
+    # Angular co-ordinates:
+    theta = tmpp[:,2]
+    phi = tmpp[:,1]
+    # Cartesian positions:
+    Z = d*np.sin(theta)
+    X = d*np.cos(theta)*np.cos(phi)
+    Y = d*np.cos(theta)*np.sin(phi)
+    pos2mpp = np.vstack((X,Y,Z)).T[posD]
+    # Density in cells of an N^3 grid:
+    ng2mpp = getGriddedGalCount(pos2mpp,N,boxsize)
+    M2mpp = tmpp[:,5] # Absolute magnitude
+    m2mpp = tmpp[:,4] # Apparent magnitude
+    K2mpp = tmpp[posD,4] # filtered apparent magnitude for useable
+        # galaxies
+    K = tmpp[posD,5] # filtered absolute magnitude
+    # Compute number of galaxies in each of 16 luminosity bins:
+    nMagBins = nAbsBins*nAppBins
+    ng2mppK = np.zeros((nMagBins,N,N,N))
+    # Effective absolute magnitudes, with K-corrections:
+    if recomputeAbsolute:
+        MabsEff = m2mpp[posD] - 5*np.log10(dL) - 25
+        if Kcorrection:
+            MabsEff += 2.9*tmpp[posD,3]
+    else:
+        MabsEff = M2mpp[posD]
+    Kbins = np.linspace(-MMax,-MMin,nAbsBins+ 1)
+    # Filter to the apparent magnitude limits:
+    indices11p5 = [np.where((-MabsEff > Kbins[l]) & (-MabsEff <= Kbins[l+1]) \
+        & (K2mpp <= 11.5))[0] for l in range(0,len(Kbins)-1)]
+    indices12p5 = [np.where((-MabsEff > Kbins[l]) & (-MabsEff <= Kbins[l+1]) \
+        & (K2mpp > 11.5) & (K2mpp <= 12.5))[0] for l in range(0,len(Kbins)-1)]
+    # Compute galaxy counts in each bin:
+    for k in range(0,nAbsBins):
+        posKlow = pos2mpp[indices11p5[k]]
+        posKupp = pos2mpp[indices12p5[k]]
+        ng2mppK[2*k,:] = getGriddedGalCount(posKlow,N,boxsize)
+        ng2mppK[2*k+1,:] = getGriddedGalCount(posKupp,N,boxsize)
+    return ng2mppK
 
