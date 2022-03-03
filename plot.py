@@ -1856,7 +1856,8 @@ def plotAalphaSkyDistribution(effAalpha,mBin,nSlice,ns,coordAbell,abell_d,\
 def computeAndPlotPPTProfile(ax,expectedLine,realisedLine,rBins,rescale=False,\
         style1 = '-',style2 = ':',title1 = "2M++ Galaxies",\
         title2 = "Posterior prediction",error=None,intervalColour='grey',\
-        intervalLabel = "95% Poisson \nInterval",color1='k',color2='k'):
+        intervalLabel = "95% Poisson \nInterval",color1='k',color2='k',\
+        density=True):
     if rescale:
         factorExp = expectedLine[-1]
         factorReal = realisedLine[-1]
@@ -1874,9 +1875,12 @@ def computeAndPlotPPTProfile(ax,expectedLine,realisedLine,rBins,rescale=False,\
         /factorReal,linestyle=style2,color=color2,\
         label = title2)
     if error is None:
-        bounds = (scipy.stats.poisson(realisedLine[nz2]*\
-            (4*np.pi*rBins[1:][nz2]**3/3)).interval(0.95)/\
-            (4*np.pi*rBins[1:][nz2]**3/3))/factorReal
+        if density:
+            bounds = (scipy.stats.poisson(realisedLine[nz2]*\
+                (4*np.pi*rBins[1:][nz2]**3/3)).interval(0.95)/\
+                (4*np.pi*rBins[1:][nz2]**3/3))/factorReal
+        else:
+            bounds = scipy.stats.poisson(realisedLine[nz2]).interval(0.95)
     else:
         # Standard deviation of the mean:
         bounds = [(realisedLine[nz2] - error[nz2])/factorReal,\
@@ -1887,9 +1891,13 @@ def computeAndPlotPPTProfile(ax,expectedLine,realisedLine,rBins,rescale=False,\
     return [h1,h2,h3]
 
 # Adjusts the formatting of a grid of plots:
-def formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim):
+def formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim,\
+        fontsize=8,fontfamily='serif',nCols = 3):
     if nRows < 2:
-        axij = ax[j]
+        if nCols > 1:
+            axij = ax[j]
+        else:
+            axij = ax
     else:
         axij = ax[i,j]
     if j > 0:
@@ -1897,13 +1905,13 @@ def formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim):
         axij.yaxis.set_major_formatter(NullFormatter())
         axij.yaxis.set_minor_formatter(NullFormatter())
     if (i == ylabelRow) and (j == 0):
-        axij.set_ylabel(ylabel)
+        axij.set_ylabel(ylabel,fontsize=fontsize,fontfamily=fontfamily)
     if i < nRows - 1:
         axij.xaxis.label.set_visible(False)
         axij.xaxis.set_major_formatter(NullFormatter())
         axij.xaxis.set_minor_formatter(NullFormatter())
     if (j == xlabelCol) and (i == nRows-1):
-        axij.set_xlabel(xlabel)
+        axij.set_xlabel(xlabel,fontsize=fontsize,fontfamily=fontfamily)
     axij.set_ylim(ylim)
 
 
@@ -1923,7 +1931,8 @@ def plotPPTProfiles(expectedLine,realisedLine,title1 = "2M++ \nGalaxies",\
         xlabelCol = 1,rBins=None,clusterNames=None,rescale=False,\
         returnHandles=False,error=None,text=None,textPos=[0.1,0.1],\
         splitLegend=True,legLoc=[0.3,0.7],color1='k',color2='k',\
-        top=0.845,bottom=0.110,left=0.125,right=0.900,ax=None,fig=None):
+        top=0.845,bottom=0.110,left=0.125,right=0.900,ax=None,fig=None,\
+        density=True):
     if rBins is None:
         rBins = np.linspace(0,20,21)
     if clusterNames is None:
@@ -1937,19 +1946,25 @@ def plotPPTProfiles(expectedLine,realisedLine,title1 = "2M++ \nGalaxies",\
             errorToPass = error
         else:
             errorToPass = error[:,l]
-        [h1,h2,h3] = computeAndPlotPPTProfile(ax[i,j],expectedLine[:,l],\
+        if nCols == 1 and nRows == 1:
+            axij = ax
+        else:
+            axij = ax[i,j]
+        [h1,h2,h3] = computeAndPlotPPTProfile(axij,expectedLine[:,l],\
             realisedLine[:,l],rBins,rescale=rescale,style1 = style1,\
             style2 = style2,title1 = title1,title2 = title2,\
             error=errorToPass,intervalColour=intervalColour,\
-            intervalLabel = intervalLabel,color1=color1,color2=color2)
-        ax[i,j].set_title(clusterNames[l][0],fontsize=fontsize,\
+            intervalLabel = intervalLabel,color1=color1,color2=color2,\
+            density=density)
+        axij.set_title(clusterNames[l][0],fontsize=fontsize,\
             fontfamily=fontfamily)
-        formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim)
+        formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim,\
+            nCols = nCols)
         if text is not None and textPos is not None:
-            ax[i,j].text(textPos[0]*ax[i,j].get_xlim()[1],\
-                ax[i,j].get_ylim()[0]*10**(\
+            axij.text(textPos[0]*axij.get_xlim()[1],\
+                axij.get_ylim()[0]*10**(\
                 textPos[1]*np.log10(\
-                ax[i,j].get_ylim()[1]/ax[i,j].get_ylim()[0])),\
+                axij.get_ylim()[1]/axij.get_ylim()[0])),\
                 text[l],fontsize=fontsize,fontfamily=fontfamily)
     plt.subplots_adjust(wspace=wspace,hspace=hspace)
     if showLegend:
@@ -1960,11 +1975,19 @@ def plotPPTProfiles(expectedLine,realisedLine,title1 = "2M++ \nGalaxies",\
             handleList[np.mod(2,nRows)].append(h3)
             for k in range(0,nRows):
                 if len(handleList[k]) > 0:
-                    ax[k,legPos[1]].legend(loc=legLoc,handles=handleList[k],\
+                    if nCols == 1 and nRows == 1:
+                        axij = ax
+                    else:
+                        axij = ax[k,legPos[1]]
+                    axij.legend(loc=legLoc,handles=handleList[k],\
                         prop={"size":fontsize,"family":fontfamily},\
                         frameon=False)
         else:
-            ax[legPos[0],legPos[1]].legend(\
+            if nCols == 1 and nRows == 1:
+                axij = ax
+            else:
+                axij = ax[legPos[0],legPos[1]]
+            axij.legend(\
                 prop={"size":fontsize,"family":fontfamily},frameon=False)
     fig.suptitle(title, fontsize=titleSize,fontfamily=fontfamily)
     plt.subplots_adjust(top=top,bottom=bottom,left=left,right=right)
@@ -1987,7 +2010,7 @@ def plotPPTProfileProgressive(expectedLine,realisedLine,clusterName=None,\
         titleSize = 12,legPos = None,ylabelRow = None,\
         xlabelCol = None,error=None,rBins=None,\
         wspace=0,hspace=0.2,show=True,savename=None,rescale=False,\
-        style1 = 'k-',style2 = 'k:',intervalColour='grey',\
+        style1 = '-',style2 = ':',color1='k',color2='k',intervalColour='grey',\
         bbox_to_anchor = None):
     nsamples = realisedLine.shape[1]
     if rBins is None:
@@ -2022,7 +2045,7 @@ def plotPPTProfileProgressive(expectedLine,realisedLine,clusterName=None,\
                 realisedLine[:,l],rBins,rescale=rescale,style1 = style1,\
                 style2 = style2,title1 = title1,title2 = title2,\
                 error=errorToPass,intervalColour=intervalColour,\
-                intervalLabel = intervalLabel)
+                intervalLabel = intervalLabel,color1=color1,color2=color2)
             axij.set_title("Sample " +str(sampleNumList[l]),\
                 fontsize=fontsize,fontfamily=fontfamily)
         formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim)

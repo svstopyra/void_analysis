@@ -1,7 +1,7 @@
 from mayavi.mlab import points3d, text3d, plot3d, triangular_mesh
 from mayavi import mlab
 import pynbody
-from . import context, halo_analyis
+from . import context
 import numpy as np
 import scipy.spatial as spatial
 

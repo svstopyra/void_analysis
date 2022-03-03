@@ -339,6 +339,23 @@ def getHaloCentresAndMassesRecomputed(h,boxsize=677.7,fixedMass=True):
     hcentres = tools.remapAntiHaloCentre(hcentres,boxsize)
     return [hcentres,hmasses]
 
+def getAllHaloCentresAndMasses(snapList,boxsize,recompute=False,\
+        suffix = "halo_mass_and_centres",\
+        function=getHaloCentresAndMassesFromCatalogue):
+    massesAndCentresList = []
+    for k in range(0,len(snapList)):
+        print("Masses and centres for sample " + str(k+1) + " of " + \
+            str(len(snapList)))
+        if os.path.isfile(snapList[k].filename + "." + suffix) \
+                and not recompute:
+            massesAndCentresList.append(pickle.load(\
+                open(snapList[k].filename + "." + suffix,"rb")))
+        else:
+            massesAndCentresList.append(tools.loadOrRecompute(\
+                snapList[k].filename + "." + suffix,function,\
+                snapList[k].halos(),boxsize=boxsize,_recomputeData=recompute))
+    return massesAndCentresList
+
 # Recentre clusters to account for simulation drift of cluster locations:
 def getClusterCentres(approxCentre,snap=None,snapPath="snapshot_001",
         positions=None,density=None,recompute=True,fileSuffix='clusters',\

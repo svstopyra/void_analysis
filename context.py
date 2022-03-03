@@ -4,6 +4,7 @@ import pynbody
 import pickle
 import astropy
 import numexpr as ne
+from . import snapedit
 
 # Returns the nearest neighbour halos to the specified halo
 def get_nearest_halos(centre,halo_list,coms='None',neighbours=1):
@@ -47,7 +48,7 @@ def void_centres(sn,sr,hr):
     return void_centre_list
 
 def computePeriodicCentreWeighted(positions,weight,periodicity,\
-        accelerate=False):
+        accelerate=False,unwrap=False):
     if np.isscalar(periodicity):
         period = (periodicity,periodicity,periodicity)
     else:
@@ -89,7 +90,10 @@ def computePeriodicCentreWeighted(positions,weight,periodicity,\
         zetabar = ne.evaluate("tempVar/M")
         thetabar = ne.evaluate("arctan2(-zetabar,-xibar) + PI")
         retVal = ne.evaluate("period*thetabar/(2.0*PI)")
-    return retVal
+    if unwrap:
+        return snapedit.unwrap(retVal,period[0])
+    else:
+        return retVal
 
 # Get the centre of a system of points each with some weight (eg mass, volume), taking into account periodicity:
 def periodicCentreWeighted(snap,weight,periodicity,units = pynbody.units.Unit("Mpc a h**-1")):
