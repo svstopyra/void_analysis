@@ -7,12 +7,14 @@ import scipy.spatial as spatial
 
 
 # Plot about a specific point:
-def plotAboutPoint(snap,point,radius = 10,showCentre=True,color=(1,1,1)):
+def plotAboutPoint(snap,point,radius = 10,showCentre=True,color=(1,1,1),\
+        hold=False):
     filt = pynbody.filt.Sphere(radius,point)
     subsnap_scatter(snap[filt],color_spec=color)
     if showCentre:
         point_scatter(point,type='sphere',scale=1.0,color_spec=(1,0,0))
-    mlab.show()
+    if not hold:
+        mlab.show()
 
 # Plot the positions in a snapshot:
 def subsnap_scatter(subsnap,color_spec=(1,1,1),scale=1.0,type='2dvertex'):

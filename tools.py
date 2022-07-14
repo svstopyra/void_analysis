@@ -12,179 +12,184 @@ import h5py
 # Fetch all points that lie within a given radius of a specified centres, accounting for wrapping,
 # and filtering on arbitrary conditions:
 def getAntiHalosInSphere(centres,radius,origin=np.array([0,0,0]),
-		deltaCentral = None,boxsize=None,n_jobs=-1,filterCondition = None):
-	if filterCondition is None:
-		filterCondition = np.ones(len(centres),dtype=np.bool)
-	if deltaCentral is not None:
-		usedIndices = np.where((deltaCentral < 0) & filterCondition)[0]
-		centresToUse = centres[usedIndices,:]
-	else:
-		usedIndices = np.where(filterCondition)[0]
-		centresToUse = centres[usedIndices,:]
-	if boxsize is not None:
-		tree = scipy.spatial.cKDTree(snapedit.wrap(centresToUse,boxsize),boxsize=boxsize)
-	else:
-		tree = scipy.spatial.cKDTree(centresToUse,boxsize=boxsize)
-	inRadius = tree.query_ball_point(origin,radius,n_jobs=n_jobs)
-	
-	if len(origin.shape) == 1:
-		inRadiusFinal = list(usedIndices[inRadius])
-		condition = np.zeros(len(centres),dtype=np.bool)
-		condition[inRadiusFinal] = True
-	else:
-		inRadiusFinal = np.array([list(usedIndices[k]) for k in inRadius])
-		condition = np.zeros((len(centres),len(origin)),dtype=np.bool)
-		for k in range(0,len(origin)):
-			condition[inRadiusFinal[k],k] = True
-	return [inRadiusFinal,condition]
+        deltaCentral = None,boxsize=None,n_jobs=-1,filterCondition = None):
+    if filterCondition is None:
+        filterCondition = np.ones(len(centres),dtype=np.bool)
+    if deltaCentral is not None:
+        usedIndices = np.where((deltaCentral < 0) & filterCondition)[0]
+        centresToUse = centres[usedIndices,:]
+    else:
+        usedIndices = np.where(filterCondition)[0]
+        centresToUse = centres[usedIndices,:]
+    if boxsize is not None:
+        tree = scipy.spatial.cKDTree(snapedit.wrap(centresToUse,boxsize),boxsize=boxsize)
+    else:
+        tree = scipy.spatial.cKDTree(centresToUse,boxsize=boxsize)
+    inRadius = tree.query_ball_point(origin,radius,n_jobs=n_jobs)
+    if len(origin.shape) == 1:
+        inRadiusFinal = list(usedIndices[inRadius])
+        condition = np.zeros(len(centres),dtype=np.bool)
+        condition[inRadiusFinal] = True
+    else:
+        inRadiusFinal = np.array([list(usedIndices[k]) for k in inRadius])
+        condition = np.zeros((len(centres),len(origin)),dtype=np.bool)
+        for k in range(0,len(origin)):
+            condition[inRadiusFinal[k],k] = True
+    return [inRadiusFinal,condition]
 
-def getHaloAndAntihaloCountsInDensityRange(radius,snap,deltaBins,centres,deltaList,
-		mThresh,hncentres,hrcentres,hnmasses,
-		hrmasses,deltaCentral,deltaLow=-0.07,deltaHigh=-0.06,n_jobs=-1):
-	similar = np.where((deltaList > deltaLow) & (deltaList <= deltaHigh))[0]
-	haloCount = np.zeros(len(similar),dtype=np.int)
-	antihaloCount = np.zeros(len(similar),dtype=np.int)
-	boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
-	haloTree = scipy.spatial.cKDTree(hncentres[np.where(hnmasses > mThresh)[0]],
-		boxsize)
-	antihaloTree = scipy.spatial.cKDTree(hrcentres[np.where(hrmasses > mThresh)[0]],
-		boxsize)
-	haloCount = haloTree.query_ball_point(centres[similar],radius,
-		return_length=True,n_jobs=n_jobs)
-	antihaloCount = antihaloTree.query_ball_point(centres[similar],radius,
-		return_length=True,n_jobs=n_jobs)
-	return [haloCount,antihaloCount]
+# Density contras in centres in a snapshot:
+def getCentredDensityConstrast(snap,centres,radius):
+    tree = getKDTree(snap)
+    mUnit = snap['mass'][0]*1e10
+    volSphere = 4*np.pi*radius**3/3
+    rhoMean = 2.7754e11*snap.properties['omegaM0']
+    return mUnit*tree.query_ball_point(centres,radius,\
+            workers=-1,return_length=True)/(volSphere*rhoMean) - 1.0
+
+
+def getHaloAndAntihaloCountsInDensityRange(radius,snap,centres,deltaList,
+        mThresh,hncentres,hrcentres,hnmasses,
+        hrmasses,deltaCentral,deltaLow=-0.07,deltaHigh=-0.06,n_jobs=-1):
+    similar = np.where((deltaList > deltaLow) & (deltaList <= deltaHigh))[0]
+    haloCount = np.zeros(len(similar),dtype=np.int)
+    antihaloCount = np.zeros(len(similar),dtype=np.int)
+    boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+    haloTree = scipy.spatial.cKDTree(hncentres[np.where(hnmasses > mThresh)[0]],
+        boxsize)
+    antihaloTree = scipy.spatial.cKDTree(hrcentres[np.where(hrmasses > mThresh)[0]],
+        boxsize)
+    haloCount = haloTree.query_ball_point(centres[similar],radius,
+        return_length=True,n_jobs=n_jobs)
+    antihaloCount = antihaloTree.query_ball_point(centres[similar],radius,
+        return_length=True,n_jobs=n_jobs)
+    return [haloCount,antihaloCount]
 
 # Given two halo catalogues, find which halos are likely to correspond to each other. 
 # This means finding halos that are within a specified distance.
 def getEquivalents(hn1,hn2,centres1,centres2,boxsize,rSearch):
-	tree1 = scipy.spatial.cKDTree(centres1,boxsize=boxsize)
-	tree2 = scipy.spatial.cKDTree(centres2,boxsize=boxsize)
-	indicesNear = tree1.query_ball_tree(tree2,rSearch)
-	equivalent = np.zeros(len(hn1),dtype=np.int)
-	for k in range(0,len(hn1)):
-		if len(indicesNear[k]) == 0:
-			equivalent[k] = -1
-		else:
-			equivalent[k] = indicesNear[k][0]
-	return equivalent
+    tree1 = scipy.spatial.cKDTree(centres1,boxsize=boxsize)
+    tree2 = scipy.spatial.cKDTree(centres2,boxsize=boxsize)
+    indicesNear = tree1.query_ball_tree(tree2,rSearch)
+    equivalent = np.zeros(len(hn1),dtype=np.int)
+    for k in range(0,len(hn1)):
+        if len(indicesNear[k]) == 0:
+            equivalent[k] = -1
+        else:
+            equivalent[k] = indicesNear[k][0]
+    return equivalent
 
 # Load cluster data from the Abell catalogue, filtering for galaxy clusters with known redshift
 def loadAbellCatalogue(folder,filterForKnownZ = True):
-	file3 = open(folder + "/table3.dat",'r')
-	fileLines3 = []
-	for line in file3:
-		fileLines3.append(line)
-	abell_l3 = np.zeros(len(fileLines3))
-	abell_b3 = np.zeros(len(fileLines3))
-	abell_n3 = np.zeros(len(fileLines3),dtype=np.int)
-	abell_z3 = np.zeros(len(fileLines3))
-	for k in range(0,len(fileLines3)):
-		abell_n3[k] = np.int(fileLines3[k][0:4])
-		abell_l3[k] = np.double(fileLines3[k][118:124])
-		abell_b3[k] = np.double(fileLines3[k][125:131])
-		abell_z3[k] = np.double(fileLines3[k][133:138].replace(' ','0'))
-
-	# Indicate missing redshifts:
-	abell_z3[np.where(abell_z3 == 0.0)] = -1
-
-	# file 4:
-	file4 = open(folder + "/table4.dat",'r')
-	fileLines4 = []
-	for line in file4:
-		fileLines4.append(line)
-
-	abell_l4 = np.zeros(len(fileLines4))
-	abell_b4 = np.zeros(len(fileLines4))
-	abell_n4 = np.zeros(len(fileLines4),dtype=np.int)
-	abell_z4 = np.zeros(len(fileLines4))
-	for k in range(0,len(fileLines4)):
-		abell_n4[k] = np.int(fileLines4[k][0:4])
-		abell_l4[k] = np.double(fileLines4[k][118:124])
-		abell_b4[k] = np.double(fileLines4[k][125:131])
-		abell_z4[k] = np.double(fileLines4[k][133:138].replace(' ','0'))
-
-	# Indicate missing redshifts:
-	abell_z4[np.where(abell_z4 == 0.0)] = -1
-	if filterForKnownZ:
-		havez3 = np.where(abell_z3 > 0)
-		havez4 = np.where(abell_z4 > 0)
-		abell_l = np.hstack((abell_l3[havez3],abell_l4[havez4]))
-		abell_b = np.hstack((abell_b3[havez3],abell_b4[havez4]))
-		abell_n = np.hstack((abell_n3[havez3],abell_n4[havez4]))
-		abell_z = np.hstack((abell_z3[havez3],abell_z4[havez4]))
-	else:
-		abell_l = np.hstack((abell_l3,abell_l4))
-		abell_b = np.hstack((abell_b3,abell_b4))
-		abell_n = np.hstack((abell_n3,abell_n4))
-		abell_z = np.hstack((abell_z3,abell_z4))
-	c = 299792.458 # Speed of light in km/s
-	abell_d = c*abell_z/100
-	return [abell_l,abell_b,abell_n,abell_z,abell_d]
+    file3 = open(folder + "/table3.dat",'r')
+    fileLines3 = []
+    for line in file3:
+        fileLines3.append(line)
+    abell_l3 = np.zeros(len(fileLines3))
+    abell_b3 = np.zeros(len(fileLines3))
+    abell_n3 = np.zeros(len(fileLines3),dtype=np.int)
+    abell_z3 = np.zeros(len(fileLines3))
+    for k in range(0,len(fileLines3)):
+        abell_n3[k] = np.int(fileLines3[k][0:4])
+        abell_l3[k] = np.double(fileLines3[k][118:124])
+        abell_b3[k] = np.double(fileLines3[k][125:131])
+        abell_z3[k] = np.double(fileLines3[k][133:138].replace(' ','0'))
+    # Indicate missing redshifts:
+    abell_z3[np.where(abell_z3 == 0.0)] = -1
+    # file 4:
+    file4 = open(folder + "/table4.dat",'r')
+    fileLines4 = []
+    for line in file4:
+        fileLines4.append(line)
+    abell_l4 = np.zeros(len(fileLines4))
+    abell_b4 = np.zeros(len(fileLines4))
+    abell_n4 = np.zeros(len(fileLines4),dtype=np.int)
+    abell_z4 = np.zeros(len(fileLines4))
+    for k in range(0,len(fileLines4)):
+        abell_n4[k] = np.int(fileLines4[k][0:4])
+        abell_l4[k] = np.double(fileLines4[k][118:124])
+        abell_b4[k] = np.double(fileLines4[k][125:131])
+        abell_z4[k] = np.double(fileLines4[k][133:138].replace(' ','0'))
+    # Indicate missing redshifts:
+    abell_z4[np.where(abell_z4 == 0.0)] = -1
+    if filterForKnownZ:
+        havez3 = np.where(abell_z3 > 0)
+        havez4 = np.where(abell_z4 > 0)
+        abell_l = np.hstack((abell_l3[havez3],abell_l4[havez4]))
+        abell_b = np.hstack((abell_b3[havez3],abell_b4[havez4]))
+        abell_n = np.hstack((abell_n3[havez3],abell_n4[havez4]))
+        abell_z = np.hstack((abell_z3[havez3],abell_z4[havez4]))
+    else:
+        abell_l = np.hstack((abell_l3,abell_l4))
+        abell_b = np.hstack((abell_b3,abell_b4))
+        abell_n = np.hstack((abell_n3,abell_n4))
+        abell_z = np.hstack((abell_z3,abell_z4))
+    c = 299792.458 # Speed of light in km/s
+    abell_d = c*abell_z/100
+    return [abell_l,abell_b,abell_n,abell_z,abell_d]
 
 def getPoissonAndErrors(bins,count,alpha=0.32):
-	meanCount = np.mean(count)
-	sumCount = np.sum(count)
-	errorMeanCount = np.std(count)/np.sqrt(len(count))
-	meanPoisson = scipy.stats.poisson.pmf(bins,meanCount)
-	# Use the ppf for the chi^2 distribution to estimate confidence interval:
-	muLower = scipy.stats.chi2.ppf(alpha/2,2*sumCount)/2
-	muUpper = scipy.stats.chi2.ppf(1 - alpha/2,2*sumCount + 2)/2
-	lambdaLower = muLower/len(count)
-	lambdaUpper = muUpper/len(count)
-	bound1 = scipy.stats.poisson.pmf(bins,lambdaUpper)
-	bound2 = scipy.stats.poisson.pmf(bins,lambdaLower)
-	stackedBound = np.vstack((bound1,bound2))
-	upperBound = np.max(stackedBound,0)
-	lowerBound = np.min(stackedBound,0)
-	errorPoisson = np.vstack((meanPoisson - lowerBound,upperBound - meanPoisson))
-	return [meanPoisson,errorPoisson]
+    meanCount = np.mean(count)
+    sumCount = np.sum(count)
+    errorMeanCount = np.std(count)/np.sqrt(len(count))
+    meanPoisson = scipy.stats.poisson.pmf(bins,meanCount)
+    # Use the ppf for the chi^2 distribution to estimate confidence interval:
+    muLower = scipy.stats.chi2.ppf(alpha/2,2*sumCount)/2
+    muUpper = scipy.stats.chi2.ppf(1 - alpha/2,2*sumCount + 2)/2
+    lambdaLower = muLower/len(count)
+    lambdaUpper = muUpper/len(count)
+    bound1 = scipy.stats.poisson.pmf(bins,lambdaUpper)
+    bound2 = scipy.stats.poisson.pmf(bins,lambdaLower)
+    stackedBound = np.vstack((bound1,bound2))
+    upperBound = np.max(stackedBound,0)
+    lowerBound = np.min(stackedBound,0)
+    errorPoisson = np.vstack((meanPoisson - lowerBound,upperBound - meanPoisson))
+    return [meanPoisson,errorPoisson]
 
 
 # Compute alpha-shapes for large antihalos on a Mollweide plot:
 def computeMollweideAlphaShapes(snap,largeAntihalos,hr,alphaVal = 7,snapsort=None):
-	ahMWPos = []
-	alpha_shapes = []
-	if snapsort is None:
-		snapsort = np.argsort(snap['iord'])
-	boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
-	for k in range(0,len(largeAntihalos)):
-		posXYZ = snapedit.unwrap(
-			snap['pos'][snapsort[hr[largeAntihalos[k]+1]['iord']],:],boxsize)
-		posMW = plot_utilities.computeMollweidePositions(posXYZ)
-		ahMWPos.append(posMW)
-		alpha_shapes.append(alphashape.alphashape(
-			np.array([posMW[0],posMW[1]]).T,alphaVal))
+    ahMWPos = []
+    alpha_shapes = []
+    if snapsort is None:
+        snapsort = np.argsort(snap['iord'])
+    boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+    for k in range(0,len(largeAntihalos)):
+        posXYZ = snapedit.unwrap(
+            snap['pos'][snapsort[hr[largeAntihalos[k]+1]['iord']],:],boxsize)
+        posMW = plot_utilities.computeMollweidePositions(posXYZ)
+        ahMWPos.append(posMW)
+        alpha_shapes.append(alphashape.alphashape(
+            np.array([posMW[0],posMW[1]]).T,alphaVal))
 
-	return [ahMWPos,alpha_shapes]
+    return [ahMWPos,alpha_shapes]
 
 # Systematic way of writing constraints on cluster masses.
 class MassConstraint:
-	def __init__(self,mass,massLow,massHigh,virial,virialLow,virialHigh,method='None'
-		,simMass=None,simMassLow=None,simMassHigh=None):
-		self.mass = mass
-		self.massLow = massLow
-		self.massHigh = massHigh
-		self.virial = virial
-		self.virialLow = virialLow
-		self.virialHigh = virialHigh
-		self.hasSimMass = False
-		self.method = method
-		if simMass is not None:
-			self.hasSimMass = False
-			if (simMassLow is None):
-				simMassLow = 0
-				print("Warning: no lower error for simulation mass given.")
-			if (simMassHigh is None):
-				simMassHigh = 0
-				print("Warning: no upper error for simulation mass given.")
-			self.setSimMass(simMass,simMassLow,simMassHigh)
-	def setSimMass(self,mass,masslow,masshigh,recompute=False):
-		if ((self.hasSimMass) and (recompute)) or (not self.hasSimMass):
-			self.simMass = mass
-			self.simMassLow = masslow
-			self.simMassHigh = masshigh
-			self.hasSimMass = True
+    def __init__(self,mass,massLow,massHigh,virial,virialLow,virialHigh,method='None'
+        ,simMass=None,simMassLow=None,simMassHigh=None):
+        self.mass = mass
+        self.massLow = massLow
+        self.massHigh = massHigh
+        self.virial = virial
+        self.virialLow = virialLow
+        self.virialHigh = virialHigh
+        self.hasSimMass = False
+        self.method = method
+        if simMass is not None:
+            self.hasSimMass = False
+            if (simMassLow is None):
+                simMassLow = 0
+                print("Warning: no lower error for simulation mass given.")
+            if (simMassHigh is None):
+                simMassHigh = 0
+                print("Warning: no upper error for simulation mass given.")
+            self.setSimMass(simMass,simMassLow,simMassHigh)
+    def setSimMass(self,mass,masslow,masshigh,recompute=False):
+        if ((self.hasSimMass) and (recompute)) or (not self.hasSimMass):
+            self.simMass = mass
+            self.simMassLow = masslow
+            self.simMassHigh = masshigh
+            self.hasSimMass = True
 
 # Function to remap snapshots into the correctly aligned equatorial co-ordinates.
 def remapBORGSimulation(snap,swapXZ = True,translate=True,reverse=False):
@@ -202,33 +207,45 @@ def remapBORGSimulation(snap,swapXZ = True,translate=True,reverse=False):
 
 # Remap a set of points to the correct co-ordinates:
 def remapAntiHaloCentre(hrcentres,boxsize):
-	hrcentresRemap = np.zeros(hrcentres.shape)
-	hrcentresRemap[:,0] = hrcentres[:,2]
-	hrcentresRemap[:,1] = hrcentres[:,1]
-	hrcentresRemap[:,2] = hrcentres[:,0]
-	hrcentresRemap = snapedit.unwrap(hrcentresRemap - np.array([boxsize/2]*3),boxsize)
-	return hrcentresRemap
+    hrcentresRemap = np.zeros(hrcentres.shape)
+    hrcentresRemap[:,0] = hrcentres[:,2]
+    hrcentresRemap[:,1] = hrcentres[:,1]
+    hrcentresRemap[:,2] = hrcentres[:,0]
+    hrcentresRemap = snapedit.unwrap(hrcentresRemap - np.array([boxsize/2]*3),boxsize)
+    return hrcentresRemap
 
-def zobovVolumesToPhysical(zobovVolumes,snap,dtype=np.double):
-	N = np.round(np.cbrt(len(snap))).astype(int)
-	boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
-	if type(zobovVolumes) == type(""):
-		vols = np.fromfile(zobovVolumes,dtype=dtype,offset=4)
-	else:
-		vols = zobovVolumes
-	return vols*(boxsize/N)**3
+def zobovVolumesToPhysical(zobovVolumes,snap,dtype=np.double,offset=4):
+    N = np.round(np.cbrt(len(snap))).astype(int)
+    boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+    if type(zobovVolumes) == type(""):
+        vols = np.fromfile(zobovVolumes,dtype=dtype,offset=offset)
+    else:
+        vols = zobovVolumes
+    return vols*(boxsize/N)**3
+
+def getHaloCentresAndMassesFromCatalogue(h,inMPcs=True):
+    hcentres = np.zeros((len(h),3))
+    hmasses = np.zeros(len(h))
+    for k in range(0,len(h)):
+        hcentres[k,0] = h[k+1].properties['Xc']
+        hcentres[k,1] = h[k+1].properties['Yc']
+        hcentres[k,2] = h[k+1].properties['Zc']
+        hmasses[k] = h[k+1].properties['mass']
+    if inMpcs:
+        hcentres /= 1000
+    return [hcentres,hmasses]
 
 def getHaloMassesAndVirials(snap,centres,overden=200,rho_def = 'critical',
-		massUnit="Msol h**-1",distanceUnit = "Mpc a h**-1"):
-	masses = np.zeros(len(centres))
-	virials = np.zeros(len(centres))
-	for k in range(0,len(masses)):
-		rvir = pynbody.analysis.halo.virial_radius(snap,cen=centres[k,:],
-			overden=overden,rho_def=rho_def)
-		filt = pynbody.filt.Sphere(rvir,centres[k,:])
-		masses[k] = np.sum(snap[filt]['mass']).in_units(massUnit)
-		virials[k] = rvir.in_units(distanceUnit)
-	return [masses,virials]
+        massUnit="Msol h**-1",distanceUnit = "Mpc a h**-1"):
+    masses = np.zeros(len(centres))
+    virials = np.zeros(len(centres))
+    for k in range(0,len(masses)):
+        rvir = pynbody.analysis.halo.virial_radius(snap,cen=centres[k,:],
+            overden=overden,rho_def=rho_def)
+        filt = pynbody.filt.Sphere(rvir,centres[k,:])
+        masses[k] = np.sum(snap[filt]['mass']).in_units(massUnit)
+        virials[k] = rvir.in_units(distanceUnit)
+    return [masses,virials]
 
 # Function to either load data, or recompute it:
 def loadOrRecompute(filename,func,*args,_recomputeData = False,_cacheData=True,\
@@ -409,10 +426,10 @@ def getKDTree(snap,cacheTree = True,reconstructTree = False):
         # Construct the tree:
         boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
         if np.any(snap['pos'] < 0) or np.any(snap['pos'] >=boxsize):
-            pos = snapedit.wrap(snap['pos'],boxsize)
+            pos = snapedit.wrap(snap['pos'] + boxsize/2,boxsize)
         else:
             pos = snap['pos']
-        tree = scipy.spatial.cKDTree(pos,boxsize)
+        tree = scipy.spatial.cKDTree(pos,boxsize = boxsize)
         if cacheTree:
             snap.tree = tree
             hasTree = True
@@ -422,14 +439,18 @@ def getKDTree(snap,cacheTree = True,reconstructTree = False):
 
 # Compute the galaxy counts in healpix slices:
 def getCountsInHealpixSlices(ng,hpIndices,nside = 4,nMagBins = 16,nslices=10,\
-        rmax=600,rmin = 0,nres = 256,count_type=float):
+        rmax=600,rmin = 0,nres = 256,count_type=float,old_method=False):
     npixels = 12*(nside**2)
     rLimits = np.linspace(rmin,rmax,nslices+1)
     ngHP = np.zeros((nMagBins,npixels*nslices),dtype=count_type)
     reshapedNG = ng.reshape((nMagBins,nres,nres,nres))
-    for k in range(0,npixels*nslices):
-        filterK = ne.evaluate("hpIndices == k")
-        for l in range(0,nMagBins):
-            ngHP[l,k] = np.sum(reshapedNG[l][filterK])
+    if old_method:
+        for k in range(0,npixels*nslices):
+            filterK = ne.evaluate("hpIndices == k")
+            for l in range(0,nMagBins):
+                ngHP[l,k] = np.sum(reshapedNG[l][filterK])
+    else:
+        for k in range(0,nMagBins):
+            np.add.at(ngHP[k],np.reshape(hpIndices,nres**3),ng[k])
     return ngHP
 

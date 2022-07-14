@@ -43,7 +43,7 @@ def getCompletenessInSelection(rl,mlow,mupp,Mlow,Mupp,cosmo,nstar,keCorr,\
 # Apply the survey mask for the 2M++ galaxy survey
 def surveyMask(points,mask11,mask12,cosmo,alpha,Mstar,\
         centre = np.array([0,0,0]),boxsize=None,nside=512,Mmin = -25,\
-        Mmax = -21,mmax=12.5,mmin=None,Mcut = 11.5,Ninterp=1000,\
+        Mmax = -21,mmax=12.5,mmin=None,mcut = 11.5,Ninterp=1000,\
         nstar=1.14e-2*(0.705**3),\
         keCorr = None,numericalIntegration=False,interpolateMask = True,\
         splitApparent = True,splitAbsolute=True,nLumBins=8,nAppMagBins=2,\
@@ -66,18 +66,18 @@ def surveyMask(points,mask11,mask12,cosmo,alpha,Mstar,\
         if splitAbsolute:
             c = np.zeros((nAppMagBins*nLumBins,len(points)))
             for k in range(0,nLumBins):
-                c[2*k,:] = getCompletenessInSelection(rl,mmin,Mcut,\
+                c[2*k,:] = getCompletenessInSelection(rl,mmin,mcut,\
                     MabsRange[k+1],MabsRange[k],cosmo,nstar,keCorr,\
                     numericalIntegration,interpolateMask,Ninterp,alpha,Mstar)
-                c[2*k+1,:] = getCompletenessInSelection(rl,Mcut,mmax,\
+                c[2*k+1,:] = getCompletenessInSelection(rl,mcut,mmax,\
                     MabsRange[k+1],MabsRange[k],cosmo,nstar,keCorr,\
                     numericalIntegration,interpolateMask,Ninterp,alpha,Mstar)
         else:
             c = np.zeros((nAppMagBins*nLumBins,len(points)))
-            c[0,:] = getCompletenessInSelection(rl,mmin,Mcut,\
+            c[0,:] = getCompletenessInSelection(rl,mmin,mcut,\
                 Mmin,Mmax,cosmo,nstar,keCorr,\
                 numericalIntegration,interpolateMask,Ninterp,alpha,Mstar)
-            c[1,:] = getCompletenessInSelection(rl,Mcut,mmax,\
+            c[1,:] = getCompletenessInSelection(rl,mcut,mmax,\
                 Mmin,Mmax,cosmo,nstar,keCorr,\
                 numericalIntegration,interpolateMask,Ninterp,alpha,Mstar)
             for k in range(1,nLumBins):
@@ -95,14 +95,34 @@ def surveyMask(points,mask11,mask12,cosmo,alpha,Mstar,\
             c = getCompletenessInSelection(rl,mmin,mmax,\
                     Mmin,Mmax,cosmo,nstar,keCorr,\
                     numericalIntegration,interpolateMask,Ninterp,alpha,Mstar)
-    angularMask = np.zeros(len(rl),dtype=np.float32)
-    condition_highM = (Mr < mmax) & (Mr >= Mcut)
-    condition_lowM = (Mr < Mcut)
+    #angularMask = np.zeros(len(rl),dtype=np.float32)
+    # Mask per bin:
+    angularMask = np.zeros(c.shape)
+    if splitApparent:
+        for k in range(0,nLumBins):
+            angularMask[2*k,:] = mask11[ind]
+            angularMask[2*k+1,:] = mask12[ind]
+    else:
+        if splitAbsolute:
+            for k in range(0,nLumBins):
+                angularMask[2*k,:] = mask11[ind]
+                angularMask[2*k+1,:] = mask12[ind]
+        else:
+            condition_highM = (Mr < mmax) & (Mr >= mcut)
+            condition_lowM = (Mr < mcut)
+            maskHigh = np.zeros(len(rl),dtype=np.float32)
+            maskLow = np.zeros(len(rl),dtype=np.float32)
+            angularMask[condition_highM] = mask12[ind[condition_highM]]
+            maskHigh[condition_highM] = mask12[ind[condition_highM]]
+            angularMask[condition_lowM] = mask11[ind[condition_lowM]]
+            maskLow[condition_lowM] = mask11[ind[condition_lowM]]
+    condition_highM = (Mr < mmax) & (Mr >= mcut)
+    condition_lowM = (Mr < mcut)
     maskHigh = np.zeros(len(rl),dtype=np.float32)
     maskLow = np.zeros(len(rl),dtype=np.float32)
-    angularMask[condition_highM] = mask12[ind[condition_highM]]
+    #angularMask[condition_highM] = mask12[ind[condition_highM]]
     maskHigh[condition_highM] = mask12[ind[condition_highM]]
-    angularMask[condition_lowM] = mask11[ind[condition_lowM]]
+    #angularMask[condition_lowM] = mask11[ind[condition_lowM]]
     maskLow[condition_lowM] = mask11[ind[condition_lowM]]
     if returnComponents:
         return [angularMask*c,angularMask,c,maskHigh,maskLow]

@@ -1,0 +1,18 @@
+[AHF]
+ic_filename = snapshot_001
+ic_filetype = 60
+outfile_prefix = snapshot_001
+LgridDomain = 512
+LgridMax = 16777216
+NperDomCell = 5.0
+NperRefCell = 5.0
+VescTune = 1.5
+NminPerHalo = 20
+RhoVir = 0
+Dvir = 200
+MaxGatherRad = 6
+LevelDomainDecomp = 6
+NcpuReading = 1
+[GADGET]
+GADGET_LUNIT = 1
+GADGET_MUNIT = 1e10

@@ -160,9 +160,6 @@ def voids_in_sphere(hr,radius,centre,sn,sr,void_centre_list=None):
     in_sphere = np.where(collect == 1)
     return in_sphere[0]
 
-def anti_halo_filter(sn,sr,hr,filt):
-    b = pynbody.bridge.Bridge(sn,sr)
-
 # Compute the rotation matrix between two specified vectors.
 # Returns the matrix that rotates the unit vector of a onto
 # the unit vector of b:
@@ -565,7 +562,9 @@ def localGroupTest(n1,n2,halo_centres,halo_masses,centre,testScale=1000):
     return [test1 & test2 & test3 & test4 & test5, nearestList]
 
 # Estimate volume of a set of intersecting spheres by the monte carlo method:
-def spheresMonteCarlo(centres,radii,boundBox,tol=1e-3,count_max=100,nRand=None,nConv = 3):
+def spheresMonteCarlo(centres,radii,boundBox,tol=1e-3,count_max=100,\
+    nRand=None,nConv = 3,seed=None):
+    np.random.seed(seed)
     boundVolume = boundBox[0]*boundBox[1]*boundBox[2]
     counter = 0
     diffRatio = 1

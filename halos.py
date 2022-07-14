@@ -3,6 +3,7 @@ from scipy.optimize import brentq
 import scipy
 from . import tools, context, snapedit
 import numpy as np
+import gc
 
 
 # Overdensity within a specific radius, about a given point. Requires a kdtree
