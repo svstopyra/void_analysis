@@ -1,7 +1,6 @@
-#-------------------------------------------------------------------------------
 # CONFIGURATION
 from void_analysis import plot, snapedit, tools, simulation_tools, halos
-from void_analysis import stacking, real_clusters
+from void_analysis import stacking, real_clusters, survey
 from void_analysis.tools import loadOrRecompute
 from void_analysis.simulation_tools import ngPerLBin, ngBias
 from void_analysis.simulation_tools import biasNew, biasOld
@@ -13,6 +12,8 @@ import astropy
 import pickle
 import gc
 import copy
+import h5py
+import healpy
 
 
 # KE correction used to compute magnitudes. Used by PPTs:
@@ -21,7 +22,8 @@ def keCorr(z,fit = [-1.456552772320231,-0.7687913554110967]):
     return 2.9*z
 
 # Convert per-voxel to per-healpix patch average galaxy counts:
-def getAllNgsToHealpix(ngList,hpIndices,sampleList,sampleFolder,nside):
+def getAllNgsToHealpix(ngList,hpIndices,sampleList,sampleFolder,nside,\
+        recomputeData=False):
     return [loadOrRecompute(sampleFolder + "sample" + str(sampleList[k]) + \
         "/ngHP.p",tools.getCountsInHealpixSlices,ngList[k],hpIndices,\
         nside=nside,_recomputeData=recomputeData) \
@@ -115,11 +117,11 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
         mmax=mmax,splitApparent=True,splitAbsolute=True,returnComponents=True,\
         _recomputeData=recomputeData)
     # Obtain galaxy counts:
+    nsamples = len(snapNumList)
     galaxyCountExp = np.zeros((nBins,nClust,nMagBins))
     galaxyCountsRobustAll = np.zeros((nBins,nClust,nsamples,nMagBins))
     # Obtain properties:
     rBins = np.linspace(rBinMin,rBinMax,nBins+1)
-    nsamples = len(snapNumList)
     wrappedPos = snapedit.wrap(clusterLoc + boxsize/2,boxsize)
     # Healpix indices for each voxel:
     if verbose:
@@ -427,8 +429,8 @@ def getUnconstrainedHMFAMFData(snapNumListUncon,snapName,snapNameRev,\
             for l in range(0,len(meanDensityCentresList[k]))]
             for k in range(0,len(snapListUnconstrained))]
         centralHaloMasses = [[haloMasses512uncon[k][\
-            comparableHalos[k][l][0]] \
-            for l in range(0,len(comparableHalos[k]))] \
+            centralHalos[k][l][0]] \
+            for l in range(0,len(centralHalos[k]))] \
             for k in range(0,len(snapListUnconstrained))]
         centralAntihalos = [[tools.getAntiHalosInSphere(\
             snapedit.wrap(antihaloCentres512uncon[k] + boxsize/2,boxsize),\
@@ -436,8 +438,8 @@ def getUnconstrainedHMFAMFData(snapNumListUncon,snapName,snapNameRev,\
             for l in range(0,len(meanDensityCentresList[k]))]
             for k in range(0,len(snapListUnconstrained))]
         centralAntihaloMasses = [[\
-            antihaloMasses512uncon[k][comparableAntihalos[k][l][0]] \
-            for l in range(0,len(comparableAntihalos[k]))] \
+            antihaloMasses512uncon[k][centralAntihalos[k][l][0]] \
+            for l in range(0,len(centralAntihalos[k]))] \
             for k in range(0,len(snapListUnconstrained))]
     else:
         raise Exception("Unrecognise mean density method.")
@@ -534,6 +536,7 @@ def getHMFAMFData(snapNumList,snapNumListOld,snapNumListUncon,\
         comparableAntihalosOld,comparableAntihaloMassesOld,\
         centralHalosOld,centralAntihalosOld,\
         centralHaloMassesOld,centralAntihaloMassesOld]
+
 
 def getVoidProfilesData(snapNumList,snapNumListUncon,\
         samplesFolder="new_chain/",\
