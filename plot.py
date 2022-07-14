@@ -1092,32 +1092,36 @@ def plotMassProfile(radii,mprof,rvir=None,logy=False,show=True):
 		plt.show()
 
 # Compare unconstrained and constrained void profiles
-def plotConstrainedVsUnconstrainedProfiles(rBinStackCentres,nbarjStack,sigmaStack,
-    nbarjRandStack,sigmaRandStack,nbar,rMin,mMin,mMax,
-    labelRand = "Unconstrained profiles (mean)",fmtRand = '-.',colourRand = 'k',
-    labelCon = "Average of 6 samples (constrained)",fmtCon = '-',colourCon = 'r',
-    labelRandIndividual = "Unconstrained profiles (individual)",fmtRandInd = ':',
-    colourRandInd = 'grey',numRandsToPlot = 3,ylim = [0,1.4],ax = None,
-    guideColour = 'grey',guideStyle='--',legendFontSize=12,fontname="serif",
-    fontsize=12,frameon=False,legendLoc = 'upper right',bottom=0.125,left=0.125,
-    includeLegend=True,showImmediately = True,title=None,hideYLabels = False,
-    nbarjIndividual = None,sigmaIndividual = None,plotIndividuals = False,
-    errorType = 'standard',errorAlpha=0.5,meanType = 'standard',
-    plotIndividualsMean = False):
-    nbarjMean = stacking.weightedMean(nbarjStack,sigmaStack,axis=0)
-    sigmaMean = np.sqrt(stacking.weightedVariance(nbarjStack,sigmaStack,axis=0))
+# Compare unconstrained and constrained void profiles
+def plotConstrainedVsUnconstrainedProfiles(rBinStackCentres,nbarjStack,\
+        sigmaStack,nbarjRandStack,sigmaRandStack,nbar,rMin,mMin,mMax,\
+        labelRand = "Unconstrained profiles (mean)",fmtRand = '-.',\
+        colourRand = 'grey',labelCon = "Average of 6 samples (constrained)",\
+        fmtCon = '-',colourCon = 'r',colorRandMean='k',\
+        labelRandIndividual = "Unconstrained profiles (individual)",\
+        fmtRandInd = ':',colourRandInd = 'grey',numRandsToPlot = 3,\
+        ylim = [0,1.4],ax = None,guideColour = 'grey',guideStyle='--',\
+        legendFontSize=12,fontname="serif",fontsize=12,frameon=False,\
+        legendLoc = 'upper right',bottom=0.125,left=0.125,includeLegend=True,\
+        showImmediately = True,title=None,hideYLabels = False,\
+        nbarjIndividual = None,sigmaIndividual = None,plotIndividuals = False,\
+        errorType = 'standard',errorAlpha=0.5,meanType = 'standard',\
+        plotIndividualsMean = False,savename=None,showTitle=True):
+    nbarjMean = stacking.weightedMean(nbarjStack,1.0/sigmaStack**2,axis=0)
+    sigmaMean = np.sqrt(stacking.weightedVariance(nbarjStack,\
+        1.0/sigmaStack**2,axis=0))
     if meanType == 'standard':
-        nbarjRandMean = stacking.weightedMean(nbarjRandStack,sigmaRandStack,axis=0)
+        nbarjRandMean = nbarjRandStack
     elif meanType == 'scatter':
-        nbarjRandMean = stacking.weightedMean(nbarjIndividual,sigmaIndividual,axis=0)
+        nbarjRandMean = stacking.weightedMean(nbarjIndividual,\
+            1.0/sigmaIndividual**2,axis=0)
     else:
         raise Exception('Invalid meanType')
     if errorType == 'standard':
-        sigmaRandMean = np.sqrt(stacking.weightedVariance(nbarjRandStack,
-            sigmaRandStack,axis=0))
+        sigmaRandMean = sigmaRandStack
     elif(errorType == 'scatter'):
         sigmaRandMean = np.sqrt(stacking.weightedVariance(nbarjIndividual,
-            sigmaIndividual,axis=0))
+            1.0/sigmaIndividual**2,axis=0))
     else:
         raise Exception('Invalid errorType')
     # Plot mean profiles:
@@ -1127,50 +1131,29 @@ def plotConstrainedVsUnconstrainedProfiles(rBinStackCentres,nbarjStack,sigmaStac
         yerr=sigmaMean/nbar,label=labelCon,fmt=fmtCon,color=colourCon)
     #ax.errorbar(rBinStackCentres,nbarjRandMean/nbar,
     #	yerr=sigmaRandMean/nbar,label=labelRand,fmt=fmtRand,color=colourRand)
-    ax.plot(rBinStackCentres,nbarjRandMean/nbar,fmtRand,
-        label=labelRand,color=colourRand)
-    ax.fill_between(rBinStackCentres,y1 = (nbarjRandMean - sigmaRandMean)/nbar,y2 = (nbarjRandMean + sigmaRandMean)/nbar,alpha=errorAlpha,color = colourRand)
-    # Plot example individual profiles:
-    for k in range(0,np.min([numRandsToPlot,nbarjRandStack.shape[0]])):
-        if plotIndividuals:
-            if (nbarjIndividual is None):
-                if k == 0:
-                    ax.errorbar(rBinStackCentres,nbarjRandStack[k,:]/nbar,
-                        yerr=sigmaRandStack[k,:]/nbar,
-                        label=labelRandIndividual,
-                        fmt=fmtRandInd,color=colourRandInd,capthick=1)
-                else:
-                    ax.errorbar(rBinStackCentres,nbarjRandStack[k,:]/nbar,
-                        yerr=sigmaRandStack[k,:]/nbar,
-                        fmt=fmtRandInd,color=colourRandInd,capthick=1)
-            else:
-                if k == 0:
-                    ax.errorbar(rBinStackCentres,nbarjIndividual[k,:]/nbar,
-                        yerr=sigmaIndividual[k,:]/nbar,
-                        label=labelRandIndividual,
-                        fmt=fmtRandInd,color=colourRandInd,capthick=1)
-                else:
-                    ax.errorbar(rBinStackCentres,nbarjIndividual[k,:]/nbar,
-                        yerr=sigmaIndividual[k,:]/nbar,
-                        fmt=fmtRandInd,color=colourRandInd,capthick=1)
-    if plotIndividualsMean and plotIndividuals:
-        nbarjRandMeanInd = stacking.weightedMean(nbarjIndividual,
-            sigmaIndividual,axis=0)
-        sigmaRandMeanInd = np.sqrt(stacking.weightedVariance(
-            nbarjIndividual,sigmaIndividual,axis=0))
-        ax.errorbar(rBinStackCentres,nbarjRandMeanInd/nbar,
-                yerr=sigmaRandMeanInd/nbar,
-                label='Mean of samples',
-                fmt='k:',color=colourRandInd,capthick=1)
+    #ax.plot(rBinStackCentres,nbarjRandMean/nbar,fmtRand,
+    #    label=labelRand,color=colourRand)
+    ax.fill_between(rBinStackCentres,\
+        y1 = (nbarjRandStack - sigmaRandStack)/nbar,\
+        y2 = (nbarjRandStack + sigmaRandStack)/nbar,alpha=errorAlpha,\
+        color = colorRandMean,label='Mean unconstrained \nprofile')
+    ax.fill_between(rBinStackCentres,\
+        y1 = (nbarjRandMean - sigmaRandMean)/nbar,\
+        y2 = (nbarjRandMean + sigmaRandMean)/nbar,alpha=errorAlpha,\
+        color = colourRand,\
+        label='Standard Deviation of \nunconstrained profiles')
     if title is None:
         title = 'Void Profiles, $R_{\\mathrm{eff}} > ' + \
             str(rMin) + '\\mathrm{\\,Mpc}h^{-1}$, $' + \
             scientificNotation(mMin) + ' < M/(M_{\\odot}h^{-1}) < ' + \
             scientificNotation(mMax) + '$'
-    ax.set_title(title,fontsize=fontsize,fontfamily=fontname)
-    ax.set_xlabel('$R/R_{\\mathrm{eff}}$',fontsize=fontsize,fontfamily=fontname)
+    if showTitle:
+        ax.set_title(title,fontsize=fontsize,fontfamily=fontname)
+    ax.set_xlabel('$R/R_{\\mathrm{eff}}$',fontsize=fontsize,\
+        fontfamily=fontname)
     if not hideYLabels:
-        ax.set_ylabel('$\\rho/\\bar{\\rho}$',fontsize=fontsize,fontfamily=fontname)
+        ax.set_ylabel('$\\rho/\\bar{\\rho}$',fontsize=fontsize,\
+            fontfamily=fontname)
     ax.plot(rBinStackCentres,np.ones(rBinStackCentres.shape),
         linestyle=guideStyle,color=guideColour)
     ax.plot([1,1],ylim,linestyle=guideStyle,color=guideColour)
@@ -1182,6 +1165,8 @@ def plotConstrainedVsUnconstrainedProfiles(rBinStackCentres,nbarjStack,sigmaStac
     if hideYLabels:
         ax.set_yticklabels([])
     plt.subplots_adjust(bottom=bottom,left=left)
+    if savename is not None:
+        plt.savefig(savename)
     if showImmediately:
         plt.show()
 
@@ -2282,7 +2267,7 @@ def plotHMFAMFComparison(constrainedHaloMasses512Old,deltaListMeanOld,\
                 for hmf in hmfUnderdense]),0)
             massBins = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),\
                 nMassBins))
-            massBinCentres = plot.binCentres(massBins)
+            massBinCentres = binCentres(massBins)
             amfUnderdense = [computeMeanHMF(hmasses,massLower = mLower,\
                 massUpper = mUpper,nBins = nMassBins) \
                 for hmasses in comparableAntihaloMassesOld]
@@ -2294,7 +2279,7 @@ def plotHMFAMFComparison(constrainedHaloMasses512Old,deltaListMeanOld,\
                 for hmf in amfUnderdense]),0)
             massBins = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),\
                 nMassBins))
-            massBinCentres = plot.binCentres(massBins)
+            massBinCentres = binCentres(massBins)
             ylabelStart = ylabelStartOld
             constrainedHaloMasses512 = constrainedHaloMasses512Old
             constrainedAntihaloMasses512 = constrainedAntihaloMasses512Old
@@ -2314,7 +2299,7 @@ def plotHMFAMFComparison(constrainedHaloMasses512Old,deltaListMeanOld,\
                 for hmf in hmfUnderdense]),0)
             massBins = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),\
                 nMassBins))
-            massBinCentres = plot.binCentres(massBins)
+            massBinCentres = binCentres(massBins)
             amfUnderdense = [computeMeanHMF(hmasses,massLower = mLower,\
                 massUpper = mUpper,nBins = nMassBins) \
                 for hmasses in comparableAntihaloMassesNew]
@@ -2326,7 +2311,7 @@ def plotHMFAMFComparison(constrainedHaloMasses512Old,deltaListMeanOld,\
                 for hmf in amfUnderdense]),0)
             massBins = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),\
                 nMassBins))
-            massBinCentres = plot.binCentres(massBins)
+            massBinCentres = binCentres(massBins)
             ylabelStart = ylabelStartNew
             constrainedHaloMasses512 = constrainedHaloMasses512New
             constrainedAntihaloMasses512 = constrainedAntihaloMasses512New
@@ -2664,17 +2649,6 @@ def plotHMFAMFUnderdenseComparison(\
         plt.savefig(figuresFolder + "hmf_amf_underdense_comparison.pdf")
     if show:
         plt.show()
-
-
-
-
-
-
-
-
-
-
-
 
 
 
