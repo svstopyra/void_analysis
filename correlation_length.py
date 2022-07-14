@@ -20,13 +20,6 @@ import emcee
     std_field,hmc_Elh,hmc_Eprior,hades_accept_count,hades_attempt_count] = \
     pickle.load(open("chain_properties_combined.p","rb"))
 
-[mcmcArray,num,N,NCAT,no_bias_params,bias_matrix,mean_field,\
-    std_field,hmc_Elh,hmc_Eprior,hades_accept_count,hades_attempt_count] = \
-    pickle.load(open("borg_groups/chain_properties_combined.p","rb"))
-
-#subfolder = "supporting_plots/"
-subfolder = "borg_groups/"
-
 mcmcArray = np.arange(6214,8286)
 NCAT = 16
 no_bias_params = 4
@@ -103,7 +96,7 @@ for l in range(0,3):
         label=parameterLabels[l]))
 
 plt.legend(handles=handles)
-plt.savefig(subfolder + "bias_correlation_bins.pdf")
+plt.savefig("bias_correlation_bins.pdf")
 plt.show()
 
 
@@ -126,8 +119,8 @@ MabsList = np.linspace(-21,-25,9)
 MabsLabels = ["$" + str(MabsList[m]) + " \\leq M < " + \
         str(MabsList[m+1]) + "$" for m in range(0,8)]
 handles = []
-nRange = np.arange(0,bias_matrix.shape[0])
-#nRange = np.arange(7000-1260,bias_matrix.shape[0])
+#nRange = np.arange(0,bias_matrix.shape[0])
+nRange = np.arange(7000-1260,bias_matrix.shape[0])
 useEmcee = True
 fig, ax = plt.subplots(3,2,figsize = (10,15))
 for l in range(0,3):
@@ -173,7 +166,7 @@ plt.legend(handles=handles)
 #plt.tight_layout()
 plt.subplots_adjust(top=0.974,bottom=0.067,left=0.082,right=0.98,\
     hspace=0.101,wspace=0.0)
-plt.savefig(subfolder + "bias_correlation_bins.pdf")
+plt.savefig("supporting_plots/bias_correlation_bins.pdf")
 plt.show()
 
 
@@ -183,21 +176,20 @@ convergenceFilter = np.where((mcmcArray > 7000) & (mcmcArray < 7500))[0]
 meanL = np.mean(hmc_Elh[convergenceFilter])
 #plt.plot(mcmcArray[nzFilter],-np.log10(hmc_Elh[nzFilter]/hmc_Elh[0])/1000)
 plt.plot(mcmcArray[nzFilter],np.log(hmc_Elh[nzFilter]/hmc_Elh[0]))
-#plt.axvline(6214,linestyle='--',color='grey',label='20 Steps start')
-#plt.axhline(np.log(meanL/hmc_Elh[0]),linestyle=':',color='k',\
-#    label='Mean, 7000-7500')
+plt.axvline(6214,linestyle='--',color='grey',label='20 Steps start')
+plt.axhline(np.log(meanL/hmc_Elh[0]),linestyle=':',color='k',\
+    label='Mean, 7000-7500')
 plt.xlabel('MCMC Sample')
 plt.ylabel('$\\log(\\mathcal{L}_S/\\mathcal{L}_0)$')
 plt.legend()
 plt.tight_layout()
-plt.savefig(subfolder + "likelihood_plot.pdf")
+plt.savefig("supporting_plots/likelihood_plot.pdf")
 plt.show()
 
 # Bias parameter plots:
 handles=[]
 fig, ax = plt.subplots(3,2,figsize = (10,15))
-#mcmcRange = np.where((mcmcArray >= 7000))[0]
-mcmcRange = np.where((mcmcArray >= 0))[0]
+mcmcRange = np.where((mcmcArray >= 7000))[0]
 for l in range(0,3):
     for m in range(0,8):
         hand1 = ax[l,0].plot(mcmcArray[mcmcRange],\
@@ -237,7 +229,7 @@ plt.legend(handles=handles)
 #plt.tight_layout()
 plt.subplots_adjust(top=0.974,bottom=0.067,left=0.082,right=0.98,\
     hspace=0.101,wspace=0.0)
-plt.savefig(subfolder + "bias_parameters_bins.pdf")
+plt.savefig("supporting_plots/bias_parameters_bins.pdf")
 plt.show()
 
 
@@ -252,8 +244,7 @@ def biasFunctionalForm(delta,b,rho,eps,N=1,S=1,A=1,numericalOffset = 1e-6):
 # Bias form plots:
 handles=[]
 fig, ax = plt.subplots(3,2,figsize = (10,15))
-#mcmcRange = np.where((mcmcArray >= 6214))[0]
-mcmcRange = np.where((mcmcArray >= 0))[0]
+mcmcRange = np.where((mcmcArray >= 6214))[0]
 deltaTest = np.array([-0.2,0,600])
 for l in range(0,len(deltaTest)):
     for m in range(0,8):
@@ -294,7 +285,7 @@ plt.legend(handles=handles)
 #plt.tight_layout()
 plt.subplots_adjust(top=0.974,bottom=0.067,left=0.082,right=0.98,\
     hspace=0.101,wspace=0.0)
-plt.savefig(subfolder + "bias_functional_form_bins.pdf")
+plt.savefig("supporting_plots/bias_functional_form_bins.pdf")
 plt.show()
 
 

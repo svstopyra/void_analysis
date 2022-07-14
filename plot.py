@@ -1,5 +1,5 @@
 #
-from . import plot_utilities, context, snapedit, stacking, tools
+from . import plot_utilities, context, snapedit, stacking, tools, cosmology
 import pynbody
 import numpy as np
 import imageio
@@ -31,235 +31,239 @@ seabornColormap = sns.color_palette("colorblind",as_cmap=True)
 
 # Halves the RGB values of a specified color
 def half_color(color):
-	if(len(color) != 3):
-		raise Exception("Colour must be a three element tuple.")
-	return (color[0]/2,color[1]/2,color[2]/2)
+    if(len(color) != 3):
+        raise Exception("Colour must be a three element tuple.")
+    return (color[0]/2,color[1]/2,color[2]/2)
 
 # Construct a set of ncolors even spaced colours in rgb space.
 def construct_color_list(n,ncolors):
-	ncbrt = np.ceil(np.cbrt(ncolors))
-	if(n > ncolors):
-		raise Exception("Requested colour exceeds maximum" + \
-		" specified number of colours. Specify more colours.")
-	k = np.floor(n/(ncbrt**2))
-	j = np.floor((n - k*ncbrt**2)/ncbrt)
-	i = (n - k*ncbrt**2 - j*ncbrt)
-	return (i/(ncbrt-1),j/(ncbrt-1),k/(ncbrt-1))
+    ncbrt = np.ceil(np.cbrt(ncolors))
+    if(n > ncolors):
+        raise Exception("Requested colour exceeds maximum" + \
+        " specified number of colours. Specify more colours.")
+    k = np.floor(n/(ncbrt**2))
+    j = np.floor((n - k*ncbrt**2)/ncbrt)
+    i = (n - k*ncbrt**2 - j*ncbrt)
+    return (i/(ncbrt-1),j/(ncbrt-1),k/(ncbrt-1))
 
 # Returns the specified number in scientific notation:
 def scientificNotation(x,latex=False,s=3,powerRange = 0):
-	log10x = np.log10(np.abs(x))
-	z = np.floor(log10x).astype(int)
-	y = 10.0**(log10x - z)
-	if z > powerRange:
-		resultString = "10^{" + "{0:0d}".format(z) + "}"
-		if y != 1.0:
-			resultString = ("{0:." + str(s) + "g}").format(y) + \
-			"\\times " + resultString
-		if latex:
-			resultString = "$" + resultString + "$"
-	else:
-		resultString = ("{0:." + str(s) + "g}").format(y*(10.0**z))
-	if x < 0:
-		resultString = "-" + resultString
-	return resultString
+    log10x = np.log10(np.abs(x))
+    z = np.floor(log10x).astype(int)
+    y = 10.0**(log10x - z)
+    if z > powerRange:
+        resultString = "10^{" + "{0:0d}".format(z) + "}"
+        if y != 1.0:
+            resultString = ("{0:." + str(s) + "g}").format(y) + \
+            "\\times " + resultString
+        if latex:
+            resultString = "$" + resultString + "$"
+    else:
+        resultString = ("{0:." + str(s) + "g}").format(y*(10.0**z))
+    if x < 0:
+        resultString = "-" + resultString
+    return resultString
 
 # Plot binned halo densities as a function of redshift
 def plot_halo_void_densities(z,rhoVnav,rhoVnsd,rhoVrav,rhoVrsd,bins):
-	binNo = len(bins) - 1
-	legendList = []
-	# Want to format bins in scientific notation:
-	
-	for k in range(0,binNo):
-		plt.semilogy(z,rhoVnav[:,k],color=construct_color_list(k+1,2*binNo))
-		plt.fill_between(z,rhoVnav[:,k] - rhoVnsd[:,k],
-			rhoVnav[:,k] + rhoVnsd[:,k],
-			color=half_color(construct_color_list(k+1,2*binNo)))
-		legendList.append('Halo Density, $' + scientificNotation(bins[k]) + \
-		'$ - $' + scientificNotation(bins[k+1]) + ' M_{sol}/h$')
-	for k in range(0,binNo):
-		plt.semilogy(z,rhoVrav[:,k],color=construct_color_list(binNo + k+1,2*binNo))
-		plt.fill_between(z,rhoVrav[:,k] - rhoVrsd[:,k],
-			rhoVrav[:,k] + rhoVrsd[:,k],
-			color=half_color(construct_color_list(binNo + k+1,2*binNo)))
-		legendList.append('Anti-halo Density, $' + scientificNotation(bins[k]) + \
-			'$ - $' + scientificNotation(bins[k+1]) + ' M_{sol}/h$')
-	plt.xlabel('z')
-	plt.ylabel('(Local Density)/(Background Density)')
-	plt.legend(legendList)
-	plt.show()
+    binNo = len(bins) - 1
+    legendList = []
+    # Want to format bins in scientific notation:
+
+    for k in range(0,binNo):
+        plt.semilogy(z,rhoVnav[:,k],color=construct_color_list(k+1,2*binNo))
+        plt.fill_between(z,rhoVnav[:,k] - rhoVnsd[:,k],
+            rhoVnav[:,k] + rhoVnsd[:,k],
+            color=half_color(construct_color_list(k+1,2*binNo)))
+        legendList.append('Halo Density, $' + scientificNotation(bins[k]) + \
+        '$ - $' + scientificNotation(bins[k+1]) + ' M_{sol}/h$')
+    for k in range(0,binNo):
+        plt.semilogy(z,rhoVrav[:,k],color=construct_color_list(binNo + k+1,2*binNo))
+        plt.fill_between(z,rhoVrav[:,k] - rhoVrsd[:,k],
+            rhoVrav[:,k] + rhoVrsd[:,k],
+            color=half_color(construct_color_list(binNo + k+1,2*binNo)))
+        legendList.append('Anti-halo Density, $' + scientificNotation(bins[k]) + \
+            '$ - $' + scientificNotation(bins[k+1]) + ' M_{sol}/h$')
+    plt.xlabel('z')
+    plt.ylabel('(Local Density)/(Background Density)')
+    plt.legend(legendList)
+    plt.show()
 
 def computeHistogram(x,bins,z=1.0,count = False,density = False,useGaussianError=False,
-		alpha = 0.68):
-	noInBins = np.zeros(len(bins)-1,dtype=int)
-	N = len(x)
-	prob = np.zeros(len(bins)-1)
-	sigma = np.zeros(len(bins)-1)
-	inBins = []
-	if N != 0:
-		for k in range(0,len(bins)-1):
-			inBins.append(np.where((x > bins[k]) & (x < bins[k+1]))[0])
-			noInBins[k] = len(inBins[k])
-			# Estimate of the probability density for this bin:
-			p = len(inBins[k])/N
-			if count:
-				prob[k] = len(inBins[k])
-			else:
-				prob[k] = p
-			if density:
-				prob[k] /= (bins[k+1] - bins[k])
-			# Normal distribution approximation of the 
-			# confidence interval on this density:
-			if useGaussianError:
-				if count:
-					sigma[k] = z*np.sqrt(p*(1.0-p)*N)
-				else:
-					sigma[k] = z*np.sqrt(p*(1.0-p)/N)
-				if density:
-					sigma[k] /= (bins[k+1] - bins[k])
-		if not useGaussianError:
-			bounds = stats.binom_conf_interval(noInBins,N*np.ones(noInBins.shape))
-			sigma = np.vstack((noInBins/N - bounds[1,:],bounds[0,:] - noInBins/N))
-	return [prob,sigma,noInBins,inBins]
+        alpha = 0.68):
+    noInBins = np.zeros(len(bins)-1,dtype=int)
+    N = len(x)
+    prob = np.zeros(len(bins)-1)
+    sigma = np.zeros(len(bins)-1)
+    inBins = []
+    if N != 0:
+        for k in range(0,len(bins)-1):
+            inBins.append(np.where((x > bins[k]) & (x < bins[k+1]))[0])
+            noInBins[k] = len(inBins[k])
+            # Estimate of the probability density for this bin:
+            p = len(inBins[k])/N
+            if count:
+                prob[k] = len(inBins[k])
+            else:
+                prob[k] = p
+            if density:
+                prob[k] /= (bins[k+1] - bins[k])
+            # Normal distribution approximation of the 
+            # confidence interval on this density:
+            if useGaussianError:
+                if count:
+                    sigma[k] = z*np.sqrt(p*(1.0-p)*N)
+                else:
+                    sigma[k] = z*np.sqrt(p*(1.0-p)/N)
+                if density:
+                    sigma[k] /= (bins[k+1] - bins[k])
+        if not useGaussianError:
+            bounds = stats.binom_conf_interval(noInBins,N*np.ones(noInBins.shape))
+            sigma = np.vstack((noInBins/N - bounds[1,:],bounds[0,:] - noInBins/N))
+    return [prob,sigma,noInBins,inBins]
 
 # Create bins for a list of values:
 def createBins(values,nBins,log=False):
-	if log:
-		# Logarithmically spaced bins:
-		return 10**np.linspace(np.log10(np.min(values)),np.log10(np.max(values)),nBins+1)
-	else:
-		# linearly spaced bins:
-		return np.linspace(np.min(values),np.max(values),nBins+1)
+    if log:
+        # Logarithmically spaced bins:
+        return 10**np.linspace(np.log10(np.min(values)),\
+            np.log10(np.max(values)),nBins+1)
+    else:
+        # linearly spaced bins:
+        return np.linspace(np.min(values),np.max(values),nBins+1)
 
 # Plot a histogram, but include error bars for the confidence interval of the uncertainty
-def histWithErrors(p,sigma,bins,ax = None,label="Bin probabilities",color=None,alpha = 0.5):
-	x = (bins[1:len(bins)] + bins[0:(len(bins)-1)])/2
-	width = bins[1:len(bins)] - bins[0:(len(bins)-1)]
-	if ax is None:
-		return plt.bar(x,p,width=width,yerr=sigma,alpha=alpha,label=label,color=color)
-	else:
-		return ax.bar(x,p,width=width,yerr=sigma,alpha=alpha,label=label,color=color)
+def histWithErrors(p,sigma,bins,ax = None,label="Bin probabilities",\
+        color=None,alpha = 0.5):
+    x = (bins[1:len(bins)] + bins[0:(len(bins)-1)])/2
+    width = bins[1:len(bins)] - bins[0:(len(bins)-1)]
+    if ax is None:
+        return plt.bar(x,p,width=width,yerr=sigma,alpha=alpha,\
+            label=label,color=color)
+    else:
+        return ax.bar(x,p,width=width,yerr=sigma,alpha=alpha,\
+            label=label,color=color,error_kw=error_kw)
 
 # Histogram of halo densities
 def haloHistogram(logrho,logrhoBins,masses,massBins,massBinList = None,
-		massBinsToPlot = None,density=True,logMassBase = None,subplots=True,
-		subplot_shape=None):
-	# Plot all the mass bins unless otherwise specified:
-	if massBinsToPlot is None:
-		massBinsToPlot = range(0,len(massBins)-1)
-	# Bin the masses of the halos if this has not already been supplied.
-	if massBinList is None:
-		[massBinList,noInBins] = plot_utilities.binValues(masses,massBins)
-	legendList = []
-	if subplots:
-		if subplot_shape is not None:
-			# Check that the requested shape makes sense:
-			if len(subplot_shape) != 2:
-				raise Exception("Sub-plots must be arranged on a 2d grid.")
-			if subplot_shape[0]*subplot_shape[1] < len(massBinsToPlot):
-				raise Exception("Not enough room in requested" + \
-					" sub-plot arrangement to fit all plots.")
-			a = subplot_shape[0]
-			b = subplot_shape[1]
-		else:
-			nearestSquareRoot = np.ceil(np.sqrt(len(massBinsToPlot))).astype(int)
-			a = b = nearestSquareRoot
-		fig, ax = plt.subplots(nrows=a,ncols=b)
-		counter = 0
-	for k in massBinsToPlot:
-		[p,sigma,noInBins,inBins] = computeHistogram(logrho[massBinList[k]],logrhoBins)
-		if subplots:
-			# Plot axes on a square grid:
-			i = np.floor(counter/b).astype(int)
-			j = np.mod(counter,b).astype(int)
-			histWithErrors(p,sigma,logrhoBins,ax[i,j])
-			if logMassBase is None:
-				ax[i,j].legend(['$' + scientificNotation(massBins[k]) + \
-					' < M < ' + scientificNotation(massBins[k+1]) + \
-					' M_{sol}/h$'])
-			else:
-				ax[i,j].legend(['$' + \
-					scientificNotation(logMassBase**massBins[k]) + \
-					'$ < M < $' + \
-					scientificNotation(logMassBase**massBins[k+1]) + \
-					' M_{sol}/h$'])
-			if i == a - 1:
-				ax[i,j].set_xlabel('$log(\\langle\\rho\\rangle_V/\\bar{\\rho})$')
-			if j == 0:
-				ax[i,j].set_ylabel('Probability Density')
-			counter = counter + 1			
-		else:
-			# Plot everything on one axis:
-			histWithErrors(p,sigma,logrhoBins)
-		if logMassBase is None:
-			legendList.append('$' + scientificNotation(massBins[k]) + \
-				' < M < ' + scientificNotation(massBins[k+1]) + ' M_{sol}/h$')
-		else:
-			# Exponentiate the masses if they were supplied in log space:
-			legendList.append('$' + scientificNotation(logMassBase**massBins[k]) + \
-			' < M < ' + scientificNotation(logMassBase**massBins[k+1]) + \
-			' M_{sol}/h$')
-	if not subplots:
-		plt.xlabel('$log(\\langle\\rho\\rangle_V/\\bar{\\rho})$')
-		plt.ylabel('Probability Density')
-		plt.legend(legendList)
-	plt.show()
+        massBinsToPlot = None,density=True,logMassBase = None,subplots=True,
+        subplot_shape=None):
+    # Plot all the mass bins unless otherwise specified:
+    if massBinsToPlot is None:
+        massBinsToPlot = range(0,len(massBins)-1)
+    # Bin the masses of the halos if this has not already been supplied.
+    if massBinList is None:
+        [massBinList,noInBins] = plot_utilities.binValues(masses,massBins)
+    legendList = []
+    if subplots:
+        if subplot_shape is not None:
+            # Check that the requested shape makes sense:
+            if len(subplot_shape) != 2:
+                raise Exception("Sub-plots must be arranged on a 2d grid.")
+            if subplot_shape[0]*subplot_shape[1] < len(massBinsToPlot):
+                raise Exception("Not enough room in requested" + \
+                    " sub-plot arrangement to fit all plots.")
+            a = subplot_shape[0]
+            b = subplot_shape[1]
+        else:
+            nearestSquareRoot = np.ceil(np.sqrt(len(massBinsToPlot))).astype(int)
+            a = b = nearestSquareRoot
+        fig, ax = plt.subplots(nrows=a,ncols=b)
+        counter = 0
+    for k in massBinsToPlot:
+        [p,sigma,noInBins,inBins] = computeHistogram(logrho[massBinList[k]],logrhoBins)
+        if subplots:
+            # Plot axes on a square grid:
+            i = np.floor(counter/b).astype(int)
+            j = np.mod(counter,b).astype(int)
+            histWithErrors(p,sigma,logrhoBins,ax[i,j])
+            if logMassBase is None:
+                ax[i,j].legend(['$' + scientificNotation(massBins[k]) + \
+                    ' < M < ' + scientificNotation(massBins[k+1]) + \
+                    ' M_{sol}/h$'])
+            else:
+                ax[i,j].legend(['$' + \
+                    scientificNotation(logMassBase**massBins[k]) + \
+                    '$ < M < $' + \
+                    scientificNotation(logMassBase**massBins[k+1]) + \
+                    ' M_{sol}/h$'])
+            if i == a - 1:
+                ax[i,j].set_xlabel('$log(\\langle\\rho\\rangle_V/\\bar{\\rho})$')
+            if j == 0:
+                ax[i,j].set_ylabel('Probability Density')
+            counter = counter + 1
+        else:
+            # Plot everything on one axis:
+            histWithErrors(p,sigma,logrhoBins)
+        if logMassBase is None:
+            legendList.append('$' + scientificNotation(massBins[k]) + \
+                ' < M < ' + scientificNotation(massBins[k+1]) + ' M_{sol}/h$')
+        else:
+            # Exponentiate the masses if they were supplied in log space:
+            legendList.append('$' + scientificNotation(logMassBase**massBins[k]) + \
+            ' < M < ' + scientificNotation(logMassBase**massBins[k+1]) + \
+            ' M_{sol}/h$')
+    if not subplots:
+        plt.xlabel('$log(\\langle\\rho\\rangle_V/\\bar{\\rho})$')
+        plt.ylabel('Probability Density')
+        plt.legend(legendList)
+    plt.show()
 
 # Plot Fraction of halos in a set of mass bins that are underdense:
 def plotUnderdenseFraction(frac,sigma,logMassBins):
-	# frac and sigma should be computed by halo_analysis.getExpansionFraction
-	# Assuming given in log10 mass bins:
-	massCentres = 10**((logMassBins[1:len(logMassBins)] + \
-		logMassBins[0:(len(logMassBins)-1)])/2)
-	fig, ax = plt.subplots()
-	ax.errorbar(massCentres,frac,yerr=sigma)
-	ax.set_xscale('log')
-	plt.xlabel('Mass bin$/M_{sol}/h$')
-	plt.ylabel('Underdense fraction at z = 0')
-	plt.show()
+    # frac and sigma should be computed by halo_analysis.getExpansionFraction
+    # Assuming given in log10 mass bins:
+    massCentres = 10**((logMassBins[1:len(logMassBins)] + \
+        logMassBins[0:(len(logMassBins)-1)])/2)
+    fig, ax = plt.subplots()
+    ax.errorbar(massCentres,frac,yerr=sigma)
+    ax.set_xscale('log')
+    plt.xlabel('Mass bin$/M_{sol}/h$')
+    plt.ylabel('Underdense fraction at z = 0')
+    plt.show()
 
 # Plot average density in each of the supplies mass bins:
 def plotMassBinDensity(rhoV,binList,logMassBins):
-	massCentres = 10**((logMassBins[1:len(logMassBins)] + \
-		logMassBins[0:(len(logMassBins)-1)])/2)
-	fig, ax = plt.subplots()
-	rhoVav = np.zeros(len(massCentres))
-	rhoVsd = np.zeros(len(massCentres))
-	for k in range(0,len(rhoVav)):
-		if len(binList[k] != 0):
-			rhoVav[k] = np.mean(rhoV[binList[k]])
-			rhoVsd[k] = np.sqrt(np.var(rhoV[binList[k]])/len(binList[k]))
-	ax.errorbar(massCentres,rhoVav,yerr=rhoVsd)
-	ax.set_xscale('log')
-	ax.set_yscale('log')
-	plt.xlabel('Mass bin$/M_{sol}/h$')
-	plt.ylabel('$\\langle\\rho\\rangle/\\bar{\\rho}$')
-	plt.show()
+    massCentres = 10**((logMassBins[1:len(logMassBins)] + \
+        logMassBins[0:(len(logMassBins)-1)])/2)
+    fig, ax = plt.subplots()
+    rhoVav = np.zeros(len(massCentres))
+    rhoVsd = np.zeros(len(massCentres))
+    for k in range(0,len(rhoVav)):
+        if len(binList[k] != 0):
+            rhoVav[k] = np.mean(rhoV[binList[k]])
+            rhoVsd[k] = np.sqrt(np.var(rhoV[binList[k]])/len(binList[k]))
+    ax.errorbar(massCentres,rhoVav,yerr=rhoVsd)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    plt.xlabel('Mass bin$/M_{sol}/h$')
+    plt.ylabel('$\\langle\\rho\\rangle/\\bar{\\rho}$')
+    plt.show()
 
 # Linear regression, together with various statistics
 def linearRegression(x,y,full=False,errors=False):
-	z = np.polyfit(x,y,deg=1)
-	a = z[0]
-	b = z[1]
-	xbar = np.mean(x)
-	ybar = np.mean(y)
-	n = len(x)
-	ssxx = np.sum((x - xbar)**2)
-	ssyy = np.sum((np.log10(y) - ybar)**2)
-	ssxy = np.sum((np.log10(y) - ybar)*(x - xbar))
-	ssxy = np.sum((np.log10(y) - ybar)*(x - xbar))
-	r2 = (ssxy**2)/(ssxx*ssyy)
-	s = np.sqrt((ssyy - (ssxy**2)/ssxx)/(n-2))
-	sea = s*np.sqrt((1/n) + (xbar**2)/ssxx)
-	seb = s*np.sqrt(ssxx)
-	if (full and errors):
-		return [a,b,sea,seb,ssxx,ssyy,ssyy,r2,s]
-	elif full:
-		return [a,b,ssxx,ssyy,ssyy,r2,s]
-	elif errors:
-		return [a,b,sea,seb]
-	else:
-		return [a,b]
+    z = np.polyfit(x,y,deg=1)
+    a = z[0]
+    b = z[1]
+    xbar = np.mean(x)
+    ybar = np.mean(y)
+    n = len(x)
+    ssxx = np.sum((x - xbar)**2)
+    ssyy = np.sum((np.log10(y) - ybar)**2)
+    ssxy = np.sum((np.log10(y) - ybar)*(x - xbar))
+    ssxy = np.sum((np.log10(y) - ybar)*(x - xbar))
+    r2 = (ssxy**2)/(ssxx*ssyy)
+    s = np.sqrt((ssyy - (ssxy**2)/ssxx)/(n-2))
+    sea = s*np.sqrt((1/n) + (xbar**2)/ssxx)
+    seb = s*np.sqrt(ssxx)
+    if (full and errors):
+        return [a,b,sea,seb,ssxx,ssyy,ssyy,r2,s]
+    elif full:
+        return [a,b,ssxx,ssyy,ssyy,r2,s]
+    elif errors:
+        return [a,b,sea,seb]
+    else:
+        return [a,b]
 
 
 
@@ -607,7 +611,7 @@ def mollweideScatter(angles,color='r',s=1,marker='.',angleCoord="ra_dec",
 		angleUnit="deg",text=None,
 		fontname='serif',fontsize=7,horizontalalignment='left',
 		verticalalignment='bottom',ax=None,textPos=None,textcoords='data',
-		arrowprops=None,arrowpad = 0):
+		arrowprops=None,arrowpad = 0,textColour='k'):
 	MW = healpy.projector.MollweideProj()
 	if ax is None:
 		fig, ax = plt.subplots()
@@ -666,7 +670,8 @@ def mollweideScatter(angles,color='r',s=1,marker='.',angleCoord="ra_dec",
 				sgVal1]),fontfamily=fontname,fontsize=fontsize,
 				horizontalalignment=ha,verticalalignment=va,xytext=xytext,
 				textcoords=textCoordToUse,arrowprops=arrow,
-				bbox = dict(pad=arrowpad,fc='none',ec='none'))
+				bbox = dict(pad=arrowpad,fc='none',ec='none'),\
+				color=textColour)
 
 # Plot a slice from a snapshot along the z direction, with some additional formatting.
 def plotZSlice(snap,posToPlot,zslice,width,thickness=15,av_z=True,
@@ -1088,97 +1093,97 @@ def plotMassProfile(radii,mprof,rvir=None,logy=False,show=True):
 
 # Compare unconstrained and constrained void profiles
 def plotConstrainedVsUnconstrainedProfiles(rBinStackCentres,nbarjStack,sigmaStack,
-		nbarjRandStack,sigmaRandStack,nbar,rMin,mMin,mMax,
-		labelRand = "Unconstrained profiles (mean)",fmtRand = '-.',colourRand = 'k',
-		labelCon = "Average of 6 samples (constrained)",fmtCon = '-',colourCon = 'r',
-		labelRandIndividual = "Unconstrained profiles (individual)",fmtRandInd = ':',
-		colourRandInd = 'grey',numRandsToPlot = 3,ylim = [0,1.4],ax = None,
-		guideColour = 'grey',guideStyle='--',legendFontSize=12,fontname="serif",
-		fontsize=12,frameon=False,legendLoc = 'upper right',bottom=0.125,left=0.125,
-		includeLegend=True,showImmediately = True,title=None,hideYLabels = False,
-		nbarjIndividual = None,sigmaIndividual = None,plotIndividuals = False,
-		errorType = 'standard',errorAlpha=0.5,meanType = 'standard',
-		plotIndividualsMean = False):
-	nbarjMean = stacking.weightedMean(nbarjStack,sigmaStack,axis=0)
-	sigmaMean = np.sqrt(stacking.weightedVariance(nbarjStack,sigmaStack,axis=0))
-	if meanType == 'standard':
-		nbarjRandMean = stacking.weightedMean(nbarjRandStack,sigmaRandStack,axis=0)
-	elif meanType == 'scatter':
-		nbarjRandMean = stacking.weightedMean(nbarjIndividual,sigmaIndividual,axis=0)
-	else:
-		raise Exception('Invalid meanType')
-	if errorType == 'standard':
-		sigmaRandMean = np.sqrt(stacking.weightedVariance(nbarjRandStack,
-			sigmaRandStack,axis=0))
-	elif(errorType == 'scatter'):
-		sigmaRandMean = np.sqrt(stacking.weightedVariance(nbarjIndividual,
-			sigmaIndividual,axis=0))
-	else:
-		raise Exception('Invalid errorType')
-	# Plot mean profiles:
-	if ax is None:
-		fig, ax = plt.subplots()
-	ax.errorbar(rBinStackCentres,nbarjMean/nbar,
-		yerr=sigmaMean/nbar,label=labelCon,fmt=fmtCon,color=colourCon)
-	#ax.errorbar(rBinStackCentres,nbarjRandMean/nbar,
-	#	yerr=sigmaRandMean/nbar,label=labelRand,fmt=fmtRand,color=colourRand)
-	ax.plot(rBinStackCentres,nbarjRandMean/nbar,fmtRand,
-		label=labelRand,color=colourRand)
-	ax.fill_between(rBinStackCentres,y1 = (nbarjRandMean - sigmaRandMean)/nbar,y2 = (nbarjRandMean + sigmaRandMean)/nbar,alpha=errorAlpha,color = colourRand)
-	# Plot example individual profiles:
-	for k in range(0,np.min([numRandsToPlot,nbarjRandStack.shape[0]])):
-		if plotIndividuals:
-			if (nbarjIndividual is None):
-				if k == 0:
-					ax.errorbar(rBinStackCentres,nbarjRandStack[k,:]/nbar,
-						yerr=sigmaRandStack[k,:]/nbar,
-						label=labelRandIndividual,
-						fmt=fmtRandInd,color=colourRandInd,capthick=1)
-				else:
-					ax.errorbar(rBinStackCentres,nbarjRandStack[k,:]/nbar,
-						yerr=sigmaRandStack[k,:]/nbar,
-						fmt=fmtRandInd,color=colourRandInd,capthick=1)
-			else:
-				if k == 0:
-					ax.errorbar(rBinStackCentres,nbarjIndividual[k,:]/nbar,
-						yerr=sigmaIndividual[k,:]/nbar,
-						label=labelRandIndividual,
-						fmt=fmtRandInd,color=colourRandInd,capthick=1)
-				else:
-					ax.errorbar(rBinStackCentres,nbarjIndividual[k,:]/nbar,
-						yerr=sigmaIndividual[k,:]/nbar,
-						fmt=fmtRandInd,color=colourRandInd,capthick=1)
-	if plotIndividualsMean and plotIndividuals:
-		nbarjRandMeanInd = stacking.weightedMean(nbarjIndividual,
-			sigmaIndividual,axis=0)
-		sigmaRandMeanInd = np.sqrt(stacking.weightedVariance(
-			nbarjIndividual,sigmaIndividual,axis=0))
-		ax.errorbar(rBinStackCentres,nbarjRandMeanInd/nbar,
-				yerr=sigmaRandMeanInd/nbar,
-				label='Mean of samples',
-				fmt='k:',color=colourRandInd,capthick=1)
-	if title is None:
-		title = 'Void Profiles, $R_{\\mathrm{eff}} > ' + \
-			str(rMin) + '\\mathrm{\\,Mpc}h^{-1}$, $' + \
-			scientificNotation(mMin) + ' < M/(M_{\\odot}h^{-1}) < ' + \
-			scientificNotation(mMax) + '$'
-	ax.set_title(title,fontsize=fontsize,fontfamily=fontname)
-	ax.set_xlabel('$R/R_{\\mathrm{eff}}$',fontsize=fontsize,fontfamily=fontname)
-	if not hideYLabels:
-		ax.set_ylabel('$\\rho/\\bar{\\rho}$',fontsize=fontsize,fontfamily=fontname)
-	ax.plot(rBinStackCentres,np.ones(rBinStackCentres.shape),
-		linestyle=guideStyle,color=guideColour)
-	ax.plot([1,1],ylim,linestyle=guideStyle,color=guideColour)
-	if includeLegend:
-		ax.legend(prop={"size":legendFontSize,"family":fontname},
-			frameon=frameon,loc=legendLoc)
-	ax.tick_params(axis='both',labelsize=fontsize)
-	ax.set_ylim(ylim)
-	if hideYLabels:
-		ax.set_yticklabels([])
-	plt.subplots_adjust(bottom=bottom,left=left)
-	if showImmediately:
-		plt.show()
+    nbarjRandStack,sigmaRandStack,nbar,rMin,mMin,mMax,
+    labelRand = "Unconstrained profiles (mean)",fmtRand = '-.',colourRand = 'k',
+    labelCon = "Average of 6 samples (constrained)",fmtCon = '-',colourCon = 'r',
+    labelRandIndividual = "Unconstrained profiles (individual)",fmtRandInd = ':',
+    colourRandInd = 'grey',numRandsToPlot = 3,ylim = [0,1.4],ax = None,
+    guideColour = 'grey',guideStyle='--',legendFontSize=12,fontname="serif",
+    fontsize=12,frameon=False,legendLoc = 'upper right',bottom=0.125,left=0.125,
+    includeLegend=True,showImmediately = True,title=None,hideYLabels = False,
+    nbarjIndividual = None,sigmaIndividual = None,plotIndividuals = False,
+    errorType = 'standard',errorAlpha=0.5,meanType = 'standard',
+    plotIndividualsMean = False):
+    nbarjMean = stacking.weightedMean(nbarjStack,sigmaStack,axis=0)
+    sigmaMean = np.sqrt(stacking.weightedVariance(nbarjStack,sigmaStack,axis=0))
+    if meanType == 'standard':
+        nbarjRandMean = stacking.weightedMean(nbarjRandStack,sigmaRandStack,axis=0)
+    elif meanType == 'scatter':
+        nbarjRandMean = stacking.weightedMean(nbarjIndividual,sigmaIndividual,axis=0)
+    else:
+        raise Exception('Invalid meanType')
+    if errorType == 'standard':
+        sigmaRandMean = np.sqrt(stacking.weightedVariance(nbarjRandStack,
+            sigmaRandStack,axis=0))
+    elif(errorType == 'scatter'):
+        sigmaRandMean = np.sqrt(stacking.weightedVariance(nbarjIndividual,
+            sigmaIndividual,axis=0))
+    else:
+        raise Exception('Invalid errorType')
+    # Plot mean profiles:
+    if ax is None:
+        fig, ax = plt.subplots()
+    ax.errorbar(rBinStackCentres,nbarjMean/nbar,
+        yerr=sigmaMean/nbar,label=labelCon,fmt=fmtCon,color=colourCon)
+    #ax.errorbar(rBinStackCentres,nbarjRandMean/nbar,
+    #	yerr=sigmaRandMean/nbar,label=labelRand,fmt=fmtRand,color=colourRand)
+    ax.plot(rBinStackCentres,nbarjRandMean/nbar,fmtRand,
+        label=labelRand,color=colourRand)
+    ax.fill_between(rBinStackCentres,y1 = (nbarjRandMean - sigmaRandMean)/nbar,y2 = (nbarjRandMean + sigmaRandMean)/nbar,alpha=errorAlpha,color = colourRand)
+    # Plot example individual profiles:
+    for k in range(0,np.min([numRandsToPlot,nbarjRandStack.shape[0]])):
+        if plotIndividuals:
+            if (nbarjIndividual is None):
+                if k == 0:
+                    ax.errorbar(rBinStackCentres,nbarjRandStack[k,:]/nbar,
+                        yerr=sigmaRandStack[k,:]/nbar,
+                        label=labelRandIndividual,
+                        fmt=fmtRandInd,color=colourRandInd,capthick=1)
+                else:
+                    ax.errorbar(rBinStackCentres,nbarjRandStack[k,:]/nbar,
+                        yerr=sigmaRandStack[k,:]/nbar,
+                        fmt=fmtRandInd,color=colourRandInd,capthick=1)
+            else:
+                if k == 0:
+                    ax.errorbar(rBinStackCentres,nbarjIndividual[k,:]/nbar,
+                        yerr=sigmaIndividual[k,:]/nbar,
+                        label=labelRandIndividual,
+                        fmt=fmtRandInd,color=colourRandInd,capthick=1)
+                else:
+                    ax.errorbar(rBinStackCentres,nbarjIndividual[k,:]/nbar,
+                        yerr=sigmaIndividual[k,:]/nbar,
+                        fmt=fmtRandInd,color=colourRandInd,capthick=1)
+    if plotIndividualsMean and plotIndividuals:
+        nbarjRandMeanInd = stacking.weightedMean(nbarjIndividual,
+            sigmaIndividual,axis=0)
+        sigmaRandMeanInd = np.sqrt(stacking.weightedVariance(
+            nbarjIndividual,sigmaIndividual,axis=0))
+        ax.errorbar(rBinStackCentres,nbarjRandMeanInd/nbar,
+                yerr=sigmaRandMeanInd/nbar,
+                label='Mean of samples',
+                fmt='k:',color=colourRandInd,capthick=1)
+    if title is None:
+        title = 'Void Profiles, $R_{\\mathrm{eff}} > ' + \
+            str(rMin) + '\\mathrm{\\,Mpc}h^{-1}$, $' + \
+            scientificNotation(mMin) + ' < M/(M_{\\odot}h^{-1}) < ' + \
+            scientificNotation(mMax) + '$'
+    ax.set_title(title,fontsize=fontsize,fontfamily=fontname)
+    ax.set_xlabel('$R/R_{\\mathrm{eff}}$',fontsize=fontsize,fontfamily=fontname)
+    if not hideYLabels:
+        ax.set_ylabel('$\\rho/\\bar{\\rho}$',fontsize=fontsize,fontfamily=fontname)
+    ax.plot(rBinStackCentres,np.ones(rBinStackCentres.shape),
+        linestyle=guideStyle,color=guideColour)
+    ax.plot([1,1],ylim,linestyle=guideStyle,color=guideColour)
+    if includeLegend:
+        ax.legend(prop={"size":legendFontSize,"family":fontname},
+            frameon=frameon,loc=legendLoc)
+    ax.tick_params(axis='both',labelsize=fontsize)
+    ax.set_ylim(ylim)
+    if hideYLabels:
+        ax.set_yticklabels([])
+    plt.subplots_adjust(bottom=bottom,left=left)
+    if showImmediately:
+        plt.show()
 
 
 # Plot halo count histograms
@@ -1522,7 +1527,7 @@ def plotCatalogueComparison(mass1,mass1err,name1,mass2,mass2err,name2,\
 # Plot a density slice from a density field
 def plotDensitySlice(ax,den,centre,width,boxsize,N,thickness,pslice,vmin,vmax,\
         cmap,markCentre=False,axesToShow = [0,2],losAxis=1,flip=False,\
-        flipud=False,fliplr=False,swapXZ = False):
+        flipud=False,fliplr=False,swapXZ = False,centreMarkerColour='r'):
     [left,right,bottom,top] = [centre[axesToShow[0]] - width/2,\
         centre[axesToShow[0]] + width/2,\
         centre[axesToShow[1]] - width/2,\
@@ -1555,7 +1560,7 @@ def plotDensitySlice(ax,den,centre,width,boxsize,N,thickness,pslice,vmin,vmax,\
         origin='lower')
     if markCentre:
         ax.scatter([centre[axesToShow[0]]],[centre[axesToShow[1]]],marker='x',\
-            c='r')
+            c=centreMarkerColour)
     return [left,right,bottom,top,indLow,indUpp]
 
 # Compare two density slices from different density fields.
@@ -1566,15 +1571,21 @@ def plotDensityComparison(denCompareLeft,denCompareRight,clusterNum = 6,N = 256,
         width = 200,centre1 = [0,0,0],centre2 = [0,0,0],thickness = 8,\
         vmin = 1/70,vmax = 70,pslice1 = None,pslice2 = None,\
         title = "BORG PM vs GADGET2 simulation",markCentre=False,\
-        losAxis = 1,flip=False,invertAxis=False,flipCentre=False,\
-        invertCentre = False,flipud=False,fliplr=False,galOffset = [0,0,0],\
-        swapXZ = False,gal_position=None,returnAx = False):
+        losAxis = 1,flipLeft=False,flipRight=False,\
+        invertAxisLeft=False,invertAxisRight=False,\
+        flipCentreLeft=False,flipCentreRight=False,\
+        invertCentre = False,galOffset = [0,0,0],\
+        swapXZLeft = False,swapXZRight = False,gal_position=None,\
+        returnAx = False,flipudLeft=False,fliplrLeft=False,\
+        flipudRight=False,fliplrRight=False):
     sort = {0:[1,2],1:[0,2],2:[0,1]}
-    if flipCentre:
+    if flipCentreLeft:
         centreUse1 = np.flipud(centre1)
-        centreUse2 = np.flipud(centre2)
     else:
         centreUse1 = centre1
+    if flipCentreRight:
+        centreUse2 = np.flipud(centre2)
+    else:
         centreUse2 = centre2
     axLabels = ['X','Y','Z']
     axesToShow = sort[losAxis]
@@ -1582,13 +1593,10 @@ def plotDensityComparison(denCompareLeft,denCompareRight,clusterNum = 6,N = 256,
         pslice1 = centreUse1[losAxis]
     if pslice2 is None:
         pslice2 = centreUse2[losAxis]
-    if invertAxis:
+    if invertAxisLeft:
         pslice1 = - pslice1
+    if invertAxisRight:
         pslice2 = - pslice2
-    if type(flipud) == bool:
-        flipud = [flipud,flipud]
-    if type(fliplr) == bool:
-        fliplr = [fliplr,fliplr]
     if showDiff:
         fig, ax = plt.subplots(1,3,figsize=(textwidth,0.5*textwidth))
     else:
@@ -1596,11 +1604,12 @@ def plotDensityComparison(denCompareLeft,denCompareRight,clusterNum = 6,N = 256,
     [left1,right1,bottom1,top1,indLow1,indUpp1] = plotDensitySlice(ax[0],
         denCompareLeft,centreUse1,width,boxsize,N,thickness,pslice1,vmin,vmax,\
         cmap,markCentre=markCentre,axesToShow=axesToShow,losAxis=losAxis,\
-        flip = flip,flipud=flipud[0],fliplr=fliplr[0],swapXZ=swapXZ)
+        flip = flipLeft,flipud=flipudLeft,fliplr=fliplrLeft,swapXZ=swapXZLeft)
     [left2,right2,bottom2,top2,indLow2,indUpp2] = plotDensitySlice(ax[1],
         denCompareRight,centreUse2,width,boxsize,N,thickness,pslice2,vmin,vmax,\
         cmap,markCentre=markCentre,axesToShow=axesToShow,losAxis=losAxis,\
-        flip = flip,flipud=flipud[1],fliplr=fliplr[1],swapXZ=swapXZ)
+        flip = flipRight,flipud=flipudRight,fliplr=fliplrRight,\
+        swapXZ=swapXZRight)
     if showDiff:
         ax[2].imshow(np.mean(denCompareLeft[:,indLow1:indUpp1,:],1)/ \
             np.mean(denCompareRight[:,indLow2:indUpp2,:],1),\
@@ -1652,7 +1661,6 @@ def plotDensityComparison(denCompareLeft,denCompareRight,clusterNum = 6,N = 256,
     #plt.savefig(textRight + '_lowres.pdf')
     #plt.suptitle("BORG Posterior vs Simulation Density (low-res)",fontsize=12,fontfamily='serif')
     #plt.suptitle("BORG Posterior vs Simulation Density",fontsize=12,fontfamily='serif')
-    #plt.suptitle("BORG Posterior: Ensemble vs Single Realisation",fontsize=12,fontfamily='serif')
     plt.suptitle(title,fontsize=12,fontfamily='serif')
     if savename is not None:
         plt.savefig(savename)
@@ -2066,13 +2074,27 @@ def plotPPTProfileProgressive(expectedLine,realisedLine,clusterName=None,\
     if returnAx:
         return ax
 
+def dereferenceAxis(ax,i,j,nRows,nCols):
+    if nRows == 1:
+        if nCols == 1:
+            axij = ax
+        else:
+            axij = ax[j]
+    else:
+        if nCols == 1:
+            axij = ax[i]
+        else:
+            axij = ax[i,j]
+    return axij
+
 
 # Compare 1D dark matter density profiles for a set of clusters.
 def compareDensities(rBins,densities,clusterNames,labels = None,styles= None,\
         fontsize = 8, colors = None,fontfamily = "serif",ylabel="$\\rho/\\bar{\\rho}$",\
         xlabel = '$r$ $[\\mathrm{Mpc}h^{-1}]$',nRows=3,nCols=3,ylim=[1,500],\
         title = "BORG vs Simulation Density",wspace=0,hspace=0.2,show=True,\
-        savename = None):
+        savename = None,ylabelRow=None,xlabelCol = None,legPos = [1,2],\
+        stdErrorDensities = None):
     if labels is None:
         labels = ["Line " + str(k) for k in range(0,len(densities))]
     if colors is None:
@@ -2085,38 +2107,51 @@ def compareDensities(rBins,densities,clusterNames,labels = None,styles= None,\
             styles = ['-',':','--','-.']
         else:
             styles = ['-' for k in range(0,len(densities))]
+    if ylabelRow is None:
+        ylabelRow = int(nRows/2)
+    if xlabelCol is None:
+        xlabelCol = int(nCols/2)
     fig, ax = plt.subplots(nRows,nCols)
     for l in range(0,nRows*nCols):
         i = int(l/nCols)
         j = l - nRows*i
+        axij = dereferenceAxis(ax,i,j,nRows,nCols)
         for m in range(0,len(densities)):
-            nz = np.where(densities[m][:,1] > 0)[0]
-            ax[i,j].semilogy(binCentres(rBins)[nz],densities[m][nz,l],color=colors[m],\
-                linestyle = styles[m],label=labels[m])
-        ax[i,j].set_title(clusterNames[l][0],fontsize=fontsize,fontfamily=fontfamily)
-        if j > 0:
-            ax[i,j].yaxis.label.set_visible(False)
-            ax[i,j].yaxis.set_major_formatter(NullFormatter())
-            ax[i,j].yaxis.set_minor_formatter(NullFormatter())
-        else:
-            ax[i,j].set_ylabel(ylabel)
-        if i < nCols - 1:
-            ax[i,j].xaxis.label.set_visible(False)
-            ax[i,j].xaxis.set_major_formatter(NullFormatter())
-            ax[i,j].xaxis.set_minor_formatter(NullFormatter())
-        else:
-            ax[i,j].set_xlabel(xlabel)
-        ax[i,j].set_ylim(ylim)
+            nz = np.where(densities[m][:,l] > 0)[0]
+            axij.semilogy(binCentres(rBins)[nz],densities[m][nz,l],\
+                color=colors[m],linestyle = styles[m],label=labels[m])
+            if stdErrorDensities is not None:
+                axij.fill_between(binCentres(rBins)[nz],\
+                    densities[m][nz,l] - stdErrorDensities[m][nz,l],\
+                    densities[m][nz,l] + stdErrorDensities[m][nz,l],alpha=0.5,\
+                    color=colors[m])
+        axij.set_title(clusterNames[l],fontsize=fontsize,\
+            fontfamily=fontfamily)
+        formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim,\
+            nCols = nCols)
     plt.subplots_adjust(wspace=wspace,hspace=hspace)
-    ax[1,2].legend(prop={"size":fontsize,"family":fontfamily},frameon=False)
+    if np.any(legPos >= [nRows,nCols]):
+        axij = dereferenceAxis(ax,0,0,nRows,nCols)
+    else:
+        axij = dereferenceAxis(ax,legPos[0],legPos[1],nRows,nCols)
+    axij.legend(prop={"size":fontsize,"family":fontfamily},frameon=False)
     plt.suptitle(title)
     if savename is not None:
         plt.savefig(savename)
     if show:
         plt.show()
 
+def computeMeanHMF(haloMasses,massLower=1e12,massUpper = 1e16,nBins=31):
+    nSamples = len(haloMasses)
+    massBins = 10**np.linspace(np.log10(massLower),np.log10(massUpper),nBins)
+    binLists = [plot_utilities.binValues(hnmasses,massBins) \
+        for hnmasses in haloMasses]
+    sigmaBins = np.std([bins[1] for bins in binLists],0)\
+        /np.sqrt(len(haloMasses))
+    noInBins = np.mean([bins[1] for bins in binLists],0)
+    return [noInBins,sigmaBins]
 
-def plotAverageHMF(haloMasses,snap,\
+def plotAverageHMF(haloMasses,boxsize,h=0.6766,omegaM0 = 0.3111,\
         massLower=1e12,massUpper = 1e16,nBins=31,ylim=[1e-1,1e5],\
         ax=None,Delta=200,marker='x',color=None,\
         linestyle='',tmfcolor='r',tmfstyle=':',mass_function="Tinker",\
@@ -2128,12 +2163,12 @@ def plotAverageHMF(haloMasses,snap,\
         xlabel="Mass bin centre [$M_{\odot}h^{-1}$]",\
         ylabel="Number of Halos",title="Halo Mass function",\
         legendLoc='lower left',bbox_to_anchor=None,\
-        savename = None,showTheory=True,binError = "standard"):
+        savename = None,showTheory=True,binError = "poisson",\
+        sigma8=0.8102,delta_wrt='SOCritical',\
+        errorLabel = None,density=False):
     [dndm,m] = cosmology.TMF_from_hmf(massLower,massUpper,\
-        h=snap.properties['h'],
-        Om0=snap.properties['omegaM0'],Delta=200,
-        delta_wrt='SOCritical',mass_function=mass_function)
-    boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+        h=h,Om0=omegaM0,Delta=Delta,delta_wrt=delta_wrt,\
+        mass_function=mass_function,sigma8=sigma8)
     if volSim is None:
         volSim = boxsize**3
     nSamples = len(haloMasses)
@@ -2162,18 +2197,27 @@ def plotAverageHMF(haloMasses,snap,\
         raise Exception("Unknown bin error requested.")
     massBinCentres = plot_utilities.binCentres(massBins)
     bounds = scipy.stats.poisson(n*volSim*nSamples).interval(poisson_interval)
+    if density:
+        noInBins /= volSim
+        sigmaBins /= volSim
+        n /= volSim
     if ax is None:
         fig, ax = plt.subplots()
-    ax.errorbar(massBinCentres,noInBins,yerr=sigmaBins,\
+    h1 = ax.errorbar(massBinCentres,noInBins,yerr=sigmaBins,\
         marker=marker,linestyle=linestyle,label=label,color=color)
     if showTheory:
-        ax.plot(massBinCentres,n*volSim,tmfstyle,label=labelLine,\
+        h2 = ax.plot(massBinCentres,n*volSim,tmfstyle,label=labelLine,\
             color=tmfcolor)
-        ax.fill_between(massBinCentres,
+        if errorLabel is None:
+            errorLabel = ("%.2g" % (100*poisson_interval)) + \
+                '% Poisson interval'
+        h3 = ax.fill_between(massBinCentres,
             bounds[0]/nSamples,bounds[1]/nSamples,
             facecolor=tmfcolor,alpha=fill_alpha,
-            interpolate=True,label=("%.2g" % (100*poisson_interval)) + \
-            '% Poisson interval')
+            interpolate=True,label=errorLabel)
+    else:
+        h2 = None
+        h3 = None
     if showLegend:
         ax.legend(prop={"size":legendFontsize,"family":font},
         loc=legendLoc,frameon=False,bbox_to_anchor=bbox_to_anchor)
@@ -2194,7 +2238,465 @@ def plotAverageHMF(haloMasses,snap,\
     if show:
         plt.show()
     if returnAx:
-        return ax
+        return [ax,h1,h2,h3]
+
+def plotHMFAMFComparison(constrainedHaloMasses512Old,deltaListMeanOld,\
+        deltaListErrorOld,comparableHaloMassesOld,\
+        constrainedAntihaloMasses512Old,comparableAntihaloMassesOld,\
+        constrainedHaloMasses512New,deltaListMeanNew,deltaListErrorNew,\
+        comparableHaloMassesNew,constrainedAntihaloMasses512New,\
+        comparableAntihaloMassesNew,referenceSnap,referenceSnapOld,\
+        savename = None,ylabelStartOld = 'Old reconstruction',\
+        ylabelStartNew = 'New reconstruction',fontsize=10,legendFontsize=8,\
+        textwidth=7.1014,nMassBins = 11,mLower = 1e14,\
+        mUpper = 3e15,mass_function = 'Tinker',showTheory=False,\
+        xlim = (1.5e13,3e15),ylim = (1e-1,1e2),\
+        legendLoc = 'upper right',showResLimit = False,density = True,\
+        useRandom = True,boxsize=677.7,h=0.6766,omegaM0 = 0.3111,\
+        volSim=4*np.pi*135**3/3,show=True,poisson_interval=0.95,\
+        haloType = ['SOCritical','SOCritical'],binError="poisson",\
+        sigma8List = [0.8288,0.8102],font='serif'):
+    if volSim is None:
+        volSim = boxsize**3
+    if density:
+        ylimHMF = np.array(ylim)/volSim
+        factor = 1.0/volSim
+    else:
+        ylimHMF = np.array(ylim)
+        factor = 1.0
+    massBinCentres = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),\
+        nMassBins))
+    fig, ax = plt.subplots(2,2,figsize=(textwidth,textwidth))
+    for i in range(0,2):
+        if i == 0:
+            # Top row old run (PM10):
+            nSamples = len(comparableHaloMassesOld)
+            hmfUnderdense = [computeMeanHMF(hmasses,massLower = mLower,\
+                massUpper = mUpper,nBins = nMassBins) \
+                for hmasses in comparableHaloMassesOld]
+            hmfUnderdensePoisson = np.array(scipy.stats.poisson(\
+                np.sum(np.array([hmf[0] \
+                for hmf in hmfUnderdense]),0)).interval(poisson_interval))/\
+                nSamples
+            hmfUnderdenseMean = np.mean(np.array([hmf[0] \
+                for hmf in hmfUnderdense]),0)
+            massBins = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),\
+                nMassBins))
+            massBinCentres = plot.binCentres(massBins)
+            amfUnderdense = [computeMeanHMF(hmasses,massLower = mLower,\
+                massUpper = mUpper,nBins = nMassBins) \
+                for hmasses in comparableAntihaloMassesOld]
+            amfUnderdensePoisson = np.array(scipy.stats.poisson(\
+                np.sum(np.array([hmf[0] \
+                for hmf in amfUnderdense]),0)).interval(poisson_interval))/\
+                nSamples
+            amfUnderdenseMean = np.mean(np.array([hmf[0] \
+                for hmf in amfUnderdense]),0)
+            massBins = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),\
+                nMassBins))
+            massBinCentres = plot.binCentres(massBins)
+            ylabelStart = ylabelStartOld
+            constrainedHaloMasses512 = constrainedHaloMasses512Old
+            constrainedAntihaloMasses512 = constrainedAntihaloMasses512Old
+            deltaListMean = deltaListMeanOld
+            deltaListError = deltaListErrorOld
+        if i == 1:
+            # Bottom row new run (COLA 20):
+            nSamples = len(comparableHaloMassesNew)
+            hmfUnderdense = [computeMeanHMF(hmasses,massLower = mLower,\
+                massUpper = mUpper,nBins = nMassBins) \
+                for hmasses in comparableHaloMassesNew]
+            hmfUnderdensePoisson = np.array(scipy.stats.poisson(\
+                np.sum(np.array([hmf[0] \
+                for hmf in hmfUnderdense]),0)).interval(poisson_interval))/\
+                nSamples
+            hmfUnderdenseMean = np.mean(np.array([hmf[0] \
+                for hmf in hmfUnderdense]),0)
+            massBins = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),\
+                nMassBins))
+            massBinCentres = plot.binCentres(massBins)
+            amfUnderdense = [computeMeanHMF(hmasses,massLower = mLower,\
+                massUpper = mUpper,nBins = nMassBins) \
+                for hmasses in comparableAntihaloMassesNew]
+            amfUnderdensePoisson = np.array(scipy.stats.poisson(\
+                np.sum(np.array([hmf[0] \
+                for hmf in amfUnderdense]),0)).interval(poisson_interval))/\
+                nSamples
+            amfUnderdenseMean = np.mean(np.array([hmf[0] \
+                for hmf in amfUnderdense]),0)
+            massBins = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),\
+                nMassBins))
+            massBinCentres = plot.binCentres(massBins)
+            ylabelStart = ylabelStartNew
+            constrainedHaloMasses512 = constrainedHaloMasses512New
+            constrainedAntihaloMasses512 = constrainedAntihaloMasses512New
+            deltaListMean = deltaListMeanNew
+            deltaListError = deltaListErrorNew
+        for j in range(0,2):
+            axij = ax[i,j]
+            if i == 0 and j == 1:
+                theoryLabel = 'Tinker Mass Function \n prediction'
+            else:
+                theoryLabel = None
+            if density:
+                ylabel = ylabelStart + \
+                    '\nNumber Density ($h^{3}\\mathrm{Mpc}^{-3}$)'
+            else:
+                ylabel = ylabelStart + '\nNumber of Halos or Antihalos'
+            if j == 0:
+                [axij,h1,h2,h3] = plotAverageHMF(constrainedHaloMasses512,\
+                    boxsize,h=h,omegaM0=omegaM0,\
+                    volSim = volSim,show=False,ax=axij,\
+                    labelLine = None,\
+                    label = "Constrained",delta_wrt=haloType[i],\
+                    showTheory=showTheory,ylim=ylimHMF,\
+                    mass_function=mass_function,\
+                    showLegend=False,returnAx = True,\
+                    tmfcolor=seabornColormap[1],\
+                    title = "Halo mass function",fill_alpha=0.25,\
+                    errorLabel='Tinker Mass Function',binError=binError,\
+                    ylabel = ylabel,xlabel = 'Mass ($M_{\\odot}h^{-1}$)',\
+                    fontsize=fontsize,labelRight=False,sigma8=sigma8List[i],\
+                    nBins=nMassBins,massLower=mLower,massUpper = mUpper,\
+                    density=density,poisson_interval=poisson_interval)
+                h4 = axij.fill_between(massBinCentres,\
+                    hmfUnderdensePoisson[0]*factor,\
+                    hmfUnderdensePoisson[1]*factor,\
+                    label = 'Unconstrained, \n' + \
+                    '$' + ("%.2g" % (deltaListMean - deltaListError)) + \
+                    ' \\leq \\delta < ' + \
+                    ("%.2g" % (deltaListMean + deltaListError)) + \
+                    '$',color=seabornColormap[0],alpha=0.5)
+                if showResLimit:
+                    h5 = axij.axvline(mUnitList[i]*100*8,linestyle=':',\
+                        color='grey',label = 'Resolution limit ($256^3$)')
+                    h6 = axij.axvline(mUnitList[i]*100,linestyle='--',\
+                        color='grey',label = 'Resolution limit ($512^3$)')
+                else:
+                    h5 = None
+                    h6 = None
+                h7 = axij.plot(massBinCentres,hmfUnderdenseMean*factor,\
+                    linestyle=':',color=seabornColormap[0])
+                axij.set_xlim(xlim)
+                axij.set_ylim(ylimHMF)
+                if i == 0:
+                    handleList = [h1,h4]
+                    if showResLimit and j == 0:
+                        handleList.append(h5)
+                    if j == 1 and showTheory:
+                        handleList.append(h3)
+                else:
+                    handleList = [h1,h4]
+                    if showResLimit and j == 0:
+                        handleList.append(h6)
+                if j == 1:
+                    axij.legend(handles = handleList,\
+                        prop={"size":legendFontsize,"family":font},
+                                    loc=legendLoc,frameon=False,\
+                                    bbox_to_anchor=bbox_to_anchor)
+            else:
+                [axij,h1,h2,h3] = plotAverageHMF(\
+                    constrainedAntihaloMasses512,\
+                    boxsize,h=h,omegaM0=omegaM0,\
+                    volSim = volSim,show=False,ax=axij,\
+                    labelLine = None,mass_function=mass_function,\
+                    label = "Constrained",delta_wrt=haloType[i],\
+                    showTheory=showTheory,ylim=ylimHMF,\
+                    ylabel=ylabel,xlabel = 'Mass ($M_{\\odot}h^{-1}$)',\
+                    showLegend=False,returnAx = True,\
+                    tmfcolor=seabornColormap[1],\
+                    title = "Antihalo mass function",fill_alpha=0.25,\
+                    errorLabel='Tinker Mass Function',binError=binError,\
+                    fontsize=fontsize,labelRight=False,sigma8=sigma8List[i],\
+                    nBins=nMassBins,massLower=mLower,massUpper = mUpper,\
+                    density=density,poisson_interval=poisson_interval)
+                h4 = axij.fill_between(massBinCentres,\
+                    amfUnderdensePoisson[0]*factor,\
+                    amfUnderdensePoisson[1]*factor,\
+                    label = 'Unconstrained, \n' + \
+                    '($' + ("%.2g" % (deltaListMean - deltaListError)) + \
+                    ' \\leq \\delta < ' + \
+                    ("%.2g" % (deltaListMean + deltaListError)) + '$)',\
+                    color=seabornColormap[0],alpha=0.5)
+                if showResLimit:
+                    h5 = axij.axvline(mUnitList[i]*100*8,linestyle=':',\
+                        color='grey',\
+                        label = 'Resolution limit ($256^3$)')
+                    h6 = axij.axvline(mUnitList[i]*100,linestyle='--',\
+                        color='grey',\
+                        label = 'Resolution limit ($512^3$)')
+                h7 = axij.plot(massBinCentres,amfUnderdenseMean*factor,\
+                    linestyle=':',color=seabornColormap[0])
+                axij.set_xlim(xlim)
+                axij.set_ylim(ylimHMF)
+                if i == 0:
+                    handleList = [h1,h4]
+                    if showResLimit and j == 0:
+                        handleList.append(h5)
+                    if j == 1 and showTheory:
+                        handleList.append(h3)
+                else:
+                    handleList = [h1,h4]
+                    if showResLimit and j == 0:
+                        handleList.append(h6)
+                if j == 1:
+                    axij.legend(handles = handleList,\
+                        prop={"size":legendFontsize,"family":font},
+                                    loc=legendLoc,frameon=False,\
+                                    bbox_to_anchor=None)
+            if i == 0:
+                axij.xaxis.label.set_visible(False)
+                axij.xaxis.set_major_formatter(NullFormatter())
+                axij.xaxis.set_minor_formatter(NullFormatter())
+            if j == 0:
+                axij.xaxis.get_major_ticks()[-2].set_visible(False)
+            if i == 1:
+                axij.title.set_visible(False)
+                axij.yaxis.get_major_ticks()[-2].set_visible(False)
+            if j == 1:
+                axij.yaxis.label.set_visible(False)
+                axij.yaxis.set_major_formatter(NullFormatter())
+                axij.yaxis.set_minor_formatter(NullFormatter())
+    plt.subplots_adjust(wspace=0.0,hspace=0.0)
+    if savename is not None:
+        plt.savefig(savename)
+    if show:
+        plt.show()
+
+def plotHMFAMFUnderdenseComparison(\
+        constrainedHaloMasses512,deltaListMean,deltaListError,\
+        comparableHaloMasses,constrainedAntihaloMasses512,\
+        comparableAntihaloMasses,centralHalos,centralAntihalos,\
+        centralHaloMasses,centralAntihaloMasses,\
+        savename = None,fontsize=10,legendFontsize=8,\
+        textwidth=7.1014,nMassBins = 11,mLower = 1e14,\
+        mUpper = 3e15,mass_function = 'Tinker',showTheory=False,\
+        xlim = (1.5e13,3e15),ylim = (1e-1,1e2),\
+        legendLoc = 'upper right',showResLimit = False,density = True,\
+        useRandom = True,boxsize=677.7,h=0.6766,omegaM0 = 0.3111,\
+        volSim=4*np.pi*135**3/3,show=True,poisson_interval=0.95,\
+        haloType = 'SOCritical',binError="poisson",\
+        sigma8=0.8102,font='serif',mUnit=None,resolution=512,\
+        meanDensityMethod="selection",meanThreshold=0.02):
+    fig, ax = plt.subplots(1,2,figsize=(textwidth,0.5*textwidth))
+    massBins = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),\
+        nMassBins))
+    massBinCentres = plot.binCentres(massBins)
+    if mUnit is None:
+        mUnit = omegaM0*2.7754e11*(boxsize/resolution)**3
+    if density:
+        ylimHMF = np.array(ylim)/volSim
+        factor = 1.0/volSim
+    else:
+        ylimHMF = np.array(ylim)
+        factor = 1.0
+    nSamples = len(comparableHaloMasses)
+    # Bottom row new run (COLA 20):
+    hmfUnderdense = [computeMeanHMF(hmasses,massLower = mLower,\
+        massUpper = mUpper,nBins = nMassBins) \
+        for hmasses in comparableHaloMasses]
+    hmfUnderdensePoisson = np.array(scipy.stats.poisson(\
+        np.sum(np.array([hmf[0] \
+        for hmf in hmfUnderdense]),0)).interval(poisson_interval))/\
+        nSamples
+    hmfUnderdenseMean = np.mean(np.array([hmf[0] \
+        for hmf in hmfUnderdense]),0)
+    massBins = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),\
+        nMassBins))
+    massBinCentres = plot.binCentres(massBins)
+    amfUnderdense = [computeMeanHMF(hmasses,massLower = mLower,\
+        massUpper = mUpper,nBins = nMassBins) \
+        for hmasses in comparableAntihaloMasses]
+    amfUnderdensePoisson = np.array(scipy.stats.poisson(\
+        np.sum(np.array([hmf[0] \
+        for hmf in amfUnderdense]),0)).interval(poisson_interval))/\
+        nSamples
+    amfUnderdenseMean = np.mean(np.array([hmf[0] \
+        for hmf in amfUnderdense]),0)
+    massBins = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),\
+        nMassBins))
+    massBinCentres = plot.binCentres(massBins)
+    for j in range(0,2):
+        axij = ax[j]
+        if j == 1:
+            theoryLabel = 'Tinker Mass Function \n prediction'
+        else:
+            theoryLabel = None
+        if j == 0:
+            [axij,h1,h2,h3] = plotAverageHMF(constrainedHaloMasses512,\
+                boxsize,h=h,omegaM0=omegaM0,\
+                volSim = volSim,show=False,ax=axij,\
+                labelLine = None,\
+                label = "Constrained Simulation",delta_wrt=haloType,\
+                showTheory=showTheory,ylim=ylimHMF,mass_function=mass_function,\
+                showLegend=False,returnAx = True,tmfcolor=seabornColormap[1],\
+                title = "Halo mass function",fill_alpha=0.25,\
+                errorLabel='Tinker Mass Function',binError=binError,\
+                ylabel = 'Number density ' + \
+                '($h^3\\mathrm{Mpc}^{-3}$)',\
+                fontsize=fontsize,labelRight=False,sigma8=sigma8,\
+                nBins=nMassBins,massLower=mLower,massUpper = mUpper,\
+                density = density,xlabel='Mass ($M_{\\odot}h^{-1}$)')
+            if useRandom:
+                if meanDensityMethod == "central":
+                    hmfTheoryMean = computeMeanHMF(centralHaloMasses,\
+                        massLower = mLower,massUpper = mUpper,nBins = nMassBins)
+                    hmfTheoryPoisson = np.array(scipy.stats.poisson(\
+                        hmfTheoryMean[0]).interval(poisson_interval))
+                else:
+                    hmfTheory = [computeMeanHMF(masses,\
+                        massLower = mLower,massUpper = mUpper,\
+                        nBins = nMassBins) \
+                        for masses in centralHaloMasses]
+                    hmfTheoryMean = np.mean(np.array([hmf[0] \
+                        for hmf in hmfTheory]),0)
+                    hmfTheoryPoisson = np.array(scipy.stats.poisson(\
+                        np.sum(np.array([hmf[0] \
+                        for hmf in hmfTheory]),0)).interval(poisson_interval))/\
+                        len(centralHaloMasses)
+                h3 = axij.fill_between(massBinCentres,\
+                    hmfTheoryPoisson[0]*factor,\
+                    hmfTheoryPoisson[1]*factor,\
+                    label = 'Unconstrained, \n (random density)',\
+                    color=seabornColormap[1],alpha=0.5)
+            h4 = axij.fill_between(massBinCentres,\
+                hmfUnderdensePoisson[0]*factor,\
+                hmfUnderdensePoisson[1]*factor,\
+                label = 'Unconstrained HMFs, \n' + \
+                '($' + ("%.2g" % (deltaListMean - deltaListError)) + \
+                ' \\leq \\delta < ' + \
+                ("%.2g" % (deltaListMean + deltaListError)) + \
+                '$)',color=seabornColormap[0],alpha=0.5)
+            if showResLimit:
+                h5 = axij.axvline(mUnit*100*8,linestyle=':',\
+                    color='grey',label = 'Resolution limit ($256^3$)')
+                h6 = axij.axvline(mUnit*100,linestyle='--',\
+                    color='grey',label = 'Resolution limit ($512^3$)')
+            else:
+                h5 = None
+                h6 = None
+            h7 = axij.plot(massBinCentres,hmfUnderdenseMean*factor,\
+                linestyle=':',color=seabornColormap[0])
+            axij.set_xlim(xlim)
+            axij.set_ylim(ylimHMF)
+            handleList = [h1,h4]
+            if showResLimit and j == 0:
+                handleList.append(h5)
+            if j == 1 and (showTheory or density):
+                handleList.append(h3)
+            else:
+                handleList = [h1,h4]
+                if showResLimit and j == 0:
+                    handleList.append(h6)
+        else:
+            [axij,h1,h2,h3] = plotAverageHMF(constrainedAntihaloMasses512,\
+                boxsize,h=h,omegaM0=omegaM0,\
+                volSim = volSim,show=False,ax=axij,\
+                labelLine = None,mass_function=mass_function,\
+                label = "Constrained Simulation",delta_wrt=haloType,\
+                showTheory=showTheory,ylim=ylimHMF,\
+                ylabel='Number of Antihalos',\
+                showLegend=False,returnAx = True,tmfcolor=seabornColormap[1],\
+                title = "Antihalo mass function",fill_alpha=0.25,\
+                errorLabel='Tinker Mass Function',binError=binError,\
+                fontsize=fontsize,labelRight=False,sigma8=sigma8,\
+                nBins=nMassBins,massLower=mLower,massUpper = mUpper,\
+                density=density,xlabel='Mass ($M_{\\odot}h^{-1}$)')
+            if useRandom:
+                if meanDensityMethod == "central":
+                    amfTheoryMean = computeMeanHMF(centralAntihaloMasses,\
+                        massLower = mLower,massUpper = mUpper,nBins = nMassBins)
+                    amfTheoryPoisson = np.array(scipy.stats.poisson(\
+                        amfTheoryMean[0]).interval(poisson_interval))
+                else:
+                    amfTheory = [computeMeanHMF(masses,\
+                        massLower = mLower,massUpper = mUpper,\
+                        nBins = nMassBins) \
+                        for masses in centralAntihaloMasses]
+                    amfTheoryMean = np.mean(np.array([amf[0] \
+                        for amf in amfTheory]),0)
+                    amfTheoryPoisson = np.array(scipy.stats.poisson(\
+                        np.sum(np.array([amf[0] \
+                        for amf in amfTheory]),0)).interval(poisson_interval))/\
+                        len(centralAntihaloMasses)
+                h3 = axij.fill_between(massBinCentres,\
+                    amfTheoryPoisson[0]*factor,\
+                    amfTheoryPoisson[1]*factor,\
+                    label = 'Unconstrained, \n (random density)',\
+                    color=seabornColormap[1],alpha=0.5)
+            h4 = axij.fill_between(massBinCentres,\
+                amfUnderdensePoisson[0]*factor,\
+                amfUnderdensePoisson[1]*factor,\
+                label = 'Unconstrained, \n' + \
+                '($' + ("%.2g" % (deltaListMean - deltaListError)) + \
+                ' \\leq \\delta < ' + \
+                ("%.2g" % (deltaListMean + deltaListError)) + '$)',\
+                color=seabornColormap[0],alpha=0.5)
+            if showResLimit:
+                h5 = axij.axvline(mUnit*100*8,linestyle=':',\
+                    color='grey',label = 'Resolution limit ($256^3$)')
+                h6 = axij.axvline(mUnit*100,linestyle='--',\
+                    color='grey',label = 'Resolution limit ($512^3$)')
+            h7 = axij.plot(massBinCentres,amfUnderdenseMean*factor,\
+                linestyle=':',color=seabornColormap[0])
+            axij.set_xlim(xlim)
+            axij.set_ylim(ylimHMF)
+            handleList = [h1,h4]
+            if showResLimit and j == 0:
+                handleList.append(h5)
+            if j == 1 and (showTheory or density):
+                handleList.append(h3)
+            else:
+                handleList = [h1,h4]
+                if showResLimit and j == 0:
+                    handleList.append(h6)
+            axij.legend(handles = handleList,\
+                prop={"size":legendFontsize,"family":font},
+                            loc=legendLoc,frameon=False)
+        if j == 0:
+            axij.xaxis.get_major_ticks()[-2].set_visible(False)
+        if j == 1:
+            axij.yaxis.label.set_visible(False)
+            axij.yaxis.set_major_formatter(NullFormatter())
+            axij.yaxis.set_minor_formatter(NullFormatter())
+    plt.subplots_adjust(wspace=0.0,hspace=0.0)
+    if savename is not None:
+        plt.savefig(figuresFolder + "hmf_amf_underdense_comparison.pdf")
+    if show:
+        plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

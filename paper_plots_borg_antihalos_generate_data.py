@@ -1,7 +1,7 @@
 #-------------------------------------------------------------------------------
 # CONFIGURATION
 from void_analysis import plot, snapedit, tools, simulation_tools, halos
-from void_analysis import stacking, real_clusters, survey
+from void_analysis import stacking, real_clusters
 from void_analysis.tools import loadOrRecompute
 from void_analysis.simulation_tools import ngPerLBin, ngBias
 from void_analysis.simulation_tools import biasNew, biasOld
@@ -13,8 +13,7 @@ import astropy
 import pickle
 import gc
 import copy
-import h5py
-import healpy
+
 
 # KE correction used to compute magnitudes. Used by PPTs:
 def keCorr(z,fit = [-1.456552772320231,-0.7687913554110967]):
@@ -22,8 +21,7 @@ def keCorr(z,fit = [-1.456552772320231,-0.7687913554110967]):
     return 2.9*z
 
 # Convert per-voxel to per-healpix patch average galaxy counts:
-def getAllNgsToHealpix(ngList,hpIndices,sampleList,sampleFolder,nside,\
-        recomputeData=False):
+def getAllNgsToHealpix(ngList,hpIndices,sampleList,sampleFolder,nside):
     return [loadOrRecompute(sampleFolder + "sample" + str(sampleList[k]) + \
         "/ngHP.p",tools.getCountsInHealpixSlices,ngList[k],hpIndices,\
         nside=nside,_recomputeData=recomputeData) \
@@ -38,8 +36,7 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
         mmin = 0.0,mmax = 12.5,recomputeData = False,rBinMin = 0.1,\
         rBinMax = 20,abell_nums = [426,2147,1656,3627,3571,548,2197,2063,1367],\
         nside = 4,nRadialSlices=10,rmax=600,tmppFile = "2mpp_data/2MPP.txt",\
-        reductions = 4,iterations = 20,verbose=True,hpIndices=None,\
-        centreMethod="density"):
+        reductions = 4,iterations = 20,verbose=True,hpIndices=None):
     # Parameters:
         # nBins - Number of radial bins for galaxy counts in PPT
         # nClust - Number of clusters to do PPTs for.
@@ -117,13 +114,13 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
         Mstarh,keCorr = keCorr,mmin=mmin,numericalIntegration=True,\
         mmax=mmax,splitApparent=True,splitAbsolute=True,returnComponents=True,\
         _recomputeData=recomputeData)
+    # Obtain galaxy counts:
+    galaxyCountExp = np.zeros((nBins,nClust,nMagBins))
+    galaxyCountsRobustAll = np.zeros((nBins,nClust,nsamples,nMagBins))
     # Obtain properties:
     rBins = np.linspace(rBinMin,rBinMax,nBins+1)
     nsamples = len(snapNumList)
     wrappedPos = snapedit.wrap(clusterLoc + boxsize/2,boxsize)
-    # Obtain galaxy counts:
-    galaxyCountExp = np.zeros((nBins,nClust,nMagBins))
-    galaxyCountsRobustAll = np.zeros((nBins,nClust,nsamples,nMagBins))
     # Healpix indices for each voxel:
     if verbose:
         print("Loading healpix data...")
@@ -149,7 +146,7 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
         print("Converting voxel counts to healpix patch counts...")
     ngHPMCMC = tools.loadOrRecompute("ngHPMCMC.p",getAllNgsToHealpix,ngMCMC,\
         hpIndices,snapNumList,samplesFolder,nside,\
-        _recomputeData=recomputeData,recomputeData=recomputeData)
+        _recomputeData=recomputeData)
     # Compute counts in each healpix pixel for 2M++ survey:
     if verbose:
         print("Computing 2M++ galaxy counts...")
@@ -306,7 +303,8 @@ def getUnconstrainedHMFAMFData(snapNumListUncon,snapName,snapNameRev,\
         unconstrainedFolder,deltaListMean,deltaListError,\
         fileSuffix = '',recomputeData=False,boxsize=677.7,verbose=True,\
         reCentreSnaps = True,Om0=0.3111,rSphere=135,nRandCentres = 10000,\
-        recomputeCentres = False,randomSeed=1000):
+        recomputeCentres = False,randomSeed=1000,meanDensityMethod="selection",\
+        meanThreshold=0.02,nRandMax=100):
     # Load unconstrained snaps:
     if verbose:
         print("Loading snapshots...")
@@ -375,17 +373,19 @@ def getUnconstrainedHMFAMFData(snapNumListUncon,snapName,snapNameRev,\
         gc.collect() # Clear memory of the previous snapshot
         tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
         gc.collect()
-        randOverDen.append(mUnit*tree.query_ball_point(randCentres,135,\
+        randOverDen.append(mUnit*tree.query_ball_point(randCentres,rSphere,\
             workers=-1,return_length=True)/(volSphere*rhoMean) - 1.0)
     # Halos/antihalos in regions with similar underdensity:
     if verbose:
         print("Finding halos in similar density regions...")
-    comparable = [np.where((delta >= deltaListMean - deltaListError) & \
+    comparableUnfilt = [np.where((delta >= deltaListMean - deltaListError) & \
         (delta < deltaListMean + deltaListError))[0] \
         for delta in randOverDen]
+    comparable = [comp[0:np.min([nRandMax,len(comp)])] \
+        for comp in comparableUnfilt]
     comparableCentresList = [randCentres[indices,:] for indices in comparable]
     comparableHalos = [[tools.getAntiHalosInSphere(\
-        snapedit.wrap(haloCentres512uncon[k] + boxsize/2,boxsize),135,\
+        snapedit.wrap(haloCentres512uncon[k] + boxsize/2,boxsize),rSphere,\
         origin = comparableCentresList[k][l]) \
         for l in range(0,len(comparableCentresList[k]))]
         for k in range(0,len(snapListUnconstrained))]
@@ -393,7 +393,7 @@ def getUnconstrainedHMFAMFData(snapNumListUncon,snapName,snapNameRev,\
         for l in range(0,len(comparableHalos[k]))] \
         for k in range(0,len(snapListUnconstrained))]
     comparableAntihalos = [[tools.getAntiHalosInSphere(\
-        snapedit.wrap(antihaloCentres512uncon[k] + boxsize/2,boxsize),135,\
+        snapedit.wrap(antihaloCentres512uncon[k] + boxsize/2,boxsize),rSphere,\
         origin = comparableCentresList[k][l]) \
         for l in range(0,len(comparableCentresList[k]))]
         for k in range(0,len(snapListUnconstrained))]
@@ -401,16 +401,46 @@ def getUnconstrainedHMFAMFData(snapNumListUncon,snapName,snapNameRev,\
         antihaloMasses512uncon[k][comparableAntihalos[k][l][0]] \
         for l in range(0,len(comparableAntihalos[k]))] \
         for k in range(0,len(snapListUnconstrained))]
-    centralHalos = [tools.getAntiHalosInSphere(hcentres,135) \
-            for hcentres in haloCentres512uncon]
-    centralAntihalos = [tools.getAntiHalosInSphere(hcentres,135) \
-            for hcentres in antihaloCentres512uncon]
-    centralHaloMasses = [\
-            haloMasses512uncon[k][centralHalos[k][0]] \
-            for k in range(0,len(centralHalos))]
-    centralAntihaloMasses = [\
-            antihaloMasses512uncon[k][centralAntihalos[k][0]] \
-            for k in range(0,len(centralAntihalos))]
+    if meanDensityMethod == "central":
+        centralHalos = [tools.getAntiHalosInSphere(hcentres,rSphere) \
+                for hcentres in haloCentres512uncon]
+        centralAntihalos = [tools.getAntiHalosInSphere(hcentres,rSphere) \
+                for hcentres in antihaloCentres512uncon]
+        centralHaloMasses = [\
+                haloMasses512uncon[k][centralHalos[k][0]] \
+                for k in range(0,len(centralHalos))]
+        centralAntihaloMasses = [\
+                antihaloMasses512uncon[k][centralAntihalos[k][0]] \
+                for k in range(0,len(centralAntihalos))]
+    elif meanDensityMethod == "selection":
+        meanDensityRegionsUnfilt = [\
+            np.where((delta >= - meanThreshold) & \
+            (delta < meanThreshold))[0] \
+            for delta in randOverDen]
+        meanDensityRegions = [comp[0:np.min([nRandMax,len(comp)])] \
+        for comp in meanDensityRegionsUnfilt]
+        meanDensityCentresList = [randCentres[indices,:] \
+            for indices in meanDensityRegions]
+        centralHalos = [[tools.getAntiHalosInSphere(\
+            snapedit.wrap(haloCentres512uncon[k] + boxsize/2,boxsize),rSphere,\
+            origin = meanDensityCentresList[k][l]) \
+            for l in range(0,len(meanDensityCentresList[k]))]
+            for k in range(0,len(snapListUnconstrained))]
+        centralHaloMasses = [[haloMasses512uncon[k][\
+            comparableHalos[k][l][0]] \
+            for l in range(0,len(comparableHalos[k]))] \
+            for k in range(0,len(snapListUnconstrained))]
+        centralAntihalos = [[tools.getAntiHalosInSphere(\
+            snapedit.wrap(antihaloCentres512uncon[k] + boxsize/2,boxsize),\
+            rSphere,origin = meanDensityCentresList[k][l]) \
+            for l in range(0,len(meanDensityCentresList[k]))]
+            for k in range(0,len(snapListUnconstrained))]
+        centralAntihaloMasses = [[\
+            antihaloMasses512uncon[k][comparableAntihalos[k][l][0]] \
+            for l in range(0,len(comparableAntihalos[k]))] \
+            for k in range(0,len(snapListUnconstrained))]
+    else:
+        raise Exception("Unrecognise mean density method.")
     if verbose:
         print("Done.")
     return [comparableHalos,comparableHaloMasses,\
@@ -429,7 +459,8 @@ def getHMFAMFData(snapNumList,snapNumListOld,snapNumListUncon,\
         snapnameOldRev = "reverse_output/snapshot_006",\
         unconstrainedFolderNew = "new_chain/unconstrained_samples/",\
         unconstrainedFolderOld = "unconstrainedSamples/",verbose=True,\
-        reCentreSnaps = True,Om0=0.3111,rSphere=135,nRandCentres = 10000):
+        reCentreSnaps = True,Om0=0.3111,rSphere=135,nRandCentres = 10000,\
+        meanDensityMethod = "selection",meanThreshold=0.02):
     if type(recomputeData) == bool:
         recomputeDataList = [recomputeData for k in range(0,4)]
     elif type(recomputeData) == list:
@@ -440,43 +471,56 @@ def getHMFAMFData(snapNumList,snapNumListOld,snapNumListUncon,\
         raise Exception("Invalid recomputeData argument")
     # New snapshots, constrained:
     [constrainedHaloMasses512New,constrainedAntihaloMasses512New,\
-        deltaListMeanNew,deltaListErrorNew] = getHMFAMFDataFromSnapshots(\
+        deltaListMeanNew,deltaListErrorNew] = tools.loadOrRecompute(\
+        "constrained_new.p",\
+        getHMFAMFDataFromSnapshots,\
         snapNumList,snapnameNew,snapnameNewRev,samplesFolder,\
         recomputeData = recomputeDataList[0],reCentreSnap=reCentreSnaps,\
-        rSphere=rSphere,Om0 = Om0,boxsize=boxsize,verbose=verbose)
+        rSphere=rSphere,Om0 = Om0,boxsize=boxsize,verbose=verbose,\
+        _recomputeData=recomputeDataList[0])
     gc.collect()
     # Old snapshots, constrained:
     [constrainedHaloMasses512Old,constrainedAntihaloMasses512Old,\
-        deltaListMeanOld,deltaListErrorOld] = getHMFAMFDataFromSnapshots(\
+        deltaListMeanOld,deltaListErrorOld] = tools.loadOrRecompute(\
+        "constrained_old.p",\
+        getHMFAMFDataFromSnapshots,\
         snapNumListOld,snapnameOld,snapnameOldRev,samplesFolderOld,\
         recomputeData=recomputeDataList[1],reCentreSnap=reCentreSnaps,\
         rSphere=rSphere,Om0 = Om0,boxsize=boxsize,verbose=verbose,\
-        fileSuffix = '_old')
+        fileSuffix = '_old',_recomputeData=recomputeDataList[1])
     gc.collect()
     # Unconstrained halos/antihalos with similar underdensity:
     [comparableHalosNew,comparableHaloMassesNew,\
             comparableAntihalosNew,comparableAntihaloMassesNew,\
             centralHalosNew,centralAntihalosNew,\
             centralHaloMassesNew,centralAntihaloMassesNew] = \
-                getUnconstrainedHMFAMFData(\
+                tools.loadOrRecompute("unconstrained_new.p",\
+                    getUnconstrainedHMFAMFData,\
                     snapNumListUncon,snapnameNew,\
                     snapnameNewRev,unconstrainedFolderNew,deltaListMeanNew,\
                     deltaListErrorNew,boxsize=boxsize,\
                     reCentreSnaps = reCentreSnaps,Om0=Om0,rSphere=rSphere,\
                     nRandCentres=nRandCentres,verbose=verbose,\
-                    recomputeData=recomputeDataList[2])
+                    recomputeData=recomputeDataList[2],\
+                    meanThreshold=meanThreshold,\
+                    meanDensityMethod=meanDensityMethod,\
+                    _recomputeData=recomputeDataList[2])
     gc.collect()
     [comparableHalosOld,comparableHaloMassesOld,\
             comparableAntihalosOld,comparableAntihaloMassesOld,\
             centralHalosOld,centralAntihalosOld,\
             centralHaloMassesOld,centralAntihaloMassesOld] = \
-                getUnconstrainedHMFAMFData(\
+                tools.loadOrRecompute("unconstrained_old.p",\
+                    getUnconstrainedHMFAMFData,\
                     snapNumListUnconOld,snapnameOld,\
                     snapnameOldRev,unconstrainedFolderOld,deltaListMeanOld,\
                     deltaListErrorOld,boxsize=boxsize,\
                     reCentreSnaps = reCentreSnaps,Om0=Om0,rSphere=rSphere,\
                     nRandCentres=nRandCentres,verbose=verbose,\
-                    fileSuffix = '_old',recomputeData=recomputeDataList[3])
+                    fileSuffix = '_old',recomputeData=recomputeDataList[3],\
+                    meanThreshold=meanThreshold,\
+                    meanDensityMethod = meanDensityMethod,\
+                    _recomputeData=recomputeDataList[3])
     gc.collect()
     return [constrainedHaloMasses512New,constrainedAntihaloMasses512New,\
         deltaListMeanNew,deltaListErrorNew,\

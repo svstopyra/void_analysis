@@ -146,8 +146,7 @@ def getGriddedDensity(snap,N,redshiftSpace= False,velFudge = 1,snapPos = None,sn
 
 
 def getCombinedAbellCatalogue(Om0 = 0.3111,Ode0 = 0.6889,h=0.6766,\
-        catFolder="",\
-        abell_nums = [426,2147,1656,3627,3571,548,2197,2063,1367]):
+        catFolder="",abell_nums = [426,2147,1656,3627,3571,548,2197,2063,1367]):
     cosmo = astropy.cosmology.LambdaCDM(100*h,Om0,Ode0)
     [abell_l,abell_b,abell_n,abell_z,\
             abell_d,p_abell,coordAbell] = getClusterSkyPositions(catFolder)

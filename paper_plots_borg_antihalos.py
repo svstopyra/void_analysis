@@ -32,16 +32,6 @@ legendFontsize = 8
 #-------------------------------------------------------------------------------
 # DATA FOR PLOTS
 
-# PPT plots data:
-if runTests:
-    testComputation(testDataFolder + "ppt_pipeline_test.p",getPPTPlotData,\
-        snapNumList = [7000, 7200, 7400],samplesFolder = 'new_chain/',\
-        recomputeData = True)
-
-[galaxyNumberCountExp,galaxyNumberCountsRobust] = tools.loadOrRecompute(\
-    figuresFolder + "ppt_plots_data.p",getPPTPlotData,\
-    _recomputeData = recomputeData)
-
 
 
 # HMF plots data:
@@ -51,9 +41,31 @@ snapNumListOld = [7422,7500,8000,8500,9000,9500]
 #snapNumList = [7000,7200,7400,7600,8000]
 snapNumList = [7000,7200,7400,7600,7800,8000]
 #snapNumListUncon = [1,2,3,4,5]
-snapNumListUncon = [1,3,5,7,8,9,10]
+snapNumListUncon = [1,2,3,4,5,6,7,8,9,10]
 snapNumListUnconOld = [1,2,3,5,6]
 boxsize = 677.7
+
+# PPT plots data:
+if runTests:
+    testComputation(testDataFolder + "ppt_pipeline_test.p",getPPTPlotData,\
+        snapNumList = [7000, 7200, 7400],samplesFolder = 'new_chain/',\
+        recomputeData = True)
+
+nBinsPPT = 30
+
+[galaxyNumberCountExp,galaxyNumberCountsRobust] = tools.loadOrRecompute(\
+    figuresFolder + "ppt_plots_data.p",getPPTPlotData,\
+    _recomputeData = recomputeData,nBins = nBinsPPT,nClust=9,nMagBins = 16,\
+        N=256,restartFile = 'new_chain_restart/merged_restart.h5',\
+        snapNumList = snapNumList,samplesFolder = 'new_chain/',\
+        surveyMaskPath = "./2mpp_data/",\
+        Om0 = 0.3111,Ode0 = 0.6889,boxsize = 677.7,h=0.6766,Mstarh = -23.28,\
+        mmin = 0.0,mmax = 12.5,recomputeData = recomputeData,rBinMin = 0.1,\
+        rBinMax = 20,abell_nums = [426,2147,1656,3627,3571,548,2197,2063,1367],\
+        nside = 4,nRadialSlices=10,rmax=600,tmppFile = "2mpp_data/2MPP.txt",\
+        reductions = 4,iterations = 20,verbose=True,hpIndices=None,\
+        centreMethod="density")
+
 
 # Load or recompute the HMF/AMF data:
 if runTests:
@@ -126,7 +138,8 @@ referenceSnap = pynbody.load(samplesFolder + \
         "/sample2791/gadget_full_forward_512/snapshot_001")
 # Sorted reference snap indices:
 snapsort = np.argsort(referenceSnap['iord'])
-
+# Resolution limit (256^3):
+mLimLower = referenceSnap['mass'][0]*1e10*100*8
 
 # Timesteps data. Rerunning this from here not yet implemented 
 #(see timesteps.py):
@@ -179,7 +192,7 @@ clusterNames = np.array([['Perseus-Pisces (A426)'],
 # Options:
 suffix = ''
 #rBins = np.logspace(np.log10(0.1),np.log10(20),31)
-rBins = np.linspace(0.1,20,31)
+rBins = np.linspace(0.1,20,nBinsPPT+1)
 
 
 plot.plotPPTProfiles(np.sum(galaxyNumberCountExp,2),\
@@ -194,7 +207,7 @@ plot.plotPPTProfiles(np.sum(galaxyNumberCountExp,2),\
 #-------------------------------------------------------------------------------
 # HMF/AMF PLOT:
 
-
+savename = figuresFolder + "hmf_amf_old_vs_new_forward_model.pdf"
 
 plot.plotHMFAMFComparison(\
         constrainedHaloMasses512Old,deltaListMeanOld,deltaListErrorOld,\
@@ -204,10 +217,11 @@ plot.plotHMFAMFComparison(\
         comparableHaloMassesNew,constrainedAntihaloMasses512New,\
         comparableAntihaloMassesNew,\
         referenceSnap,referenceSnapOld,\
-        savename = figuresFolder + "hmf_amf_old_vs_new_forward_model.pdf",\
+        savename = "test_hmf_amf.pdf",\
         ylabelStartOld = 'Old reconstruction',\
         ylabelStartNew = 'New reconstruction',\
-        fontsize=fontsize,legendFontsize=legendFontsize)
+        fontsize=fontsize,legendFontsize=legendFontsize,density=True,\
+        xlim = (mLimLower,3e15),nMassBins=11,mLower=1e14,mUpper=3e15)
 
 
 #-------------------------------------------------------------------------------
@@ -218,8 +232,8 @@ plot.plotHMFAMFUnderdenseComparison(\
         comparableHaloMassesNew,constrainedAntihaloMasses512New,\
         comparableAntihaloMassesNew,centralHalosNew,centralAntihalosNew,\
         centralHaloMassesNew,centralAntihaloMassesNew,\
-        referenceSnap,referenceSnapOld,\
-        savename = figuresFolder + "hmf_amf_underdense_comparison.pdf")
+        savename = figuresFolder + "hmf_amf_underdense_comparison.pdf",\
+        xlim = (mLimLower,3e15),nMassBins=11,mLower=1e14,mUpper=3e15)
 
 #-------------------------------------------------------------------------------
 # RADIAL VOID PROFILES
