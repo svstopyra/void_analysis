@@ -38,7 +38,8 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
         mmin = 0.0,mmax = 12.5,recomputeData = False,rBinMin = 0.1,\
         rBinMax = 20,abell_nums = [426,2147,1656,3627,3571,548,2197,2063,1367],\
         nside = 4,nRadialSlices=10,rmax=600,tmppFile = "2mpp_data/2MPP.txt",\
-        reductions = 4,iterations = 20,verbose=True,hpIndices=None):
+        reductions = 4,iterations = 20,verbose=True,hpIndices=None,\
+        centreMethod="density"):
     # Parameters:
         # nBins - Number of radial bins for galaxy counts in PPT
         # nClust - Number of clusters to do PPTs for.
@@ -188,11 +189,11 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
         indices = tree.query_ball_point(wrappedPos,rBins[k+1])
         if centreMethod == "snapshot":
             indicesGad = [tree.query_ball_point(\
-                -np.fliplr(snapedit.wrap(centres + boxsize/2,boxsize)),\
+                -np.fliplr(snapedit.wrap(centres,boxsize)),\
                 rBins[k+1]) for centres in clusterCentresSim]
         elif centreMethod == "density":
             indicesGad = [tree.query_ball_point(\
-                snapedit.wrap(centres + boxsize/2,boxsize),rBins[k+1]) \
+                snapedit.wrap(centres,boxsize),rBins[k+1]) \
                 for centres in clusterCentresSim]
         if np.any(np.array(indices,dtype=bool)):
             for l in range(0,nClust):
@@ -757,13 +758,13 @@ def getMatchPynbody(snap1,snap2,cat1,cat2,quantity1,quantity2,\
 
 def getMatchDistance(snap1,snap2,centres1,centres2,\
         quantity1,quantity2,tree1=None,tree2=None,distMax = 20.0,\
-        max_index=200,quantityThresh=0.5,sortMethod='distance'):
+        max_index=200,quantityThresh=0.5,sortMethod='distance',\
+        mode="fractional"):
+    boxsize = snap1.properties['boxsize'].ratio("Mpc a h**-1")
     if tree1 is None:
-        boxsize = snap1.properties['boxsize'].ratio("Mpc a h**-1")
         tree1 = scipy.spatial.cKDTree(snapedit.wrap(centres1,boxsize),\
             boxsize=boxsize)
     if tree2 is None:
-        boxsize = snap2.properties['boxsize'].ratio("Mpc a h**-1")
         tree2 = scipy.spatial.cKDTree(snapedit.wrap(centres2,boxsize),\
             boxsize=boxsize)
     # Our procedure here is to get the closest anti-halo that lies within the 
@@ -772,7 +773,18 @@ def getMatchDistance(snap1,snap2,centres1,centres2,\
     candidatesList = []
     ratioList = []
     distList = []
-    searchOther = tree1.query_ball_tree(tree2,distMax)
+    if mode == "fractional":
+        # Interpret distMax as a fraction of the void radius, not the 
+        # distance in Mpc/h.
+        # Choose a search radius that is no greater than the void radius divided
+        # by the radius ratio. If the other anti-halo is further away than this
+        # then it wouldn't match to us anyway, so we don't need to consider it.
+        radii1 = quantity1/quantityThresh
+        radii2 = quantity2/quantityThresh
+        searchOther = tree2.query_ball_point(snapedit.wrap(centres1,boxsize),\
+            radii1,workers=-1)
+    else:
+        searchOther = tree1.query_ball_tree(tree2,distMax)
     for k in range(0,np.min([len(centres1),max_index])):
         if len(searchOther[k]) > 0:
             # Sort indices:
@@ -800,7 +812,14 @@ def getMatchDistance(snap1,snap2,centres1,centres2,\
             else:
                 raise Exception("Unrecognised sorting method")
             # Get thresholds for these candidates:
-            candidates = np.where((quantRatio >= quantityThresh))[0]
+            if mode == "fractional":
+                candRadii = quantity2[sortedCandidates]
+                # Geometric mean of radii, to ensure symmetry.
+                geometricRadii = np.sqrt(quantity1[k]*candRadii)
+                candidates = np.where((quantRatio >= quantityThresh) & \
+                    (distances[indSort] <= geometricRadii*distMax))[0]
+            else:
+                candidates = np.where((quantRatio >= quantityThresh))[0]
             candidatesList.append(candidates)
             ratioList.append(quantRatio[candidates])
             distList.append(distances[candidates])
@@ -871,7 +890,7 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
         crossMatchThreshold = 0.5,distMax=20.0,sortMethod='ratio',\
         blockDuplicates=True,twoWayOnly = True,\
         snapList=None,snapListRev=None,ahProps=None,hrList=None,\
-        rMin = 5,rMax = 100):
+        rMin = 5,rMax = 100,mode="fractional"):
     # Load snapshots:
     if verbose:
         print("Loading snapshots...")
@@ -981,7 +1000,7 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
                             tree2=treeList[l],distMax = distMax,\
                             max_index=max_index,\
                             quantityThresh=crossMatchThreshold,\
-                            sortMethod=sortMethod)
+                            sortMethod=sortMethod,mode=mode)
                     matchArrayListNew.append(match)
                 else:
                     raise Exception("Unrecognised matching type requested.")

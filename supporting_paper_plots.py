@@ -23,8 +23,8 @@ recomputeData = False
 # Snapshots to use:
 snapNumListOld = [7422,7500,8000,8500,9000,9500]
 #snapNumList = [7000,7200,7400]
-snapNumList = [7000,7200,7400,7600]
-snapNumListUncon = [1,2,3,4,5,6,7,8,9,10]
+snapNumList = [7000,7200,7400,7600,8000]
+snapNumListUncon = [1,2,3,4,5,6]
 snapNumListUnconOld = [1,2,3,5,6]
 
 # Filename data:
@@ -346,6 +346,112 @@ plotDensityComparison(denFor[ns],denForZeld[ns],N=256,\
     textLeft = "GADGET",textRight="Zel'dovich",\
     title="Unconstrained simulations (reverse), Sample " + str(ns+1),\
     vmax = 1000,vmin=1/1000)
+
+
+# 2M++ Data:
+catFile = "./2mpp_data/2m++.txt"
+catalogue = np.loadtxt(catFile,delimiter='|',skiprows=31,
+    usecols=(1,2,3,4,5,6,7,8,10,11,12,13,14,15,16))
+# Filter useable galaxies:
+useGalaxy = (catalogue[:,10] == 0.0) & (catalogue[:,5] > 0)
+c = 299792.458 # Speed of light in km/s
+z = catalogue[:,5]/c # Redshift
+# Cosmological parameters:
+
+# Comoving distance to all galaxies, in Mpc/h:
+dcz = cosmo.comoving_distance(z[useGalaxy]).value*cosmo.h
+# Co-ordinates of the galaxies (in Mpc/h):
+coord = astropy.coordinates.SkyCoord(\
+    ra = catalogue[useGalaxy,0]*astropy.units.degree,\
+    dec=catalogue[useGalaxy,1]*astropy.units.degree,\
+    distance=dcz*astropy.units.Mpc)
+# Cartesian positions of galaxies in equatorial, comoving co-ordinates (Mpc/h):
+equatorialXYZ = np.vstack((coord.cartesian.x.value,\
+    coord.cartesian.y.value,coord.cartesian.z.value)).T
+
+
+
+cl = 2
+ns = 0
+centre1 = clusterLoc[cl]
+centre2 = -np.fliplr(clusterCentresSim[ns])[cl]
+centre3 = clusterCentresSim[ns][cl]
+#centre1 = -np.flip(haloCentres[0][np.array(\
+#    centralHalos[0][0])[constrainedHaloSortM20[0]][0]])
+#centre2 = -np.flip(haloCentres[0][np.array(\
+#    centralHalos[0][0])[constrainedHaloSortM20[0]][0]])
+#centre1 = truePeakLocs[0][truePeakOrder[0],:]
+#centre2 = truePeakLocs[0][truePeakOrder[0],:]
+losAxis = 1
+sort = {0:[1,2],1:[0,2],2:[0,1]}
+otherAxis = sort[losAxis]
+width = 75
+thickness = 8
+Mlow = 5e13
+Mhigh = 1e16
+label = True
+densityListDTFE = [np.fromfile(samplesFolder + "sample" + \
+                str(snap) + "/gadget_full_forward_512/snapshot_001.a_den",
+                dtype=np.float32) for snap in snapNumList]
+densityListN = [np.reshape(den,(256,256,256),order='F') \
+   for den in densityListDTFE]
+ax = plotDensityComparison(mcmcDen_r[ns],np.flip(densityListN[ns]),\
+    N=256,centre1=centre1,centre2=centre1,width = width,\
+    textLeft = "Sample " + str(snapNumList[ns]) + " (Final Density)",\
+    textRight="Sample " + str(snapNumList[ns]) + " (Evolved ICs)",\
+    title="Density Field around " + clusterNames[cl][0],vmax = 1000,\
+    vmin=1/1000,\
+    markCentre=True,losAxis=losAxis,showGalaxies=True,flipCentreLeft=False,\
+    flipCentreRight=False,flipRight=False,flipLeft=False,\
+    invertAxisLeft=False,invertAxisRight=False,flipudLeft=False,\
+    flipudRight=False,fliplrLeft=False,fliplrRight=False,\
+    swapXZLeft=True,swapXZRight=True,\
+    gal_position=equatorialXYZ,show=False,returnAx = True,thickness=thickness)
+
+plt.show()
+
+ngMCMC0 = ngPerLBin(
+            biasParam,return_samples=True,mask=mask,\
+            accelerate=True,\
+            delta = [mcmcDenLin_r[0]],contrast=False,sampleList=[0],\
+            beta=biasParam[0][:,:,1],rhog = biasParam[0][:,:,3],\
+            epsg=biasParam[0][:,:,2],\
+            nmean=biasParam[0][:,:,0],biasModel = biasNew)
+
+# Saving the indices of the main clusters, for use in MCMC:
+boxsize = 677.7
+h = 0.6766
+Om0 = 0.3111
+Ode = 1 - Om0
+cosmo = astropy.cosmology.LambdaCDM(100*h,Om0,Ode0)
+# 2M++ catalogue data, and cluster locations:
+[combinedAbellN,combinedAbellPos,abell_nums] = \
+    real_clusters.getCombinedAbellCatalogue(Om0 = 0.3111,Ode0 = 0.6889,\
+        h=0.6766,catFolder="")
+clusterInd = [np.where(combinedAbellN == n)[0] for n in abell_nums]
+clusterLoc = np.zeros((len(clusterInd),3))
+for k in range(0,len(clusterInd)):
+    if len(clusterInd[k]) == 1:
+        clusterLoc[k,:] = combinedAbellPos[clusterInd[k][0],:]
+    else:
+        # Average positions:
+        clusterLoc[k,:] = np.mean(combinedAbellPos[clusterInd[k],:],0)
+
+wrappedPos = snapedit.wrap(clusterLoc + boxsize/2,boxsize)
+
+indices5 = tree.query_ball_point(wrappedPos,5.0)
+indices10 = tree.query_ball_point(wrappedPos,10.0)
+indices15 = tree.query_ball_point(wrappedPos,15.0)
+indices20 = tree.query_ball_point(wrappedPos,20.0)
+indices2p5 = tree.query_ball_point(wrappedPos,2.5)
+
+rList = np.array([2.5,5,10,15,20])
+
+indicesAll = [tree.query_ball_point(wrappedPos,rad) for rad in rList]
+
+pickle.dump([rList,indicesAll],open("cluster_indices.p","wb"))
+
+
 
 #-------------------------------------------------------------------------------
 # Compare first two unconstrained simulations:
@@ -1014,7 +1120,8 @@ sigmaSepStackIndUn = np.vstack([sim[1] for sim in indStack])
 
 snapname = "gadget_full_forward_512/snapshot_001"
 snapnameRev = "gadget_full_reverse_512/snapshot_001"
-snapNumList = [7000,7200,7400,7600,7800,8000]
+#snapNumList = [7000,7200,7400,7600,8000]
+snapNumList = [7000,7200,7400,7600,8000]
 
 snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" + \
     snapname) for snapNum in snapNumList]
@@ -1503,10 +1610,12 @@ elif sortMethod == "distance":
 plt.show()
 
 # Finding the optimal radius:
-threshList = np.array([0.2,0.3,0.4,0.5,0.6])
-distArr2 = np.arange(0,21,0.2)[1:]
+threshList = np.array([0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9])
+#distArr2 = np.arange(0,21,0.2)[1:]
+distArr2 = np.arange(0,3,0.1)
 sortMethod='ratio'
 uniqueMatchFracArray = np.zeros((len(threshList),len(distArr2)))
+catFractionFinalMatrix = np.zeros((len(threshList),len(distArr2)))
 ahCountsList = 
 for k in range(0,len(threshList)):
     for l in range(0,len(distArr2)):
@@ -1534,6 +1643,9 @@ for k in range(0,len(threshList)):
             for counts in candCountStripped])/\
             np.sum([[ahCountsTest[l] for k in range(0,len(snapNumList)-1)] \
             for l in range(0,len(snapNumList))])
+        if len(finalCatTest) > 0:
+            catFractionFinalMatrix[k,l] = np.mean(\
+                np.sum(finalCatTest > 0,1)/len(snapNumList))
         print(("%.3g" % (100*(k*len(distArr2) + l + 1)/\
             (len(threshList)*len(distArr2)))) + "% complete")
 
@@ -1542,11 +1654,30 @@ plt.clf()
 plt.plot(distArr2,uniqueMatchFracArray.transpose(),\
     label=['$\\mu_{\\mathrm{rad}} = $' + ("%.2g" % thresh) \
     for thresh in threshList])
-plt.xlabel('Search Radius ($\\mathrm{Mpc}h^{-1}$)')
+plt.axvline(1.0,linestyle=':',color='grey')
+plt.xlabel('$R_{\\mathrm{search}}/\sqrt{R_1R_2}$')
 plt.ylabel('Fraction of Unique matches')
 plt.legend()
-plt.savefig(figuresFolder + "supporting_plots/optimal_search_radius.pdf")
+plt.savefig(figuresFolder + \
+    "supporting_plots/optimal_search_radius_unique.pdf")
 plt.show()
+
+
+# Catalogue fraction:
+
+plt.clf()
+plt.plot(distArr2,catFractionFinalMatrix.transpose(),\
+    label=['$\\mu_{\\mathrm{rad}} = $' + ("%.2g" % thresh) \
+    for thresh in threshList])
+plt.axvline(1.0,linestyle=':',color='grey')
+plt.xlabel('$R_{\\mathrm{search}}/\sqrt{R_1R_2}$')
+plt.ylabel('Mean fraction of catalogues')
+plt.legend()
+plt.savefig(figuresFolder + \
+    "supporting_plots/optimal_search_radius_catalogue.pdf")
+plt.show()
+
+
 
 # Setup interpolating functions:
 interpList = [scipy.interpolate.interp1d(distArr2,-uniqueMatchFracArray[k,:],\
@@ -1558,13 +1689,14 @@ optimalR = np.mean(optimalRList)
 
 # Find the optimal radius threshold:
 # Finding the optimal radius:
-distArr3 = np.array([5,8.73,10])
-threshList2 = np.arange(0.0,1.0,0.02)
+#distArr3 = np.array([5,8.73,10])
+distArr3 = np.arange(0,1.1,0.1)
+threshList2 = np.arange(0.0,1.0,0.05)
 sortMethod='ratio'
 uniqueMatchFracArray2 = np.zeros((len(threshList2),len(distArr3)))
 noMatchFracMatrix2 = np.zeros((len(threshList2),len(distArr3)))
 multiMatchFracMatrix2 = np.zeros((len(threshList2),len(distArr3)))
-twoWayMatchFracMatrix2 = np.zeros((len(threshList2),len(distArr3)))
+#twoWayMatchFracMatrix2 = np.zeros((len(threshList2),len(distArr3)))
 catFractionFinalMatrix2 = np.zeros((len(threshList2),len(distArr3)))
 for k in range(0,len(threshList2)):
     for l in range(0,len(distArr3)):
@@ -1582,24 +1714,28 @@ for k in range(0,len(threshList2)):
             snapListRev=snapListRev,ahProps=ahProps,hrList=hrList,\
             max_index=None,twoWayOnly=True,blockDuplicates=True,\
             crossMatchThreshold = threshList2[k],distMax = distArr3[l],\
-            rSphere=135)
-        candCountStripped = np.array([candidateCountsTest[k][:,diffMap[k]] \
-            for k in range(0,len(snapNumList))])
-        uniqueMatchFracArray2[k,l] = np.mean(\
-            [[len(np.where(counts[:,k] == 1)[0]) \
-            for k in range(0,len(snapNumList)-1)] \
-            for counts in candCountStripped])/max_index
-        noMatchFracMatrix2[k,l] = np.mean(\
-            [[len(np.where(counts[:,k] == 0)[0]) \
-            for k in range(0,len(snapNumList)-1)] \
-            for counts in candCountStripped])/max_index
-        multiMatchFracMatrix2[k,l] = np.mean(\
-            [[len(np.where(counts[:,k] > 1)[0]) \
-            for k in range(0,len(snapNumList)-1)] \
-            for counts in candCountStripped])/max_index
-        twoWayMatchFracMatrix2[k,l] = np.mean([[np.sum(twoWayVec[:,k]) \
-            for k in range(0,len(snapNumList)-1)] \
-            for twoWayVec in twoWayMatchListTest])/max_index
+            rSphere=135,verbose=False)
+        candCountStripped = np.array([candidateCountsTest[m][:,diffMap[m]] \
+            for m in range(0,len(snapNumList))])
+        uniqueMatchFracArray2[k,l] = np.sum(\
+            [[len(np.where(counts[:,m] == 1)[0]) \
+            for m in range(0,len(snapNumList)-1)] \
+            for counts in candCountStripped])/\
+            np.sum([[len(haloList) \
+            for m in range(0,len(snapNumList)-1)] \
+            for haloList in shortHaloListTest])
+        noMatchFracMatrix2[k,l] = np.sum(\
+            [[len(np.where(counts[:,m] == 0)[0]) \
+            for m in range(0,len(snapNumList)-1)] \
+            for counts in candCountStripped])/np.sum([[len(haloList) \
+            for m in range(0,len(snapNumList)-1)] \
+            for haloList in shortHaloListTest])
+        multiMatchFracMatrix2[k,l] = np.sum(\
+            [[len(np.where(counts[:,m] > 1)[0]) \
+            for m in range(0,len(snapNumList)-1)] \
+            for counts in candCountStripped])/np.sum([[len(haloList) \
+            for m in range(0,len(snapNumList)-1)] \
+            for haloList in shortHaloListTest])
         if len(finalCatTest) > 0:
             catFractionFinalMatrix2[k,l] = np.mean(\
                 np.sum(finalCatTest > 0,1)/len(snapNumList))
@@ -1607,8 +1743,9 @@ for k in range(0,len(threshList2)):
             (len(threshList2)*len(distArr3)))) + "% complete")
 
 # Plot the unique fraction:
-colorList = [seabornColormap[k] for k in range(0,len(distArr3))]
-for k in [1]:
+colorList = [seabornColormap[k] \
+    for k in range(0,np.min([len(distArr3),len(seabornColormap)]))]
+for k in range(0,np.min([len(distArr3),len(seabornColormap)])):
     plt.plot(threshList2,uniqueMatchFracArray2[:,k],\
         label='Unique fraction ($R_{search} = $' + \
         ("%.2g" % distArr3[k]) + ")",\
