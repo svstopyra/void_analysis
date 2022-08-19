@@ -39,6 +39,9 @@ def getCompletenessInSelection(rl,mlow,mupp,Mlow,Mupp,cosmo,nstar,keCorr,\
             numericalIntegration=numericalIntegration)
     return np.maximum(0.0,c)
 
+def keCorr(z,fit = [-1.456552772320231,-0.7687913554110967]):
+    #return -fit[0]*z# - fit[1]
+    return 2.9*z
 
 # Apply the survey mask for the 2M++ galaxy survey
 def surveyMask(points,mask11,mask12,cosmo,alpha,Mstar,\

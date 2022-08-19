@@ -8,6 +8,10 @@ from scipy import interpolate
 import camb
 import scipy
 import pynbody
+import os
+from . import snapedit
+from astropy.coordinates import SkyCoord
+import astropy.units as u
 
 # Linear growth factor as a function of z:
 def fLinear(z,Om,Ol):
@@ -224,9 +228,15 @@ def TMF_from_hmf(Mmin,Mmax,dlog10m=0.01,h = 0.677,Tcmb0 = 2.725,Om0=0.307,Ob0 = 
     else:
         return [tmf.dndm,tmf.m*hfactor]
 
-def PSMF(Mmin,Mmax,dlog10m=0.01,h = 0.677,Tcmb0 = 2.725,Om0=0.307,Ob0 = 0.0486,returnObjects = False,sigma8 = 0.8159,delta_c=None):
-    cosmo = astropy.cosmology.FlatLambdaCDM(H0 = 100*h,Om0 = Om0, Tcmb0 = Tcmb0, Ob0 = Ob0)
-    tmf = hmf.hmf.MassFunction(Mmin=np.log10(Mmin),Mmax=np.log10(Mmax),hmf_model=hmf.fitting_functions.PS,cosmo_model=cosmo,sigma_8 = sigma8,delta_wrt=delta_wrt,delta_c=delta_c,disable_mass_conversion=False)
+def PSMF(Mmin,Mmax,dlog10m=0.01,h = 0.677,Tcmb0 = 2.725,Om0=0.307,\
+        Ob0 = 0.0486,returnObjects = False,sigma8 = 0.8159,delta_c=1.686,\
+        delta_wrt='SOCritical'):
+    cosmo = astropy.cosmology.FlatLambdaCDM(H0 = 100*h,Om0 = Om0,\
+        Tcmb0 = Tcmb0, Ob0 = Ob0)
+    tmf = hmf.hmf.MassFunction(Mmin=np.log10(Mmin),Mmax=np.log10(Mmax),\
+        hmf_model=hmf.fitting_functions.PS,cosmo_model=cosmo,\
+        sigma_8 = sigma8,mdef_model=delta_wrt,delta_c=delta_c,\
+        disable_mass_conversion=False)
     if returnObjects:
         return [tmf.dndm,tmf.m,tmf,cosmo]
     else:
@@ -349,7 +359,7 @@ def W_spatialTHp(kR):
     return np.where(kR > 1e-3,(3.0*((kR)**2 - 3.0)*np.sin(kR) + 9.0*kR*np.cos(kR))/((kR)**4),0.0)
 
 # Compute sigma with the frequency space top hat window function:
-def sigma2Mtophat(M,Pk,rhobar):
+def sigma2Mtophat(M,Pk,rhobar,ki):
     kmax = np.max(ki)
     kc = 1/windowMtoR(M,rhobar,gammaf=6*np.pi**2)
     if np.isscalar(kc):
@@ -374,7 +384,8 @@ def sigmaTinker(R,Pk,rhom,kmin,kmax):
 def jacobian_tinker(sigma,M,rhobar,Pk,kmin,kmax):
     R = windowMtoR(M,rhobar,gammaf = 4.0*np.pi/3.0)
     if np.isscalar(R):
-        return -(R/(3.0*sigma))*integrate.quad(lambda k: Pk(k)*W_spatialTHp(k*R)*k**3,kmin,kmax)
+        return -(R/(3.0*sigma))*integrate.quad(\
+            lambda k: Pk(k)*W_spatialTHp(k*R)*k**3,kmin,kmax)[0]
     else:
         result = np.zeros(len(R))
         for l in range(0,len(R)):
@@ -503,32 +514,21 @@ def comovingToLuminosity(comovingDistance,cosmo,Ninterp=1000,return_z = False):
     else:
         return rl
 
-# Compute the power spectrum for a snapshot, saving the result to a file for later loading.
-def computePowerSpectrum(snap,recompute=False,directory=None):
-    if directory is None:
-        directory = os.path.dirname(snap.filename)
-    if not os.path.isfile(directory + "/PK-DM-" + os.path.basename(snap.filename)):
-        os.system('gen-pk -i ' + snap.filename + ' -o ' + directory)
-    pkdata = np.loadtxt(directory + "/PK-DM-" + os.path.basename(snap.filename))	
-    boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
-    k = (2*np.pi/boxsize)*pkdata[:,0]
-    Pk = (boxsize/(2*np.pi))**3*pkdata[:,1]
-    N = np.array(pkdata[:,2],dtype=np.int)
-    return [k,Pk,N]
-
 # Error in a power spectrum estimate:
 def sigmaPk(pk,Nk,Np):
     return pk*np.sqrt((1 + 2/(Np*pk) + 1/(Np**2*pk**2))/Nk)
 
 # Comput the overdensity for mass within a specified radius.
-def overdensity(snap,radius,centres=np.array([0,0,0]),rhomean=None,tree=None,n_jobs=-1):
+def overdensity(snap,radius,centres=np.array([0,0,0]),rhomean=None,tree=None,\
+        workers=-1):
     boxsize = snap.properties['boxsize'].in_units("Mpc a h**-1")
     if tree is None:
         tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
     if rhomean is None:
         rhomean = (np.sum(np.array(snap['mass'].in_units("Msol h**-1")))/((snap.properties['boxsize'].in_units("Mpc a h**-1"))**3))
     mass = snap['mass'].in_units("Msol h**-1")[0]
-    massTotal = mass*tree.query_ball_point(centres,radius,n_jobs=n_jobs,return_length=True)
+    massTotal = mass*tree.query_ball_point(centres,radius,workers=workers,\
+        return_length=True)
     density = (massTotal/((4*np.pi*(radius)**3/3)*(rhomean))) -1
     return density
 
@@ -539,11 +539,11 @@ def lowMemoryOverdensity(snap,radius,centre=np.array([0,0,0]),rhomean=None):
         rhomean = (np.sum(np.array(snap['mass'].in_units("Msol h**-1")))/((snap.properties['boxsize'].in_units("Mpc a h**-1"))**3))
     return np.sum(np.array(snap[filt]['mass'].in_units("Msol h**-1")))/((4*np.pi*(radius)**3/3)*(rhomean)) - 1
 
-def sampleOverdensities(snap,radius,samples,tree=None,seed=None):
+def sampleOverdensities(snap,radius,nsamples,tree=None,seed=None):
     np.random.seed(seed)
     boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
     # Randomised centres:
-    centres = np.random.rand(samples,3)*boxsize
+    centres = np.random.rand(nsamples,3)*boxsize
     if tree is None:
         tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
     deltaList = overdensity(snap,radius,centres=centres,tree=tree)
@@ -553,19 +553,20 @@ def sampleOverdensities(snap,radius,samples,tree=None,seed=None):
 def computeLocalUnderdensity(snap,rBins,centre=np.array([0]*3),tree=None,workers=-1):
     boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
     if tree is None:
-        tree = scipy.spatial.cKDTree(wrap(snap['pos'],boxsize),boxsize=boxsize)
+        tree = scipy.spatial.cKDTree(snapedit.wrap(snap['pos'],boxsize),\
+            boxsize=boxsize)
     rBinsUpper = rBins[1:]
     centres = np.zeros((len(rBinsUpper),3))
     centres[:,:] = centre
     points = tree.query_ball_point(centres,rBinsUpper,workers=workers)
-    nParts = np.zeros(len(rBinsUpper),dtype=np.int)
+    nParts = np.zeros(len(rBinsUpper),dtype=int)
     for k in range(0,len(rBinsUpper)):
         nParts[k] = len(points[k])
     volumeSpheres = 4*np.pi*rBinsUpper**3/3
     volumeShells = np.zeros(len(volumeSpheres))
     volumeShells[0] = volumeSpheres[0]
     volumeShells[1:] = volumeSpheres[1:] - volumeSpheres[0:-1]
-    nPartsShells = np.zeros(nParts.shape,dtype=np.int)
+    nPartsShells = np.zeros(nParts.shape,dtype=int)
     nPartsShells[0] = nParts[0]
     nPartsShells[1:] = nParts[1:] - nParts[0:-1]
     nbar = len(snap)/boxsize**3

@@ -103,15 +103,29 @@ def massCentreAboutPoint(point,positions,boxsize,tree=None,reductions=3,\
         for l in range(0,iterations):
             parts = tree.query_ball_point(searchPoint,rsearch,workers=-1)
             if len(point.shape) == 1:
-                centre = context.computePeriodicCentreWeighted(\
-                    positions[parts,:],weights[parts],boxsize,\
-                    accelerate=accelerate)
+                if len(parts) > 0:
+                    centre = context.computePeriodicCentreWeighted(\
+                        positions[parts,:],weights[parts],boxsize,\
+                        accelerate=accelerate)
+                else:
+                    break
             else:
                 for m in range(0,len(point)):
-                    centre[m,:] = context.computePeriodicCentreWeighted(\
-                        positions[parts[m],:],weights[parts[m]],boxsize,\
-                        accelerate=accelerate)
+                    if len(parts[m]) > 0:
+                        centre[m,:] = context.computePeriodicCentreWeighted(\
+                            positions[parts[m],:],weights[parts[m]],boxsize,\
+                            accelerate=accelerate)
+                # Break if we run out of particles in all regions:
+                if np.all([len(p) for p in parts] == 0):
+                    break
         rsearch /= 2
+        # Break the loop early if we run out of particles to iterate on:
+        if len(point.shape) == 1:
+            if len(parts) == 0:
+                break
+        else:
+            if np.all([len(p) for p in parts] == 0):
+                break
     if wrap:
         centre = snapedit.unwrap(centre,boxsize)
     return centre
@@ -168,12 +182,12 @@ def getHaloMass(posAll,haloPos,nbar,Om,partMasses,delta=200,massDef = 'critical'
                 thisHaloPos = haloPosToUse
             else:
                 thisHaloPos = haloPosToUse[k,:]
-        if np.isscalar(partMasses):
-                masses[k] = treeToUse.query_ball_point(thisHaloPos,\
-                        rDeltas[k],return_length=True)*partMasses
-        else:
-            indices = treeToUse.query_ball_point(thisHaloPos,rDeltas[k])
-            masses[k] = np.sum(partMasses[indices])
+            if np.isscalar(partMasses):
+                    masses[k] = treeToUse.query_ball_point(thisHaloPos,\
+                            rDeltas[k],return_length=True)*partMasses
+            else:
+                indices = treeToUse.query_ball_point(thisHaloPos,rDeltas[k])
+                masses[k] = np.sum(partMasses[indices])
     return (masses,rDeltas)
 
 

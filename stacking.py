@@ -59,7 +59,7 @@ def simulationCorrelation(rBins,boxsize,data1,data2=None,nThreads = 1,weights1=N
 
 
 # Cross correlation of two sets of points:
-def getCrossCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,matterSnap,rMin = 0,rMax = np.inf,rRange = np.linspace(0.1,10,101),nThreads=thread_count,boxsize = 200.0):
+def getCrossCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,rMin = 0,rMax = np.inf,rRange = np.linspace(0.1,10,101),nThreads=thread_count,boxsize = 200.0):
 	rFilter1 = np.where((ahRadii > rMin) & (ahRadii < rMax))[0]
 	rFilter2 = np.where((voidRadii > rMin) & (voidRadii < rMax))[0]
 	ahPos = ahCentres[rFilter1,:]
@@ -70,7 +70,7 @@ def getCrossCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,matterSnap,rMin
 	return [xiAM,xiVM,xiAV]
 
 # Auto correlation of a set of points:
-def getAutoCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,matterSnap,rMin = 0,rMax = np.inf,rRange = np.linspace(0.1,10,101),nThreads=thread_count,boxsize = 200.0):
+def getAutoCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,rMin = 0,rMax = np.inf,rRange = np.linspace(0.1,10,101),nThreads=thread_count,boxsize = 200.0):
 	rFilter1 = np.where((ahRadii > rMin) & (ahRadii < rMax))[0]
 	rFilter2 = np.where((voidRadii > rMin) & (voidRadii < rMax))[0]
 	ahPos = ahCentres[rFilter1,:]
@@ -78,21 +78,6 @@ def getAutoCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,matterSnap,rMin 
 	xiAA = simulationCorrelation(rRange,boxsize,ahPos,nThreads=nThreads)
 	xiVV = simulationCorrelation(rRange,boxsize,vdPos,nThreads=nThreads)
 	return [xiAA,xiVV]
-
-# Stacking:
-def stackVoids(voidCentres,snap,rBins,nThreads=thread_count,voidScales=None):
-	if voidScales is None:
-		voidScales = np.ones(len(voidCentres))
-	boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
-	massCentres = snap['pos'].in_units("Mpc a h**-1")
-	massValues = snap['mass'].in_units("Msol h**-1")
-	# Get pairs:
-	DD = Corrfunc.theory.DD(0,nThreads,rBins,voidCentres[:,0],voidCentres[:,1],voidCentres[:,2],X2=massCentres[:,0],Y2=massCentres[:,1],Z2=massCentres[:,2],weights2=massValues,periodic=True,boxsize=boxsize)
-	# Get void volume sum:
-	rBinsUp = rBins[1:]
-	rBinsLow = rBins[0:-1]
-	volumes = 4*np.pi*(rBinsup**3 - rBinsLow**3)/3
-	volsum = np.sum(voidScales**3)*volumes
 
 def getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree=None,method="poisson",vorVolumes=None):
 	if (vorVolumes is None) and (method == "VTFE"):
@@ -176,13 +161,15 @@ def getRadialVelocityAverages(voidCentres,voidRadii,snap,rBins,nThreads=thread_c
 		sort = np.argsort(r)
 		indicesSorted = indicesList[sort]
 		boundaries = np.searchsorted(r[sort],rBins*voidRadii[k])
-		vR = np.sum(disp*snap['vel'][indicesList,:],1)*vorVolumes[indicesList]/r
-		print("Doing void " + str(k) + " of " + str(len(vRList)))
+		vR = np.sum(disp*snap['vel'][indicesSorted,:],1)*\
+			vorVolumes[indicesSorted]/r
+		#print("Doing void " + str(k) + " of " + str(len(vRList)))
 		for l in range(0,len(rBins)-1):
 			indices = indicesSorted[boundaries[l]:boundaries[l+1]]
 			if len(indices) > 0:
 				#indicesSphere = sort[boundaries[l]:boundaries[l+1]]
-				vRList[k,l] = np.sum(vR[indices])/np.sum(vorVolumes[indices])
+				vRList[k,l] = np.sum(vR[boundaries[l]:boundaries[l+1]])/\
+					np.sum(vorVolumes[boundaries[l]:boundaries[l+1]])
 				nPartList[k,l] = len(indices)
 	return [vRList,volumesList]
 
@@ -381,7 +368,7 @@ def matchDistributionFilter(lambdas1,lambdas2,lambdaBins=None,randomSeed=None,bi
 
 
 # Profile integrals:
-def profileIntregral(muBins,rho,mumin=0,mumax=1.0,histIntegral=True):
+def profileIntegral(muBins,rho,mumin=0,mumax=1.0,histIntegral=True):
 	mu = plot_utilities.binCentres(muBins)
 	if not histIntegral:
 		intRange = np.where((mu >= mumin) & (mu <= mumax))
@@ -396,12 +383,12 @@ def getProfileIntegralAndDeltaAverage(snap,rBins,radii,centres,pairCounts,volume
 	filterToUse = np.where(condition)[0]
 	[nbarj,sigma] = stackVoidsWithFilter(centres,radii,filterToUse,snap,rBins,nPairsList = pairCounts,volumesList=volumesList,method=method,errorType=errorType)
 	rBinCentres = plot_utilities.binCentres(rBins)
-	profInt = profileIntregral(rBins,nbarj/nbar,mumin=mumin,mumax=mumax)
-	profIntUpper = profileIntregral(rBins,(nbarj + sigma)/nbar,mumin=mumin,mumax=mumax)
-	profIntLower = profileIntregral(rBins,(nbarj - sigma)/nbar,mumin=mumin,mumax=mumax)
+	profInt = profileIntegral(rBins,nbarj/nbar,mumin=mumin,mumax=mumax)
+	profIntUpper = profileIntegral(rBins,(nbarj + sigma)/nbar,mumin=mumin,mumax=mumax)
+	profIntLower = profileIntegral(rBins,(nbarj - sigma)/nbar,mumin=mumin,mumax=mumax)
 	if method == "poisson":
 		deltaAverage = np.sum(radii[filterToUse]**3*(1.0 + deltaBar[filterToUse]))/np.sum(radii[filterToUse]**3)
-		deltaAverageError = np.sqrt(stacking.weightedVariance((1.0 + deltaBar[filterToUse]),radii[filterToUse]**3))/np.sqrt(len(filterToUse))
+		deltaAverageError = np.sqrt(weightedVariance((1.0 + deltaBar[filterToUse]),radii[filterToUse]**3))/np.sqrt(len(filterToUse))
 	else:
 		deltaAverage = np.mean((1.0 + deltaBar[filterToUse]))
 		deltaAverageError = np.std((1.0 + deltaBar[filterToUse]))/np.sqrt(len(filterToUse))
@@ -412,14 +399,14 @@ def deltaBarEffAverageAndError(radii,deltaBarEff,condition,method="poisson"):
 	filterToUse = np.where(condition)[0]
 	if method == "poisson":
 		deltaAverage = np.sum(radii[filterToUse]**3*(1.0 + deltaBarEff[filterToUse]))/np.sum(radii[filterToUse]**3)
-		deltaAverageError = np.sqrt(stacking.weightedVariance((1.0 + deltaBarEff[filterToUse]),radii[filterToUse]**3))/np.sqrt(len(filterToUse))
+		deltaAverageError = np.sqrt(weightedVariance((1.0 + deltaBarEff[filterToUse]),radii[filterToUse]**3))/np.sqrt(len(filterToUse))
 	else:
 		deltaAverage = np.mean((1.0 + deltaBarEff[filterToUse]))
 		deltaAverageError = np.std((1.0 + deltaBarEff[filterToUse]))/np.sqrt(len(filterToUse))
 	return [deltaAverage,deltaAverageError]
 
 def deltaVError(deltaVList):
-	return (deltaVList[0] - deltaVList[3],deltaVList[4] - deltaVList[0])
+	return (deltaVList[0] - deltaVList[2],deltaVList[3] - deltaVList[0])
 
 def deltaVRatio(deltaVlist):
 	return deltaVlist[1]/deltaVlist[0]

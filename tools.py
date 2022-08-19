@@ -9,12 +9,16 @@ import pickle
 import os
 import traceback, logging
 import h5py
+from astropy.coordinates import SkyCoord
+import astropy.units as u
+import healpy
+
 # Fetch all points that lie within a given radius of a specified centres, accounting for wrapping,
 # and filtering on arbitrary conditions:
 def getAntiHalosInSphere(centres,radius,origin=np.array([0,0,0]),
-        deltaCentral = None,boxsize=None,n_jobs=-1,filterCondition = None):
+        deltaCentral = None,boxsize=None,workers=-1,filterCondition = None):
     if filterCondition is None:
-        filterCondition = np.ones(len(centres),dtype=np.bool)
+        filterCondition = np.ones(len(centres),dtype=bool)
     if deltaCentral is not None:
         usedIndices = np.where((deltaCentral < 0) & filterCondition)[0]
         centresToUse = centres[usedIndices,:]
@@ -25,14 +29,14 @@ def getAntiHalosInSphere(centres,radius,origin=np.array([0,0,0]),
         tree = scipy.spatial.cKDTree(snapedit.wrap(centresToUse,boxsize),boxsize=boxsize)
     else:
         tree = scipy.spatial.cKDTree(centresToUse,boxsize=boxsize)
-    inRadius = tree.query_ball_point(origin,radius,n_jobs=n_jobs)
+    inRadius = tree.query_ball_point(origin,radius,workers=workers)
     if len(origin.shape) == 1:
         inRadiusFinal = list(usedIndices[inRadius])
-        condition = np.zeros(len(centres),dtype=np.bool)
+        condition = np.zeros(len(centres),dtype=bool)
         condition[inRadiusFinal] = True
     else:
         inRadiusFinal = np.array([list(usedIndices[k]) for k in inRadius])
-        condition = np.zeros((len(centres),len(origin)),dtype=np.bool)
+        condition = np.zeros((len(centres),len(origin)),dtype=bool)
         for k in range(0,len(origin)):
             condition[inRadiusFinal[k],k] = True
     return [inRadiusFinal,condition]
@@ -49,19 +53,19 @@ def getCentredDensityConstrast(snap,centres,radius):
 
 def getHaloAndAntihaloCountsInDensityRange(radius,snap,centres,deltaList,
         mThresh,hncentres,hrcentres,hnmasses,
-        hrmasses,deltaCentral,deltaLow=-0.07,deltaHigh=-0.06,n_jobs=-1):
+        hrmasses,deltaCentral,deltaLow=-0.07,deltaHigh=-0.06,workers=-1):
     similar = np.where((deltaList > deltaLow) & (deltaList <= deltaHigh))[0]
-    haloCount = np.zeros(len(similar),dtype=np.int)
-    antihaloCount = np.zeros(len(similar),dtype=np.int)
+    haloCount = np.zeros(len(similar),dtype=int)
+    antihaloCount = np.zeros(len(similar),dtype=int)
     boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
     haloTree = scipy.spatial.cKDTree(hncentres[np.where(hnmasses > mThresh)[0]],
         boxsize)
     antihaloTree = scipy.spatial.cKDTree(hrcentres[np.where(hrmasses > mThresh)[0]],
         boxsize)
     haloCount = haloTree.query_ball_point(centres[similar],radius,
-        return_length=True,n_jobs=n_jobs)
+        return_length=True,workers=workers)
     antihaloCount = antihaloTree.query_ball_point(centres[similar],radius,
-        return_length=True,n_jobs=n_jobs)
+        return_length=True,workers=workers)
     return [haloCount,antihaloCount]
 
 # Given two halo catalogues, find which halos are likely to correspond to each other. 
@@ -70,7 +74,7 @@ def getEquivalents(hn1,hn2,centres1,centres2,boxsize,rSearch):
     tree1 = scipy.spatial.cKDTree(centres1,boxsize=boxsize)
     tree2 = scipy.spatial.cKDTree(centres2,boxsize=boxsize)
     indicesNear = tree1.query_ball_tree(tree2,rSearch)
-    equivalent = np.zeros(len(hn1),dtype=np.int)
+    equivalent = np.zeros(len(hn1),dtype=int)
     for k in range(0,len(hn1)):
         if len(indicesNear[k]) == 0:
             equivalent[k] = -1
@@ -84,12 +88,13 @@ def loadAbellCatalogue(folder,filterForKnownZ = True):
     fileLines3 = []
     for line in file3:
         fileLines3.append(line)
+    file3.close()
     abell_l3 = np.zeros(len(fileLines3))
     abell_b3 = np.zeros(len(fileLines3))
-    abell_n3 = np.zeros(len(fileLines3),dtype=np.int)
+    abell_n3 = np.zeros(len(fileLines3),dtype=int)
     abell_z3 = np.zeros(len(fileLines3))
     for k in range(0,len(fileLines3)):
-        abell_n3[k] = np.int(fileLines3[k][0:4])
+        abell_n3[k] = int(fileLines3[k][0:4])
         abell_l3[k] = np.double(fileLines3[k][118:124])
         abell_b3[k] = np.double(fileLines3[k][125:131])
         abell_z3[k] = np.double(fileLines3[k][133:138].replace(' ','0'))
@@ -100,12 +105,13 @@ def loadAbellCatalogue(folder,filterForKnownZ = True):
     fileLines4 = []
     for line in file4:
         fileLines4.append(line)
+    file4.close()
     abell_l4 = np.zeros(len(fileLines4))
     abell_b4 = np.zeros(len(fileLines4))
-    abell_n4 = np.zeros(len(fileLines4),dtype=np.int)
+    abell_n4 = np.zeros(len(fileLines4),dtype=int)
     abell_z4 = np.zeros(len(fileLines4))
     for k in range(0,len(fileLines4)):
-        abell_n4[k] = np.int(fileLines4[k][0:4])
+        abell_n4[k] = int(fileLines4[k][0:4])
         abell_l4[k] = np.double(fileLines4[k][118:124])
         abell_b4[k] = np.double(fileLines4[k][125:131])
         abell_z4[k] = np.double(fileLines4[k][133:138].replace(' ','0'))
@@ -231,7 +237,7 @@ def getHaloCentresAndMassesFromCatalogue(h,inMPcs=True):
         hcentres[k,1] = h[k+1].properties['Yc']
         hcentres[k,2] = h[k+1].properties['Zc']
         hmasses[k] = h[k+1].properties['mass']
-    if inMpcs:
+    if inMPcs:
         hcentres /= 1000
     return [hcentres,hmasses]
 
@@ -251,12 +257,14 @@ def getHaloMassesAndVirials(snap,centres,overden=200,rho_def = 'critical',
 def loadOrRecompute(filename,func,*args,_recomputeData = False,_cacheData=True,\
         **kwargs):
     if os.path.isfile(filename) and not _recomputeData:
-        return pickle.load(open(filename,"rb"))
+        with open(filename,"rb") as infile:
+            result = pickle.load(infile)
     else:
         result = func(*args,**kwargs)
         if _cacheData:
-            pickle.dump(result,open(filename,"wb"))
-        return result
+            with open(filename,"wb") as outfile:
+                pickle.dump(result,outfile)
+    return result
 
 # Compares two variables and checks if they are the same:
 def compareData(result,compare,tolerance = 1e-5,enforceExact = False):
@@ -453,4 +461,56 @@ def getCountsInHealpixSlices(ng,hpIndices,nside = 4,nMagBins = 16,nslices=10,\
         for k in range(0,nMagBins):
             np.add.at(ngHP[k],np.reshape(hpIndices,nres**3),ng[k])
     return ngHP
+
+# Convert positions to healpix regions:
+def positionsToHealpix(positions,nside=4,\
+        inputCoord='icrs',outputCoord='galactic',rmax = 600,\
+        nslices = 10):
+    coords = SkyCoord(x = positions[:,0]*u.Mpc,y=positions[:,1]*u.Mpc,\
+        z = positions[:,2]*u.Mpc,frame=inputCoord,\
+        representation_type="cartesian")
+    if outputCoord == "galactic":
+        l = coords.galactic.l
+        b = coords.galactic.b
+    else:
+        l = coords.icrs.ra
+        b = coords.icrs.dec
+    theta = np.pi/2 - np.pi*np.array(b)/180.0
+    phi = np.pi*np.array(l)/180.0
+    pix = healpy.ang2pix(nside,theta,phi)
+    shellThickness = rmax/nslices
+    dist = np.sqrt(np.sum(positions**2,1))
+    shells = np.array(np.floor(dist/shellThickness),dtype=int)
+    npix = 12*nside**2
+    hpIndices = pix + shells*npix
+    return hpIndices
+
+def downsample(arr,factor):
+    old_shape = list(arr.shape)
+    mod = np.array([size % factor for size in old_shape])
+    if np.any(mod != 0):
+        raise Exception("Must downsample by a factor of the array size" + \
+            " along every dimension")
+    new_shape = []
+    for k in range(0,len(old_shape)):
+        new_shape.append(int(old_shape[k]/factor))
+        new_shape.append(factor)
+    newArr = np.reshape(arr,new_shape)
+    indicesAv = np.arange(1,len(new_shape),2)
+    downSampled = np.mean(newArr,tuple(indicesAv))
+    return downSampled
+
+
+# Wrappers around pickle, since we use this format a lot. Also ensures the file
+# always ends up being closed:
+def loadPickle(filename):
+    with open(filename,"rb") as infile:
+        result = pickle.load(infile)
+    return result
+
+def savePickle(result,filename):
+    with open(filename,"wb") as outfile:
+        pickle.dump(result,outfile)
+
+
 

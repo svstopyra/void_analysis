@@ -59,7 +59,7 @@ def index(pos,boxsize,N,lfl_corner=[0,0,0]):
 	#ind[:] = (np.floor((pos.in_units("Mpc a h**-1") - lfl_corner)*N/boxsize)).astype(int)
 	# Grid centroids are actually offset by half a cell from the lower front left corner, so
 	# we have to subtract off this part before rounding to the closest grid.
-	ind[:] = (np.round((pos.in_units("Mpc a h**-1") - lfl_corner)*N/boxsize - 0.5)).astype(int)
+	ind[:] = (np.round((pos - lfl_corner)*N/boxsize - 0.5)).astype(int)
 	return ind
 
 def grid_offset(pos,boxsize,N,lfl=[0,0,0]):
@@ -204,7 +204,8 @@ def reverseICs(s,filename=None,units=None,fmt=None,inverted=False,factor=1,perm=
 		centres = centres.in_units(units)
 	
 	snew = pynbody.snapshot.new(len(s))
-	snew['pos'] = wrap(2.0*centres - s['pos'],s.properties['boxsize'])
+	boxsize = s.properties['boxsize'].ratio("Mpc a h**-1")
+	snew['pos'] = wrap(2.0*centres - s['pos'],boxsize)
 	snew['vel'] = -s['vel']
 	# Other properties should be the same:
 	snew.properties = s.properties
@@ -319,12 +320,13 @@ def getParticlesInHalos(snap,halos):
 	return snap[np.argsort(snap['iord'])][np.unique(in_halos)]
 
 # Outputs a copy of a snapshot filt, with the particles re-ordered to be in ascending index order:
-def reorderSnap(snapname_in,snapname_out):
+def reorderSnap(snapname_in,snapname_out=None):
 	s = pynbody.load(snapname_in)
 	#Sort the index order:
 	sortedIndices = np.argsort(s['iord'])
 	snew = s[sortedIndices]
-	snew.write(filename=snapname_out,fmt=type(s))
+	if snapname_out is not None:
+		snew.write(filename=snapname_out,fmt=type(s))
 	return snew
 
 # Create a new snapshot based on a set of positions and weights

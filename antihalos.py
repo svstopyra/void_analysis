@@ -31,7 +31,7 @@ def getAntiHaloMasses(hr,fixedMass=False):
             antiHaloMasses[k] = mUnit*len(hr[k+1])
         else:
             antiHaloMasses[k] = np.sum(hr[k+1]['mass'])
-    return getAntiHaloMasses
+    return antiHaloMasses
 
 # Get the volume averaged densities of all the anti-halos.
 def getAntiHaloDensities(hr,snap,volumes=None):
@@ -45,6 +45,7 @@ def getAntiHaloDensities(hr,snap,volumes=None):
     for k in range(0,len(hr)):
         antiHaloDensities[k] = np.sum(rho[hr[k+1]['iord']]*\
             volumes[hr[k+1]['iord']])/np.sum(volumes[hr[k+1]['iord']])
+    return antiHaloDensities
 
 # Polynomial fit of the anti-halo massses and their radii above a given mass threshold
 def fitMassAndRadii(antiHaloMasses,antiHaloRadii,logThresh=14):
@@ -62,8 +63,8 @@ def MtoR(x,a,b):
 def RtoM(y,a,b):
     return (y/(10**a))**(1/b)
 
-    # Volume weighted barycentres of a set of particles:
-    def computeVolumeWeightedBarycentre(positions,volumes):
+# Volume weighted barycentres of a set of particles:
+def computeVolumeWeightedBarycentre(positions,volumes):
     if volumes.shape != (1,len(positions)):
         volumes2 = np.reshape(volumes,(1,len(positions)))
     else:
@@ -254,7 +255,6 @@ def runGenPk(centresAH,centresZV,massesAH,massesZV,rFilterAH = None,rFilterZV=No
 # Estimate correlation function of discrete data. If data2 is specified, it computes the cross correlation of the two data sets
 import Corrfunc
 def simulationCorrelation(rBins,boxsize,data1,data2=None,nThreads = 1,weights1=None,weights2 = None):
-
     X1 = data1[:,0]
     Y1 = data1[:,1]
     Z1 = data1[:,2]
@@ -289,18 +289,20 @@ def simulationCorrelation(rBins,boxsize,data1,data2=None,nThreads = 1,weights1=N
     return xiEst
 
 # Cross correlation of voids and anti-halo centres:
-def getCrossCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,rMin = 0,rMax = np.inf,rRange = np.linspace(0.1,10,101),nThreads=thread_count,boxsize = 200.0):
-    rFilter1 = np.where((ahRadii > rMin) & (ahRadii < rMax))[0]
-    rFilter2 = np.where((voidRadii > rMin) & (voidRadii < rMax))[0]
-    ahPos = ahCentres[rFilter1,:]
-    vdPos = voidCentres[rFilter2,:]
-    xiAM = simulationCorrelation(rRange,boxsize,ahPos,data2=snap['pos'],nThreads=nThreads,weights2 = snap['mass'])
-    xiVM = simulationCorrelation(rRange,boxsize,vdPos,data2=snap['pos'],nThreads=nThreads,weights2 = snap['mass'])
-    xiAV = simulationCorrelation(rRange,boxsize,ahPos,data2=vdPos,nThreads=nThreads)
-    return [xiAM,xiVM,xiAV]
+#def getCrossCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,rMin = 0,rMax = np.inf,rRange = np.linspace(0.1,10,101),nThreads=thread_count,boxsize = 200.0):
+#    rFilter1 = np.where((ahRadii > rMin) & (ahRadii < rMax))[0]
+#    rFilter2 = np.where((voidRadii > rMin) & (voidRadii < rMax))[0]
+#    ahPos = ahCentres[rFilter1,:]
+#    vdPos = voidCentres[rFilter2,:]
+#    xiAM = simulationCorrelation(rRange,boxsize,ahPos,data2=snap['pos'],nThreads=nThreads,weights2 = snap['mass'])
+#    xiVM = simulationCorrelation(rRange,boxsize,vdPos,data2=snap['pos'],nThreads=nThreads,weights2 = snap['mass'])
+#    xiAV = simulationCorrelation(rRange,boxsize,ahPos,data2=vdPos,nThreads=nThreads)
+#    return [xiAM,xiVM,xiAV]
 
 # Auto correlations of void and anti-halo centres:
-def getAutoCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,rMin = 0,rMax = np.inf,rRange = np.linspace(0.1,10,101),nThreads=thread_count,boxsize = 200.0):
+def getAutoCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,rMin = 0,\
+        rMax = np.inf,rRange = np.linspace(0.1,10,101),nThreads=thread_count,\
+        boxsize = 200.0):
     rFilter1 = np.where((ahRadii > rMin) & (ahRadii < rMax))[0]
     rFilter2 = np.where((voidRadii > rMin) & (voidRadii < rMax))[0]
     ahPos = ahCentres[rFilter1,:]

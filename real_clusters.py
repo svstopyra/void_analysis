@@ -28,26 +28,28 @@ def getClusterSkyPositions(fileroot=""):
     fileLines3 = []
     for line in file3:
         fileLines3.append(line)
+    file3.close()
     file4 = open(fileroot + "VII_110A/table4.dat",'r')
     fileLines4 = []
     for line in file4:
         fileLines4.append(line)
+    file4.close()
     # Extract sky co-ordinates, abell numbers, and redshift:
     abell_l3 = np.zeros(len(fileLines3))
     abell_b3 = np.zeros(len(fileLines3))
-    abell_n3 = np.zeros(len(fileLines3),dtype=np.int)
+    abell_n3 = np.zeros(len(fileLines3),dtype=int)
     abell_z3 = np.zeros(len(fileLines3))
     abell_l4 = np.zeros(len(fileLines4))
     abell_b4 = np.zeros(len(fileLines4))
-    abell_n4 = np.zeros(len(fileLines4),dtype=np.int)
+    abell_n4 = np.zeros(len(fileLines4),dtype=int)
     abell_z4 = np.zeros(len(fileLines4))
     for k in range(0,len(fileLines3)):
-        abell_n3[k] = np.int(fileLines3[k][0:4])
+        abell_n3[k] = int(fileLines3[k][0:4])
         abell_l3[k] = np.double(fileLines3[k][118:124])
         abell_b3[k] = np.double(fileLines3[k][125:131])
         abell_z3[k] = np.double(fileLines3[k][133:138].replace(' ','0'))
     for k in range(0,len(fileLines4)):
-        abell_n4[k] = np.int(fileLines4[k][0:4])
+        abell_n4[k] = int(fileLines4[k][0:4])
         abell_l4[k] = np.double(fileLines4[k][118:124])
         abell_b4[k] = np.double(fileLines4[k][125:131])
         abell_z4[k] = np.double(fileLines4[k][133:138].replace(' ','0'))
@@ -72,7 +74,7 @@ def getClusterSkyPositions(fileroot=""):
     return [abell_l,abell_b,abell_n,abell_z,abell_d,p_abell,coordAbell]
 
 
-def getAntiHalosInSphere(centres,radius,origin=np.array([0,0,0]),deltaCentral = None,boxsize=None,n_jobs=-1,filterCondition = None):
+def getAntiHalosInSphere(centres,radius,origin=np.array([0,0,0]),deltaCentral = None,boxsize=None,workers=-1,filterCondition = None):
     if filterCondition is None:
         filterCondition = np.ones(len(centres),dtype=np.bool)
     if deltaCentral is not None:
@@ -85,14 +87,14 @@ def getAntiHalosInSphere(centres,radius,origin=np.array([0,0,0]),deltaCentral = 
         tree = scipy.spatial.cKDTree(snapedit.wrap(centresToUse,boxsize),boxsize=boxsize)
     else:
         tree = scipy.spatial.cKDTree(centresToUse,boxsize=boxsize)
-    inRadius = tree.query_ball_point(origin,radius,n_jobs=n_jobs)
+    inRadius = tree.query_ball_point(origin,radius,workers=workers)
 
     if len(origin.shape) == 1:
-        inRadiusFinal = list(usedIndices[inRadius])
+        inRadiusFinal = usedIndices[inRadius]
         condition = np.zeros(len(centres),dtype=np.bool)
         condition[inRadiusFinal] = True
     else:
-        inRadiusFinal = np.array([list(usedIndices[k]) for k in inRadius])
+        inRadiusFinal = [list(usedIndices[k]) for k in inRadius]
         condition = np.zeros((len(centres),len(origin)),dtype=np.bool)
         for k in range(0,len(origin)):
             condition[inRadiusFinal[k],k] = True
@@ -108,12 +110,20 @@ def getClusterCounterpartPositions(abell_nums,abell_n,p_abell,snap,hncentres,hnm
     [haloCounterpartsLarge,condition] =\
         getAntiHalosInSphere(hncentres,rSearch,origin=superClusterCentres,\
             boxsize=boxsize,filterCondition = (hnmasses > mThresh))
-    largeHalosList = np.array([haloCounterpartsLarge[k][0]\
-         for k in range(0,len(haloCounterpartsLarge))])
-    sort = np.array([np.where(abell_n[np.isin(abell_n,abell_nums)] == abell_nums[k])[0][0] \
-        for k in range(0,len(abell_nums))],dtype=int)
-    largeHalos = largeHalosList[sort]
-    return largeHalos
+    largeHalosList = []
+    for k in range(0,len(haloCounterpartsLarge)):
+        if len(haloCounterpartsLarge[k]) > 0:
+            largeHalosList.append(haloCounterpartsLarge[k][0])
+        else:
+            largeHalosList.append(-1)
+    largeHalosList = np.array(largeHalosList,dtype=int)
+    sort = []
+    for k in range(0,len(abell_nums)):
+        selection = np.where(abell_n[np.isin(abell_n,abell_nums)] == \
+            abell_nums[k])[0]
+        if len(selection) > 0:
+            sort.append(selection[0])
+    return largeHalosList
 
 
 def getGriddedDensity(snap,N,redshiftSpace= False,velFudge = 1,snapPos = None,snapVel = None,

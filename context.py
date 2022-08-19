@@ -5,6 +5,7 @@ import pickle
 import astropy
 import numexpr as ne
 from . import snapedit
+import scipy
 
 # Returns the nearest neighbour halos to the specified halo
 def get_nearest_halos(centre,halo_list,coms='None',neighbours=1):
@@ -16,36 +17,31 @@ def get_nearest_halos(centre,halo_list,coms='None',neighbours=1):
         coms = np.zeros([len(halo_list),3])
         print("Computing halo centres of mass (this may take some time)...")
         for i in range(0,len(halo_list)):
-            come[i,:] = pynbody.analysis.halo.center_of_mass(halo_list[i+1])
+            coms[i,:] = pynbody.analysis.halo.center_of_mass(halo_list[i+1])
 
     # Construct KD tree for halo positions:	
-    tree = spatial.cKDTree(coms)
+    tree = scipy.spatial.cKDTree(coms)
     # Get nearest neighbours
     nearest = tree.query(centre,neighbours)
     return nearest[1]
 
 # Compute some additional properties of the halo catalogue (and possible save them to a file)
-def halo_centres_and_mass(h,save_file='none'):
-    halo_centres = np.zeros([len(h),3])
-    halo_masses = np.zeros(len(h))
+def halo_centres_and_mass(h,save_file='none',haloFilter=None):
+    if haloFilter is None:
+        haloFilter = np.arange(0,len(h))
+    halo_centres = np.zeros([len(haloFilter),3])
+    halo_masses = np.zeros(len(haloFilter))
     units = h[1]['pos'].units
     boxsize = h[1].properties['boxsize'].ratio(h[1]['pos'].units)
-    for k in range(0,len(h)):
-        halo_centres[k,:] = periodicCentre(h[k+1],boxsize,units=units)
-        halo_masses[k] = np.sum(h[k+1]['mass'])
+    for k in range(0,len(haloFilter)):
+        halo_centres[k,:] = periodicCentre(h[haloFilter[k]+1],boxsize,\
+            units=units)
+        halo_masses[k] = np.sum(h[haloFilter[k]+1]['mass'])
     if(save_file != 'none'):
         pickle.dump([halo_centres,halo_masses],open(save_file,"wb"))
     return [halo_centres,halo_masses]
 
 # Gets halos in the reversed simulation (sr) and returns a list of their centres in the unreversed simulation.
-def void_centres(sn,sr,hr):
-    void_centre_list = np.zeros([len(hr),3])
-    b = pynbody.bridge.Bridge(sn,sr)
-    units = sn['pos'].units
-    boxsize = sn.properties['boxsize'].ratio(sn['pos'].units)
-    for k in range(0,len(hr)):
-        void_centre_list[k,:] = periodicCentre(b(hr[k+1]),boxsize,units=units)
-    return void_centre_list
 
 def computePeriodicCentreWeighted(positions,weight,periodicity,\
         accelerate=False,unwrap=False):
@@ -118,47 +114,13 @@ def halo_filter(s,h,filt):
     # s - simulation snapshot
     # h - halo list (could also be a list of 
     halo_list = np.zeros(len(h))
+    indicesFilt = s[filt]['iord']
     for k in range(0,len(h)):
-        if len(h[k+1][filt] > 0):
+        if len(np.intersect1d(h[k+1]['iord'],indicesFilt) > 0):
             halo_list[k] = 1
     # Get halo indices (offset by 1 downwards from the halo number)
     indices = np.where(halo_list == 1)
     return indices[0]
-
-# Get halos inside a specified sphere, using centre and mass:
-def halos_in_sphere(h,radius,centre,halo_centres=None):
-    # Generate halo_centres and masses if these are not given:
-    if(halo_centres == None):
-        [halo_centres,halo_masses] = halo_centres_and_mass(h)
-    #Get distance from the centre specified:
-    r = np.sqrt(np.sum((halo_centres - centre)**2,1))
-    in_sphere = np.where(r < radius)
-    collect = np.zeros(len(h))
-    collect[in_sphere[0]] = 1
-    # Check that these halos are actually in the sphere, because sometimes halos
-    # can appear to have their centre of mass inside it, even though they are outside
-    # because they lie on the periodic boundary (thus half their mass is on one side of the sphere and half on the other).
-    filt = pynbody.filt.Sphere(radius,centre)
-    for k in range(0,len(in_sphere[0])):
-        if (len(h[in_sphere[0][k]+1][filt]) == 0):
-            collect[in_sphere[0][k]] = 0
-    in_sphere = np.where(collect == 1)
-    return in_sphere[0]
-
-def voids_in_sphere(hr,radius,centre,sn,sr,void_centre_list=None):
-    if(void_centre_list == None):
-        void_centre_list = void_centres(sn,sr,hr)
-    r = np.sqrt(np.sum((void_centre_list - centre)**2,1))
-    in_sphere = np.where(r < radius)
-    collect = np.zeros(len(hr))
-    collect[in_sphere[0]] = 1
-    filt = pynbody.filt.Sphere(radius,centre)
-    b = pynbody.bridge.Bridge(sn,sr)
-    for k in range(0,len(in_sphere[0])):
-        if (len(b(hr[in_sphere[0][k]+1])[filt]) < len(hr[in_sphere[0][k]+1])/2):
-            collect[in_sphere[0][k]] = 0
-    in_sphere = np.where(collect == 1)
-    return in_sphere[0]
 
 # Compute the rotation matrix between two specified vectors.
 # Returns the matrix that rotates the unit vector of a onto
@@ -451,16 +413,12 @@ def distance(pos,centre = (0,0,0)):
         return np.sqrt(np.sum((pos - centre)**2,1))
 
 # Return the distances of each halo from the specified centre:
-def halo_distances(hlist,centre = (0,0,0)):
-    dist = np.zeros(len(hlist))
-    for k in range(0,len(hlist)):
-        dist[k] = mean_distance(hlist[k+1],centre)
-    return dist
-
-def void_distances(hr,b,centre = (0,0,0)):
-    dist = np.zeros(len(hr))
-    for k in range(0,len(hr)):
-        dist[k] = mean_distance(b(hr[k+1]),centre)
+def halo_distances(hlist,centre = (0,0,0),haloFilter = None):
+    if haloFilter is None:
+        haloFilter = np.arange(0,len(hlist))
+    dist = np.zeros(len(haloFilter))
+    for k in range(0,len(haloFilter)):
+        dist[k] = mean_distance(hlist[haloFilter[k]+1],centre)
     return dist
 
 # Creates a list of points from the union of many halos:
@@ -490,7 +448,8 @@ def select_sphere(s,radius,distance,direction,offset=(0,0,0)):
 def get_containing_halos(snap,halos):
     particle_count = np.zeros(len(halos),dtype='int')
     for k in range(0,len(halos)):
-        particle_count[k] = len(halos[k+1].intersect(snap))
+        #particle_count[k] = len(halos[k+1].intersect(snap))
+        particle_count[k] = len(np.intersect1d(snap['iord'],halos[k+1]['iord']))
 
     containing_halos = np.where(particle_count > 0)
     particles = particle_count[containing_halos]
@@ -630,7 +589,8 @@ def mapGalacticSnapshotToEquatorial(snap,snapCoord=None):
         l = np.arctan2(snap['pos'][:,1],snap['pos'][:,0])
         b = np.arcsin(snap['pos'][:,2]/R)
         snapCoord = astropy.coordinates.SkyCoord(l=l*astropy.units.rad,
-            b=b*astropy.units.rad,distance=R*astropy.units.Mpc/h)
+            b=b*astropy.units.rad,distance=R*astropy.units.Mpc/h,\
+            frame='galactic')
     snap['pos'][:,0] = snapCoord.icrs.cartesian.x.value*h
     snap['pos'][:,1] = snapCoord.icrs.cartesian.y.value*h
     snap['pos'][:,2] = snapCoord.icrs.cartesian.z.value*h
@@ -640,7 +600,8 @@ def mapEquatorialToGalactic(points,h = 0.705):
     ra = np.arctan2(points[:,1],points[:,0])
     dec = np.arcsin(points[:,2]/R)
     snapCoord = astropy.coordinates.SkyCoord(ra=ra*astropy.units.rad,
-        dec=dec*astropy.units.rad,distance=R*astropy.units.Mpc/h)
+        dec=dec*astropy.units.rad,distance=R*astropy.units.Mpc/h,\
+        frame='icrs')
     pointsGalactic = np.zeros(points.shape)
     pointsGalactic[:,0] = snapCoord.galactic.cartesian.x.value*h
     pointsGalactic[:,1] = snapCoord.galactic.cartesian.y.value*h
@@ -652,7 +613,7 @@ def mapGalacticToEquatorial(points,h = 0.705):
     l = np.arctan2(points[:,1],points[:,0])
     b = np.arcsin(points[:,2]/R)
     snapCoord = astropy.coordinates.SkyCoord(l=l*astropy.units.rad,
-        b=b*astropy.units.rad,distance=R*astropy.units.Mpc/h)
+        b=b*astropy.units.rad,distance=R*astropy.units.Mpc/h,frame='galactic')
     pointsEquatorial = np.zeros(points.shape)
     pointsEquatorial[:,0] = snapCoord.icrs.cartesian.x.value*h
     pointsEquatorial[:,1] = snapCoord.icrs.cartesian.y.value*h

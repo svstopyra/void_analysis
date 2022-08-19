@@ -2,7 +2,7 @@
 from void_analysis import plot, snapedit, tools, simulation_tools, halos
 from void_analysis import stacking, real_clusters, survey
 from void_analysis.tools import loadOrRecompute
-from void_analysis.simulation_tools import ngPerLBin, ngBias
+from void_analysis.simulation_tools import ngPerLBin
 from void_analysis.simulation_tools import biasNew, biasOld
 from void_analysis.survey import radialCompleteness, surveyMask
 import numpy as np
@@ -23,10 +23,10 @@ def keCorr(z,fit = [-1.456552772320231,-0.7687913554110967]):
 
 # Convert per-voxel to per-healpix patch average galaxy counts:
 def getAllNgsToHealpix(ngList,hpIndices,sampleList,sampleFolder,nside,\
-        recomputeData=False):
+        recomputeData=False,nres=256):
     return [loadOrRecompute(sampleFolder + "sample" + str(sampleList[k]) + \
         "/ngHP.p",tools.getCountsInHealpixSlices,ngList[k],hpIndices,\
-        nside=nside,_recomputeData=recomputeData) \
+        nside=nside,nres=nres,_recomputeData=recomputeData) \
         for k in range(0,len(sampleList))]
 
 # Generate data for the PPT plots:
@@ -39,7 +39,8 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
         rBinMax = 20,abell_nums = [426,2147,1656,3627,3571,548,2197,2063,1367],\
         nside = 4,nRadialSlices=10,rmax=600,tmppFile = "2mpp_data/2MPP.txt",\
         reductions = 4,iterations = 20,verbose=True,hpIndices=None,\
-        centreMethod="density"):
+        centreMethod="density",catFolder="",\
+        snapname="/gadget_full_forward_512/snapshot_001"):
     # Parameters:
         # nBins - Number of radial bins for galaxy counts in PPT
         # nClust - Number of clusters to do PPTs for.
@@ -77,7 +78,7 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
     # 2M++ catalogue data, and cluster locations:
     [combinedAbellN,combinedAbellPos,abell_nums] = \
         real_clusters.getCombinedAbellCatalogue(Om0 = 0.3111,Ode0 = 0.6889,\
-            h=0.6766,catFolder="")
+            h=0.6766,catFolder=catFolder)
     clusterInd = [np.where(combinedAbellN == n)[0] for n in abell_nums]
     clusterLoc = np.zeros((len(clusterInd),3))
     for k in range(0,len(clusterInd)):
@@ -93,6 +94,16 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
         str(k) + ".h5",'r') for k in snapNumList]
     mcmcDen = [1.0 + sample['scalars']['BORG_final_density'][()] \
         for sample in biasData]
+    if N < mcmcDen[0].shape[0]:
+        print("Warning!!: requested resolution is lower than " + 
+        "the MCMC file. Density field will be downgraded.")
+        mcmcDen = [tools.downsample(den,int(den.shape[0]/N)) \
+            for den in mcmcDen]
+    elif N > mcmcDen[0].shape[0]:
+        print("Warning!!: requested resolution is higher than " + 
+        "the MCMC file. Density field will be interpolated.")
+        mcmcDen = [scipy.ndimage.zoom(den,N/den.shape[0]) \
+            for den in mcmcDen]
     mcmcDenLin = [np.reshape(den,N**3) for den in mcmcDen]
     mcmcDen_r = [np.reshape(den,(N,N,N),order='F') for den in mcmcDenLin]
     mcmcDenLin_r = [np.reshape(den,N**3) for den in mcmcDen_r]
@@ -137,7 +148,7 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
     ngMCMC = np.vstack([tools.loadOrRecompute(samplesFolder + "sample" + \
             str(snapNumList[k]) + "/ngMCMC.p",ngPerLBin,\
             biasParam,return_samples=True,mask=mask,\
-            accelerate=True,\
+            accelerate=True,N=N,\
             delta = [mcmcDenLin_r[k]],contrast=False,sampleList=[0],\
             beta=biasParam[k][:,:,1],rhog = biasParam[k][:,:,3],\
             epsg=biasParam[k][:,:,2],\
@@ -148,17 +159,17 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
     if verbose:
         print("Converting voxel counts to healpix patch counts...")
     ngHPMCMC = tools.loadOrRecompute("ngHPMCMC.p",getAllNgsToHealpix,ngMCMC,\
-        hpIndices,snapNumList,samplesFolder,nside,\
+        hpIndices,snapNumList,samplesFolder,nside,nres=N,\
         _recomputeData=recomputeData)
     # Compute counts in each healpix pixel for 2M++ survey:
     if verbose:
         print("Computing 2M++ galaxy counts...")
     ng2MPP = np.reshape(tools.loadOrRecompute("mg2mppK3.p",\
         survey.griddedGalCountFromCatalogue,\
-        cosmo,tmppFile=tmppFile,Kcorrection = True,\
+        cosmo,tmppFile=tmppFile,Kcorrection = True,N=N,\
         _recomputeData=recomputeData),(nMagBins,N**3))
     ngHP = tools.loadOrRecompute("ngHP3.p",tools.getCountsInHealpixSlices,\
-        ng2MPP,hpIndices,nside=nside,_recomputeData=recomputeData)
+        ng2MPP,hpIndices,nside=nside,nres=N,_recomputeData=recomputeData)
     # Amplitudes of the bias model in each healpix patch:
     if verbose:
         print("Computing bias patch amplitudes...")
@@ -173,8 +184,7 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
     clusterCentresSim = []
     densityList = [np.reshape(den,N**3) for den in mcmcDen_r]
     for k in range(0,nsamples): 
-        snapPath = samplesFolder + "sample" + str(snapNumList[k]) + \
-                "/gadget_full_forward_512/snapshot_001"
+        snapPath = samplesFolder + "sample" + str(snapNumList[k]) + snapname
         clusterCentresSim.append(\
             simulation_tools.getClusterCentres(clusterLoc,\
             snapPath = snapPath,fileSuffix = "clusters1",\
@@ -251,8 +261,7 @@ def getHMFAMFDataFromSnapshots(snapNumList,snapname,snapnameRev,samplesFolder,\
             recompute=recomputeData,_recomputeData=recomputeData)
     else:
         # Load from the pre-computed list:
-        ahProps = [pickle.load(\
-            open(snap.filename + ".AHproperties.p","rb")) \
+        ahProps = [tools.loadPickle(snap.filename + ".AHproperties.p") \
             for snap in snapList]
         massesAndCentres512 = [[\
             tools.remapAntiHaloCentre(props[0],boxsize),props[1]] \
@@ -341,8 +350,7 @@ def getUnconstrainedHMFAMFData(snapNumListUncon,snapName,snapNameRev,\
                 recompute=recomputeData,_recomputeData=recomputeData)
     else:
         # Load from the pre-computed list:
-        ahProps = [pickle.load(\
-            open(snap.filename + ".AHproperties.p","rb")) \
+        ahProps = [tools.loadPickle(snap.filename + ".AHproperties.p") \
             for snap in snapListUnconstrained]
         massesAndCentres_512uncon = [[\
             tools.remapAntiHaloCentre(props[0],boxsize),props[1]] \
@@ -563,11 +571,9 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
     snapListUnconstrainedRev = [pynbody.load(unconstrainedFolder + \
             "sample" + str(snapNum) + "/" + snapnameRev) \
             for snapNum in snapNumListUncon]
-    ahPropsConstrained = [pickle.load(\
-        open(snap.filename + ".AHproperties.p","rb")) \
+    ahPropsConstrained = [tools.loadPickle(snap.filename + ".AHproperties.p") \
         for snap in snapList]
-    ahPropsUnconstrained = [pickle.load(\
-        open(snap.filename + ".AHproperties.p","rb")) \
+    ahPropsUnconstrained = [tools.loadPickle(snap.filename + ".AHproperties.p")\
         for snap in snapListUnconstrained]
     nbar = (N/boxsize)**3
     # Constrained antihalo properties:
@@ -688,8 +694,7 @@ def getAntihaloSkyPlotData(snapNumList,nToPlot=20,verbose=True,\
     boxsize = snapList[0].properties['boxsize'].ratio("Mpc a h**-1")
     antihaloCatalogueList = [snap.halos() for snap in snapListRev]
     snapsortList = [np.argsort(snap['iord']) for snap in snapList]
-    ahProps = [pickle.load(\
-        open(snap.filename + ".AHproperties.p","rb")) \
+    ahProps = [tools.loadPickle(snap.filename + ".AHproperties.p") \
         for snap in snapList]
     antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
         for props in ahProps]
@@ -905,8 +910,7 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
     if verbose:
         print("Extracting anti-halo properties...")
     if ahProps is None:
-        ahProps = [pickle.load(\
-            open(snap.filename + ".AHproperties.p","rb")) \
+        ahProps = [tools.loadPickle(snap.filename + ".AHproperties.p") \
             for snap in snapList]
     antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
         for props in ahProps]

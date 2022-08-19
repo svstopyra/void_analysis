@@ -5,9 +5,13 @@ import astropy
 import numexpr as ne
 from .halos import massCentreAboutPoint
 import scipy
-from . import tools, snapedit
+from . import tools, snapedit, context, stacking
 import pickle
 import os
+import multiprocessing as mp
+thread_count = mp.cpu_count()
+from astropy.coordinates import SkyCoord
+import astropy.units as u
 
 # Convert eulerian co-ordinate to redshift space co-ordinates:
 def eulerToZ(pos,vel,cosmo,boxsize,h,centre = None,Ninterp=1000,\
@@ -115,25 +119,8 @@ def getGriddedGalCount(pos,N,boxsize):
         range = ((-boxsize/2,boxsize/2),(-boxsize/2,boxsize/2),\
             (-boxsize/2,boxsize/2)),normed=False)
     # Deal with an ordering issue:
-    H = np.reshape(np.reshape(H,256**3),(256,256,256),order='F')
+    H = np.reshape(np.reshape(H,N**3),(N,N,N),order='F')
     return H
-
-# bias function, per realisation:
-def ngBias(nmeans,bs,delta,lumBins = 16,nReal = 6):
-    beta = bs[:,:,0]
-    rhog = bs[:,:,1]
-    epsg = bs[:,:,2]
-    ng = np.zeros(delta.shape)
-    for l in range(0,nReal):
-        if len(delta[l].shape) == 3:
-            deltaUse = np.reshape(delta[l],N**3)
-        else:
-            deltaUse = delta[l]
-        deltaArray = np.tile(deltaUse,(lumBins,1)).transpose()
-        resArray = bias['nmeans'][l,:,0]*np.power(1.0 + deltaArray,beta[l,:])*\
-                np.exp(-rhog[l,:]*np.power(1.0 + deltaArray,-epsg[l,:]))
-        ng[l] = np.sum(resArray,1)
-    return ng
 
 # Old Bias Model:
 def biasOld(rhoArray,params,accelerate = True):
@@ -310,15 +297,19 @@ def matchClustersAndHalos(clusterPos,haloPos,haloMass,boxsize,catalogPos,\
                  descendingHalos[0:matchableNum]
     return [counterpartClusters,counterpartHalos]
 
-def getHaloCentresAndMassesFromCatalogue(h,boxsize=677.7):
+def getHaloCentresAndMassesFromCatalogue(h,boxsize=677.7,remap=True,\
+        inMpcs = True):
     hcentres = np.zeros((len(h),3))
     hmasses = np.zeros(len(h))
     for k in range(0,len(h)):
-        hcentres[k,0] = h[k+1].properties['Xc']/1000
-        hcentres[k,1] = h[k+1].properties['Yc']/1000
-        hcentres[k,2] = h[k+1].properties['Zc']/1000
+        hcentres[k,0] = h[k+1].properties['Xc']
+        hcentres[k,1] = h[k+1].properties['Yc']
+        hcentres[k,2] = h[k+1].properties['Zc']
         hmasses[k] = h[k+1].properties['mass']
-    hcentres = tools.remapAntiHaloCentre(hcentres,boxsize)
+    if inMpcs:
+        hcentres /= 1000
+    if remap:
+        hcentres = tools.remapAntiHaloCentre(hcentres,boxsize)
     return [hcentres,hmasses]
 
 def getHaloCentresAndMassesRecomputed(h,boxsize=677.7,fixedMass=True):
@@ -426,13 +417,87 @@ def getClusterCentres(approxCentre,snap=None,snapPath="snapshot_001",
                 else:
                     refinedPos[k,:] = haloPos[counterpartHalos[k],:]
         elif method == "load":
-            refinedPos = pickle.load(open(snapPath + "." + fileSuffix,"rb"))
+            with open(snapPath + "." + fileSuffix,"rb") as infile:
+                refinedPos = pickle.load(infile)
             if refinedPos.shape != approxCentre.shape:
                 raise Exception("Cached cluster locations are not a match " + \
                     "for supplied clusters.")
         else:
             raise Exception("Invalid method requested.")
         if cache:
-            pickle.dump(refinedPos,open(snapPath + "." + fileSuffix,"wb"))
+            with open(snapPath + "." + fileSuffix,"wb") as outfile:
+                pickle.dump(refinedPos,outfile)
     return refinedPos
+
+
+
+# Master function to process snapshots. Note, this assumes AHF or another 
+# halo finder has already been run, as well as ZOBOV, with the relevant 
+# volumes data file moved to be in the same place.
+def processSnapshot(standard,reverse,nBins,offset=4,output=None):
+    if output is None:
+        output = standard + ".AHproperties.p"
+    # Load snapshots and halo catalogues.
+    snapn = pynbody.load(standard)
+    hn = snapn.halos()
+    snapr = pynbody.load(reverse)
+    hr = snapr.halos()
+    # Check whether the snapshots need re-ordering:
+    sortedn = np.arange(0,len(snapn))
+    sortedr = np.arange(0,len(snapr))
+    orderedn = np.all(sortedn == snapn['iord'])
+    orderedr = np.all(sortedr == snapr['iord'])
+    if not orderedn:
+        sortedn = np.argsort(snapn['iord'])
+    if not orderedr:
+        sortedr = np.argsort(snapr['iord'])
+
+    # Get halo masses and centres from the halo catalogues:
+    [hncentres,hnmasses] = getHaloCentresAndMassesFromCatalogue(hn,remap=False)
+    [hrcentres,hrmasses] = getHaloCentresAndMassesFromCatalogue(hr,remap=False)
+    # Import the ZOBOV Voronoi information:
+    haveVoronoi = os.path.isfile(standard + ".vols")
+    if haveVoronoi:
+        volumes = tools.zobovVolumesToPhysical(standard + ".vols",snapn,\
+            dtype=np.double,offset=offset)
+    else:
+        volumes = snapn['mass']/snapn['rho'] # Use an sph estimate of the 
+            # volume weights. Note that these do not necessarily tesselate, 
+            # so can't directly obtain the void volumes from them.
+    # While we have the halo centres, what we actually need is the
+    # anti-halo centres:
+    antiHaloCentres = np.zeros((len(hr),3))
+    antiHaloVolumes = np.zeros(len(hr))
+    boxsize = snapn.properties['boxsize'].ratio("Mpc a h**-1")
+    periodicity = [boxsize]*3
+    for k in range(0,len(hr)):
+        antiHaloCentres[k,:] = context.computePeriodicCentreWeighted(\
+            snapn['pos'][sortedn[hr[k+1]['iord']],:],\
+            volumes[sortedn[hr[k+1]['iord']]],periodicity,accelerate=True)
+        antiHaloVolumes[k] = np.sum(volumes[sortedn[hr[k+1]['iord']]])
+    antiHaloRadii = np.cbrt(3*antiHaloVolumes/(4*np.pi))
+    # Perform pair counting (speeds up computing density profiles, 
+    # but needs to be recomputed if we want different bins):
+    rBinStack = np.linspace(0,3.0,nBins)
+    tree = scipy.spatial.cKDTree(snapn['pos'],boxsize=boxsize)
+    [pairCounts,volumesList] = stacking.getPairCounts(\
+        antiHaloCentres,antiHaloRadii,snapn,rBinStack,\
+        nThreads=thread_count,tree=tree,method="poisson",vorVolumes=volumes)
+    # Central and average densities of the anti-halos:
+    deltaCentral = np.zeros(len(hr))
+    deltaAverage = np.zeros(len(hr))
+    rhoBar = np.sum(snapn['mass'])/(boxsize**3) # Cosmological average density
+    for k in range(0,len(hr)):
+        deltaCentral[k] = stacking.centralDensity(antiHaloCentres[k,:],\
+            antiHaloRadii[k],snapn['pos'],volumes,snapn['mass'],\
+            tree=tree,centralRatio = 4,nThreads=thread_count)/rhoBar - 1.0
+        deltaAverage[k] = np.sum(hr[k+1]['mass'])/\
+            np.sum(volumes[sortedn[hr[k+1]['iord']]])/rhoBar - 1.0
+    pickle.dump([hncentres,hnmasses,hrcentres,hrmasses,volumes,\
+      antiHaloCentres,antiHaloVolumes,antiHaloRadii,rBinStack,pairCounts,\
+      volumesList,deltaCentral,deltaAverage],\
+      open(output,"wb"))
+
+
+
 
