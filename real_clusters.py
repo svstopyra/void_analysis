@@ -76,7 +76,7 @@ def getClusterSkyPositions(fileroot=""):
 
 def getAntiHalosInSphere(centres,radius,origin=np.array([0,0,0]),deltaCentral = None,boxsize=None,workers=-1,filterCondition = None):
     if filterCondition is None:
-        filterCondition = np.ones(len(centres),dtype=np.bool)
+        filterCondition = np.ones(len(centres),dtype=bool)
     if deltaCentral is not None:
         usedIndices = np.where((deltaCentral < 0) & filterCondition)[0]
         centresToUse = centres[usedIndices,:]
@@ -91,11 +91,11 @@ def getAntiHalosInSphere(centres,radius,origin=np.array([0,0,0]),deltaCentral = 
 
     if len(origin.shape) == 1:
         inRadiusFinal = usedIndices[inRadius]
-        condition = np.zeros(len(centres),dtype=np.bool)
+        condition = np.zeros(len(centres),dtype=bool)
         condition[inRadiusFinal] = True
     else:
         inRadiusFinal = [list(usedIndices[k]) for k in inRadius]
-        condition = np.zeros((len(centres),len(origin)),dtype=np.bool)
+        condition = np.zeros((len(centres),len(origin)),dtype=bool)
         for k in range(0,len(origin)):
             condition[inRadiusFinal[k],k] = True
     return [inRadiusFinal,condition]

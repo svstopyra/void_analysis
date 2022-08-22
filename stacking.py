@@ -102,7 +102,7 @@ def getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree=No
 	elif method == "volume":
 		# Volume weighted density in each shell:
 		for k in range(0,len(voidRadii)):
-			indicesList = np.array(tree.query_ball_point(voidCentres[k,:],rBins[-1]*voidRadii[k],n_jobs=nThreads),dtype=np.int32)
+			indicesList = np.array(tree.query_ball_point(voidCentres[k,:],rBins[-1]*voidRadii[k],workers=nThreads),dtype=np.int32)
 			disp = snap['pos'][indicesList,:] - voidCentres[k,:]
 			r = np.array(np.sqrt(np.sum(disp**2,1)))
 			sort = np.argsort(r)
@@ -119,7 +119,7 @@ def getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree=No
 			print("Finished void " + str(k) + " of " + str(len(voidRadii)))
 	else:
 		#for k in range(0,len(rBins)):
-		#	indices = tree.query_ball_point(voidCentres,rBins[k]*voidRadii,n_jobs=nThreads)
+		#	indices = tree.query_ball_point(voidCentres,rBins[k]*voidRadii,workers=nThreads)
 		#	listLengths = np.array([len(list) for list in indices])
 		#	volSum = np.array([np.sum(vorVolumes[list]) for list in indices])
 		#	if k == 0:
@@ -129,7 +129,7 @@ def getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree=No
 		#		nPairsList[:,k] = listLengths - nPairsList[:,k-1]
 		#		volumesList[:,k] = volSum - volumesList[:,k-1]
 		for k in range(0,len(voidRadii)):
-			indicesList = np.array(tree.query_ball_point(voidCentres[k,:],rBins[-1]*voidRadii[k],n_jobs=nThreads),dtype=np.int32)
+			indicesList = np.array(tree.query_ball_point(voidCentres[k,:],rBins[-1]*voidRadii[k],workers=nThreads),dtype=np.int32)
 			disp = snap['pos'][indicesList,:] - voidCentres[k,:]
 			r = np.array(np.sqrt(np.sum(disp**2,1)))
 			sort = np.argsort(r)
@@ -155,7 +155,7 @@ def getRadialVelocityAverages(voidCentres,voidRadii,snap,rBins,nThreads=thread_c
 	nPartList = np.zeros((len(voidCentres),len(rBins)-1),dtype=np.int64)
 	volumesList = np.outer(voidRadii**3,volumes)
 	for k in range(0,len(vRList)):
-		indicesList = np.array(tree.query_ball_point(voidCentres[k,:],rBins[-1]*voidRadii[k],n_jobs=nThreads),dtype=np.int32)
+		indicesList = np.array(tree.query_ball_point(voidCentres[k,:],rBins[-1]*voidRadii[k],workers=nThreads),dtype=np.int32)
 		disp = snap['pos'][indicesList,:] - voidCentres[k,:]
 		r = np.array(np.sqrt(np.sum(disp**2,1)))
 		sort = np.argsort(r)
@@ -281,7 +281,7 @@ def lambdaVoid(voidParticles,volumes,nbar,radius):
 def centralDensity(voidCentre,voidRadius,positions,volumes,masses,boxsize=None,tree=None,centralRatio = 4,nThreads=thread_count):
 	if tree is None:
 		tree = scipy.spatial.cKDTree(positions,boxsize=boxsize)
-	central = tree.query_ball_point(voidCentre,voidRadius/centralRatio,n_jobs=nThreads)
+	central = tree.query_ball_point(voidCentre,voidRadius/centralRatio,workers=nThreads)
 	rhoCentral = np.sum(masses[central])/np.sum(volumes[central])
 	return rhoCentral
 	
@@ -289,12 +289,12 @@ def centralDensityNN(voidCentre,positions,masses,volumes,boxsize=None,tree = Non
 	if tree is None:
 		tree = scipy.spatial.cKDTree(positions,boxsize=boxsize)
 	if rCut is not None:
-		central = tree.query(voidCentre,k=nNeighbours,n_jobs=nThreads,distance_upper_bound = rCut)
+		central = tree.query(voidCentre,k=nNeighbours,workers=nThreads,distance_upper_bound = rCut)
 	else:
-		central = tree.query(voidCentre,k=nNeighbours,n_jobs=nThreads)
+		central = tree.query(voidCentre,k=nNeighbours,workers=nThreads)
 	if (len(central[0]) < 1) and (rCut is not None):
 		# Try again, ignoring the cut:
-		central = tree.query(voidCentre,k=nNeighbours,n_jobs=nThreads)
+		central = tree.query(voidCentre,k=nNeighbours,workers=nThreads)
 	rhoCentral = np.sum(masses[central[1]])/np.sum(volumes[central[1]])
 	return rhoCentral
 

@@ -86,7 +86,7 @@ def getGriddedDensity(snap,N,redshiftSpace= False,velFudge = 1,snapPos = None,sn
     meanDensity = np.double(np.sum(snapMass))/(boxsize**3)
     density = H/(cellVol*meanDensity)
     # Deal with an ordering issue:
-    density = np.reshape(np.reshape(density,256**3),(256,256,256),order='F')
+    density = np.reshape(np.reshape(density,N**3),(N,N,N),order='F')
     return density
 
 # Compute the points within a co-ordinate range, accounting for periodic 
@@ -339,8 +339,8 @@ def getAllHaloCentresAndMasses(snapList,boxsize,recompute=False,\
             str(len(snapList)))
         if os.path.isfile(snapList[k].filename + "." + suffix) \
                 and not recompute:
-            massesAndCentresList.append(pickle.load(\
-                open(snapList[k].filename + "." + suffix,"rb")))
+            massesAndCentresList.append(tools.loadPickle(\
+                snapList[k].filename + "." + suffix))
         else:
             massesAndCentresList.append(tools.loadOrRecompute(\
                 snapList[k].filename + "." + suffix,function,\

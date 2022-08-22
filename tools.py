@@ -387,7 +387,7 @@ def createTestData(filename,func,*args,_return_result = True,\
 # Convert an MCMC file into a white noise file:
 def mcmcFileToWhiteNoise(mcmcfile,outputName,normalise = True,\
         fromInverseFourier = False,flip = False,reverse=False):
-    f = h5py.File(mcmcfile)
+    f = h5py.File(mcmcfile,'r')
     if fromInverseFourier:
         wn = scipy.fft.irfftn(f['scalars']['s_hat_field'][()])
     else:

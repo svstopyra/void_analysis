@@ -1,6 +1,6 @@
 import numpy as np
 import pynbody
-from . import context, anti_halo_plot, stacking
+from . import context, stacking
 import os
 import multiprocessing as mp
 thread_count = mp.cpu_count()
