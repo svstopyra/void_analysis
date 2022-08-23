@@ -19,12 +19,27 @@ import astropy
 import h5py
 import astropy
 import argparse
+import configparser
 import os
 
 # If true, the code will generate reference data if missing.
-generateMode = True
+#generateMode = True
 # Change this if the test data is kept in a non-standard place:
-dataFolder = "data_for_tests/"
+#dataFolder = "data_for_tests/"
+
+# Process configuration options:
+config = configparser.ConfigParser()
+if os.path.isfile("../config.ini"):
+    config.read("../config.ini")
+    print("Using user-defined config options.")
+elif os.path.isfile("../config_default.ini"):
+    config.read("../config_default.ini")
+    print("Using default config options...")
+else:
+    raise Exception("config_default.ini is missing.")
+
+dataFolder = config['TESTING']['DataFolder']
+generateMode = config['TESTING']['GenerateMode'] == 'True'
 
 # Base test class:
 class test_base(unittest.TestCase):

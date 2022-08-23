@@ -12,7 +12,7 @@ import pynbody
 
 figuresFolder = "borg-antihalos_paper_figures/"
 
-recomputeData = False
+recomputeData = True
 testDataFolder = figuresFolder + "tests_data/"
 runTests = False
 
@@ -39,7 +39,8 @@ legendFontsize = 8
 # Snapshots to use:
 snapNumListOld = [7422,7500,8000,8500,9000,9500]
 #snapNumList = [7000,7200,7400,7600,8000]
-snapNumList = [7000,7200,7400,7600,7800,8000]
+#snapNumList = [7000,7200,7400,7600,7800,8000]
+snapNumList = np.arange(7000,10300 +1,300)
 #snapNumListUncon = [1,2,3,4,5]
 snapNumListUncon = [1,2,3,4,5,6,7,8,9,10]
 snapNumListUnconOld = [1,2,3,5,6]
