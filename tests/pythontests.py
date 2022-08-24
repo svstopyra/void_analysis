@@ -109,6 +109,7 @@ class test_ICgen(test_base):
     # Test the extraction and conversion of mcmc file white noise to a
     # format that genetIC understands
     def test_wn(self):
+        print("Running white noise extraction test.")
         tools.mcmcFileToWhiteNoise(self.dataFolder + "mcmc_2791.h5",\
             "test_wn_extraction/wn.npy",\
             normalise = True,fromInverseFourier=False,flip=False,reverse=True)
@@ -129,6 +130,7 @@ class test_ahproperties(test_base):
         self.generateTestData = generateMode
     # Test conversion of volumes to the correct units:
     def test_volumes(self):
+        print("Running volumes test.")
         standard = self.dataFolder + \
             "reference_constrained/sample2791/gadget_full_forward/snapshot_001"
         snapn = pynbody.load(standard)
@@ -140,6 +142,7 @@ class test_ahproperties(test_base):
         self.compareToReference(computed,reference)
     # Test computation of anti-halo centres:
     def test_centres_and_radii(self):
+        print("Running centres and radii test.")
         standard = self.dataFolder + \
             "reference_constrained/sample2791/gadget_full_forward/snapshot_001"
         reverse = self.dataFolder + \
@@ -187,6 +190,7 @@ class test_ahproperties(test_base):
         self.compareToReference(computed,reference)
     # Test pair counts calculation:
     def test_pair_counts(self):
+        print("Running pair counts test.")
         thread_count = mp.cpu_count()
         refCentres = np.load(self.dataFolder + \
             "reference_constrained/ref_centres.npy")
@@ -223,6 +227,7 @@ class test_ahproperties(test_base):
                 rtol=self.rtol,atol=self.atol))
     # Test central density calculation:
     def test_central_density(self):
+        print("Running central density test.")
         thread_count = mp.cpu_count()
         standard = self.dataFolder + \
             "reference_constrained/sample2791/gadget_full_forward/snapshot_001"
@@ -248,6 +253,7 @@ class test_ahproperties(test_base):
         self.compareToReference(computed,reference)
     # Test the pipeline end to end:
     def test_properties_pipeline(self):
+        print("Running properties pipeline test.")
         standard = self.dataFolder + \
             "reference_constrained/sample2791/gadget_full_forward/snapshot_001"
         reverse = self.dataFolder + \
