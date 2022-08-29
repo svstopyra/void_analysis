@@ -18,7 +18,7 @@ def getOverdensity(radius,centre,snap,tree,mode = "mean"):
     else:
         mUnit = snap['mass'][0]*1e10
     boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
-    count = tree.query_ball_point(centre,radius,n_jobs=-1,return_length=True)
+    count = tree.query_ball_point(centre,radius,workers=-1,return_length=True)
     return count*mUnit/(rhoRef*(4*np.pi*radius**3/3))
 
 # Virial radius of a cluster about a particular centre. Requires a kdTree.

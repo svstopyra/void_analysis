@@ -111,9 +111,9 @@ class test_ICgen(test_base):
     def test_wn(self):
         print("Running white noise extraction test.")
         tools.mcmcFileToWhiteNoise(self.dataFolder + "mcmc_2791.h5",\
-            "test_wn_extraction/wn.npy",\
+            "wn.npy",\
             normalise = True,fromInverseFourier=False,flip=False,reverse=True)
-        computed = np.load("test_wn_extraction/wn.npy")
+        computed = np.load("wn.npy")
         referenceFile = self.dataFolder + "wn_test.npy"
         reference = self.getReference(referenceFile,computed,mode="numpy")
         self.assertTrue(np.allclose(computed,reference,\
@@ -753,9 +753,9 @@ class test_tools(test_base):
     def test_mcmcFileToWhiteNoise(self):
         print("Running tools.mcmcFileToWhiteNoise test...")
         tools.mcmcFileToWhiteNoise(self.dataFolder + "mcmc_2791.h5",\
-            "test_wn_extraction/wn.npy",\
+            "wn.npy",\
             normalise = True,fromInverseFourier=False,flip=False,reverse=True)
-        computed = np.load("test_wn_extraction/wn.npy")
+        computed = np.load("wn.npy")
         referenceFile = self.dataFolder + "wn.npy"
         reference = self.getReference(referenceFile,computed,mode="numpy")
         self.compareToReference(computed,reference)
