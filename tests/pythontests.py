@@ -367,7 +367,6 @@ class test_ppts(test_base):
     # Test mapping between galaxy counts in voxels and healpix patches:
     def test_healpix_mapping(self):
         print("Running healpix mapping test...")
-        self.dataFolder = "data_for_tests/"
         nMagBins = 16
         N = 64
         with open(self.dataFolder + "ngCounts_ref.p","rb") as infile:
@@ -576,7 +575,6 @@ class test_void_profiles(test_base):
     # End-to-end test of the void profiles pipeline:
     def test_whole_stacking_pipeline(self):
         print("Running stacking pipeline end-to-end test.")
-        self.dataFolder = "data_for_tests/"
         snapname = "gadget_full_forward/snapshot_001"
         snapnameRev = "gadget_full_reverse/snapshot_001"
         computed = getVoidProfilesData(\
