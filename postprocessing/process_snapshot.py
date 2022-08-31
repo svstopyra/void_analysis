@@ -4,7 +4,7 @@ import pynbody
 import numpy as np
 from void_analysis import context, stacking
 from void_analysis.tools import zobovVolumesToPhysical
-from void_analyis.tools import getHaloCentresAndMassesFromCatalogue
+from void_analysis.tools import getHaloCentresAndMassesFromCatalogue
 from void_analysis.simulation_tools import processSnapshot
 import multiprocessing as mp
 import scipy
@@ -17,7 +17,7 @@ import argparse
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = \
         "Process a pair and forward " + \
-        +"and reverse snapshot files, giving the anti-halo catalogues and " + \
+        "and reverse snapshot files, giving the anti-halo catalogues and " + \
         "various properties of it.")
     parser.add_argument('forward',\
         help = "Name of the snapshot file to process.")
@@ -34,7 +34,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.output is None:
         args.output = args.forward + ".AHproperties.p"
-    processSnapshot(args.standard,args.reverse,args.nBins,offset=args.offset,\
+    processSnapshot(args.forward,args.reverse,args.nBins,offset=args.offset,\
         output = args.output)
 
 

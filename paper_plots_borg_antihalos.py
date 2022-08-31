@@ -9,10 +9,12 @@ import numpy as np
 import seaborn as sns
 seabornColormap = sns.color_palette("colorblind",as_cmap=True)
 import pynbody
+import astropy.units as u
+from astropy.coordinates import SkyCoord
 
 figuresFolder = "borg-antihalos_paper_figures/"
 
-recomputeData = True
+recomputeData = False
 testDataFolder = figuresFolder + "tests_data/"
 runTests = False
 
@@ -218,7 +220,7 @@ plot.plotHMFAMFComparison(\
         comparableHaloMassesNew,constrainedAntihaloMasses512New,\
         comparableAntihaloMassesNew,\
         referenceSnap,referenceSnapOld,\
-        savename = "test_hmf_amf.pdf",\
+        savename = figuresFolder + "test_hmf_amf.pdf",\
         ylabelStartOld = 'Old reconstruction',\
         ylabelStartNew = 'New reconstruction',\
         fontsize=fontsize,legendFontsize=legendFontsize,density=True,\
@@ -279,8 +281,8 @@ bound_box = transforms.Bbox([[cropPoint[0], cropPoint[1]],
 
 # Cluster locations:
 # Galaxy positions:
-with open("load_2mpp_catalogue.py") as infile:
-    exec(infile.read())
+[combinedAbellN,combinedAbellPos,abell_nums] = \
+    real_clusters.getCombinedAbellCatalogue()
 
 abell_nums = [426,2147,1656,3627,3545,548,2197,2052,1367]
 [abell_l,abell_b,abell_n,abell_z,\
@@ -288,12 +290,25 @@ abell_nums = [426,2147,1656,3627,3545,548,2197,2052,1367]
 clusterInd = [np.where(combinedAbellN == n)[0] for n in abell_nums]
 clusterIndMain = [ind[0] for ind in clusterInd]
 
+coordCombinedAbellCart = SkyCoord(x=combinedAbellPos[:,0]*u.Mpc,\
+        y = combinedAbellPos[:,1]*u.Mpc,z = combinedAbellPos[:,2]*u.Mpc,\
+        frame='icrs',representation_type='cartesian')
 
+equatorialRThetaPhi = np.vstack(\
+    [coordCombinedAbell.icrs.spherical.distance.value,\
+    coordCombinedAbell.icrs.spherical.lat.value*np.pi/180.0,\
+    coordCombinedAbell.icrs.spherical.lon.value*np.pi/180]).transpose()
+
+coordCombinedAbellSphere = SkyCoord(distance=\
+    coordCombinedAbellCart.icrs.spherical.distance.value*u.Mpc,\
+    ra = coordCombinedAbellCart.icrs.spherical.lon.value*u.deg,\
+    dec = coordCombinedAbellCart.icrs.spherical.lat.value*u.deg,\
+    frame='icrs')
 
 plot.plotLocalUniverseMollweide(rCut,snapToShow,\
     alpha_shapes = alpha_shape_list[ns][1],
     largeAntihalos = largeAntihalos[ns],hr=antihaloCatalogueList[ns],
-    coordAbell = coordCombinedAbell,abellListLocation = clusterIndMain,\
+    coordAbell = coordCombinedAbellSphere,abellListLocation = clusterIndMain,\
     nameListLargeClusters = [name[0] for name in clusterNames],\
     ha = ha,va= va, annotationPos = annotationPos,\
     title = 'Local super-volume: large voids (antihalos) within $' + \

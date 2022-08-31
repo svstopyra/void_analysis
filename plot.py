@@ -2466,7 +2466,7 @@ def plotHMFAMFUnderdenseComparison(\
     fig, ax = plt.subplots(1,2,figsize=(textwidth,0.5*textwidth))
     massBins = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),\
         nMassBins))
-    massBinCentres = plot.binCentres(massBins)
+    massBinCentres = binCentres(massBins)
     if mUnit is None:
         mUnit = omegaM0*2.7754e11*(boxsize/resolution)**3
     if density:
@@ -2488,7 +2488,7 @@ def plotHMFAMFUnderdenseComparison(\
         for hmf in hmfUnderdense]),0)
     massBins = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),\
         nMassBins))
-    massBinCentres = plot.binCentres(massBins)
+    massBinCentres = binCentres(massBins)
     amfUnderdense = [computeMeanHMF(hmasses,massLower = mLower,\
         massUpper = mUpper,nBins = nMassBins) \
         for hmasses in comparableAntihaloMasses]
@@ -2500,7 +2500,7 @@ def plotHMFAMFUnderdenseComparison(\
         for hmf in amfUnderdense]),0)
     massBins = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),\
         nMassBins))
-    massBinCentres = plot.binCentres(massBins)
+    massBinCentres = binCentres(massBins)
     for j in range(0,2):
         axij = ax[j]
         if j == 1:
@@ -2646,7 +2646,7 @@ def plotHMFAMFUnderdenseComparison(\
             axij.yaxis.set_minor_formatter(NullFormatter())
     plt.subplots_adjust(wspace=0.0,hspace=0.0)
     if savename is not None:
-        plt.savefig(figuresFolder + "hmf_amf_underdense_comparison.pdf")
+        plt.savefig(savename)
     if show:
         plt.show()
 
