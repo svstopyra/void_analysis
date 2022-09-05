@@ -1,7 +1,7 @@
 #-------------------------------------------------------------------------------
 # CONFIGURATION
 from void_analysis import plot
-from paper_plots_borg_antihalos_generate_data import *
+from void_analysis.paper_plots_borg_antihalos_generate_data import *
 from void_analysis.real_clusters import getClusterSkyPositions
 from matplotlib import transforms
 import pickle
@@ -1609,6 +1609,100 @@ elif sortMethod == "distance":
 
 plt.show()
 
+# Optimising purity and completeness:
+
+# Finding the optimal radius:
+threshList = np.array([0.0,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9])
+#distArr2 = np.arange(0,21,0.2)[1:]
+distArr2 = np.arange(0,3,0.1)
+sortMethod='ratio'
+uniqueMatchFracArray = np.zeros((len(threshList),len(distArr2)))
+catFractionFinalMatrix = np.zeros((len(threshList),len(distArr2)))
+purity_1f = np.zeros((len(threshList),len(distArr2)))
+purity_2f = np.zeros((len(threshList),len(distArr2)))
+completeness_1f = np.zeros((len(threshList),len(distArr2)))
+completeness_2f = np.zeros((len(threshList),len(distArr2)))
+for k in range(0,len(threshList)):
+    for l in range(0,len(distArr2)):
+        #[finalCatTest,shortHaloListTest,twoWayMatchListTest,\
+        #    finalCandidatesTest,finalRatiosTest,finalDistancesTest,\
+        #    allCandidatesTest,candidateCountsTest] = \
+        #    constructAntihaloCatalogue(snapNumList,snapList=snapList,\
+        #    snapListRev=snapListRev,ahProps=ahProps,hrList=hrList,\
+        #    crossMatchThreshold = threshList[k],distMax = distArr2[l],\
+        #    verbose=False,max_index=max_index,sortMethod=sortMethod)
+        [finalCatTest,shortHaloListTest,twoWayMatchListTest,\
+            finalCandidatesTest,finalRatiosTest,finalDistancesTest,\
+            allCandidatesTest,candidateCountsTest] = \
+            constructAntihaloCatalogue(snapNumList,snapList=snapList,\
+            snapListRev=snapListRev,ahProps=ahProps,hrList=hrList,\
+            max_index=None,twoWayOnly=True,blockDuplicates=True,\
+            crossMatchThreshold = threshList[k],distMax = distArr2[l],\
+            rSphere=135,verbose=False)
+        purity_1f[k,l] = np.sum(candidateCountsTest[0][1] > 0)/\
+            len(shortHaloListTest[0])
+        completeness_1f[k,l] = np.sum(candidateCountsTest[1][0] > 0)/\
+            len(shortHaloListTest[1])
+        purity_2f[k,l] = np.sum(np.array(twoWayMatchListTest[0])[:,0])/\
+            len(shortHaloListTest[0])
+        completeness_2f[k,l] = np.sum(np.array(twoWayMatchListTest[1])[:,0])/\
+            len(shortHaloListTest[1])
+        print(("%.3g" % (100*(k*len(distArr2) + l + 1)/\
+            (len(threshList)*len(distArr2)))) + "% complete")
+
+euclideanDist2 = (purity_2f - 1.0)**2  + (completeness_2f - 1.0)**2
+
+plt.clf()
+plt.plot(distArr2,euclideanDist2.transpose(),\
+    label=['$\\mu_{\\mathrm{rad}} = $' + ("%.2g" % thresh) \
+    for thresh in threshList])
+plt.axvline(1.0,linestyle=':',color='grey')
+plt.xlabel('$R_{\\mathrm{search}}/\sqrt{R_1R_2}$')
+plt.ylabel('Distance Squared $[(^2P_f - 1)^2 + (^2C_f - 1)^2]$')
+plt.legend()
+plt.savefig(figuresFolder + \
+    "supporting_plots/optimal_distance_squared.pdf")
+plt.show()
+
+plt.clf()
+plt.plot(distArr2,purity_1f.transpose(),\
+    label=['$\\mu_{\\mathrm{rad}} = $' + ("%.2g" % thresh) \
+    for thresh in threshList])
+plt.axvline(1.0,linestyle=':',color='grey')
+plt.xlabel('$R_{\\mathrm{search}}/\sqrt{R_1R_2}$')
+plt.ylabel('$^1P_f$')
+plt.legend()
+plt.savefig(figuresFolder + \
+    "supporting_plots/optimal_distance_squared.pdf")
+plt.show()
+
+plt.clf()
+plt.plot(distArr2,(purity_2f/purity_1f).transpose(),\
+    label=['$\\mu_{\\mathrm{rad}} = $' + ("%.2g" % thresh) \
+    for thresh in threshList])
+plt.axvline(1.0,linestyle=':',color='grey')
+plt.xlabel('$R_{\\mathrm{search}}/\sqrt{R_1R_2}$')
+plt.ylabel('$^2P_{\mu_{\mathrm{rad}}}/{^1P_{\mu_{\mathrm{rad}}}}$')
+plt.legend()
+plt.savefig(figuresFolder + \
+    "supporting_plots/purity_ratio.pdf")
+plt.show()
+
+plt.clf()
+plt.plot(distArr2,purity_1f.transpose(),\
+    label=['$^1P_{' + ("%.2g" % thresh) + "}$" \
+    for thresh in threshList],linestyle='-')
+plt.plot(distArr2,purity_2f.transpose(),\
+    label=['$^2P_{' + ("%.2g" % thresh) + "}$" \
+    for thresh in threshList],linestyle='--')
+plt.axvline(1.0,linestyle=':',color='grey')
+plt.xlabel('$R_{\\mathrm{search}}/\sqrt{R_1R_2}$')
+plt.ylabel('$^wP_f$')
+plt.legend()
+plt.savefig(figuresFolder + \
+    "supporting_plots/optimal_distance_squared.pdf")
+plt.show()
+
 # Finding the optimal radius:
 threshList = np.array([0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9])
 #distArr2 = np.arange(0,21,0.2)[1:]
@@ -1804,6 +1898,8 @@ optimalMu = optimalCatFracList[1]
     twoWayOnly=True,blockDuplicates=True,\
     crossMatchThreshold = 0.0,distMax = 8.81)
 
+
+
 # Distribution of ratios:
 meanRatio = [np.mean(np.hstack(arr)) for arr in finalRatiosOpt]
 plt.hist(meanRatio,bins=np.linspace(0,1,21))
@@ -1817,7 +1913,7 @@ plt.show()
 
 # Construct the final Catalogue using optimal values:
 muOpt = 0.60
-rSearchOpt = 8.81
+rSearchOpt = 1.0
 
 [finalCatOpt,shortHaloListOpt,twoWayMatchListOpt,finalCandidatesOpt,\
     finalRatiosOpt,finalDistancesOpt,allCandidatesOpt,candidateCountsOpt] = \
@@ -1854,6 +1950,28 @@ massListShort = [np.array([antihaloMasses[l][\
         centralAntihalos[l][0][sortedList[l][k]]] \
         for k in range(0,np.min([ahCounts[l],max_index]))]) \
         for l in range(0,len(snapNumList))]
+
+
+radiiListComb = getRadiiFromCat(finalCatOpt,radiiListShort)
+massListComb = getRadiiFromCat(finalCatOpt,massListShort)
+[radiiListMean,radiiListSigma] = getMeanProperty(radiiListComb)
+[massListMean,massListSigma] = getMeanProperty(massListComb)
+
+
+# Mass function plot:
+
+# MEan mass function:
+mUnit = 8*0.3111*2.7754e11*(677.7/512)**3
+mLower = 100*mUnit
+massFunctionComparison(massListMean,massListShort,volSphere,nBins=11,\
+    labelLeft = "Combined anti-halo catalogue",\
+    labelRight="Average of 5 catalogues",\
+    ylabel="Number of antihalos",savename=figuresFolder + \
+    "supporting_plots/mass_function_combined.pdf",massLower=mLower,\
+    ylim=[1,500],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,\
+    fontsize=10,massUpper = 2e15)
+
+
 
 
 [finalCat135,shortHaloList135,twoWayMatchList135,finalCandidates135,\
