@@ -15,7 +15,7 @@ def orderHalos(fname):
 	substructureFname = fname + ".z0.000.AHF_substructure"
 	# Import the new halo catalogue and re-order it:
 	haloData = np.loadtxt(halosFname)
-	ids = np.loadtxt(halosFname,dtype=np.int,usecols = (0))
+	ids = np.loadtxt(halosFname,dtype=int,usecols = (0))
 	masses = haloData[:,3]
 	sort = np.argsort(masses)[::-1]
 	f_halos = open(halosFname,"r")
@@ -36,7 +36,7 @@ def orderHalos(fname):
 		splitString = f_halos_lines[sort[k]].split()
 		splitString[0] = str(k)
 		# Replace host halo with correct host id, or -1 (if recorded as 0):
-		hostID = np.int(splitString[1])
+		hostID = int(splitString[1])
 		if hostID != 0:
 			newIDList = np.where(np.isin(ids[sort],hostID))[0]
 			if len(newIDList) < 1:
@@ -60,11 +60,11 @@ def orderHalos(fname):
 	counter = 0
 	halo_counter = 0
 	# Get arrays of particles for each halo:
-	nparts = np.zeros(len(halos),dtype=np.int)
-	partStarts = np.zeros(len(halos),dtype=np.int)
+	nparts = np.zeros(len(halos),dtype=int)
+	partStarts = np.zeros(len(halos),dtype=int)
 	while counter < len(f_part_lines):
 		# Skip lines with only a single entry, as these denote the boundaries of individual cpu files.
-		lineAsArray = np.array(f_part_lines[counter].split(),dtype=np.int)
+		lineAsArray = np.array(f_part_lines[counter].split(),dtype=int)
 		if len(lineAsArray) == 1:
 			counter += 1
 			continue
@@ -89,8 +89,8 @@ def orderHalos(fname):
 	f_profiles_lines = []
 	for line in f_profiles:
 		f_profiles_lines.append(line)
-	linestarts = np.ones(len(halos),dtype=np.int)
-	bins = np.array(haloData[:,36],dtype=np.int)
+	linestarts = np.ones(len(halos),dtype=int)
+	bins = np.array(haloData[:,36],dtype=int)
 	linestarts[1:] += np.cumsum(bins)[0:-1]
 	f_profiles_new.write(f_profiles_lines[0])
 	for k in range(0,len(halos)):
@@ -104,8 +104,8 @@ def orderHalos(fname):
 	f_sub_new = open(substructureFname + appendFname,"w")
 	f_sub_lines = []
 	for line in f_sub:
-		f_sub_lines.append(np.array(line.split(),dtype=np.int))
-	numHalosWithSubstructure = np.int(len(f_sub_lines)/2)	
+		f_sub_lines.append(np.array(line.split(),dtype=int))
+	numHalosWithSubstructure = int(len(f_sub_lines)/2)	
 	for k in range(0,numHalosWithSubstructure):
 		index = np.where(np.isin(ids[sort],f_sub_lines[2*k][0]))[0]
 		if len(index) < 1:
