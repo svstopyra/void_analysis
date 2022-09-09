@@ -1897,14 +1897,20 @@ def formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim,\
         axij.yaxis.label.set_visible(False)
         axij.yaxis.set_major_formatter(NullFormatter())
         axij.yaxis.set_minor_formatter(NullFormatter())
-    if (i == ylabelRow) and (j == 0):
+    if ylabelRow is None:
         axij.set_ylabel(ylabel,fontsize=fontsize,fontfamily=fontfamily)
+    else:
+        if (i == ylabelRow) and (j == 0):
+            axij.set_ylabel(ylabel,fontsize=fontsize,fontfamily=fontfamily)
     if i < nRows - 1:
         axij.xaxis.label.set_visible(False)
         axij.xaxis.set_major_formatter(NullFormatter())
         axij.xaxis.set_minor_formatter(NullFormatter())
-    if (j == xlabelCol) and (i == nRows-1):
+    if xlabelCol is None:
         axij.set_xlabel(xlabel,fontsize=fontsize,fontfamily=fontfamily)
+    else:
+        if (j == xlabelCol) and (i == nRows-1):
+            axij.set_xlabel(xlabel,fontsize=fontsize,fontfamily=fontfamily)
     axij.set_ylim(ylim)
 
 

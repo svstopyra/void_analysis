@@ -256,7 +256,7 @@ plot.plotConstrainedVsUnconstrainedProfiles(rBinStackCentres,nbarjSepStack,\
 #-------------------------------------------------------------------------------
 # ANTIHALO SKY PLOT:
 
-ns = 1
+ns = 0
 snapToShow = pynbody.load(samplesFolder + "sample" + str(snapNumList[ns]) + \
     "/gadget_full_forward_512/snapshot_001")
 tools.remapBORGSimulation(snapToShow,swapXZ=False,reverse=True)
@@ -295,9 +295,9 @@ coordCombinedAbellCart = SkyCoord(x=combinedAbellPos[:,0]*u.Mpc,\
         frame='icrs',representation_type='cartesian')
 
 equatorialRThetaPhi = np.vstack(\
-    [coordCombinedAbell.icrs.spherical.distance.value,\
-    coordCombinedAbell.icrs.spherical.lat.value*np.pi/180.0,\
-    coordCombinedAbell.icrs.spherical.lon.value*np.pi/180]).transpose()
+    [coordCombinedAbellCart.icrs.spherical.distance.value,\
+    coordCombinedAbellCart.icrs.spherical.lat.value*np.pi/180.0,\
+    coordCombinedAbellCart.icrs.spherical.lon.value*np.pi/180]).transpose()
 
 coordCombinedAbellSphere = SkyCoord(distance=\
     coordCombinedAbellCart.icrs.spherical.distance.value*u.Mpc,\

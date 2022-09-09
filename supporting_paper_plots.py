@@ -15,6 +15,9 @@ import matplotlib.pylab as plt
 import alphashape
 from descartes import PolygonPatch
 from void_analysis.plot import plotDensityComparison
+from matplotlib import cm
+import matplotlib.colors as colors
+from matplotlib.ticker import NullFormatter
 
 figuresFolder = "borg-antihalos_paper_figures/"
 
@@ -1283,6 +1286,36 @@ def specialNanMax(x):
     else:
         return np.nanmax(x)
 
+
+def getRadiiFromCat(catList,radiiList):
+    radiiListOut = -np.ones(catList.shape,dtype=float)
+    for k in range(0,len(catList)):
+        for l in range(0,len(catList[0])):
+            if catList[k,l] > 0:
+                radiiListOut[k,l] = radiiList[l][catList[k,l]-1]
+    return radiiListOut
+
+def getCentresFromCat(catList,centresList,ns):
+    centresListOut = np.zeros((len(catList),3),dtype=float)
+    for k in range(0,len(catList)):
+        if catList[k,ns] > 0:
+            centresListOut[k,:] = centresList[ns][catList[k,ns]-1]
+        else:
+            centresListOut[k,:] = np.nan
+    return centresListOut
+
+def getMeanProperty(propertyList):
+    meanProperty = np.zeros(len(propertyList))
+    sigmaProperty = np.zeros(len(propertyList))
+    for k in range(0,len(propertyList)):
+        haveProperty = np.where(propertyList[k,:] > 0)[0]
+        meanProperty[k] = np.mean(propertyList[k,haveProperty])
+        sigmaProperty[k] = np.std(propertyList[k,haveProperty])/\
+            np.sqrt(len(haveProperty))
+    return [meanProperty,sigmaProperty]
+
+
+
 thresholdArr = np.linspace(0.0,1.0,51)
 distArr = np.arange(0,21,2.5)[1:]
 # Mean number of candidates per other catalogue:
@@ -1612,16 +1645,40 @@ plt.show()
 # Optimising purity and completeness:
 
 # Finding the optimal radius:
-threshList = np.array([0.0,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9])
+#threshList = np.array([0.0,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9])
+threshList = np.array([0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9])
 #distArr2 = np.arange(0,21,0.2)[1:]
 distArr2 = np.arange(0,3,0.1)
+massListBounds = np.array([1e13,1e14,5e14,1e15,1e16])
 sortMethod='ratio'
-uniqueMatchFracArray = np.zeros((len(threshList),len(distArr2)))
-catFractionFinalMatrix = np.zeros((len(threshList),len(distArr2)))
-purity_1f = np.zeros((len(threshList),len(distArr2)))
-purity_2f = np.zeros((len(threshList),len(distArr2)))
-completeness_1f = np.zeros((len(threshList),len(distArr2)))
-completeness_2f = np.zeros((len(threshList),len(distArr2)))
+uniqueMatchFracArray = np.zeros((len(threshList),len(distArr2),\
+    len(massListBounds)))
+catFractionFinalMatrix = np.zeros((len(threshList),len(distArr2),\
+    len(massListBounds)))
+purity_1f = np.zeros((len(threshList),len(distArr2),\
+    len(massListBounds)))
+purity_2f = np.zeros((len(threshList),len(distArr2),\
+    len(massListBounds)))
+completeness_1f = np.zeros((len(threshList),len(distArr2),\
+    len(massListBounds)))
+completeness_2f = np.zeros((len(threshList),len(distArr2),\
+    len(massListBounds)))
+
+centralAntihalosTest = [tools.getAntiHalosInSphere(antihaloCentres[k],135,\
+        filterCondition = (antihaloRadii[k] > rMin) & \
+        (antihaloRadii[k] <= rMax)) for k in range(0,len(snapNumList))]
+centralAntihaloMassesTest = [\
+        antihaloMasses[k][centralAntihalosTest[k][0]] \
+        for k in range(0,len(centralAntihalosTest))]
+sortedListTest = [np.flip(np.argsort(centralAntihaloMassesTest[k])) \
+        for k in range(0,len(snapNumList))]
+ahCountsTest = np.array([len(cahs[0]) for cahs in centralAntihalosTest])
+massListShortTest = [np.array([antihaloMasses[l][\
+            centralAntihalosTest[l][0][sortedListTest[l][k]]] \
+            for k in range(0,np.min([ahCountsTest[l],max_index]))]) \
+            for l in range(0,len(snapNumList))]
+diffMap = [np.setdiff1d(np.arange(0,len(snapNumList)),[k]) \
+    for k in range(0,len(snapNumList))]
 for k in range(0,len(threshList)):
     for l in range(0,len(distArr2)):
         #[finalCatTest,shortHaloListTest,twoWayMatchListTest,\
@@ -1639,33 +1696,185 @@ for k in range(0,len(threshList)):
             max_index=None,twoWayOnly=True,blockDuplicates=True,\
             crossMatchThreshold = threshList[k],distMax = distArr2[l],\
             rSphere=135,verbose=False)
-        purity_1f[k,l] = np.sum(candidateCountsTest[0][1] > 0)/\
-            len(shortHaloListTest[0])
-        completeness_1f[k,l] = np.sum(candidateCountsTest[1][0] > 0)/\
-            len(shortHaloListTest[1])
-        purity_2f[k,l] = np.sum(np.array(twoWayMatchListTest[0])[:,0])/\
-            len(shortHaloListTest[0])
-        completeness_2f[k,l] = np.sum(np.array(twoWayMatchListTest[1])[:,0])/\
-            len(shortHaloListTest[1])
+        massFilter = [[(massListShortTest[n] > massListBounds[m]) & \
+            (massListShortTest[n] <= massListBounds[m+1]) \
+            for m in range(0,len(massListBounds)-1)] \
+            for n in range(0,len(massListShortTest))]
+        for m in range(0,len(massListBounds)-1):
+            purity_1f[k,l,m] = np.mean(\
+                [[np.sum((candidateCountsTest[i][j] > 0) & \
+                    (massFilter[i][m]))/np.sum(massFilter[i][m]) \
+                    for j in diffMap[i]] \
+                    for i in range(0,len(ahCountsTest))])
+            completeness_1f[k,l,m] = np.mean(\
+                [[np.sum((candidateCountsTest[j][i] > 0) & \
+                    (massFilter[j][m]))/np.sum((massFilter[j][m])) \
+                    for j in diffMap[i]] \
+                    for i in range(0,len(ahCountsTest))])
+            purity_2f[k,l,m] = np.mean(\
+                [[np.sum(np.array(twoWayMatchListTest[i])[:,j] & \
+                    (massFilter[i][m]))/np.sum(massFilter[i][m]) \
+                    for i in range(0,len(ahCountsTest))] \
+                    for j in range(0,len(ahCountsTest)-1)])
+            completeness_2f[k,l,m] = np.mean(\
+                [[np.sum(np.array(twoWayMatchListTest[i])[:,j] & \
+                    (massFilter[i][m]))/np.sum(massFilter[i][m]) \
+                    for i in range(0,len(ahCountsTest))] \
+                    for j in range(0,len(ahCountsTest)-1)])
+            #np.sum(\
+            #    [np.array(twoWayMatchListTest[1])[:,0] & \
+            #    (massFilter[1][m]))/np.sum((massFilter[1][m]) \
+            #    ])
+        purity_1f[k,l,len(massListBounds)-1] = np.mean(\
+            [[np.sum(\
+            candidateCountsTest[i][j] > 0)/\
+            len(shortHaloListTest[i]) \
+            for j in diffMap[i]] \
+            for i in range(0,len(ahCountsTest))])
+        completeness_1f[k,l,len(massListBounds)-1] = np.mean(\
+            [[np.sum(\
+                candidateCountsTest[j][i] > 0)/\
+                len(shortHaloListTest[j]) \
+                for j in diffMap[i]] \
+                for i in range(0,len(ahCountsTest))])
+        purity_2f[k,l,len(massListBounds)-1] = np.mean(\
+            [[np.sum(\
+                np.array(twoWayMatchListTest[i])[:,j])/\
+                len(shortHaloListTest[i]) \
+                for i in range(0,len(ahCountsTest))] \
+                for j in range(0,len(ahCountsTest)-1)])
+        completeness_2f[k,l,len(massListBounds)-1] = np.mean(\
+            [[np.sum(\
+                np.array(twoWayMatchListTest[i])[:,j])/\
+                len(shortHaloListTest[i]) \
+                for i in range(0,len(ahCountsTest))] \
+                for j in range(0,len(ahCountsTest)-1)])
         print(("%.3g" % (100*(k*len(distArr2) + l + 1)/\
             (len(threshList)*len(distArr2)))) + "% complete")
 
-euclideanDist2 = (purity_2f - 1.0)**2  + (completeness_2f - 1.0)**2
+euclideanDist2 = np.sqrt((purity_2f - 1.0)**2  + (completeness_2f - 1.0)**2)
 
+# Completeness/Purity:
+
+def imshowComparison(leftGrid,rightGrid,top=0.851,bottom=0.167,left=0.088,\
+        right=0.845,hspace=0.2,wspace=0.0,cbaxPar = [0.87,0.2,0.02,0.68],\
+        figsize=(8,4),cmap = 'Blues',extentLeft = None,extentRight=None,\
+        vLeft = [0.0,0.6],vRight = None,aspect='auto',origin='lower',\
+        xlabel='Search radius ($R_{\mathrm{search}}/\sqrt{R_1R_2}$)',\
+        ylabel = 'Radius ratio threshold ($\mu_{\mathrm{rad}}$)',\
+        titleLeft = 'Two-way completeness ($^2C_{\mu_{\mathrm{rad}}}$)',\
+        titleRight = 'Two-way purity ($^2P_{\mu_{\mathrm{rad}}}$)',\
+        cbarLabel = 'Two-way completeness/purity',show = True,savename=None,\
+        scaling = 'linear',superTitle=None,supTitleSize = 14):
+    if vRight is None:
+        vRight = vLeft
+        cbarMode = "single"
+    else:
+        cbarMode = "double"
+    fig, ax = plt.subplots(1,2,figsize=figsize)
+    imLeft = ax[0].imshow(leftGrid,extent=extentLeft,aspect=aspect,\
+        cmap=cmap,origin=origin,vmin=vLeft[0],vmax=vLeft[1])
+    imRight = ax[1].imshow(rightGrid,extent=extentRight,aspect=aspect,\
+        cmap=cmap,origin=origin,vmin=vRight[0],vmax=vRight[1])
+    for axi in ax:
+        axi.set_xlabel(xlabel)
+        axi.set_ylabel(ylabel)
+    ax[0].set_title(titleLeft)
+    ax[1].set_title(titleRight)
+    ax[1].yaxis.label.set_visible(False)
+    ax[1].yaxis.set_major_formatter(NullFormatter())
+    ax[1].yaxis.set_minor_formatter(NullFormatter())
+    if scaling == 'linear':
+        normFunc = colors.Normalize
+    elif scaling == 'log':
+        normFunc = colors.LogNorm
+    else:
+        raise Exception("Unknown normFunc")
+    if superTitle is not None:
+        fig.suptitle(superTitle,fontsize=supTitleSize)
+    if cbarMode == "single":
+        sm = cm.ScalarMappable(normFunc(vmin=vLeft[0],vmax=vLeft[1]),\
+            cmap=cmap)
+        cbax = fig.add_axes(cbaxPar)
+        cbar = plt.colorbar(sm, orientation="vertical",\
+            label=cbarLabel,cax=cbax)
+        plt.subplots_adjust(top=top,bottom=bottom,left=left,right=right,\
+            hspace=hspace,wspace=wspace)
+    else:
+        imList = [imLeft,imRight]
+        vList = [vLeft,vRight]
+        for k in range(0,len(imList)):
+            sm = cm.ScalarMappable(normFunc(\
+                vmin=vList[k][0],vmax=vList[k][1]),cmap=cmap)
+            plt.colorbar(sm,ax=ax[k],orientation="vertical",cmap=cmap)
+        plt.tight_layout()
+    if savename is not None:
+        plt.savefig(savename)
+    if show:
+        plt.show()
+
+
+imshowComparison(completeness_2f[:,:,0],purity_2f[:,:,0],\
+    extentLeft= (np.min(distArr2),np.max(distArr2),\
+    np.min(threshList),np.max(threshList)),\
+    extentRight = (np.min(distArr2),np.max(distArr2),\
+    np.min(threshList),np.max(threshList)))
+
+massTitles = ["$" + plot.scientificNotation(massListBounds[k]) + \
+    " < M/M_{\\odot} < " + plot.scientificNotation(massListBounds[k+1]) \
+    + "$"  for k in range(0,4)]
+massTitles.append("All masses")
+nM = 1
+imshowComparison(completeness_2f[:,:,nM],completeness_1f[:,:,nM],\
+    vRight = [0.0,1.0],vLeft = [0.0,1.0],\
+    titleRight = 'One-way completeness ($^1C_{\mu_{\mathrm{rad}}}$)',\
+    extentLeft= (np.min(distArr2),np.max(distArr2),\
+    np.min(threshList),np.max(threshList)),\
+    extentRight = (np.min(distArr2),np.max(distArr2),\
+    np.min(threshList),np.max(threshList)),superTitle = massTitles[nM])
+
+imshowComparison(purity_1f,completeness_1f,vRight = [0.0,1.0],vLeft=[0.0,1.0],\
+    titleRight = 'One-way completeness ($^1C_{\mu_{\mathrm{rad}}}$)',\
+    titleLeft = 'One-way purity ($^1P_{\mu_{\mathrm{rad}}}$)',\
+    extentLeft= (np.min(distArr2),np.max(distArr2),\
+    np.min(threshList),np.max(threshList)),\
+    extentRight = (np.min(distArr2),np.max(distArr2),\
+    np.min(threshList),np.max(threshList)))
+
+
+imshowComparison(completeness_2f,purity_2f)
+imshowComparison(completeness_2f,purity_2f)
+
+
+# Curves of completeness/purity:
 plt.clf()
-plt.plot(distArr2,euclideanDist2.transpose(),\
+plt.plot(distArr2,euclideanDist2[:,:,nM].transpose(),\
     label=['$\\mu_{\\mathrm{rad}} = $' + ("%.2g" % thresh) \
     for thresh in threshList])
 plt.axvline(1.0,linestyle=':',color='grey')
 plt.xlabel('$R_{\\mathrm{search}}/\sqrt{R_1R_2}$')
-plt.ylabel('Distance Squared $[(^2P_f - 1)^2 + (^2C_f - 1)^2]$')
+plt.ylabel('Distance $\sqrt{(^2P_f - 1)^2 + (^2C_f - 1)^2}$')
 plt.legend()
+plt.title(massTitles[nM])
 plt.savefig(figuresFolder + \
     "supporting_plots/optimal_distance_squared.pdf")
 plt.show()
 
+
 plt.clf()
-plt.plot(distArr2,purity_1f.transpose(),\
+plt.plot(threshList,euclideanDist2[:,1:-1:5,nM],\
+    label=['$R_{\\mathrm{search}}/\sqrt{R_1R_2} = $' + ("%.2g" % R) \
+    for R in distArr2[1:-1:5]])
+plt.xlabel('$\\mu_{\\mathrm{rad}}$')
+plt.ylabel('Distance $\sqrt{(^2P_f - 1)^2 + (^2C_f - 1)^2}$')
+plt.legend()
+plt.title(massTitles[nM])
+plt.savefig(figuresFolder + \
+    "supporting_plots/optimal_distance_squared_mu.pdf")
+plt.show()
+
+plt.clf()
+plt.plot(distArr2,purity_1f[:,:,4].transpose(),\
     label=['$\\mu_{\\mathrm{rad}} = $' + ("%.2g" % thresh) \
     for thresh in threshList])
 plt.axvline(1.0,linestyle=':',color='grey')
@@ -1677,7 +1886,7 @@ plt.savefig(figuresFolder + \
 plt.show()
 
 plt.clf()
-plt.plot(distArr2,(purity_2f/purity_1f).transpose(),\
+plt.plot(distArr2,(purity_2f[:,:,4]/purity_1f[:,:,4]).transpose(),\
     label=['$\\mu_{\\mathrm{rad}} = $' + ("%.2g" % thresh) \
     for thresh in threshList])
 plt.axvline(1.0,linestyle=':',color='grey')
@@ -1689,10 +1898,10 @@ plt.savefig(figuresFolder + \
 plt.show()
 
 plt.clf()
-plt.plot(distArr2,purity_1f.transpose(),\
+plt.plot(distArr2,purity_1f[:,:,4].transpose(),\
     label=['$^1P_{' + ("%.2g" % thresh) + "}$" \
     for thresh in threshList],linestyle='-')
-plt.plot(distArr2,purity_2f.transpose(),\
+plt.plot(distArr2,purity_2f[:,:,4].transpose(),\
     label=['$^2P_{' + ("%.2g" % thresh) + "}$" \
     for thresh in threshList],linestyle='--')
 plt.axvline(1.0,linestyle=':',color='grey')
@@ -1742,6 +1951,11 @@ for k in range(0,len(threshList)):
                 np.sum(finalCatTest > 0,1)/len(snapNumList))
         print(("%.3g" % (100*(k*len(distArr2) + l + 1)/\
             (len(threshList)*len(distArr2)))) + "% complete")
+
+
+
+
+
 
 # Plot the unique fraction:
 plt.clf()
