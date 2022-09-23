@@ -1915,6 +1915,10 @@ euclideanDist2 = np.sqrt((purity_2f - 1.0)**2  + (completeness_2f - 1.0)**2)
 
 # Completeness/Purity:
 
+
+pickle.dump([purity_1f,purity_2f,completeness_1f,completeness_2f,distArr2,\
+    threshList],open("purity_data.p","wb"))
+
 def imshowComparison(leftGrid,rightGrid,top=0.851,bottom=0.167,left=0.088,\
         right=0.845,hspace=0.2,wspace=0.0,cbaxPar = [0.87,0.2,0.02,0.68],\
         figsize=(8,4),cmap = 'Blues',extentLeft = None,extentRight=None,\
