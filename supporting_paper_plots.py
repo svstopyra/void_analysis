@@ -1139,6 +1139,8 @@ max_index = 17000
 rMin=5
 rMax = 30
 
+snapSortList = [np.argsort(snap['iord']) for snap in snapList]
+
 ahProps = [pickle.load(\
             open(snap.filename + ".AHproperties.p","rb")) \
             for snap in snapList]
@@ -1642,14 +1644,87 @@ elif sortMethod == "distance":
 
 plt.show()
 
+
+
+
+# Overlap map:
+from void_analysis.tools import minmax
+def overlapMap(cat1,cat2,volumes1,volumes2,checkFirst = False,verbose=False):
+    overlap = np.zeros((len(cat1),len(cat2)))
+    vol1 = np.array([np.sum(volumes1[halo['iord']]) for halo in cat1])
+    vol2 = np.array([np.sum(volumes2[halo['iord']]) for halo in cat2])
+    if checkFirst:
+        for k in range(0,len(cat1)):
+            for l in range(0,len(cat2)):
+                if checkOverlap(cat1[k+1]['iord'],cat2[l+1]['iord']):
+                    intersection = np.intersect1d(cat1[k+1]['iord'],\
+                        cat2[l+1]['iord'])
+                    overlap[k,l] = np.sum(\
+                        volumes1[intersection])/np.sqrt(vol1[k]*vol2[l])
+    else:
+        for k in range(0,len(cat1)):
+            for l in range(0,len(cat2)):
+                intersection = np.intersect1d(cat1[k+1]['iord'],\
+                    cat2[l+1]['iord'])
+                if len(intersection) > 0:
+                    overlap[k,l] = np.sum(\
+                        volumes1[intersection])/np.sqrt(vol1[k]*vol2[l])
+            if verbose:
+                print(("%.3g" % (100*(k*len(cat1) + l + 1)/\
+                    (len(cat1)*len(cat2)))) + "% complete")
+    return overlap
+
+# Check whether two halos have any overlap:
+def checkOverlap(list1,list2):
+    [min1,max1] = minmax(list1)
+    [min2,max2] = minmax(list2)
+    if max1 < min2:
+        return False
+    elif min1 > max2:
+        return False
+    else:
+        if len(list1) < len(list2):
+            listMin = list1
+            listMax = list2
+        else:
+            listMin = list2
+            listMax = list1
+        for k in range(0,len(listMin)):
+            if np.isin(listMin[k],listMax):
+                return True
+        return False
+
+def generateOverlapList(snapNumList,hrListCentral,volumesList):
+    overlapList = []
+    for k in range(0,len(snapNumList)):
+        for l in range(0,len(snapNumList)):
+            if k >= l:
+                continue
+            overlapList.append(overlapMap(hrListCentral[k],\
+                hrListCentral[l],volumesList[k],volumesList[l],\
+                verbose=False))
+    return overlapList
+
+
+
+overlapList = tools.loadOrRecompute("overlap_list.p",generateOverlapList,\
+    snapNumList,hrListCentral,volumesList,recompute=False)
+
+if len(overlapList) != int(len(snapNumList)*(len(snapNumList) - 1)/2):
+    raise Exception("Invalid overlapList!")
+
+
 # Optimising purity and completeness:
 
 # Finding the optimal radius:
 #threshList = np.array([0.0,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9])
-threshList = np.array([0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9])
+#threshList = np.array([0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9])
+#threshList = np.array([0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9])
+#threshList = np.arange(0.1,1,0.05)
+threshList = np.arange(0.5,1,0.05)
 #distArr2 = np.arange(0,21,0.2)[1:]
 distArr2 = np.arange(0,3,0.1)
-massListBounds = np.array([1e13,1e14,5e14,1e15,1e16])
+massListBounds = np.array([1e13,1e14,5e14,1e16])
 sortMethod='ratio'
 uniqueMatchFracArray = np.zeros((len(threshList),len(distArr2),\
     len(massListBounds)))
@@ -1664,9 +1739,18 @@ completeness_1f = np.zeros((len(threshList),len(distArr2),\
 completeness_2f = np.zeros((len(threshList),len(distArr2),\
     len(massListBounds)))
 
-centralAntihalosTest = [tools.getAntiHalosInSphere(antihaloCentres[k],135,\
-        filterCondition = (antihaloRadii[k] > rMin) & \
-        (antihaloRadii[k] <= rMax)) for k in range(0,len(snapNumList))]
+massRange = [1e14,5e14]
+if massRange is None:
+    centralAntihalosTest = [tools.getAntiHalosInSphere(antihaloCentres[k],135,\
+            filterCondition = (antihaloRadii[k] > rMin) & \
+            (antihaloRadii[k] <= rMax)) for k in range(0,len(snapNumList))]
+else:
+    centralAntihalosTest = [tools.getAntiHalosInSphere(antihaloCentres[k],135,\
+            filterCondition = (antihaloRadii[k] > rMin) & \
+            (antihaloRadii[k] <= rMax) & (antihaloMasses[k] > massRange[0]) & \
+            (antihaloMasses[k] <= massRange[1])) \
+            for k in range(0,len(snapNumList))]
+
 centralAntihaloMassesTest = [\
         antihaloMasses[k][centralAntihalosTest[k][0]] \
         for k in range(0,len(centralAntihalosTest))]
@@ -1680,6 +1764,11 @@ massListShortTest = [np.array([antihaloMasses[l][\
 diffMap = [np.setdiff1d(np.arange(0,len(snapNumList)),[k]) \
     for k in range(0,len(snapNumList))]
 for k in range(0,len(threshList)):
+    #crossMatchThreshold = np.array([threshList[k],0.3])
+    crossMatchThreshold = np.array([0.3,threshList[k]])
+    crossMatchQuantity = "both"
+    sortMethod = "volumes"
+    overlaps = overlapList
     for l in range(0,len(distArr2)):
         #[finalCatTest,shortHaloListTest,twoWayMatchListTest,\
         #    finalCandidatesTest,finalRatiosTest,finalDistancesTest,\
@@ -1688,43 +1777,45 @@ for k in range(0,len(threshList)):
         #    snapListRev=snapListRev,ahProps=ahProps,hrList=hrList,\
         #    crossMatchThreshold = threshList[k],distMax = distArr2[l],\
         #    verbose=False,max_index=max_index,sortMethod=sortMethod)
+        massRange = [0,1e16]
         [finalCatTest,shortHaloListTest,twoWayMatchListTest,\
             finalCandidatesTest,finalRatiosTest,finalDistancesTest,\
             allCandidatesTest,candidateCountsTest] = \
-            constructAntihaloCatalogue(snapNumList,snapList=snapList,\
-            snapListRev=snapListRev,ahProps=ahProps,hrList=hrList,\
-            max_index=None,twoWayOnly=True,blockDuplicates=True,\
-            crossMatchThreshold = threshList[k],distMax = distArr2[l],\
-            rSphere=135,verbose=False)
+                constructAntihaloCatalogue(snapNumList,snapList=snapList,\
+                snapListRev=snapListRev,ahProps=ahProps,hrList=hrList,\
+                max_index=None,twoWayOnly=True,blockDuplicates=True,\
+                #crossMatchThreshold = np.array([0.7,threshList[k]]),\
+                crossMatchThreshold = crossMatchThreshold,\
+                #crossMatchThreshold = threshList[k],\
+                #crossMatchQuantity = "radius",\
+                crossMatchQuantity = crossMatchQuantity,\
+                massRange = massRange,\
+                distMax = distArr2[l],\
+                rSphere=135,verbose=False,sortMethod=sortMethod,\
+                snapSortList=snapSortList,overlapList = overlaps)
+        centralAntihalosTest = [tools.getAntiHalosInSphere(\
+            antihaloCentres[k],135,\
+            filterCondition = (antihaloRadii[k] > rMin) & \
+            (antihaloRadii[k] <= rMax) & \
+            (antihaloMasses[k] > massRange[0]) & \
+            (antihaloMasses[k] <= massRange[1])) \
+            for k in range(0,len(snapNumList))]
+        centralAntihaloMassesTest = [\
+                antihaloMasses[k][centralAntihalosTest[k][0]] \
+                for k in range(0,len(centralAntihalosTest))]
+        sortedListTest = [\
+            np.flip(np.argsort(centralAntihaloMassesTest[k])) \
+            for k in range(0,len(snapNumList))]
+        ahCountsTest = np.array([len(cahs[0]) \
+            for cahs in centralAntihalosTest])
+        massListShortTest = [np.array([antihaloMasses[l][\
+            centralAntihalosTest[l][0][sortedListTest[l][k]]] \
+            for k in range(0,np.min([ahCountsTest[l],max_index]))]) \
+            for l in range(0,len(snapNumList))]
         massFilter = [[(massListShortTest[n] > massListBounds[m]) & \
             (massListShortTest[n] <= massListBounds[m+1]) \
             for m in range(0,len(massListBounds)-1)] \
             for n in range(0,len(massListShortTest))]
-        for m in range(0,len(massListBounds)-1):
-            purity_1f[k,l,m] = np.mean(\
-                [[np.sum((candidateCountsTest[i][j] > 0) & \
-                    (massFilter[i][m]))/np.sum(massFilter[i][m]) \
-                    for j in diffMap[i]] \
-                    for i in range(0,len(ahCountsTest))])
-            completeness_1f[k,l,m] = np.mean(\
-                [[np.sum((candidateCountsTest[j][i] > 0) & \
-                    (massFilter[j][m]))/np.sum((massFilter[j][m])) \
-                    for j in diffMap[i]] \
-                    for i in range(0,len(ahCountsTest))])
-            purity_2f[k,l,m] = np.mean(\
-                [[np.sum(np.array(twoWayMatchListTest[i])[:,j] & \
-                    (massFilter[i][m]))/np.sum(massFilter[i][m]) \
-                    for i in range(0,len(ahCountsTest))] \
-                    for j in range(0,len(ahCountsTest)-1)])
-            completeness_2f[k,l,m] = np.mean(\
-                [[np.sum(np.array(twoWayMatchListTest[i])[:,j] & \
-                    (massFilter[i][m]))/np.sum(massFilter[i][m]) \
-                    for i in range(0,len(ahCountsTest))] \
-                    for j in range(0,len(ahCountsTest)-1)])
-            #np.sum(\
-            #    [np.array(twoWayMatchListTest[1])[:,0] & \
-            #    (massFilter[1][m]))/np.sum((massFilter[1][m]) \
-            #    ])
         purity_1f[k,l,len(massListBounds)-1] = np.mean(\
             [[np.sum(\
             candidateCountsTest[i][j] > 0)/\
@@ -1749,6 +1840,74 @@ for k in range(0,len(threshList)):
                 len(shortHaloListTest[i]) \
                 for i in range(0,len(ahCountsTest))] \
                 for j in range(0,len(ahCountsTest)-1)])
+        for m in range(0,len(massListBounds)-1):
+            # Recompute with bounded masses:
+            #massRange = [massListBounds[m],massListBounds[m+1]]
+            massRange = None
+            if massRange is not None:
+                [finalCatTest,shortHaloListTest,twoWayMatchListTest,\
+                finalCandidatesTest,finalRatiosTest,finalDistancesTest,\
+                allCandidatesTest,candidateCountsTest] = \
+                    constructAntihaloCatalogue(snapNumList,snapList=snapList,\
+                    snapListRev=snapListRev,ahProps=ahProps,hrList=hrList,\
+                    max_index=None,twoWayOnly=True,blockDuplicates=True,\
+                    #crossMatchThreshold = np.array([0.7,threshList[k]]),\
+                    crossMatchThreshold = crossMatchThreshold,\
+                    #crossMatchThreshold = threshList[k],\
+                    #crossMatchQuantity = "radius",\
+                    crossMatchQuantity = crossMatchQuantity,\
+                    massRange = massRange,\
+                    distMax = distArr2[l],\
+                    rSphere=135,verbose=False,sortMethod=sortMethod,\
+                    snapSortList=snapSortList,overlapList = overlaps)
+                centralAntihalosTest = [tools.getAntiHalosInSphere(\
+                    antihaloCentres[k],135,\
+                    filterCondition = (antihaloRadii[k] > rMin) & \
+                    (antihaloRadii[k] <= rMax) & \
+                    (antihaloMasses[k] > massRange[0]) & \
+                    (antihaloMasses[k] <= massRange[1])) \
+                    for k in range(0,len(snapNumList))]
+                centralAntihaloMassesTest = [\
+                        antihaloMasses[k][centralAntihalosTest[k][0]] \
+                        for k in range(0,len(centralAntihalosTest))]
+                sortedListTest = [\
+                    np.flip(np.argsort(centralAntihaloMassesTest[k])) \
+                    for k in range(0,len(snapNumList))]
+                ahCountsTest = np.array([len(cahs[0]) \
+                    for cahs in centralAntihalosTest])
+                massListShortTest = [np.array([antihaloMasses[l][\
+                    centralAntihalosTest[l][0][sortedListTest[l][k]]] \
+                    for k in range(0,np.min([ahCountsTest[l],max_index]))]) \
+                    for l in range(0,len(snapNumList))]
+                massFilter = [[(massListShortTest[n] > massListBounds[m]) & \
+                    (massListShortTest[n] <= massListBounds[m+1]) \
+                    for m in range(0,len(massListBounds)-1)] \
+                    for n in range(0,len(massListShortTest))]
+            # Record purity/completeness:
+            purity_1f[k,l,m] = np.mean(\
+                [[np.sum((candidateCountsTest[i][j] > 0) & \
+                    (massFilter[i][m]))/np.sum(massFilter[i][m]) \
+                    for j in diffMap[i]] \
+                    for i in range(0,len(ahCountsTest))])
+            completeness_1f[k,l,m] = np.mean(\
+                [[np.sum((candidateCountsTest[j][i] > 0) & \
+                    (massFilter[j][m]))/np.sum((massFilter[j][m])) \
+                    for j in diffMap[i]] \
+                    for i in range(0,len(ahCountsTest))])
+            purity_2f[k,l,m] = np.mean(\
+                [[np.sum(np.array(twoWayMatchListTest[i])[:,j] & \
+                    (massFilter[i][m]))/np.sum(massFilter[i][m]) \
+                    for i in range(0,len(ahCountsTest))] \
+                    for j in range(0,len(ahCountsTest)-1)])
+            completeness_2f[k,l,m] = np.mean(\
+                [[np.sum(np.array(twoWayMatchListTest[i])[:,j] & \
+                    (massFilter[i][m]))/np.sum(massFilter[i][m]) \
+                    for i in range(0,len(ahCountsTest))] \
+                    for j in range(0,len(ahCountsTest)-1)])
+            #np.sum(\
+            #    [np.array(twoWayMatchListTest[1])[:,0] & \
+            #    (massFilter[1][m]))/np.sum((massFilter[1][m]) \
+            #    ])
         print(("%.3g" % (100*(k*len(distArr2) + l + 1)/\
             (len(threshList)*len(distArr2)))) + "% complete")
 
@@ -1814,15 +1973,18 @@ def imshowComparison(leftGrid,rightGrid,top=0.851,bottom=0.167,left=0.088,\
         plt.show()
 
 
+#ylabel = 'Radius ratio threshold ($\mu_{\mathrm{rad}}$)'
+ylabel = 'Mass ratio threshold ($\mu_{\mathrm{mass}}$)'
+
 imshowComparison(completeness_2f[:,:,0],purity_2f[:,:,0],\
     extentLeft= (np.min(distArr2),np.max(distArr2),\
     np.min(threshList),np.max(threshList)),\
     extentRight = (np.min(distArr2),np.max(distArr2),\
-    np.min(threshList),np.max(threshList)))
+    np.min(threshList),np.max(threshList)),ylabel=ylabel)
 
 massTitles = ["$" + plot.scientificNotation(massListBounds[k]) + \
     " < M/M_{\\odot} < " + plot.scientificNotation(massListBounds[k+1]) \
-    + "$"  for k in range(0,4)]
+    + "$"  for k in range(0,len(massListBounds)-1)]
 massTitles.append("All masses")
 nM = 1
 imshowComparison(completeness_2f[:,:,nM],completeness_1f[:,:,nM],\
@@ -1831,7 +1993,8 @@ imshowComparison(completeness_2f[:,:,nM],completeness_1f[:,:,nM],\
     extentLeft= (np.min(distArr2),np.max(distArr2),\
     np.min(threshList),np.max(threshList)),\
     extentRight = (np.min(distArr2),np.max(distArr2),\
-    np.min(threshList),np.max(threshList)),superTitle = massTitles[nM])
+    np.min(threshList),np.max(threshList)),superTitle = massTitles[nM],\
+    ylabel=ylabel)
 
 imshowComparison(purity_1f,completeness_1f,vRight = [0.0,1.0],vLeft=[0.0,1.0],\
     titleRight = 'One-way completeness ($^1C_{\mu_{\mathrm{rad}}}$)',\
@@ -1839,7 +2002,7 @@ imshowComparison(purity_1f,completeness_1f,vRight = [0.0,1.0],vLeft=[0.0,1.0],\
     extentLeft= (np.min(distArr2),np.max(distArr2),\
     np.min(threshList),np.max(threshList)),\
     extentRight = (np.min(distArr2),np.max(distArr2),\
-    np.min(threshList),np.max(threshList)))
+    np.min(threshList),np.max(threshList)),ylabel=ylabel)
 
 
 imshowComparison(completeness_2f,purity_2f)
@@ -1874,7 +2037,7 @@ plt.savefig(figuresFolder + \
 plt.show()
 
 plt.clf()
-plt.plot(distArr2,purity_1f[:,:,4].transpose(),\
+plt.plot(distArr2,purity_1f[:,:,nM].transpose(),\
     label=['$\\mu_{\\mathrm{rad}} = $' + ("%.2g" % thresh) \
     for thresh in threshList])
 plt.axvline(1.0,linestyle=':',color='grey')
@@ -1886,7 +2049,19 @@ plt.savefig(figuresFolder + \
 plt.show()
 
 plt.clf()
-plt.plot(distArr2,(purity_2f[:,:,4]/purity_1f[:,:,4]).transpose(),\
+plt.plot(distArr2,purity_2f[:,:,nM].transpose(),\
+    label=['$\\mu_{\\mathrm{rad}} = $' + ("%.2g" % thresh) \
+    for thresh in threshList])
+plt.axvline(1.0,linestyle=':',color='grey')
+plt.xlabel('$R_{\\mathrm{search}}/\sqrt{R_1R_2}$')
+plt.ylabel('$^2P_f$')
+plt.legend()
+plt.savefig(figuresFolder + \
+    "supporting_plots/optimal_distance_squared.pdf")
+plt.show()
+
+plt.clf()
+plt.plot(distArr2,(purity_2f[:,:,nM]/purity_1f[:,:,nM]).transpose(),\
     label=['$\\mu_{\\mathrm{rad}} = $' + ("%.2g" % thresh) \
     for thresh in threshList])
 plt.axvline(1.0,linestyle=':',color='grey')

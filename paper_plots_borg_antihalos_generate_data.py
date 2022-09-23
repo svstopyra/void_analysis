@@ -764,7 +764,8 @@ def getMatchPynbody(snap1,snap2,cat1,cat2,quantity1,quantity2,\
 def getMatchDistance(snap1,snap2,centres1,centres2,\
         quantity1,quantity2,tree1=None,tree2=None,distMax = 20.0,\
         max_index=200,quantityThresh=0.5,sortMethod='distance',\
-        mode="fractional"):
+        mode="fractional",sortQuantity = 0,cat1=None,cat2=None,volumes1=None,\
+        volumes2=None,overlap = None):
     boxsize = snap1.properties['boxsize'].ratio("Mpc a h**-1")
     if tree1 is None:
         tree1 = scipy.spatial.cKDTree(snapedit.wrap(centres1,boxsize),\
@@ -786,15 +787,41 @@ def getMatchDistance(snap1,snap2,centres1,centres2,\
         # then it wouldn't match to us anyway, so we don't need to consider it.
         radii1 = quantity1/quantityThresh
         radii2 = quantity2/quantityThresh
+        if len(radii1.shape) > 1:
+            searchRadii = radii1[:,0]
+        else:
+            searchRadii = radii1
         searchOther = tree2.query_ball_point(snapedit.wrap(centres1,boxsize),\
-            radii1,workers=-1)
+            searchRadii,workers=-1)
     else:
         searchOther = tree1.query_ball_tree(tree2,distMax)
+    if overlap is None and sortMethod == "volumes":
+        if cat1 is None or cat2 is None or \
+        volumes1 is None or volumes2 is None:
+            raise Exception("Anti-halo catalogue required for " + \
+                "volumes based matching.")
+        overlap = overlapMap(cat1,cat2,volumes1,volumes2)
     for k in range(0,np.min([len(centres1),max_index])):
         if len(searchOther[k]) > 0:
             # Sort indices:
             distances = np.sqrt(np.sum((\
                     centres2[searchOther[k],:] - centres1[k,:])**2,1))
+            if len(quantity1.shape) > 1:
+                quantRatio = np.zeros((len(searchOther[k]),\
+                    quantity1.shape[1]))
+                for l in range(0,quantity1.shape[1]):
+                    bigger = np.where(\
+                        quantity2[searchOther[k],l] > quantity1[k,l])[0]
+                    quantRatio[:,l] = quantity2[searchOther[k],l]/\
+                        quantity1[k,l]
+                    quantRatio[bigger,l] = quantity1[k,l]/\
+                        quantity2[searchOther[k],l][bigger]
+            else:
+                bigger = np.where(\
+                    quantity2[searchOther[k]] > quantity1[k])[0]
+                quantRatio = quantity2[searchOther[k]]/quantity1[k]
+                quantRatio[bigger] = quantity1[k]/\
+                    quantity2[searchOther[k]][bigger]
             if sortMethod == 'distance':
                 # Sort the antihalos by distance. Candidate is the closest
                 # halo which satisfies the threshold criterion:
@@ -807,24 +834,46 @@ def getMatchDistance(snap1,snap2,centres1,centres2,\
             elif sortMethod == 'ratio':
                 # sort the quantRatio from biggest to smallest, so we find
                 # the most similar anti-halo within the search distance:
-                bigger = np.where(quantity2[searchOther[k]] > quantity1[k])[0]
-                quantRatio = quantity2[searchOther[k]]/quantity1[k]
-                quantRatio[bigger] = quantity1[k]/\
-                    quantity2[searchOther[k]][bigger]
-                indSort = np.flip(np.argsort(quantRatio))
+                if len(quantity1.shape) > 1:
+                    indSort = np.flip(np.argsort(quantRatio[:,sortQuantity]))
+                else:
+                    indSort = np.flip(np.argsort(quantRatio))
+                quantRatio = quantRatio[indSort]
+                sortedCandidates = np.array(searchOther[k],dtype=int)[indSort]
+            elif sortMethod == "volumes":
+                volOverlapFrac = overlap[k,searchOther[k]]
+                indSort = np.flip(np.argsort(volOverlapFrac))
                 quantRatio = quantRatio[indSort]
                 sortedCandidates = np.array(searchOther[k],dtype=int)[indSort]
             else:
                 raise Exception("Unrecognised sorting method")
             # Get thresholds for these candidates:
             if mode == "fractional":
-                candRadii = quantity2[sortedCandidates]
-                # Geometric mean of radii, to ensure symmetry.
-                geometricRadii = np.sqrt(quantity1[k]*candRadii)
-                candidates = np.where((quantRatio >= quantityThresh) & \
-                    (distances[indSort] <= geometricRadii*distMax))[0]
+                if len(quantity1.shape) > 1:
+                    candRadii = quantity2[sortedCandidates,0]
+                    # Geometric mean of radii, to ensure symmetry.
+                    geometricRadii = np.sqrt(quantity1[k,0]*candRadii)
+                    condition = (quantRatio[:,0] >= quantityThresh[0]) & \
+                        (distances[indSort] <= geometricRadii*distMax)
+                    for l in range(1,quantity1.shape[1]):
+                        condition = condition & \
+                            (quantRatio[:,l] >= quantityThresh[l])
+                    candidates = np.where(condition)[0]
+                else:
+                    candRadii = quantity2[sortedCandidates]
+                    # Geometric mean of radii, to ensure symmetry.
+                    geometricRadii = np.sqrt(quantity1[k]*candRadii)
+                    candidates = np.where((quantRatio >= quantityThresh) & \
+                        (distances[indSort] <= geometricRadii*distMax))[0]
             else:
-                candidates = np.where((quantRatio >= quantityThresh))[0]
+                if len(quantity1.shape) > 1:
+                    condition = np.ones(quantityRatio.shape[0],dtype=bool)
+                    for l in range(0,quantity1.shape[1]):
+                        condition = condition & \
+                            (quantRatio[:,l] >= quantityThresh[l])
+                    candidates = np.where(condition)[0]
+                else:
+                    candidates = np.where((quantRatio >= quantityThresh))[0]
             candidatesList.append(candidates)
             ratioList.append(quantRatio[candidates])
             distList.append(distances[candidates])
@@ -885,6 +934,64 @@ def isInZoA(centre,inUnits="equatorial",galacticCentreZOA = [-30,30],\
             & ((b > bRange[0]) & (b < bRange[1]))] = True
     return result
 
+def overlapMap(cat1,cat2,volumes1,volumes2,checkFirst = False,verbose=False):
+    overlap = np.zeros((len(cat1),len(cat2)))
+    vol1 = np.array([np.sum(volumes1[halo['iord']]) for halo in cat1])
+    vol2 = np.array([np.sum(volumes2[halo['iord']]) for halo in cat2])
+    if checkFirst:
+        for k in range(0,len(cat1)):
+            for l in range(0,len(cat2)):
+                if checkOverlap(cat1[k+1]['iord'],cat2[l+1]['iord']):
+                    intersection = np.intersect1d(cat1[k+1]['iord'],\
+                        cat2[l+1]['iord'])
+                    overlap[k,l] = np.sum(\
+                        volumes1[intersection])/np.sqrt(vol1[k]*vol2[l])
+    else:
+        for k in range(0,len(cat1)):
+            for l in range(0,len(cat2)):
+                intersection = np.intersect1d(cat1[k+1]['iord'],\
+                    cat2[l+1]['iord'])
+                if len(intersection) > 0:
+                    overlap[k,l] = np.sum(\
+                        volumes1[intersection])/np.sqrt(vol1[k]*vol2[l])
+            if verbose:
+                print(("%.3g" % (100*(k*len(cat1) + l + 1)/\
+                    (len(cat1)*len(cat2)))) + "% complete")
+    return overlap
+
+# Check whether two halos have any overlap:
+def checkOverlap(list1,list2):
+    [min1,max1] = minmax(list1)
+    [min2,max2] = minmax(list2)
+    if max1 < min2:
+        return False
+    elif min1 > max2:
+        return False
+    else:
+        if len(list1) < len(list2):
+            listMin = list1
+            listMax = list2
+        else:
+            listMin = list2
+            listMax = list1
+        for k in range(0,len(listMin)):
+            if np.isin(listMin[k],listMax):
+                return True
+        return False
+
+def linearFromIJ(i,j,N):
+    if i >= N or i < 0:
+        raise Exception("i out of range.")
+    if j >= N or j < 0:
+        raise Exception("j out of range.")
+    if i < j:
+        return int(i*N - i*(i+1)/2 + j - i - 1)
+    if j < i:
+        return int(j*N - j*(j+1)/2 + i - j - 1)
+    else:
+        raise Exception("i = j not valid.")
+
+
 
 # Construct an anti-halo catalogue from reversed snapshots
 def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
@@ -895,7 +1002,8 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
         crossMatchThreshold = 0.5,distMax=20.0,sortMethod='ratio',\
         blockDuplicates=True,twoWayOnly = True,\
         snapList=None,snapListRev=None,ahProps=None,hrList=None,\
-        rMin = 5,rMax = 100,mode="fractional"):
+        rMin = 5,rMax = 100,mode="fractional",massRange = None,\
+        snapSortList = None,overlapList = None):
     # Load snapshots:
     if verbose:
         print("Loading snapshots...")
@@ -916,9 +1024,26 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
         for props in ahProps]
     antihaloMasses = [props[3] for props in ahProps]
     antihaloRadii = [props[7] for props in ahProps]
-    centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],rSphere,\
-        filterCondition = (antihaloRadii[k] > rMin) & \
-        (antihaloRadii[k] <= rMax)) for k in range(0,len(snapNumList))]
+    if sortMethod == "volumes":
+        if snapSortList is None:
+            snapSortList = [np.argsort(snap['iord']) for snap in snapList]
+        volumesList = [ahProps[k][4][snapSortList[k]] \
+            for k in range(0,len(ahProps))]
+    else:
+        volumesList = [None for k in range(0,len(ahProps))]
+    if massRange is None:
+        centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],\
+            rSphere,filterCondition = (antihaloRadii[k] > rMin) & \
+            (antihaloRadii[k] <= rMax)) for k in range(0,len(snapNumList))]
+    else:
+        if len(massRange) < 2:
+            raise Exception("Mass range must have an upper and a lower " + \
+                "limit.")
+        centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],\
+            rSphere,filterCondition = (antihaloRadii[k] > rMin) & \
+            (antihaloRadii[k] <= rMax) & (antihaloMasses[k] > massRange[0]) & \
+            (antihaloMasses[k] <= massRange[1])) \
+            for k in range(0,len(snapNumList))]
     centralAntihaloMasses = [\
             antihaloMasses[k][centralAntihalos[k][0]] \
             for k in range(0,len(centralAntihalos))]
@@ -932,17 +1057,34 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
         hrList = [snap.halos() for snap in snapListRev]
     sortedList = [np.flip(np.argsort(centralAntihaloMasses[k])) \
         for k in range(0,len(snapNumList))]
-    if matchType == "pynbody":
+    if matchType == "pynbody" or sortMethod == "volumes":
         hrListCentral = [copy.deepcopy(halos) for halos in hrList]
+    else:
+        hrListCentral = [None for halos in hrList]
     shortHaloList = []
     for l in range(0,len(snapNumList)):
-        if matchType == "pynbody":
+        if matchType == "pynbody" or sortMethod == "volumes":
             hrListCentral[l]._halos = dict([(k+1,\
                 hrList[l][centralAntihalos[l][0][sortedList[l][k]]+1]) \
                 for k in range(0,len(centralAntihalos[l][0]))])
             hrListCentral[l]._nhalos = len(centralAntihalos[l][0])
         shortHaloList.append(\
             np.array(centralAntihalos[l][0])[sortedList[l]] + 1)
+    if overlapList is None and sortMethod == "volumes":
+        # Construct overlap list for all possible pairs:
+        overlapList = []
+        for k in range(0,len(snapNumList)):
+            for l in range(0,len(snapNumList)):
+                if k >= l:
+                    continue
+                overlapList.append(overlapMap(hrListCentral[k],\
+                    hrListCentral[l],volumesList[k],volumesList[l],\
+                    verbose=False))
+    if sortMethod == "volumes":
+        # Check that the supplied overlap list is the correct size. If not,
+        # this probably means that a bad overlap list was given:
+        if len(overlapList) != int(len(snapNumList)*(len(snapNumList) - 1)/2):
+            raise Exception("Invalid overlapList!")
     # Construct matches:
     matchArrayList = [[] for k in range(0,len(snapNumList))]
     allCandidates = []
@@ -963,6 +1105,15 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
         #    for k in range(0,max_index)] \
         #    for l in range(0,len(snapNumList))]).transpose()
         quantityList = [np.array([antihaloMasses[l][\
+            centralAntihalos[l][0][sortedList[l][k]]] \
+            for k in range(0,np.min([ahCounts[l],max_index]))]) \
+            for l in range(0,len(snapNumList))]
+    elif crossMatchQuantity == "both":
+        quantityListRad = [np.array([antihaloRadii[l][\
+            centralAntihalos[l][0][sortedList[l][k]]] \
+            for k in range(0,np.min([ahCounts[l],max_index]))]) \
+            for l in range(0,len(snapNumList))]
+        quantityListMass = [np.array([antihaloMasses[l][\
             centralAntihalos[l][0][sortedList[l][k]]] \
             for k in range(0,np.min([ahCounts[l],max_index]))]) \
             for l in range(0,len(snapNumList))]
@@ -996,15 +1147,43 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
                             quantityThresh = crossMatchThreshold)
                     matchArrayListNew.append(match)
                 elif matchType == 'distance':
-                    [match, candidatesList,ratioList,distList] = \
-                        getMatchDistance(snapListRev[k],\
-                            snapListRev[l],centresListShort[k],\
-                            centresListShort[l],quantityList[k],\
-                            quantityList[l],tree1=treeList[k],\
-                            tree2=treeList[l],distMax = distMax,\
-                            max_index=max_index,\
-                            quantityThresh=crossMatchThreshold,\
-                            sortMethod=sortMethod,mode=mode)
+                    if crossMatchQuantity == "both":
+                        if sortMethod == "volumes":
+                            linearIndex = linearFromIJ(k,l,len(snapNumList))
+                            if k < l:
+                                overlap = overlapList[linearIndex]
+                            else:
+                                overlap = overlapList[linearIndex].transpose()
+                        else:
+                            overlap = None
+                        [match, candidatesList,ratioList,distList] = \
+                            getMatchDistance(snapListRev[k],\
+                                snapListRev[l],centresListShort[k],\
+                                centresListShort[l],\
+                                np.array([quantityListRad[k],\
+                                    quantityListMass[k]]).transpose(),\
+                                np.array([quantityListRad[l],\
+                                    quantityListMass[l]]).transpose(),\
+                                tree1=treeList[k],\
+                                tree2=treeList[l],distMax = distMax,\
+                                max_index=max_index,\
+                                quantityThresh=crossMatchThreshold,\
+                                sortMethod=sortMethod,mode=mode,\
+                                cat1 = hrListCentral[k],\
+                                cat2 = hrListCentral[l],\
+                                volumes1 = volumesList[k],\
+                                volumes2 = volumesList[l],\
+                                overlap = overlap)
+                    else:
+                        [match, candidatesList,ratioList,distList] = \
+                            getMatchDistance(snapListRev[k],\
+                                snapListRev[l],centresListShort[k],\
+                                centresListShort[l],quantityList[k],\
+                                quantityList[l],tree1=treeList[k],\
+                                tree2=treeList[l],distMax = distMax,\
+                                max_index=max_index,\
+                                quantityThresh=crossMatchThreshold,\
+                                sortMethod=sortMethod,mode=mode)
                     matchArrayListNew.append(match)
                 else:
                     raise Exception("Unrecognised matching type requested.")
