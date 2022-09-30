@@ -27,7 +27,8 @@ recomputeData = False
 snapNumListOld = [7422,7500,8000,8500,9000,9500]
 #snapNumList = [7000,7200,7400]
 snapNumList = [7000,7200,7400,7600,8000]
-snapNumListUncon = [1,2,3,4,5,6]
+#snapNumListUncon = [1,2,3,4,5,6]
+snapNumListUncon = [1,2,3,4,5,6,7,8,9,10]
 snapNumListUnconOld = [1,2,3,5,6]
 
 # Filename data:
@@ -1124,7 +1125,9 @@ sigmaSepStackIndUn = np.vstack([sim[1] for sim in indStack])
 snapname = "gadget_full_forward_512/snapshot_001"
 snapnameRev = "gadget_full_reverse_512/snapshot_001"
 #snapNumList = [7000,7200,7400,7600,8000]
-snapNumList = [7000,7200,7400,7600,8000]
+#snapNumList = [7000,7200,7400,7600,8000]
+
+snapNumList = [8800,9100,9400,9700,10000]
 
 snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" + \
     snapname) for snapNum in snapNumList]
@@ -1306,14 +1309,18 @@ def getCentresFromCat(catList,centresList,ns):
             centresListOut[k,:] = np.nan
     return centresListOut
 
-def getMeanProperty(propertyList):
+def getMeanProperty(propertyList,stripNaN=True,lowerLimit=0,stdError=True):
     meanProperty = np.zeros(len(propertyList))
     sigmaProperty = np.zeros(len(propertyList))
     for k in range(0,len(propertyList)):
-        haveProperty = np.where(propertyList[k,:] > 0)[0]
+        condition = propertyList[k,:] > lowerLimit
+        if stripNaN:
+            condition = condition & (np.isfinite(propertyList[k,:] > 0))
+        haveProperty = np.where(condition)[0]
         meanProperty[k] = np.mean(propertyList[k,haveProperty])
-        sigmaProperty[k] = np.std(propertyList[k,haveProperty])/\
-            np.sqrt(len(haveProperty))
+        sigmaProperty[k] = np.std(propertyList[k,haveProperty])
+        if stdError:
+            sigmaProperty[k] /= np.sqrt(len(haveProperty))
     return [meanProperty,sigmaProperty]
 
 
@@ -1727,17 +1734,17 @@ distArr2 = np.arange(0,3,0.1)
 massListBounds = np.array([1e13,1e14,5e14,1e16])
 sortMethod='ratio'
 uniqueMatchFracArray = np.zeros((len(threshList),len(distArr2),\
-    len(massListBounds)))
+    len(massListBounds),2))
 catFractionFinalMatrix = np.zeros((len(threshList),len(distArr2),\
-    len(massListBounds)))
+    len(massListBounds),2))
 purity_1f = np.zeros((len(threshList),len(distArr2),\
-    len(massListBounds)))
+    len(massListBounds),2))
 purity_2f = np.zeros((len(threshList),len(distArr2),\
-    len(massListBounds)))
+    len(massListBounds),2))
 completeness_1f = np.zeros((len(threshList),len(distArr2),\
-    len(massListBounds)))
+    len(massListBounds),2))
 completeness_2f = np.zeros((len(threshList),len(distArr2),\
-    len(massListBounds)))
+    len(massListBounds),2))
 
 massRange = [1e14,5e14]
 if massRange is None:
@@ -1763,89 +1770,32 @@ massListShortTest = [np.array([antihaloMasses[l][\
             for l in range(0,len(snapNumList))]
 diffMap = [np.setdiff1d(np.arange(0,len(snapNumList)),[k]) \
     for k in range(0,len(snapNumList))]
+fixedMassThresh = 0.3
+fixedRadThresh = 0.3
 for k in range(0,len(threshList)):
-    #crossMatchThreshold = np.array([threshList[k],0.3])
-    crossMatchThreshold = np.array([0.3,threshList[k]])
-    crossMatchQuantity = "both"
-    sortMethod = "volumes"
-    overlaps = overlapList
-    for l in range(0,len(distArr2)):
-        #[finalCatTest,shortHaloListTest,twoWayMatchListTest,\
-        #    finalCandidatesTest,finalRatiosTest,finalDistancesTest,\
-        #    allCandidatesTest,candidateCountsTest] = \
-        #    constructAntihaloCatalogue(snapNumList,snapList=snapList,\
-        #    snapListRev=snapListRev,ahProps=ahProps,hrList=hrList,\
-        #    crossMatchThreshold = threshList[k],distMax = distArr2[l],\
-        #    verbose=False,max_index=max_index,sortMethod=sortMethod)
-        massRange = [0,1e16]
-        [finalCatTest,shortHaloListTest,twoWayMatchListTest,\
-            finalCandidatesTest,finalRatiosTest,finalDistancesTest,\
-            allCandidatesTest,candidateCountsTest] = \
-                constructAntihaloCatalogue(snapNumList,snapList=snapList,\
-                snapListRev=snapListRev,ahProps=ahProps,hrList=hrList,\
-                max_index=None,twoWayOnly=True,blockDuplicates=True,\
-                #crossMatchThreshold = np.array([0.7,threshList[k]]),\
-                crossMatchThreshold = crossMatchThreshold,\
-                #crossMatchThreshold = threshList[k],\
-                #crossMatchQuantity = "radius",\
-                crossMatchQuantity = crossMatchQuantity,\
-                massRange = massRange,\
-                distMax = distArr2[l],\
-                rSphere=135,verbose=False,sortMethod=sortMethod,\
-                snapSortList=snapSortList,overlapList = overlaps)
-        centralAntihalosTest = [tools.getAntiHalosInSphere(\
-            antihaloCentres[k],135,\
-            filterCondition = (antihaloRadii[k] > rMin) & \
-            (antihaloRadii[k] <= rMax) & \
-            (antihaloMasses[k] > massRange[0]) & \
-            (antihaloMasses[k] <= massRange[1])) \
-            for k in range(0,len(snapNumList))]
-        centralAntihaloMassesTest = [\
-                antihaloMasses[k][centralAntihalosTest[k][0]] \
-                for k in range(0,len(centralAntihalosTest))]
-        sortedListTest = [\
-            np.flip(np.argsort(centralAntihaloMassesTest[k])) \
-            for k in range(0,len(snapNumList))]
-        ahCountsTest = np.array([len(cahs[0]) \
-            for cahs in centralAntihalosTest])
-        massListShortTest = [np.array([antihaloMasses[l][\
-            centralAntihalosTest[l][0][sortedListTest[l][k]]] \
-            for k in range(0,np.min([ahCountsTest[l],max_index]))]) \
-            for l in range(0,len(snapNumList))]
-        massFilter = [[(massListShortTest[n] > massListBounds[m]) & \
-            (massListShortTest[n] <= massListBounds[m+1]) \
-            for m in range(0,len(massListBounds)-1)] \
-            for n in range(0,len(massListShortTest))]
-        purity_1f[k,l,len(massListBounds)-1] = np.mean(\
-            [[np.sum(\
-            candidateCountsTest[i][j] > 0)/\
-            len(shortHaloListTest[i]) \
-            for j in diffMap[i]] \
-            for i in range(0,len(ahCountsTest))])
-        completeness_1f[k,l,len(massListBounds)-1] = np.mean(\
-            [[np.sum(\
-                candidateCountsTest[j][i] > 0)/\
-                len(shortHaloListTest[j]) \
-                for j in diffMap[i]] \
-                for i in range(0,len(ahCountsTest))])
-        purity_2f[k,l,len(massListBounds)-1] = np.mean(\
-            [[np.sum(\
-                np.array(twoWayMatchListTest[i])[:,j])/\
-                len(shortHaloListTest[i]) \
-                for i in range(0,len(ahCountsTest))] \
-                for j in range(0,len(ahCountsTest)-1)])
-        completeness_2f[k,l,len(massListBounds)-1] = np.mean(\
-            [[np.sum(\
-                np.array(twoWayMatchListTest[i])[:,j])/\
-                len(shortHaloListTest[i]) \
-                for i in range(0,len(ahCountsTest))] \
-                for j in range(0,len(ahCountsTest)-1)])
-        for m in range(0,len(massListBounds)-1):
-            # Recompute with bounded masses:
-            #massRange = [massListBounds[m],massListBounds[m+1]]
-            massRange = None
-            if massRange is not None:
-                [finalCatTest,shortHaloListTest,twoWayMatchListTest,\
+    for q in range(0,2):
+        #crossMatchQuantity = "both"
+        sortMethod = "ratio"
+        overlaps = None
+        if q == 0:
+            # Fixed mass threshold:
+            #crossMatchThreshold = np.array([threshList[k],fixedMassThresh])
+            crossMatchQuantity = 'radius'
+            crossMatchThreshold = threshList[k]
+        if q == 1:
+            # Fixed radius threshold:
+            crossMatchQuantity = 'mass'
+            crossMatchThreshold = threshList[k]
+        for l in range(0,len(distArr2)):
+            #[finalCatTest,shortHaloListTest,twoWayMatchListTest,\
+            #    finalCandidatesTest,finalRatiosTest,finalDistancesTest,\
+            #    allCandidatesTest,candidateCountsTest] = \
+            #    constructAntihaloCatalogue(snapNumList,snapList=snapList,\
+            #    snapListRev=snapListRev,ahProps=ahProps,hrList=hrList,\
+            #    crossMatchThreshold = threshList[k],distMax = distArr2[l],\
+            #    verbose=False,max_index=max_index,sortMethod=sortMethod)
+            massRange = [0,1e16]
+            [finalCatTest,shortHaloListTest,twoWayMatchListTest,\
                 finalCandidatesTest,finalRatiosTest,finalDistancesTest,\
                 allCandidatesTest,candidateCountsTest] = \
                     constructAntihaloCatalogue(snapNumList,snapList=snapList,\
@@ -1860,56 +1810,123 @@ for k in range(0,len(threshList)):
                     distMax = distArr2[l],\
                     rSphere=135,verbose=False,sortMethod=sortMethod,\
                     snapSortList=snapSortList,overlapList = overlaps)
-                centralAntihalosTest = [tools.getAntiHalosInSphere(\
-                    antihaloCentres[k],135,\
-                    filterCondition = (antihaloRadii[k] > rMin) & \
-                    (antihaloRadii[k] <= rMax) & \
-                    (antihaloMasses[k] > massRange[0]) & \
-                    (antihaloMasses[k] <= massRange[1])) \
-                    for k in range(0,len(snapNumList))]
-                centralAntihaloMassesTest = [\
-                        antihaloMasses[k][centralAntihalosTest[k][0]] \
-                        for k in range(0,len(centralAntihalosTest))]
-                sortedListTest = [\
-                    np.flip(np.argsort(centralAntihaloMassesTest[k])) \
-                    for k in range(0,len(snapNumList))]
-                ahCountsTest = np.array([len(cahs[0]) \
-                    for cahs in centralAntihalosTest])
-                massListShortTest = [np.array([antihaloMasses[l][\
-                    centralAntihalosTest[l][0][sortedListTest[l][k]]] \
-                    for k in range(0,np.min([ahCountsTest[l],max_index]))]) \
-                    for l in range(0,len(snapNumList))]
-                massFilter = [[(massListShortTest[n] > massListBounds[m]) & \
-                    (massListShortTest[n] <= massListBounds[m+1]) \
-                    for m in range(0,len(massListBounds)-1)] \
-                    for n in range(0,len(massListShortTest))]
-            # Record purity/completeness:
-            purity_1f[k,l,m] = np.mean(\
-                [[np.sum((candidateCountsTest[i][j] > 0) & \
-                    (massFilter[i][m]))/np.sum(massFilter[i][m]) \
+            centralAntihalosTest = [tools.getAntiHalosInSphere(\
+                antihaloCentres[k],135,\
+                filterCondition = (antihaloRadii[k] > rMin) & \
+                (antihaloRadii[k] <= rMax) & \
+                (antihaloMasses[k] > massRange[0]) & \
+                (antihaloMasses[k] <= massRange[1])) \
+                for k in range(0,len(snapNumList))]
+            centralAntihaloMassesTest = [\
+                    antihaloMasses[k][centralAntihalosTest[k][0]] \
+                    for k in range(0,len(centralAntihalosTest))]
+            sortedListTest = [\
+                np.flip(np.argsort(centralAntihaloMassesTest[k])) \
+                for k in range(0,len(snapNumList))]
+            ahCountsTest = np.array([len(cahs[0]) \
+                for cahs in centralAntihalosTest])
+            massListShortTest = [np.array([antihaloMasses[l][\
+                centralAntihalosTest[l][0][sortedListTest[l][k]]] \
+                for k in range(0,np.min([ahCountsTest[l],max_index]))]) \
+                for l in range(0,len(snapNumList))]
+            massFilter = [[(massListShortTest[n] > massListBounds[m]) & \
+                (massListShortTest[n] <= massListBounds[m+1]) \
+                for m in range(0,len(massListBounds)-1)] \
+                for n in range(0,len(massListShortTest))]
+            purity_1f[k,l,len(massListBounds)-1,q] = np.mean(\
+                [[np.sum(\
+                candidateCountsTest[i][j] > 0)/\
+                len(shortHaloListTest[i]) \
+                for j in diffMap[i]] \
+                for i in range(0,len(ahCountsTest))])
+            completeness_1f[k,l,len(massListBounds)-1,q] = np.mean(\
+                [[np.sum(\
+                    candidateCountsTest[j][i] > 0)/\
+                    len(shortHaloListTest[j]) \
                     for j in diffMap[i]] \
                     for i in range(0,len(ahCountsTest))])
-            completeness_1f[k,l,m] = np.mean(\
-                [[np.sum((candidateCountsTest[j][i] > 0) & \
-                    (massFilter[j][m]))/np.sum((massFilter[j][m])) \
-                    for j in diffMap[i]] \
-                    for i in range(0,len(ahCountsTest))])
-            purity_2f[k,l,m] = np.mean(\
-                [[np.sum(np.array(twoWayMatchListTest[i])[:,j] & \
-                    (massFilter[i][m]))/np.sum(massFilter[i][m]) \
+            purity_2f[k,l,len(massListBounds)-1,q] = np.mean(\
+                [[np.sum(\
+                    np.array(twoWayMatchListTest[i])[:,j])/\
+                    len(shortHaloListTest[i]) \
                     for i in range(0,len(ahCountsTest))] \
                     for j in range(0,len(ahCountsTest)-1)])
-            completeness_2f[k,l,m] = np.mean(\
-                [[np.sum(np.array(twoWayMatchListTest[i])[:,j] & \
-                    (massFilter[i][m]))/np.sum(massFilter[i][m]) \
+            completeness_2f[k,l,len(massListBounds)-1,q] = np.mean(\
+                [[np.sum(\
+                    np.array(twoWayMatchListTest[i])[:,j])/\
+                    len(shortHaloListTest[i]) \
                     for i in range(0,len(ahCountsTest))] \
                     for j in range(0,len(ahCountsTest)-1)])
-            #np.sum(\
-            #    [np.array(twoWayMatchListTest[1])[:,0] & \
-            #    (massFilter[1][m]))/np.sum((massFilter[1][m]) \
-            #    ])
-        print(("%.3g" % (100*(k*len(distArr2) + l + 1)/\
-            (len(threshList)*len(distArr2)))) + "% complete")
+            for m in range(0,len(massListBounds)-1):
+                # Recompute with bounded masses:
+                #massRange = [massListBounds[m],massListBounds[m+1]]
+                massRange = None
+                if massRange is not None:
+                    [finalCatTest,shortHaloListTest,twoWayMatchListTest,\
+                    finalCandidatesTest,finalRatiosTest,finalDistancesTest,\
+                    allCandidatesTest,candidateCountsTest] = \
+                        constructAntihaloCatalogue(snapNumList,snapList=snapList,\
+                        snapListRev=snapListRev,ahProps=ahProps,hrList=hrList,\
+                        max_index=None,twoWayOnly=True,blockDuplicates=True,\
+                        #crossMatchThreshold = np.array([0.7,threshList[k]]),\
+                        crossMatchThreshold = crossMatchThreshold,\
+                        #crossMatchThreshold = threshList[k],\
+                        #crossMatchQuantity = "radius",\
+                        crossMatchQuantity = crossMatchQuantity,\
+                        massRange = massRange,\
+                        distMax = distArr2[l],\
+                        rSphere=135,verbose=False,sortMethod=sortMethod,\
+                        snapSortList=snapSortList,overlapList = overlaps)
+                    centralAntihalosTest = [tools.getAntiHalosInSphere(\
+                        antihaloCentres[k],135,\
+                        filterCondition = (antihaloRadii[k] > rMin) & \
+                        (antihaloRadii[k] <= rMax) & \
+                        (antihaloMasses[k] > massRange[0]) & \
+                        (antihaloMasses[k] <= massRange[1])) \
+                        for k in range(0,len(snapNumList))]
+                    centralAntihaloMassesTest = [\
+                            antihaloMasses[k][centralAntihalosTest[k][0]] \
+                            for k in range(0,len(centralAntihalosTest))]
+                    sortedListTest = [\
+                        np.flip(np.argsort(centralAntihaloMassesTest[k])) \
+                        for k in range(0,len(snapNumList))]
+                    ahCountsTest = np.array([len(cahs[0]) \
+                        for cahs in centralAntihalosTest])
+                    massListShortTest = [np.array([antihaloMasses[l][\
+                        centralAntihalosTest[l][0][sortedListTest[l][k]]] \
+                        for k in range(0,np.min([ahCountsTest[l],max_index]))]) \
+                        for l in range(0,len(snapNumList))]
+                    massFilter = [[(massListShortTest[n] > massListBounds[m]) & \
+                        (massListShortTest[n] <= massListBounds[m+1]) \
+                        for m in range(0,len(massListBounds)-1)] \
+                        for n in range(0,len(massListShortTest))]
+                # Record purity/completeness:
+                purity_1f[k,l,m,q] = np.mean(\
+                    [[np.sum((candidateCountsTest[i][j] > 0) & \
+                        (massFilter[i][m]))/np.sum(massFilter[i][m]) \
+                        for j in diffMap[i]] \
+                        for i in range(0,len(ahCountsTest))])
+                completeness_1f[k,l,m,q] = np.mean(\
+                    [[np.sum((candidateCountsTest[j][i] > 0) & \
+                        (massFilter[j][m]))/np.sum((massFilter[j][m])) \
+                        for j in diffMap[i]] \
+                        for i in range(0,len(ahCountsTest))])
+                purity_2f[k,l,m,q] = np.mean(\
+                    [[np.sum(np.array(twoWayMatchListTest[i])[:,j] & \
+                        (massFilter[i][m]))/np.sum(massFilter[i][m]) \
+                        for i in range(0,len(ahCountsTest))] \
+                        for j in range(0,len(ahCountsTest)-1)])
+                completeness_2f[k,l,m,q] = np.mean(\
+                    [[np.sum(np.array(twoWayMatchListTest[i])[:,j] & \
+                        (massFilter[i][m]))/np.sum(massFilter[i][m]) \
+                        for i in range(0,len(ahCountsTest))] \
+                        for j in range(0,len(ahCountsTest)-1)])
+                #np.sum(\
+                #    [np.array(twoWayMatchListTest[1])[:,0] & \
+                #    (massFilter[1][m]))/np.sum((massFilter[1][m]) \
+                #    ])
+    print(("%.3g" % (100*(k*len(distArr2) + l + 1)/\
+        (len(threshList)*len(distArr2)))) + "% complete")
 
 euclideanDist2 = np.sqrt((purity_2f - 1.0)**2  + (completeness_2f - 1.0)**2)
 
@@ -1917,7 +1934,12 @@ euclideanDist2 = np.sqrt((purity_2f - 1.0)**2  + (completeness_2f - 1.0)**2)
 
 
 pickle.dump([purity_1f,purity_2f,completeness_1f,completeness_2f,distArr2,\
-    threshList],open("purity_data.p","wb"))
+    threshList],open("purity_data_" + str(fixedMassThresh) + ".p","wb"))
+
+[purity_1f,purity_2f,completeness_1f,completeness_2f,distArr2,threshList] = \
+    pickle.load(open("purity_data_" + str(fixedMassThresh) + ".p","rb"))
+
+
 
 def imshowComparison(leftGrid,rightGrid,top=0.851,bottom=0.167,left=0.088,\
         right=0.845,hspace=0.2,wspace=0.0,cbaxPar = [0.87,0.2,0.02,0.68],\
@@ -1925,6 +1947,7 @@ def imshowComparison(leftGrid,rightGrid,top=0.851,bottom=0.167,left=0.088,\
         vLeft = [0.0,0.6],vRight = None,aspect='auto',origin='lower',\
         xlabel='Search radius ($R_{\mathrm{search}}/\sqrt{R_1R_2}$)',\
         ylabel = 'Radius ratio threshold ($\mu_{\mathrm{rad}}$)',\
+        ylabelRight = None,\
         titleLeft = 'Two-way completeness ($^2C_{\mu_{\mathrm{rad}}}$)',\
         titleRight = 'Two-way purity ($^2P_{\mu_{\mathrm{rad}}}$)',\
         cbarLabel = 'Two-way completeness/purity',show = True,savename=None,\
@@ -1934,6 +1957,8 @@ def imshowComparison(leftGrid,rightGrid,top=0.851,bottom=0.167,left=0.088,\
         cbarMode = "single"
     else:
         cbarMode = "double"
+    if ylabelRight is None:
+        ylabelRight = ylabel
     fig, ax = plt.subplots(1,2,figsize=figsize)
     imLeft = ax[0].imshow(leftGrid,extent=extentLeft,aspect=aspect,\
         cmap=cmap,origin=origin,vmin=vLeft[0],vmax=vLeft[1])
@@ -1941,7 +1966,8 @@ def imshowComparison(leftGrid,rightGrid,top=0.851,bottom=0.167,left=0.088,\
         cmap=cmap,origin=origin,vmin=vRight[0],vmax=vRight[1])
     for axi in ax:
         axi.set_xlabel(xlabel)
-        axi.set_ylabel(ylabel)
+    ax[0].set_ylabel(ylabel)
+    ax[1].set_ylabel(ylabelRight)
     ax[0].set_title(titleLeft)
     ax[1].set_title(titleRight)
     ax[1].yaxis.label.set_visible(False)
@@ -1991,14 +2017,30 @@ massTitles = ["$" + plot.scientificNotation(massListBounds[k]) + \
     + "$"  for k in range(0,len(massListBounds)-1)]
 massTitles.append("All masses")
 nM = 1
-imshowComparison(completeness_2f[:,:,nM],completeness_1f[:,:,nM],\
+imshowComparison(completeness_2f[:,:,nM,0],completeness_2f[:,:,nM,1],\
     vRight = [0.0,1.0],vLeft = [0.0,1.0],\
-    titleRight = 'One-way completeness ($^1C_{\mu_{\mathrm{rad}}}$)',\
+    titleRight = 'Fixed radius threshold ($\mu_{\mathrm{rad}} = ' + \
+    str(fixedRadThresh) + '$)',\
+    titleLeft = 'Fixed mass threshold ($\mu_{\mathrm{mass}} = ' + \
+    str(fixedMassThresh) + '$)',\
     extentLeft= (np.min(distArr2),np.max(distArr2),\
     np.min(threshList),np.max(threshList)),\
     extentRight = (np.min(distArr2),np.max(distArr2),\
     np.min(threshList),np.max(threshList)),superTitle = massTitles[nM],\
-    ylabel=ylabel)
+    ylabel="Radius or Mass Threshold")
+
+imshowComparison(completeness_2f[:,:,1,0],completeness_2f[:,:,2,0],\
+    vRight = [0.0,1.0],vLeft = [0.0,1.0],\
+    titleLeft = '$10^{14} < M/M_{\\odot} \\leq 5\\times 10^{14}$',\
+    titleRight = '$M/M_{\\odot} > 5\\times 10^{14}$',\
+    extentLeft= (np.min(distArr2),np.max(distArr2),\
+    np.min(threshList),np.max(threshList)),\
+    extentRight = (np.min(distArr2),np.max(distArr2),\
+    np.min(threshList),np.max(threshList)),superTitle = "Two-way Purity",\
+    ylabel="Radius Threshold, $\\mu_{\\mathrm{rad}}$")
+
+
+
 
 imshowComparison(purity_1f,completeness_1f,vRight = [0.0,1.0],vLeft=[0.0,1.0],\
     titleRight = 'One-way completeness ($^1C_{\mu_{\mathrm{rad}}}$)',\
@@ -2014,18 +2056,53 @@ imshowComparison(completeness_2f,purity_2f)
 
 
 # Curves of completeness/purity:
-plt.clf()
-plt.plot(distArr2,euclideanDist2[:,:,nM].transpose(),\
+#plt.clf()
+fig, ax = plt.subplots(1,2,figsize=(textwidth,0.5*textwidth))
+ax[0].plot(distArr2,euclideanDist2[:,:,1,0].transpose(),\
     label=['$\\mu_{\\mathrm{rad}} = $' + ("%.2g" % thresh) \
     for thresh in threshList])
-plt.axvline(1.0,linestyle=':',color='grey')
-plt.xlabel('$R_{\\mathrm{search}}/\sqrt{R_1R_2}$')
-plt.ylabel('Distance $\sqrt{(^2P_f - 1)^2 + (^2C_f - 1)^2}$')
-plt.legend()
-plt.title(massTitles[nM])
+ax[1].plot(distArr2,euclideanDist2[:,:,2,0].transpose(),\
+    label=['$\\mu_{\\mathrm{rad}} = $' + ("%.2g" % thresh) \
+    for thresh in threshList])
+ax[0].set_title('$10^{14} < M/M_{\\odot} \\leq 5\\times 10^{14}$')
+ax[1].set_title('$M/M_{\\odot} > 5\\times 10^{14}$')
+for axi in ax:
+    axi.axvline(1.0,linestyle=':',color='grey')
+    axi.set_xlabel('$R_{\\mathrm{search}}/\sqrt{R_1R_2}$')
+    axi.set_ylabel('Distance $\sqrt{(^2P_f - 1)^2 + (^2C_f - 1)^2}$')
+    axi.legend()
+
+plt.suptitle(massTitles[nM])
+plt.tight_layout()
 plt.savefig(figuresFolder + \
-    "supporting_plots/optimal_distance_squared.pdf")
+    "supporting_plots/optimal_distance_squared_rsearch.pdf")
 plt.show()
+
+
+fig, ax = plt.subplots(1,2,figsize=(2.0*textwidth,2.0*0.5*textwidth))
+ax[0].plot(threshList,euclideanDist2[:,1:-1:5,1,0],\
+    label=['$R_{\\mathrm{search}}/\sqrt{R_1R_2} = $' + ("%.2g" % R) \
+    for R in distArr2[1:-1:5]])
+ax[1].plot(threshList,euclideanDist2[:,1:-1:5,2,0],\
+    label=['$R_{\\mathrm{search}}/\sqrt{R_1R_2} = $' + ("%.2g" % R) \
+    for R in distArr2[1:-1:5]])
+ax[0].set_title('$10^{14} < M/M_{\\odot} \\leq 5\\times 10^{14}$')
+ax[1].set_title('$M/M_{\\odot} > 5\\times 10^{14}$')
+for axi in ax:
+    axi.axvline(1.0,linestyle=':',color='grey')
+    axi.set_ylabel('Distance $\sqrt{(^2P_f - 1)^2 + (^2C_f - 1)^2}$')
+    axi.legend()
+
+ax[0].set_xlabel('$\\mu_{\\mathrm{rad}}$')
+ax[1].set_xlabel('$\\mu_{\\mathrm{mass}}$')
+
+plt.suptitle(massTitles[nM])
+plt.tight_layout()
+plt.savefig(figuresFolder + \
+    "supporting_plots/optimal_distance_squared_mu.pdf")
+plt.show()
+
+
 
 
 plt.clf()
@@ -2090,6 +2167,11 @@ plt.legend()
 plt.savefig(figuresFolder + \
     "supporting_plots/optimal_distance_squared.pdf")
 plt.show()
+
+
+# Combined profiles:
+
+
 
 # Finding the optimal radius:
 threshList = np.array([0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9])
@@ -2304,16 +2386,198 @@ plt.legend()
 plt.savefig(figuresFolder + "supporting_plots/ratio_histogram.pdf")
 plt.show()
 
+
+
+
+# Mass function plot:
+from void_analysis import cosmology, plot_utilities
+def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,\
+        Delta=200,sigma8=0.8,fontsize=12,legendFontsize=10,font="serif",\
+        Ob0=0.049,mass_function='Tinker',delta_wrt='SOCritical',massLower=5e13,\
+        massUpper=1e15,figsize=(4,4),marker='x',linestyle='--',\
+        color=seabornColormap[0],colorTheory = seabornColormap[1],\
+        nBins=21,poisson_interval = 0.95,legendLoc='lower left',\
+        label="Gadget Simulation",transfer_model='EH',fname=None,\
+        xlabel="Mass [$M_{\odot}h^{-1}$]",ylabel="Number of halos",\
+        ylim=[1e1,2e4],title="Gadget Simulation",showLegend=True,\
+        tickRight=False,tickLeft=True):
+    [dndm,m] = cosmology.TMF_from_hmf(massLower,massUpper,\
+        h=h,Om0=Om0,Delta=Delta,delta_wrt=delta_wrt,\
+        mass_function=mass_function,sigma8=sigma8,Ob0 = Ob0,\
+        transfer_model=transfer_model,fname=fname,ns=ns)
+    massBins = 10**np.linspace(np.log10(massLower),np.log10(massUpper),nBins)
+    n = cosmology.dndm_to_n(m,dndm,massBins)
+    bounds = np.array(scipy.stats.poisson(n*volSim).interval(poisson_interval))
+    massBinCentres = plot_utilities.binCentres(massBins)
+    alphaO2 = (1.0 - poisson_interval)/2.0
+    if type(masses) == list:
+        [noInBins,sigmaBins] = plot.computeMeanHMF(masses,\
+            massLower=massLower,massUpper=massUpper,nBins = nBins)
+    else:
+        noInBins = plot_utilities.binValues(masses,massBins)[1]
+        sigmaBins = np.abs(np.array([scipy.stats.chi2.ppf(\
+            alphaO2,2*noInBins)/2,\
+            scipy.stats.chi2.ppf(1.0 - alphaO2,2*(noInBins+1))/2]) - \
+            noInBins)
+    if ax is None:
+        fig, ax = plt.subplots(1,1,figsize=(8,4))
+    ax.errorbar(massBinCentres,noInBins,sigmaBins,marker=marker,\
+        linestyle=linestyle,label=label,color=color)
+    ax.plot(massBinCentres,n*volSim,":",label=mass_function + ' prediction',\
+                    color=seabornColormap[1])
+    ax.fill_between(massBinCentres,
+                    bounds[0],bounds[1],
+                    facecolor=colorTheory,alpha=0.5,interpolate=True,\
+                    label='$' + str(100*poisson_interval) + \
+                    '\%$ Confidence \nInterval')
+    if showLegend:
+        ax.legend(prop={"size":legendFontsize,"family":font},
+            loc=legendLoc,frameon=False)
+    ax.set_title(title,fontsize=fontsize,fontfamily=font)
+    ax.set_xlabel(xlabel,fontsize=fontsize,fontfamily=font)
+    ax.set_ylabel(ylabel,fontsize=fontsize,fontfamily=font)
+    ax.tick_params(axis='both',labelsize=fontsize,\
+        labelright=tickRight,right=tickRight)
+    ax.tick_params(axis='both',which='minor',bottom=True,labelsize=fontsize)
+    ax.tick_params(axis='y',which='minor')
+    ax.yaxis.grid(color='grey',linestyle=':',alpha=0.5)
+    ax.set_ylim(ylim)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+
+def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
+        Delta=200,sigma8=0.8,fontsize=12,legendFontsize=10,font="serif",\
+        Ob0=0.049,mass_function='Tinker',delta_wrt='SOCritical',massLower=5e13,\
+        massUpper=1e15,figsize=(8,4),marker='x',linestyle='--',ax=None,\
+        color=seabornColormap[0],colorTheory = seabornColormap[1],\
+        nBins=21,poisson_interval = 0.95,legendLoc='lower left',\
+        labelLeft = 'Gadget Simulation',labelRight='ML Simulation',\
+        xlabel="Mass [$M_{\odot}h^{-1}$]",ylabel="Number of halos",\
+        ylim=[1e1,2e4],savename=None,show=True,transfer_model='EH',fname=None,\
+        returnAx = False,ns=1.0,rows=1,cols=2,titleLeft = "Gadget Simulation",\
+        titleRight = "Gadget Simulation"):
+    if ax is None:
+        fig, ax = plt.subplots(rows,cols,figsize=(8,4))
+    plotMassFunction(massesLeft,volSim,ax=ax[0],Om0=Om0,h=h,ns=ns,\
+        Delta=Delta,sigma8=sigma8,fontsize=fontsize,\
+        legendFontsize=legendFontsize,font="serif",\
+        Ob0=Ob0,mass_function=mass_function,delta_wrt=delta_wrt,\
+        massLower=massLower,title=titleLeft,\
+        massUpper=massUpper,marker=marker,linestyle=linestyle,\
+        color=color,colorTheory = colorTheory,\
+        nBins=nBins,poisson_interval = poisson_interval,legendLoc='lower left',\
+        label=labelLeft,transfer_model=transfer_model,ylim=ylim)
+    plotMassFunction(massesRight,volSim,ax=ax[1],Om0=Om0,h=h,ns=ns,\
+        Delta=Delta,sigma8=sigma8,fontsize=fontsize,\
+        legendFontsize=legendFontsize,font="serif",\
+        Ob0=Ob0,mass_function=mass_function,delta_wrt=delta_wrt,\
+        massLower=massLower,title = titleRight,\
+        massUpper=massUpper,marker=marker,linestyle=linestyle,\
+        color=color,colorTheory = colorTheory,\
+        nBins=nBins,poisson_interval = poisson_interval,legendLoc='lower left',\
+        label=labelRight,transfer_model=transfer_model,ylim=ylim)
+    plt.tight_layout()
+    if savename is not None:
+        plt.savefig(savename)
+    if show:
+        plt.show()
+    if returnAx:
+        return ax
+
+
+
 # Construct the final Catalogue using optimal values:
-muOpt = 0.60
-rSearchOpt = 1.0
+muOpt = 0.70
+rSearchOpt = 1.2
+rSphere = 300
+mMin = 1e11
+mMax = 1e16
 
 [finalCatOpt,shortHaloListOpt,twoWayMatchListOpt,finalCandidatesOpt,\
-    finalRatiosOpt,finalDistancesOpt,allCandidatesOpt,candidateCountsOpt] = \
+    finalRatiosOpt,finalDistancesOpt,allCandidatesOpt,candidateCountsOpt,\
+    allRatiosOpt,finalCombinatoricFracOpt,finalCatFracOpt] = \
     constructAntihaloCatalogue(snapNumList,snapList=snapList,\
     snapListRev=snapListRev,ahProps=ahProps,hrList=hrList,max_index=None,\
     twoWayOnly=True,blockDuplicates=True,\
-    crossMatchThreshold = muOpt,distMax = rSearchOpt,rSphere=rSphere)
+    crossMatchThreshold = muOpt,distMax = rSearchOpt,rSphere=rSphere,\
+    massRange = [mMin,mMax],NWayMatch = True)
+
+
+
+
+indexMap = -np.ones((5,5),dtype=int)
+
+
+# Expand into all possible candidates:
+nV = 2
+allCands = [[] for k in range(0,5)]
+lengthsList = np.zeros(5,dtype=int)
+for k in range(0,5):
+    if finalCatOpt[nV][k] > -1:
+        allCands[k].append(finalCatOpt[nV][k]-1)
+
+lengthsListNew = np.array([len(cand) for cand in allCands],dtype=int)
+while not np.all(lengthsListNew == lengthsList):
+    lengthsList = lengthsListNew
+    for k in range(0,5):
+        if len(allCands[k]) > 0:
+            for l in diffMap[k]:
+                for m in range(0,len(allCands[k])):
+                    if len(allCandidatesOpt[k][l][allCands[k][m]]) > 0:
+                        if not np.isin(allCandidatesOpt[k][l][allCands[k][m]][0],allCands[l]):
+                            allCands[l].append(allCandidatesOpt[k][l][allCands[k][m]][0])
+    lengthsListNew = np.array([len(cand) for cand in allCands],dtype=int)
+
+# Count two way matches:
+twoWayMatchesAllCands = [[] for k in range(0,5)]
+for k in range(0,5):
+    for l in range(0,len(allCands[k])):
+        nTW = np.sum(np.array(\
+            [len(allCandidatesOpt[k][m][allCands[k][l]]) \
+            for m in diffMap[k]]) > 0)
+        twoWayMatchesAllCands[k].append(nTW)
+
+# Compute the average fractions:
+ratioAverages = [[] for k in range(0,5)]
+for k in range(0,5):
+    for l in range(0,len(allCands[k])):
+        ratios = np.zeros(4)
+        for m in range(0,4):
+            if len(allRatiosOpt[k][diffMap[k][m]][allCands[k][l]]) > 0:
+                ratios[m] = allRatiosOpt[k][diffMap[k][m]][allCands[k][l]][0]
+        qR = np.mean(ratios)
+        ratioAverages[k].append(qR)
+
+
+
+
+
+# How then do we decide which void to pick if we have multiple candidates?
+# First, pick the void with the greatest number of two-way matches to other
+# catalogues.
+# But if we still have an ambiguity, then we pick the one with the greatest 
+# average radius ratio.
+
+
+
+
+nTW = 0
+for k in range(0,5):
+    if len(allCands[k]) > 0:
+        for l in range(0,k):
+            if len(allCandidatesOpt[k][l][allCands[k][0]]) > 0:
+                nTW += 1
+
+
+
+
+for k in range(0,5):
+    for l in range(0,5):
+        if k != l:
+            if len(allCandidatesOpt[k][l][nV]) == 1:
+                indexMap[k,l] = allCandidatesOpt[k][l][nV][0]
+
+
 
 antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
     for props in ahProps]
@@ -2321,7 +2585,9 @@ antihaloMasses = [props[3] for props in ahProps]
 antihaloRadii = [props[7] for props in ahProps]
 centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],rSphere,\
         filterCondition = (antihaloRadii[k] > rMin) & \
-        (antihaloRadii[k] <= rMax)) for k in range(0,len(snapNumList))]
+        (antihaloRadii[k] <= rMax) & (antihaloMasses[k] > mMin) & \
+        (antihaloMasses[k] <= mMax)) \
+        for k in range(0,len(snapNumList))]
 centralAntihaloMasses = [\
         antihaloMasses[k][centralAntihalos[k][0]] \
         for k in range(0,len(centralAntihalos))]
@@ -2344,28 +2610,472 @@ massListShort = [np.array([antihaloMasses[l][\
         for k in range(0,np.min([ahCounts[l],max_index]))]) \
         for l in range(0,len(snapNumList))]
 
+deltaBarList = [props[12] for props in ahProps]
+deltaCList = [props[11] for props in ahProps]
+
+deltaBarListShort = [np.array([deltaBarList[l][\
+        centralAntihalos[l][0][sortedList[l][k]]] \
+        for k in range(0,np.min([ahCounts[l],max_index]))]) \
+        for l in range(0,len(snapNumList))]
+deltaCListShort = [np.array([deltaCList[l][\
+        centralAntihalos[l][0][sortedList[l][k]]] \
+        for k in range(0,np.min([ahCounts[l],max_index]))]) \
+        for l in range(0,len(snapNumList))]
 
 radiiListComb = getRadiiFromCat(finalCatOpt,radiiListShort)
 massListComb = getRadiiFromCat(finalCatOpt,massListShort)
+deltaBarListComb = getRadiiFromCat(finalCatOpt,deltaBarListShort)
+deltaCListComb = getRadiiFromCat(finalCatOpt,deltaCListShort)
+
+
+for k in range(0,5):
+    plt.hist(radiiListShort[k][finalCatOpt[finalCatOpt[:,k] > 0,k] - 1],alpha=0.5)
+
+
+for k in range(0,5):
+    plt.hist(radiiListComb[radiiListComb[:,k] > 0,k],alpha=0.5)
+
+
+
+
 [radiiListMean,radiiListSigma] = getMeanProperty(radiiListComb)
 [massListMean,massListSigma] = getMeanProperty(massListComb)
+[deltaBarListMean,deltaBarListSigma] = getMeanProperty(deltaBarListComb,\
+    lowerLimit = -1,stdError=False)
+[deltaCListMean,deltaCListSigma] = getMeanProperty(deltaCListComb,\
+    lowerLimit = -1,stdError=False)
+
+# Robustness vs Mass:
+massBins = 10**np.linspace(np.log10(1e14),np.log10(1e15),16)
+[binList,noInBins] = plot_utilities.binValues(massListMean,massBins)
+massBinCentres = plot_utilities.binCentres(massBins)
+meanRobustness = np.array([np.mean(finalCombinatoricFracOpt[ind]) \
+    for ind in binList])
+stdRobustness = np.array([np.std(finalCombinatoricFracOpt[ind])/\
+    np.sqrt(len(ind)) for ind in binList])
+
+meanCatFrac = np.array([np.mean(finalCatFracOpt[ind]) for ind in binList])
+stdCatFrac = np.array([np.std(finalCatFracOpt[ind])/np.sqrt(len(ind)) \
+    for ind in binList])
+
+plt.errorbar(massBinCentres,meanRobustness,yerr=stdRobustness,\
+    label='Combinatoric Fraction')
+plt.errorbar(massBinCentres,meanCatFrac,yerr=stdCatFrac,\
+    label = "Catalogue fraction")
+plt.xscale('log')
+plt.xlabel('Mass ($M_{\\odot}h^{-1}$)')
+plt.ylabel('Mean Fraction')
+plt.legend(frameon=False)
+plt.show()
 
 
-# Mass function plot:
 
-# MEan mass function:
+plt.xscale('log')
+plt.xlabel('Mass ($M_{\\odot}h^{-1}$)')
+plt.ylabel('Mean Combinatoric Fraction')
+plt.show()
+
+
+
+inCatalogueFinal = [finalCatOpt[:,k] > 0 for k in range(0,len(massListShort))]
+deltaBarMeanFullList = np.hstack([deltaBarListMean[cond]] \
+    for cond in inCatalogueFinal)[0]
+deltaBarScatterFullList = np.hstack([deltaBarListComb[inCatalogueFinal[k],k]] \
+    for k in range(0,len(inCatalogueFinal)))[0]
+
+[binList2,noInBins2] = plot_utilities.binValues(deltaBarScatterFullList,deltaBins)
+meanDelta = [np.mean(deltaBarScatterFullList[ind]) for ind in binList2]
+sigmaDelta = [np.std(deltaBarScatterFullList[ind]) for ind in binList2]
+
+plt.errorbar(deltaBinCentres,meanSigma,yerr=sigmaSigma,\
+    label='Between Catalogues')
+plt.errorbar(deltaBinCentres,sigmaDelta,yerr=sigmaSigma2,\
+    label = "All matched antihalos")
+plt.xlabel('Average-density contrast')
+plt.ylabel('Standard Deviation')
+plt.legend()
+plt.show()
+
+# Scatter about the mean density contrast
+plotRange = [-0.8,-0.6]
+plt.hist2d(deltaBarMeanFullList,deltaBarScatterFullList,\
+    cmap='Blues',bins=np.linspace(plotRange[0],plotRange[1],21))
+plt.xlabel('Mean Average-Density Constrast')
+plt.ylabel('Average-Density Contrast')
+plt.plot(plotRange,plotRange,'k--')
+plt.title("Average-Density Contrast, scatter about mean")
+plt.colorbar()
+plt.tight_layout()
+plt.show()
+
+plt.scatter(massListMean,radiiListMean)
+plt.xscale('log')
+#plt.yscale('log')
+plt.xlabel("Mass ($M_{\\odot}h^{-1})$")
+plt.ylabel("Radius ($\\mathrm{Mpc}h^{-1})$")
+plt.show()
+
+# Scatter plot of average densities:
+inCatalogueFinal = [finalCatOpt[:,k] > 0 for k in range(0,len(massListShort))]
+inCatalogue = [np.isin(np.arange(1,len(massListShort[k])+1),finalCatOpt[:,k]) \
+    for k in range(0,len(massListShort))]
+
+#condition = (deltaBarListComb[:,0] > -1) & (deltaBarListComb[:,1] > -1)
+condition = inCatalogueFinal[0] & inCatalogueFinal[1]
+condition = condition & (massListComb[:,0] > 1e14) & (massListComb[:,0] <= 5e14)
+condition = condition & (massListComb[:,1] > 1e14) & (massListComb[:,1] <= 5e14)
+
+conditionHigh = inCatalogueFinal[0] & inCatalogueFinal[1]
+conditionHigh = conditionHigh & (massListComb[:,0] > 5e14) & \
+    (massListComb[:,0] <= 1e16)
+conditionHigh = conditionHigh & (massListComb[:,1] > 5e14) & \
+    (massListComb[:,1] <= 1e16)
+
+deltaBins = np.linspace(-0.8,-0.6,21)
+[binList,noInBins] = plot_utilities.binValues(deltaBarListMean[condition],deltaBins)
+meanSigma = [np.mean(deltaBarListSigma[condition][ind]) for ind in binList]
+sigmaSigma = [np.std(deltaBarListSigma[condition][ind])/np.sqrt(len(ind)) \
+    for ind in binList]
+deltaBinCentres = plot_utilities.binCentres(deltaBins)
+deltaStd = np.std(deltaBarListComb[condition,0])
+
+plt.errorbar(deltaBinCentres,meanSigma,yerr=sigmaSigma,\
+    label = "Standard deviation \n of the same void " + \
+    "\n between catalogues")
+plt.axhline(deltaStd,color='grey',linestyle='--',\
+    label = "Standard deviation \n of all voids \n over mass range")
+plt.xlabel("Average Density Bin")
+plt.ylabel("Standard Deviation")
+plt.title("Mass bin $10^{14} < M/M_{\\odot} \\leq 5\\times 10^{14}$")
+plt.ylim([0,0.06])
+plt.legend(frameon = False)
+plt.show()
+
+
+# Average Density
+fig, ax = plt.subplots(1,2,figsize=(textwidth,0.5*textwidth))
+
+plotRange = [-0.8,-0.6]
+ax[0].hist2d(deltaBarListComb[condition,0],deltaBarListComb[condition,1],\
+    cmap='Blues',bins=np.linspace(plotRange[0],plotRange[1],21))
+ax[0].set_xlabel('Catalogue 1, average density')
+ax[0].set_ylabel('Catalogue 2, average density')
+ax[0].plot(plotRange,plotRange,'k--')
+ax[0].set_title("$10^{14} < M/M_{\\odot} \\leq 5\\times 10^{14}$")
+
+plotRange = [-0.8,-0.6]
+ax[1].hist2d(deltaBarListComb[conditionHigh,0],deltaBarListComb[conditionHigh,1],\
+    cmap='Blues',bins=np.linspace(plotRange[0],plotRange[1],21))
+ax[1].set_xlabel('Catalogue 1, average density')
+ax[1].set_ylabel('Catalogue 2, average density')
+ax[1].plot(plotRange,plotRange,'k--')
+ax[1].set_title("$M/M_{\\odot} > 5\\times 10^{14}$")
+
+ax[1].yaxis.label.set_visible(False)
+ax[1].yaxis.set_major_formatter(NullFormatter())
+ax[1].yaxis.set_minor_formatter(NullFormatter())
+
+
+sm = cm.ScalarMappable(colors.LogNorm(vmin=1,vmax=2000),\
+    cmap='Blues')
+cbax = fig.add_axes([0.87,0.2,0.02,0.68])
+cbar = plt.colorbar(sm, orientation="vertical",cax=cbax)
+plt.subplots_adjust(top=0.885,bottom=0.194,left=0.122,right=0.849,hspace=0.2,\
+    wspace=0.0)
+
+plt.show()
+
+fig, ax = plt.subplots()
+plotRange = [-0.8,-0.6]
+ax.hist2d(deltaBarListComb[condition,0],deltaBarListComb[condition,1],\
+    cmap='Blues',bins=np.linspace(plotRange[0],plotRange[1],21))
+ax.set_xlabel('Catalogue 1, average density')
+ax.set_ylabel('Catalogue 2, average density')
+ax.plot(plotRange,plotRange,'k--')
+ax.set_title("$10^{14} < M/M_{\\odot} \\leq 5\\times 10^{14}$")
+plt.colorbar()
+plt.tight_layout()
+plt.show()
+
+
+# Central Density
+plotRange = [-0.95,-0.7]
+plt.hist2d(deltaCListComb[condition,0],deltaCListComb[condition,1],\
+    cmap='Blues',bins=np.linspace(plotRange[0],plotRange[1],21))
+plt.xlabel('Catalogue 1, central density')
+plt.ylabel('Catalogue 2, central density')
+plt.plot(plotRange,plotRange,'k--')
+plt.title("Central Void Density")
+plt.colorbar()
+plt.tight_layout()
+plt.show()
+
+# Mass
+plotRangeMass = [1e14,5e14]
+plt.hist2d(massListComb[condition,0],massListComb[condition,1],\
+    cmap='Blues',bins=10**np.linspace(np.log10(plotRangeMass[0]),\
+    np.log10(plotRangeMass[1]),21))
+plt.xlabel('Catalogue 1, mass')
+plt.ylabel('Catalogue 2, mass')
+plt.xscale('log')
+plt.yscale('log')
+plt.plot(plotRangeMass,plotRangeMass,'k--')
+plt.title("Mass compared between catalogues")
+plt.colorbar()
+plt.tight_layout()
+plt.show()
+
+# Radius
+plotRangeRad = [5,30]
+plt.hist2d(radiiListComb[condition,0],radiiListComb[condition,1],\
+    cmap='Blues',bins=10**np.linspace(np.log10(plotRangeRad[0]),\
+    np.log10(plotRangeRad[1]),21))
+plt.xlabel('Catalogue 1, radius ($\\mathrm{Mpc}h^{-1}$)')
+plt.ylabel('Catalogue 2, radius ($\\mathrm{Mpc}h^{-1}$)')
+plt.plot(plotRangeRad,plotRangeRad,'k--')
+plt.xscale('log')
+plt.yscale('log')
+plt.title("Radius compared between catalogues")
+plt.colorbar()
+plt.tight_layout()
+plt.show()
+
+
+plt.scatter(radiiListComb[condition,0],radiiListComb[condition,1])
+plt.plot([5,16],[5,16],'k--')
+plt.xlim([5,16])
+plt.ylim([5,16])
+plt.show()
+
+
+plt.hist(radiiListShort[0],alpha=0.5)
+plt.hist(radiiListShort[1],alpha=0.5)
+plt.show()
+
+plt.hist(radiiListComb[condition,0],alpha=0.5)
+plt.hist(radiiListComb[condition,1],alpha=0.5)
+plt.show()
+
+condition = (deltaBarListComb[:,0] > -1) & (deltaBarListComb[:,1] > -1)
+condition = condition & (massListComb[:,0] > 1e14) & (massListComb[:,0] <= 5e14)
+condition = condition & (massListComb[:,1] > 1e14) & (massListComb[:,1] <= 5e14)
+
+plt.hist(radiiListComb[condition,0],alpha=0.5)
+plt.hist(radiiListComb[condition,1],alpha=0.5)
+plt.show()
+
+# Spead in the catalogues with radius:
+def plotDensityVsRadius(radii,density,cmap='Blues',radBins = None,\
+        deltaBins = None,vmin = 1,vmax = 2000,Om0 = 0.3111,\
+        mLines = [1e14,5e14,1e15],linestyleList = ['k--','k:','k-'],\
+        xlabel = 'Radius ($\\mathrm{Mpc}h^{-1}$)',\
+        ylabel = 'Average density contrast',xlim = [5,30],ylim = [-1,0],\
+        ax = None,savename=None,show = True,showLegend = True,\
+        showColorbar = True,logx = False,logy = False,showMassCurves = True):
+    if ax is None:
+        fig, ax = plt.subplots()
+    if radBins is None:
+        radBins = np.linspace(0,30,21)
+    if deltaBins is None:
+        deltaBins = np.linspace(-1,0,21)
+    ax.hist2d(radii,density,\
+        bins = [radBins,deltaBins],cmap=cmap,\
+        norm = colors.LogNorm(vmin = vmin,vmax = vmax))
+    if showMassCurves:
+        rList = np.linspace(radBins[0] + 0.01,radBins[-1],len(radBins))
+        rhoBar = 2.7754e11*Om0
+        dList = [m/(rhoBar*4*np.pi*rList**3/3) - 1.0 for m in mLines]
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    if logx:
+        ax.set_xscale('log')
+    if logy:
+        ax.set_yscale('log')
+    if showMassCurves:
+        for m in range(0,len(mLines)):
+            ax.plot(rList,dList[m],linestyleList[m],label = '$' + \
+                plot.scientificNotation(mLines[m]) + 'M_{\\odot}h^{-1}$')
+    if showLegend:
+        ax.legend(frameon=False)
+    if showColorbar:
+        sm = cm.ScalarMappable(colors.LogNorm(vmin=vmin,vmax=vmax),cmap=cmap)
+        cbar = plt.colorbar(sm, orientation="vertical",ax = ax)
+    #plt.tight_layout()
+    if savename is not None:
+        plt.savefig(savename)
+    if show:
+        plt.show()
+
+
+conditionMassRestricted = [(massListShort[k] > 1e14) & \
+    (massListShort[k] <= 5e14) & inCatalogue[k] \
+    for k in range(0,len(massListShort))]
+
+fig, ax = plt.subplots(1,2,figsize = (textwidth,0.5*textwidth))
+
+plotDensityVsRadius(radiiListShort[0][conditionMassRestricted[0]],\
+    deltaBarListShort[0][conditionMassRestricted[0]],ax=ax[0],show=False,\
+    showLegend = False,showColorbar = False)
+plotDensityVsRadius(radiiListShort[1][conditionMassRestricted[1]],\
+    deltaBarListShort[1][conditionMassRestricted[1]],ax=ax[1],show=False,\
+    showColorbar = False)
+
+sm = cm.ScalarMappable(colors.LogNorm(vmin=1,vmax=2000),\
+    cmap='Blues')
+cbax = fig.add_axes([0.87,0.2,0.02,0.68])
+cbar = plt.colorbar(sm, orientation="vertical",cax=cbax)
+plt.subplots_adjust(top=0.891,bottom=0.167,left=0.113,right=0.85,hspace=0.2,\
+    wspace=0.06)
+ax[1].yaxis.label.set_visible(False)
+ax[1].yaxis.set_major_formatter(NullFormatter())
+ax[1].yaxis.set_minor_formatter(NullFormatter())
+ax[0].set_title("Catalogue 1")
+ax[1].set_title("Catalogue 2")
+
+plt.show()
+
+
+# Radius mass distribution:
+fig, ax = plt.subplots(1,2,figsize = (textwidth,0.5*textwidth))
+
+plotDensityVsRadius(radiiListShort[0][conditionMassRestricted[0]],\
+    massListShort[0][conditionMassRestricted[0]],ax=ax[0],show=False,\
+    showLegend = False,showColorbar = False,\
+    deltaBins = 10**(np.linspace(np.log10(1e14),np.log10(5e14),21)),\
+    logy = True,ylabel = "Mass ($M_{\\odot}h^{-1}$)",\
+    showMassCurves = False,ylim=[1e14,5e14])
+plotDensityVsRadius(radiiListShort[1][conditionMassRestricted[1]],\
+    massListShort[1][conditionMassRestricted[1]],ax=ax[1],show=False,\
+    showColorbar = False,logy = True,ylabel = "Mass ($M_{\\odot}h^{-1}$)",\
+    deltaBins = 10**(np.linspace(np.log10(1e14),np.log10(5e14),21)),\
+    showMassCurves = False,ylim=[1e14,5e14])
+
+
+fitList = [np.polyfit(np.log10(radiiListShort[k][conditionMassRestricted[k]]),\
+    np.log10(massListShort[k][conditionMassRestricted[k]]),1) \
+    for k in range(0,len(massListShort))]
+
+
+radBins = np.linspace(0,30,21)
+rList = np.linspace(radBins[0] + 0.01,radBins[-1],len(radBins))
+ax[0].plot(rList,10**(fitList[0][0]*np.log10(rList) + fitList[0][1]),'k--',\
+    label = "Fit, \nM = $" + plot.scientificNotation(10**fitList[0][1]) + \
+    "M_{\\odot}$\n$\\times r^{" + plot.scientificNotation(fitList[0][0]) + "}$")
+ax[1].plot(rList,10**(fitList[1][0]*np.log10(rList) + fitList[1][1]),'k--',\
+    label = "Fit, \nM = $" + plot.scientificNotation(10**fitList[1][1]) + \
+    "M_{\\odot}$\n$\\times r^{" + plot.scientificNotation(fitList[1][0]) + "}$")
+
+sm = cm.ScalarMappable(colors.LogNorm(vmin=1,vmax=2000),\
+    cmap='Blues')
+cbax = fig.add_axes([0.87,0.2,0.02,0.68])
+cbar = plt.colorbar(sm, orientation="vertical",cax=cbax)
+plt.subplots_adjust(top=0.891,bottom=0.167,left=0.143,right=0.85,hspace=0.2,\
+    wspace=0.06)
+ax[1].yaxis.label.set_visible(False)
+ax[1].yaxis.set_major_formatter(NullFormatter())
+ax[1].yaxis.set_minor_formatter(NullFormatter())
+ax[0].set_title("Catalogue 1")
+ax[1].set_title("Catalogue 2")
+ax[0].legend(frameon=False,loc="lower right",prop={"size":9,"family":"serif"})
+ax[1].legend(frameon=False,loc="lower right",prop={"size":9,"family":"serif"})
+plt.show()
+
+
+
+
+
+# Mean mass function:
 mUnit = 8*0.3111*2.7754e11*(677.7/512)**3
 mLower = 100*mUnit
-massFunctionComparison(massListMean,massListShort,volSphere,nBins=11,\
+volSphere = 4*np.pi*rSphere**3/3
+combFracThresh = 0.1
+massFunctionComparison(massListMean[finalCombinatoricFracOpt > combFracThresh],\
+    massListShort,volSphere,nBins=11,\
     labelLeft = "Combined anti-halo catalogue",\
     labelRight="Average of 5 catalogues",\
     ylabel="Number of antihalos",savename=figuresFolder + \
     "supporting_plots/mass_function_combined.pdf",massLower=mLower,\
     ylim=[1,500],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,\
-    fontsize=10,massUpper = 2e15)
+    fontsize=10,massUpper = 2e15,\
+    titleLeft = "Combined Catalogue",titleRight = "All catalogues average")
+
+additionalConditions = [np.isin(np.arange(0,len(antihaloMasses[k])),\
+    np.array(centralAntihalos[k][0])[finalCatOpt[finalCatOpt[:,k] >= 0,k] - 1]) \
+    for k in range(0,len(snapList))]
+
+# Void profiles plot:
+
+[rBinStackCentresCombined,nbarjSepStackCombined,\
+        sigmaSepStackCombined,nbarjSepStackUnCombined,sigmaSepStackUnCombined,\
+        nbarjAllStackedCombined,sigmaAllStackedCombined,\
+        nbarjAllStackedUnCombined,sigmaAllStackedUnCombined,\
+        nbar,rMin,mMin,mMax] = getVoidProfilesData(\
+            snapNumList,snapNumListUncon,\
+            snapList = snapList,snapListRev = snapListRev,\
+            samplesFolder="new_chain/",\
+            unconstrainedFolder="new_chain/unconstrained_samples/",\
+            snapname = "gadget_full_forward_512/snapshot_001",\
+            snapnameRev = "gadget_full_reverse_512/snapshot_001",\
+            reCentreSnaps = False,N=512,boxsize=677.7,mMin = 1e14,mMax = 1e15,\
+            rMin=5,rMax=25,verbose=True,combineSims=False,\
+            method="poisson",errorType = "Weighted",\
+            unconstrainedCentreList = np.array([[0,0,0]]),\
+            additionalConditions = additionalConditions)
+
+[rBinStackCentres,nbarjSepStack,\
+        sigmaSepStack,nbarjSepStackUn,sigmaSepStackUn,\
+        nbarjAllStacked,sigmaAllStacked,nbarjAllStackedUn,sigmaAllStackedUn,\
+        nbar,rMin,mMin,mMax] = getVoidProfilesData(\
+            snapNumList,snapNumListUncon,\
+            snapList = snapList,snapListRev = snapListRev,\
+            samplesFolder="new_chain/",\
+            unconstrainedFolder="new_chain/unconstrained_samples/",\
+            snapname = "gadget_full_forward_512/snapshot_001",\
+            snapnameRev = "gadget_full_reverse_512/snapshot_001",\
+            reCentreSnaps = False,N=512,boxsize=677.7,mMin = 1e14,mMax = 1e15,\
+            rMin=5,rMax=25,verbose=True,combineSims=False,\
+            method="poisson",errorType = "Weighted",\
+            unconstrainedCentreList = np.array([[0,0,0]]),\
+            additionalConditions = None)
+
+textwidth=7.1014
+fontsize = 12
+legendFontsize=10
+fig, ax = plt.subplots(1,2,figsize=(textwidth,0.5*textwidth))
 
 
+plot.plotConstrainedVsUnconstrainedProfiles(rBinStackCentresCombined,\
+    nbarjSepStackCombined,sigmaSepStackCombined,\
+    nbarjAllStackedUnCombined,sigmaAllStackedUnCombined,nbar,rMin,mMin,mMax,\
+    fontsize = fontsize,legendFontSize=legendFontsize,\
+    labelCon='Constrained',\
+    labelRand='Unconstrained \nmean',\
+    savename=figuresFolder + "profiles1415.pdf",\
+    showTitle=True,ax = ax[0],title="Combined Catalogue",\
+    meanErrorLabel = 'Unconstrained \nMean',\
+    profileErrorLabel = 'Profile \nvariation \n',\
+    nbarjUnconstrainedStacks=nbarjSepStackUn,legendLoc='lower right',\
+    sigmajUnconstrainedStacks = sigmaSepStackUn,showMean=True,show=False)
 
+plot.plotConstrainedVsUnconstrainedProfiles(rBinStackCentres,nbarjSepStack,\
+    sigmaSepStack,nbarjAllStackedUn,sigmaAllStackedUn,nbar,rMin,mMin,mMax,\
+    fontsize = fontsize,legendFontSize=legendFontsize,\
+    labelCon='Constrained',\
+    labelRand='Unconstrained \nmean',\
+    savename=figuresFolder + "profiles1415.pdf",\
+    showTitle=True,ax = ax[1],title="All Catalogues",\
+    meanErrorLabel = 'Unconstrained \nMean',\
+    profileErrorLabel = 'Profile \nvariation \n',\
+    nbarjUnconstrainedStacks=nbarjSepStackUn,legendLoc='lower right',\
+    sigmajUnconstrainedStacks = sigmaSepStackUn,showMean=True,show=False)
+
+plt.tight_layout()
+plt.show()
+
+
+# Catalogues of different sizes:
 
 [finalCat135,shortHaloList135,twoWayMatchList135,finalCandidates135,\
     finalRatios135,finalDistances135,allCandidates135,candidateCounts135] = \

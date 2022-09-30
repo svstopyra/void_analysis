@@ -251,7 +251,7 @@ plot.plotConstrainedVsUnconstrainedProfiles(rBinStackCentres,nbarjSepStack,\
     meanErrorLabel = 'Unconstrained \nMean',\
     profileErrorLabel = 'Profile \nvariation \n',\
     nbarjUnconstrainedStacks=nbarjSepStackUn,\
-    sigmajUnconstrainedStacks = sigmaSepStackUn,showMean=False)
+    sigmajUnconstrainedStacks = sigmaSepStackUn,showMean=True)
 
 #-------------------------------------------------------------------------------
 # ANTIHALO SKY PLOT:

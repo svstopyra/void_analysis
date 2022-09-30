@@ -1103,25 +1103,29 @@ def plotConstrainedVsUnconstrainedProfiles(rBinStackCentres,nbarjStack,\
         ylim = [0,1.4],ax = None,guideColour = 'grey',guideStyle='--',\
         legendFontSize=12,fontname="serif",fontsize=12,frameon=False,\
         legendLoc = 'upper right',bottom=0.125,left=0.125,includeLegend=True,\
-        showImmediately = True,title=None,hideYLabels = False,\
-        nbarjIndividual = None,sigmaIndividual = None,plotIndividuals = False,\
-        errorType = 'standard',errorAlpha=0.5,meanType = 'standard',\
-        plotIndividualsMean = False,savename=None,showTitle=True):
+        show = True,title=None,hideYLabels = False,\
+        plotIndividuals = False,\
+        errorType = 'scatter',errorAlpha=0.5,meanType = 'standard',\
+        plotIndividualsMean = False,savename=None,showTitle=True,\
+        meanErrorLabel = 'Mean unconstrained \nprofile',\
+        profileErrorLabel = 'Standard Deviation of \nunconstrained profiles',\
+        nbarjUnconstrainedStacks = None,sigmajUnconstrainedStacks=None,\
+        showMean = True):
     nbarjMean = stacking.weightedMean(nbarjStack,1.0/sigmaStack**2,axis=0)
     sigmaMean = np.sqrt(stacking.weightedVariance(nbarjStack,\
         1.0/sigmaStack**2,axis=0))
     if meanType == 'standard':
         nbarjRandMean = nbarjRandStack
     elif meanType == 'scatter':
-        nbarjRandMean = stacking.weightedMean(nbarjIndividual,\
+        nbarjRandMean = stacking.weightedMean(nbarjUnconstrainedStacks,\
             1.0/sigmaIndividual**2,axis=0)
     else:
         raise Exception('Invalid meanType')
     if errorType == 'standard':
         sigmaRandMean = sigmaRandStack
     elif(errorType == 'scatter'):
-        sigmaRandMean = np.sqrt(stacking.weightedVariance(nbarjIndividual,
-            1.0/sigmaIndividual**2,axis=0))
+        sigmaRandMean = np.sqrt(stacking.weightedVariance(\
+            nbarjUnconstrainedStacks,1.0/sigmajUnconstrainedStacks**2,axis=0))
     else:
         raise Exception('Invalid errorType')
     # Plot mean profiles:
@@ -1133,15 +1137,16 @@ def plotConstrainedVsUnconstrainedProfiles(rBinStackCentres,nbarjStack,\
     #	yerr=sigmaRandMean/nbar,label=labelRand,fmt=fmtRand,color=colourRand)
     #ax.plot(rBinStackCentres,nbarjRandMean/nbar,fmtRand,
     #    label=labelRand,color=colourRand)
-    ax.fill_between(rBinStackCentres,\
-        y1 = (nbarjRandStack - sigmaRandStack)/nbar,\
-        y2 = (nbarjRandStack + sigmaRandStack)/nbar,alpha=errorAlpha,\
-        color = colorRandMean,label='Mean unconstrained \nprofile')
+    if showMean:
+        ax.fill_between(rBinStackCentres,\
+            y1 = (nbarjRandStack - sigmaRandStack)/nbar,\
+            y2 = (nbarjRandStack + sigmaRandStack)/nbar,alpha=errorAlpha,\
+            color = colorRandMean,label=meanErrorLabel)
     ax.fill_between(rBinStackCentres,\
         y1 = (nbarjRandMean - sigmaRandMean)/nbar,\
         y2 = (nbarjRandMean + sigmaRandMean)/nbar,alpha=errorAlpha,\
         color = colourRand,\
-        label='Standard Deviation of \nunconstrained profiles')
+        label=profileErrorLabel)
     if title is None:
         title = 'Void Profiles, $R_{\\mathrm{eff}} > ' + \
             str(rMin) + '\\mathrm{\\,Mpc}h^{-1}$, $' + \
@@ -1167,7 +1172,7 @@ def plotConstrainedVsUnconstrainedProfiles(rBinStackCentres,nbarjStack,\
     plt.subplots_adjust(bottom=bottom,left=left)
     if savename is not None:
         plt.savefig(savename)
-    if showImmediately:
+    if show:
         plt.show()
 
 

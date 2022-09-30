@@ -548,6 +548,7 @@ def getHMFAMFData(snapNumList,snapNumListOld,snapNumListUncon,\
 
 
 def getVoidProfilesData(snapNumList,snapNumListUncon,\
+        snapList = None,snapListRev = None,\
         samplesFolder="new_chain/",\
         unconstrainedFolder="new_chain/unconstrained_samples/",\
         snapname = "gadget_full_forward_512/snapshot_001",\
@@ -555,14 +556,17 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
         reCentreSnaps = False,N=512,boxsize=677.7,mMin = 1e14,mMax = 1e15,\
         rMin=5,rMax=25,verbose=True,combineSims=False,\
         method="poisson",errorType = "Weighted",\
-        unconstrainedCentreList = np.array([[0,0,0]])):
+        unconstrainedCentreList = np.array([[0,0,0]]),\
+        additionalConditions = None):
     # Load snapshots:
     if verbose:
         print("Loading snapshots...")
-    snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" + \
-        snapname) for snapNum in snapNumList]
-    snapListRev =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
-        + snapnameRev) for snapNum in snapNumList]
+    if snapList is None:
+        snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + \
+            "/" + snapname) for snapNum in snapNumList]
+    if snapListRev is None:
+        snapListRev =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + \
+            "/" + snapnameRev) for snapNum in snapNumList]
     # Load unconstrained snaps:
     if verbose:
         print("Loading snapshots...")
@@ -605,15 +609,19 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
     centralAntihalosUn = [[tools.getAntiHalosInSphere(hcentres,135,\
         origin=centre) for centre in unconstrainedCentreList] \
         for hcentres in ahCentresListRemapUn]
+    if additionalConditions is None:
+        additionalConditions = [np.ones(len(centres),dtype=bool) \
+            for centres in ahCentresListRemap]
     # Select antihalos in the central region:
     conditionList = [(deltaCentralList[ns] < 0) & \
-        (centralAntihalosCon[ns][1]) for ns in range(0,len(snapNumList))]
+        (centralAntihalosCon[ns][1]) & additionalConditions[ns] \
+        for ns in range(0,len(snapNumList))]
     conditionListUn = [[(deltaCentralListUn[ns] < 0) & \
         (centralAHs[1]) for centralAHs in centralAntihalosUn[ns]] \
         for ns in range(0,len(snapNumListUncon))]
     conditionListMrange = [(deltaCentralList[ns] < 0) & \
         (centralAntihalosCon[ns][1]) & (antihaloMassesList[ns] > mMin) & \
-        (antihaloMassesList[ns] <= mMax) \
+        (antihaloMassesList[ns] <= mMax) & additionalConditions[ns] \
         for ns in range(0,len(snapNumList))]
     conditionListMrangeUn = [[(deltaCentralListUn[ns] < 0) & \
         (centralAHs[1]) & (antihaloMassesListUn[ns] > mMin) & \
@@ -639,7 +647,8 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
     [nbarjAllStackedUn,sigmaAllStackedUn] = stacking.stackVoidsWithFilter(\
         np.vstack(ahCentresListUn),stackedRadiiUn,\
         np.where((stackedRadiiUn > rMin) & (stackedRadiiUn < rMax) & \
-        (stackedMassesUn > mMin) & (stackedMassesUn <= mMax))[0],\
+        (stackedMassesUn > mMin) & \
+        (stackedMassesUn <= mMax))[0],\
         snapListUnconstrained[0],rBins,\
         nPairsList = np.vstack(pairCountsListUn),\
         volumesList = np.vstack(volumesListUn),\
@@ -874,7 +883,7 @@ def getMatchDistance(snap1,snap2,centres1,centres2,\
                     candidates = np.where(condition)[0]
                 else:
                     candidates = np.where((quantRatio >= quantityThresh))[0]
-            candidatesList.append(candidates)
+            candidatesList.append(np.array(searchOther[k])[candidates])
             ratioList.append(quantRatio[candidates])
             distList.append(distances[candidates])
             if len(candidates) > 0:
@@ -1003,7 +1012,7 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
         blockDuplicates=True,twoWayOnly = True,\
         snapList=None,snapListRev=None,ahProps=None,hrList=None,\
         rMin = 5,rMax = 100,mode="fractional",massRange = None,\
-        snapSortList = None,overlapList = None):
+        snapSortList = None,overlapList = None,NWayMatch = False):
     # Load snapshots:
     if verbose:
         print("Loading snapshots...")
@@ -1210,10 +1219,14 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
     finalCandidates = []
     finalRatios = []
     finalDistances = []
+    finalCombinatoricFrac = []
+    finalCatFrac = []
     candidateCounts = [np.zeros((len(snapNumList),ahCounts[l]),dtype=int) \
         for l in range(0,len(snapNumList))]
     alreadyMatched = np.zeros((len(snapNumList),max_index),dtype=bool)
     matrixFullList = [np.array(matchArrayList[k]).transpose()[1:,:] \
+        for k in range(0,len(snapNumList))]
+    diffMap = [np.setdiff1d(np.arange(0,len(snapNumList)),[k]) \
         for k in range(0,len(snapNumList))]
     for k in range(0,len(snapNumList)):
         matrixFull = matrixFullList[k]
@@ -1254,32 +1267,154 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
                         isNewMatch[m] = False
                 if np.any(isNewMatch[otherColumns]):
                     # Add antihalo to the global catalogue:
-                    finalCat.append(matrixFull[l])
+                    if not NWayMatch:
+                        finalCat.append(matrixFull[l])
                     candm = []
                     ratiosm = []
                     distancesm = []
                     # Mark companions as already included:
                     for m in range(0,len(snapNumList)):
                         if (m != k) and (matrixFull[l][m] > 0):
-                            # Only deem something to be already matched if it
-                            # maps back to this with a single unique candidate
-                            alreadyMatched[m][matrixFull[l][m] - 1] = \
-                                (matrixFullList[m]\
-                                [matrixFull[l,m] - 1,k] == l+1) \
-                                and (len(allCandidates[m][k]\
-                                [matrixFull[l][m] - 1]) == 1)
+                            # Only deem something to be already matched
+                            # if it maps back to this with a single unique 
+                            # candidate
+                            if not NWayMatch:
+                                alreadyMatched[m][matrixFull[l][m] - 1] = \
+                                    (matrixFullList[m]\
+                                    [matrixFull[l,m] - 1,k] == l+1) \
+                                    and (len(allCandidates[m][k]\
+                                    [matrixFull[l][m] - 1]) == 1)
                         if (m != k):
                             candm.append(allCandidates[k][m][l])
                             ratiosm.append(allRatios[k][m][l])
                             distancesm.append(allDistances[k][m][l])
-                        if m == k:
+                        if m == k and not NWayMatch:
                             alreadyMatched[m][l] = True
-                    finalCandidates.append(candm)
-                    finalRatios.append(ratiosm)
-                    finalDistances.append(distancesm)
+                    if NWayMatch:
+                        # Track down all possible matches that are connected
+                        # to this one:
+                        allCands = [[] for k in range(0,len(snapNumList))]
+                        lengthsList = np.zeros(len(snapNumList),dtype=int)
+                        for m in range(0,len(snapNumList)):
+                            if matrixFull[l][k] > -1:
+                                allCands[k].append(matrixFull[l][k]-1)
+                        lengthsListNew = np.array(\
+                            [len(cand) for cand in allCands],dtype=int)
+                        while not np.all(lengthsListNew == lengthsList):
+                            lengthsList = lengthsListNew
+                            for n in range(0,len(snapNumList)):
+                                if len(allCands[n]) > 0:
+                                    for d in diffMap[n]:
+                                        for m in range(0,len(allCands[n])):
+                                            if len(allCandidates[n][d][\
+                                                    allCands[n][m]]) > 0:
+                                                if not np.isin(\
+                                                        allCandidates[n][d][\
+                                                        allCands[n][m]][0],\
+                                                        allCands[d]) and \
+                                                        not alreadyMatched[n,\
+                                                        allCandidates[n][d]\
+                                                            [allCands[n]\
+                                                            [m]][0]]:
+                                                    allCands[d].append(\
+                                                        allCandidates[n][d][\
+                                                        allCands[n][m]][0])
+                            lengthsListNew = np.array([len(cand) \
+                                for cand in allCands],dtype=int)
+                        # Count two way matches:
+                        twoWayMatchesAllCands = [[] \
+                            for m in range(0,len(snapNumList))]
+                        for m in range(0,len(snapNumList)):
+                            for n in range(0,len(allCands[m])):
+                                nTW = np.sum(np.array(\
+                                    [len(allCandidates[m][d][allCands[m][n]]) \
+                                    for d in diffMap[m]]) > 0)
+                                twoWayMatchesAllCands[m].append(nTW)
+                        # Compute the average fractions:
+                        ratioAverages = [[] for k in range(0,len(snapNumList))]
+                        for m in range(0,len(snapNumList)):
+                            for n in range(0,len(allCands[m])):
+                                ratios = np.zeros(len(snapNumList)-1)
+                                for d in range(0,len(snapNumList)-1):
+                                    if len(allRatios[m][diffMap[m][d]][\
+                                            allCands[m][n]]) > 0:
+                                        ratios[d] = allRatios[m][\
+                                            diffMap[m][d]][allCands[m][n]][0]
+                                qR = np.mean(ratios)
+                                ratioAverages[m].append(qR)
+                        # Compute the distances:
+                        distAverages = [[] for k in range(0,len(snapNumList))]
+                        for m in range(0,len(snapNumList)):
+                            for n in range(0,len(allCands[m])):
+                                distances = np.zeros(len(snapNumList)-1)
+                                for d in range(0,len(snapNumList)-1):
+                                    if len(allDistances[m][diffMap[m][d]][\
+                                            allCands[m][n]]) > 0:
+                                        distances[d] = allDistances[m][\
+                                            diffMap[m][d]][allCands[m][n]][0]
+                                qR = np.mean(distances)
+                                distAverages[m].append(qR)
+                        # Now figure out the best candidates to include:
+                        bestCandidates = -np.ones(len(snapNumList),dtype=int)
+                        bestRatios = np.zeros(len(snapNumList))
+                        bestDistances = np.zeros(len(snapNumList))
+                        numberOfLinks = 0
+                        for m in range(0,len(snapNumList)):
+                            if len(allCands[m]) == 1:
+                                bestCandidates[m] = allCands[m][0]
+                                bestRatios[m] = ratioAverages[m][0]
+                                bestDistances[m] = distAverages[m][0]
+                                numberOfLinks += twoWayMatchesAllCands[m][0]
+                            elif len(allCands[m]) > 1:
+                                maxTW = np.max(allCands[m])
+                                haveMaxTW = np.where(\
+                                    np.array(allCands[m]) == maxTW)[0]
+                                if len(haveMaxTW) > 1:
+                                    # Need to use the ratio criteria to choose
+                                    # instead
+                                    maxRat = np.max(ratioAverages[m])
+                                    haveMaxRat = np.where(\
+                                        np.array(ratioAverages[m]) == maxRat)[0]
+                                    bestCandidates[m] = allCands[m][\
+                                        haveMaxRat[0]]
+                                    bestRatios[m] = ratioAverages[m][\
+                                        haveMaxRat[0]]
+                                    bestDistances[m] = distAverages[m][\
+                                        haveMaxRat[0]]
+                                    numberOfLinks += twoWayMatchesAllCands[m][\
+                                        haveMaxRat[0]]
+                                else:
+                                    bestCandidates[m] = allCands[m][\
+                                        haveMaxTW[0]]
+                                    bestRatios[m] = ratioAverages[m][\
+                                        haveMaxTW[0]]
+                                    bestDistances[m] = distAverages[m][\
+                                        haveMaxTW[0]]
+                                    numberOfLinks += twoWayMatchesAllCands[m][\
+                                        haveMaxTW[0]]
+                            # If no candidates, just leave it as -1
+                        # Now we mark the other voids as already included:
+                        for m in range(0,len(snapNumList)):
+                            alreadyMatched[m,bestCandidates[m]] = True
+                        finalCat.append(bestCandidates)
+                        finalCandidates.append(candm)
+                        finalRatios.append(bestRatios)
+                        finalDistances.append(bestDistances)
+                        finalCombinatoricFrac.append(float(numberOfLinks/\
+                            (len(snapNumList)*(len(snapNumList)-1))))
+                        finalCatFrac.append(float(\
+                            np.sum(bestCandidates > 0)/len(snapNumList)))
+                    else:
+                        finalCandidates.append(candm)
+                        finalRatios.append(ratiosm)
+                        finalDistances.append(distancesm)
+                        finalCatFrac.append(\
+                            float(len(np.where(matrixFull[l] > 0)[0])/\
+                            len(snapNumList)))
     return [np.array(finalCat),shortHaloList,np.array(twoWayMatchLists),\
         finalCandidates,finalRatios,finalDistances,allCandidates,\
-        candidateCounts]
+        candidateCounts,allRatios,np.array(finalCombinatoricFrac),\
+        np.array(finalCatFrac)]
 
 def getMatchRatios(matchList,quantityList):
     ratioArray = np.zeros(matchList.shape)
