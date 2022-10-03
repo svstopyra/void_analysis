@@ -1371,12 +1371,16 @@ def plotLocalUniverseMollweide(rCut,snap,
 				centreMW = (antihaloCentres[k][0],antihaloCentres[k][1])
 			if voidColour is None:
 				colourToUse = cmapFunc(k/len(largeAntihalos))
+			elif type(voidColour) is list:
+				colourToUse = voidColour[k]
 			else:
 				colourToUse = voidColour
 			if antiHaloLabel == 'haloID':
 				textToUse = str(largeAntihalos[k])
 			elif antiHaloLabel == 'inPlot':
 				textToUse = str(k + 1)
+			elif type(antiHaloLabel) == list:
+				textToUse = antiHaloLabel[k]
 			else:
 				raise Exception('Unrecognised antihalo label option.')
 			plotMollweideAlphaShape(
@@ -1444,9 +1448,14 @@ def plotLocalUniverseMollweide(rCut,snap,
 	if includeZOA:
 		handles.append(polygon)
 	if voidColour is not None:
-		fakeVoid = patches.Polygon(np.array([[0,1,-1],[0,-1,-1]]).T,
-			fc=voidColour,ec='None',alpha=0.5,
-			label='Large anti-halos')
+		if type(voidColour) is list:
+			fakeVoid = patches.Polygon(np.array([[0,1,-1],[0,-1,-1]]).T,
+				fc='b',ec='None',alpha=0.5,
+				label='Large anti-halos')
+		else:
+			fakeVoid = patches.Polygon(np.array([[0,1,-1],[0,-1,-1]]).T,
+				fc=voidColour,ec='None',alpha=0.5,
+				label='Large anti-halos')
 		handles.append(fakeVoid)
 	ax.legend(handles=handles,frameon=False,
 		prop={"size":legendFontSize,"family":"serif"},

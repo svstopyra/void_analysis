@@ -683,14 +683,18 @@ def getAntihaloSkyPlotData(snapNumList,nToPlot=20,verbose=True,\
         snapRevFolder = "gadget_full_reverse_512",\
         snapname = "gadget_full_forward_512/snapshot_001",\
         snapnameRev = "gadget_full_reverse_512/snapshot_001",\
-        reCentreSnaps = True,rCentre=135,figuresFolder=''):
+        reCentreSnaps = True,rCentre=135,figuresFolder='',\
+        snapList = None,snapListRev = None,antihaloCatalogueList=None,\
+        snapsortList = None,ahProps = None,massRange = None,rRange = None):
     # Load snapshots:
     if verbose:
         print("Loading snapshots...")
-    snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" + \
-        snapname) for snapNum in snapNumList]
-    snapListRev =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
-        + snapnameRev) for snapNum in snapNumList]
+    if snapList is None:
+        snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + \
+            "/" + snapname) for snapNum in snapNumList]
+    if snapListRev is None:
+        snapListRev =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + \
+            "/" + snapnameRev) for snapNum in snapNumList]
     if reCentreSnaps:
         for snap in snapList:
             tools.remapBORGSimulation(snap,swapXZ=False,reverse=True)
@@ -701,15 +705,35 @@ def getAntihaloSkyPlotData(snapNumList,nToPlot=20,verbose=True,\
     if verbose:
         print("Computing halo/antihalo centres...")
     boxsize = snapList[0].properties['boxsize'].ratio("Mpc a h**-1")
-    antihaloCatalogueList = [snap.halos() for snap in snapListRev]
-    snapsortList = [np.argsort(snap['iord']) for snap in snapList]
-    ahProps = [tools.loadPickle(snap.filename + ".AHproperties.p") \
-        for snap in snapList]
+    if antihaloCatalogueList is None:
+        antihaloCatalogueList = [snap.halos() for snap in snapListRev]
+    if ahProps is None:
+        ahProps = [tools.loadPickle(snap.filename + ".AHproperties.p") \
+            for snap in snapList]
+    antihaloRadii = [props[7] for props in ahProps]
     antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
         for props in ahProps]
     antihaloMasses = [props[3] for props in ahProps]
-    centralAntihalos = [tools.getAntiHalosInSphere(hcentres,rCentre) \
-        for hcentres in antihaloCentres]
+    if snapsortList is None:
+        snapsortList = [np.argsort(snap['iord']) \
+            for snap in snapList]
+    #centralAntihalos = [tools.getAntiHalosInSphere(hcentres,rCentre) \
+    #    for hcentres in antihaloCentres]
+    if rRange is None:
+        rRangeCond = [np.ones(len(antihaloRadii[k]),dtype=bool) \
+            for k in range(0,len(snapNumList))]
+    else:
+        rRangeCond = (antihaloRadii[k] > rMin) & \
+            (antihaloRadii[k] <= rMax)
+    if mRange is None:
+        mRangeCond = [np.ones(len(antihaloRadii[k]),dtype=bool) \
+            for k in range(0,len(snapNumList))]
+    else:
+        mRangeCond = (antihaloMasses[k] > massRange[0]) & \
+            (antihaloMasses[k] <= massRange[1])
+    centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],\
+            rSphere,filterCondition = rRangeCond & mRangeCond) \
+            for k in range(0,len(snapNumList))]
     massSortCentral = [\
         np.flip(np.argsort(antihaloMasses[k][centralAntihalos[k][0]])) \
         for k in range(0,len(centralAntihalos))]

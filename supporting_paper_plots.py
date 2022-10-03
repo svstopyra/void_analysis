@@ -2500,7 +2500,7 @@ mMax = 1e16
     snapListRev=snapListRev,ahProps=ahProps,hrList=hrList,max_index=None,\
     twoWayOnly=True,blockDuplicates=True,\
     crossMatchThreshold = muOpt,distMax = rSearchOpt,rSphere=rSphere,\
-    massRange = [mMin,mMax],NWayMatch = True)
+    massRange = [mMin,mMax],NWayMatch = False)
 
 
 
@@ -4094,8 +4094,10 @@ plt.show()
 
 
 
-
-
+radiiListOpt = getRadiiFromCat(finalCatOpt,radiiListShort)
+massListOpt = getRadiiFromCat(finalCatOpt,massListShort)
+[radiiMeanOpt, radiiSigmaOpt]  = getMeanProperty(radiiListOpt)
+[massMeanOpt, massSigmaOpt]  = getMeanProperty(massListOpt)
 sortedRadiiOpt = np.flip(np.argsort(radiiMeanOpt))
 
 # Using the particle overlap matching procedure:
@@ -4115,7 +4117,7 @@ centresListShort = [np.array([antihaloCentres[l][\
 
 
 radiiListOrderedPyn = getRadiiFromCat(finalCatPyn,radiiList)
-radiiListOrdered = getRadiiFromCat(finalCat,radiiList)
+radiiListOrdered = getRadiiFromCat(finalCatOpt,radiiList)
 
 [radiiListMeanPyn,radiiListSigmaPyn] = getMeanProperty(radiiListOrderedPyn)
 [radiiListMean,radiiListSigma] = getMeanProperty(radiiListOrdered)
@@ -4130,7 +4132,10 @@ sortedRadii = np.flip(np.argsort(radiiListMean))
             "skyplot_data_all.p",\
             getAntihaloSkyPlotData,snapNumList,samplesFolder=samplesFolder,\
             _recomputeData = recomputeData,recomputeData = recomputeData,\
-            nToPlot=200)
+            nToPlot=200,snapList = snapList,snapListRev = snapListRev,\
+            antihaloCatalogueList = hrList,snapsortList = snapSortList,\
+            ahProps = ahProps,rCentre = rSphere,massRange = [mMin,mMax],\
+            rRange = [5,30])
 
 ns = 1
 snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" + \
@@ -4138,6 +4143,13 @@ snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" + \
 for snap in snapList:
     tools.remapBORGSimulation(snap,swapXZ=False,reverse=True)
 
+
+
+
+ns = 0
+snapToShow = pynbody.load(samplesFolder + "sample" + str(snapNumList[ns]) + \
+    "/gadget_full_forward_512/snapshot_001")
+tools.remapBORGSimulation(snapToShow,swapXZ=False,reverse=True)
 
 rCut = 135
 ha = ['right','left','left','left','left','center','right',\
@@ -4159,14 +4171,31 @@ bound_box = transforms.Bbox([[cropPoint[0], cropPoint[1]],
 
 # Cluster locations:
 # Galaxy positions:
-with open("load_2mpp_catalogue.py") as infile:
-    exec(infile.read())
+[combinedAbellN,combinedAbellPos,abell_nums] = \
+    real_clusters.getCombinedAbellCatalogue()
 
 abell_nums = [426,2147,1656,3627,3545,548,2197,2052,1367]
 [abell_l,abell_b,abell_n,abell_z,\
         abell_d,p_abell,coordAbell] = getClusterSkyPositions("./")
 clusterInd = [np.where(combinedAbellN == n)[0] for n in abell_nums]
 clusterIndMain = [ind[0] for ind in clusterInd]
+
+coordCombinedAbellCart = SkyCoord(x=combinedAbellPos[:,0]*u.Mpc,\
+        y = combinedAbellPos[:,1]*u.Mpc,z = combinedAbellPos[:,2]*u.Mpc,\
+        frame='icrs',representation_type='cartesian')
+
+equatorialRThetaPhi = np.vstack(\
+    [coordCombinedAbellCart.icrs.spherical.distance.value,\
+    coordCombinedAbellCart.icrs.spherical.lat.value*np.pi/180.0,\
+    coordCombinedAbellCart.icrs.spherical.lon.value*np.pi/180]).transpose()
+
+coordCombinedAbellSphere = SkyCoord(distance=\
+    coordCombinedAbellCart.icrs.spherical.distance.value*u.Mpc,\
+    ra = coordCombinedAbellCart.icrs.spherical.lon.value*u.deg,\
+    dec = coordCombinedAbellCart.icrs.spherical.lat.value*u.deg,\
+    frame='icrs')
+
+
 
 
 nVoidsToShow = len(seabornColormap)
@@ -4176,7 +4205,12 @@ catToUse = finalCatOpt
 #selection = sortedRadiiPyn[0:nVoidsToShow]
 selection = sortedRadiiOpt[:(nVoidsToShow)]
 #selection = sortedRadii[np.where(finalCat[sortedRadii,1] == 32)[0]]
-for ns in range(0,3):
+asListAll = []
+colourListAll = []
+laListAll = []
+labelListAll = []
+
+for ns in range(0,5):
     asList = []
     colourList = []
     laList = []
@@ -4189,10 +4223,17 @@ for ns in range(0,3):
                 largeAntihalos_all[ns][catToUse[selection[k],ns]-1])
             colourList.append(seabornColormap[k])
             labelList.append(str(catToUse[selection[k],ns]))
+    asListAll.append(asList)
+    colourListAll.append(colourList)
+    laListAll.append(laList)
+    labelListAll.append(labelList)
+
+
+for ns in range(0,5):
     plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
-        alpha_shapes = asList,\
-        largeAntihalos = laList,hr=hrList[ns],\
-        coordAbell = coordCombinedAbell,abellListLocation = clusterIndMain,\
+        alpha_shapes = asListAll[ns],\
+        largeAntihalos = laListAll[ns],hr=hrList[ns],\
+        coordAbell = coordCombinedAbellSphere,abellListLocation = clusterIndMain,\
         nameListLargeClusters = [name[0] for name in clusterNames],\
         ha = ha,va= va, annotationPos = annotationPos,\
         title = 'Local super-volume: large voids (antihalos) within $' + \
@@ -4200,9 +4241,9 @@ for ns in range(0,3):
         vmin=1e-2,vmax=1e2,legLoc = 'lower left',bbox_to_anchor = (-0.1,-0.2),\
         snapsort = snapsortList_all[ns],antihaloCentres = None,\
         figOut = figuresFolder + "/supporting_plots/ah_match_sample_" + \
-        str(ns) + ".pdf",\
+        str(ns) + ".png",\
         showFig=False,figsize = (scale*textwidth,scale*0.55*textwidth),\
-        voidColour = colourList,antiHaloLabel=labelList,\
+        voidColour = colourListAll[ns],antiHaloLabel=labelListAll[ns],\
         bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
         galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
         voidAlpha = 0.6)
