@@ -1435,6 +1435,19 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
                         finalCatFrac.append(\
                             float(len(np.where(matrixFull[l] > 0)[0])/\
                             len(snapNumList)))
+                        # Compute the combinatoric fraction:
+                        Ncats = len(snapNumList)
+                        twoWayMatchCounts = 0
+                        for m in range(0,Ncats):
+                            for d in diffMap[m]:
+                                allCands = allCandidates[m][d][matrixFull[l][m]-1]
+                                if len(allCands) > 0:
+                                    if allCands[0] == matrixFull[l][d]-1:
+                                        twoWayMatchCounts += 1
+                        finalCombinatoricFracOpt.append(twoWayMatchCounts/\
+                            (Ncats*(Ncats-1)))
+
+
     return [np.array(finalCat),shortHaloList,np.array(twoWayMatchLists),\
         finalCandidates,finalRatios,finalDistances,allCandidates,\
         candidateCounts,allRatios,np.array(finalCombinatoricFrac),\

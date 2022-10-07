@@ -1129,6 +1129,8 @@ snapnameRev = "gadget_full_reverse_512/snapshot_001"
 
 snapNumList = [8800,9100,9400,9700,10000]
 
+#snapNumList = [7000,7200,7400,7600,8000,8800,9100,9400,9700,10000]
+
 snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" + \
     snapname) for snapNum in snapNumList]
 snapListRev =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
@@ -1150,6 +1152,7 @@ ahProps = [pickle.load(\
 antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
     for props in ahProps]
 antihaloMasses = [props[3] for props in ahProps]
+vorVols = [props[4] for props in ahProps]
 antihaloRadii = [props[7] for props in ahProps]
 centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],rSphere,\
         filterCondition = (antihaloRadii[k] > rMin) & \
@@ -2493,6 +2496,9 @@ rSphere = 300
 mMin = 1e11
 mMax = 1e16
 
+diffMap = [np.setdiff1d(np.arange(0,len(snapNumList)),[k]) \
+    for k in range(0,len(snapNumList))]
+
 [finalCatOpt,shortHaloListOpt,twoWayMatchListOpt,finalCandidatesOpt,\
     finalRatiosOpt,finalDistancesOpt,allCandidatesOpt,candidateCountsOpt,\
     allRatiosOpt,finalCombinatoricFracOpt,finalCatFracOpt] = \
@@ -2500,8 +2506,19 @@ mMax = 1e16
     snapListRev=snapListRev,ahProps=ahProps,hrList=hrList,max_index=None,\
     twoWayOnly=True,blockDuplicates=True,\
     crossMatchThreshold = muOpt,distMax = rSearchOpt,rSphere=rSphere,\
-    massRange = [mMin,mMax],NWayMatch = False)
+    massRange = [mMin,mMax],NWayMatch = False,rMin=rMin,rMax=rMax)
 
+finalCombinatoricFracOpt = np.zeros(len(finalCatOpt))
+Ncats = len(snapNumList)
+for k in range(0,len(finalCatOpt)):
+    twoWayMatchCounts = 0
+    for m in range(0,finalCatOpt.shape[1]):
+        for d in diffMap[m]:
+            allCands = allCandidatesOpt[m][d][finalCatOpt[k,m]-1]
+            if len(allCands) > 0:
+                if allCands[0] == finalCatOpt[k,d]-1:
+                    twoWayMatchCounts += 1
+    finalCombinatoricFracOpt[k] = twoWayMatchCounts/(Ncats*(Ncats-1))
 
 
 
@@ -2983,7 +3000,9 @@ ax[1].legend(frameon=False,loc="lower right",prop={"size":9,"family":"serif"})
 plt.show()
 
 
-
+# Filter for catalogue fraction:
+catFracOpt = np.array([np.sum(finalCatOpt[k,:] > -1)/len(snapNumList) \
+    for k in range(0,len(finalCatOpt))])
 
 
 # Mean mass function:
@@ -2991,6 +3010,32 @@ mUnit = 8*0.3111*2.7754e11*(677.7/512)**3
 mLower = 100*mUnit
 volSphere = 4*np.pi*rSphere**3/3
 combFracThresh = 0.1
+
+
+massFunctionComparison(massListMean,\
+    massListShort,volSphere,nBins=11,\
+    labelLeft = "Combined anti-halo catalogue",\
+    labelRight="Average of " + str(len(snapNumList)) + " catalogues",\
+    ylabel="Number of antihalos",savename=figuresFolder + \
+    "supporting_plots/mass_function_combined.pdf",massLower=mLower,\
+    ylim=[1,500],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,\
+    fontsize=10,massUpper = 2e15,\
+    titleLeft = "Combined Catalogue",titleRight = "All catalogues average")
+
+massFunctionComparison(massListMean[catFracOpt > 0.5],\
+    massListShort,volSphere,nBins=11,\
+    labelLeft = "Combined anti-halo catalogue",\
+    labelRight="Average of " + str(len(snapNumList)) + " catalogues",\
+    ylabel="Number of antihalos",savename=figuresFolder + \
+    "supporting_plots/mass_function_combined.pdf",massLower=mLower,\
+    ylim=[1,500],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,\
+    fontsize=10,massUpper = 2e15,\
+    titleLeft = "Combined Catalogue",titleRight = "All catalogues average")
+
+
+
+
+
 massFunctionComparison(massListMean[finalCombinatoricFracOpt > combFracThresh],\
     massListShort,volSphere,nBins=11,\
     labelLeft = "Combined anti-halo catalogue",\
@@ -4044,24 +4089,146 @@ for nc in range(0,nCatNums):
 
 # Signal to noise calculation:
 [mcmcArray,num,N,NCAT,no_bias_params,bias_matrix,mean_field,\
-    std_field] = pickle.load(open("chain_properties.p","rb"))
+    std_field,hmc_Elh,hmc_Eprior,hades_accept_count,\
+    hades_attempt_count] = pickle.load(open("chain_properties.p","rb"))
 
 snrField = mean_field**2/std_field**2
+snrWeighted = (snrField/(1.0 + mean_field))/np.sum(1.0/(1.0 + mean_field))
+snrWeights = 1.0/(1.0 + mean_field)**2
+snrWeightsLin = snrWeights.reshape(256**3)
+mean_fieldLin = mean_field.reshape(256**3)
+#snrWeighted = snrField
 finalCentresOptList = np.array([getCentresFromCat(\
     finalCatOpt,centresListShort,ns) for ns in range(0,len(snapNumList))])
 
 meanCentreOpt = np.nanmean(finalCentresOptList,0)
-catFractionsOpt = np.array([len(np.where(x > 0)[0])/len(snapNumList) \
-    for x in finalCatOpt])
+#catFractionsOpt = np.array([len(np.where(x > 0)[0])/len(snapNumList) \
+#    for x in finalCatOpt])
+#catFractionsOpt = finalCatFracOpt
+catFractionsOpt = finalCombinatoricFracOpt
 grid = snapedit.gridListPermutation(256,perm=(2,1,0))
 centroids = grid*boxsize/256 + boxsize/(2*256)
 positions = snapedit.unwrap(centroids - np.array([boxsize/2]*3),boxsize)
 tree = scipy.spatial.cKDTree(snapedit.wrap(positions + boxsize/2,boxsize),\
     boxsize=boxsize)
 
-nearestPoints = tree.query_ball_point(meanCentreOpt,radiiMeanOpt,workers=-1)
+nearestPoints = tree.query_ball_point(\
+    snapedit.wrap(meanCentreOpt + boxsize/2,boxsize),radiiMeanOpt,workers=-1)
+#nearestPoints = tree.query_ball_point(\
+#    snapedit.wrap(meanCentreOpt + boxsize/2,boxsize),50,workers=-1)
 snrFieldLin = np.reshape(snrField,256**3)
+snrWeightedLin = np.reshape(snrWeighted,256**3)
 snrList = np.array([np.mean(snrFieldLin[points]) for points in nearestPoints])
+# Volume weighted mean:
+
+#snrList = np.array([stacking.weightedMean(snrFieldLin[points],\
+#    snrWeightsLin[points]) for points in nearestPoints])
+
+
+#snrListError = np.sqrt(np.array([stacking.weightedVariance(snrFieldLin[points],\
+#    snrWeightsLin[points]) for points in nearestPoints]))
+
+# SNR distribution of voids:
+mBins = [1e13,1e14,5e14,1e16]
+rMaxInclude = 135
+lowDistance = np.sqrt(np.sum(meanCentreOpt**2,1)) < rMaxInclude
+[inMassBins,noInMassBins] = plot_utilities.binValues(massMeanOpt[lowDistance],\
+    mBins)
+for k in range(0,len(mBins)-1):
+    plt.hist(snrList[lowDistance][inMassBins[k]],bins=10**np.linspace(-2,4,21),\
+        alpha=0.5,label="$" + plot.scientificNotation(mBins[k]) + \
+        " < M/M_{\\odot} \leq " + \
+        plot.scientificNotation(mBins[k+1]) + "$",\
+        density=True)
+
+plt.xscale('log')
+plt.xlabel('SNR')
+plt.ylabel('Density')
+plt.legend()
+plt.title("Void SNR within $" + ("%.3g" % rMaxInclude) + \
+    "\\,\\mathrm{Mpc}h^{=1}$")
+plt.show()
+
+
+
+
+# SNR with distance???
+rBins = np.linspace(0,300,31)
+rBinCentres = plot_utilities.binCentres(rBins)
+indDist = tree.query_ball_point(np.tile(np.array([boxsize/2]*3),(30,1)),\
+    rBins[1:])
+snrDist = np.zeros(len(rBinCentres))
+snrDistErr = np.zeros(len(rBinCentres))
+for k in range(0,len(rBinCentres)):
+    if k == 0:
+        ind = indDist[k]
+    else:
+        ind = np.intersect1d(indDist[k],indDist[k-1])
+    snrDist[k] = np.mean(snrFieldLin[ind])
+    snrDistErr[k] = np.std(snrFieldLin[ind])/np.sqrt(len(ind))
+
+plt.plot(rBinCentres,snrDist)
+plt.ylabel('SNR ($\\delta^2/\\sigma_{\\delta}^2$)')
+plt.xlabel('Shell distance from origin ($\\mathrm{Mpc}h^{-1}$)')
+plt.show()
+
+
+
+#snrBins = np.linspace(0,50,21)
+rMaxInclude = 135
+lowDistance = np.sqrt(np.sum(meanCentreOpt**2,1)) < rMaxInclude
+snrBins = 10**np.linspace(-1,2,11)
+snrBinCentres = plot_utilities.binCentres(snrBins)
+[inListSNR,noInBinsSNR] = plot_utilities.binValues(snrList[lowDistance],snrBins)
+meanCatFracSNR = np.array([np.mean(catFractionsOpt[ind]) for ind in inListSNR])
+stdCatFracSNR = np.array([np.std(catFractionsOpt[ind])/np.sqrt(len(ind)) \
+    for ind in inListSNR])
+
+mBins = [1e13,1e14,5e14,1e16]
+[inMassBins,noInMassBins] = plot_utilities.binValues(massMeanOpt,mBins)
+
+meanCatFracBinsSNR = [np.array(\
+    [np.mean(catFractionsOpt[np.intersect1d(ind,inMassBins[k])]) \
+    for ind in inListSNR]) \
+    for k in range(0,len(mBins) - 1)]
+stdCatFracBinsSNR = [np.array(\
+    [np.std(catFractionsOpt[np.intersect1d(ind,inMassBins[k])])/\
+    np.sqrt(len(np.intersect1d(ind,inMassBins[k]))) \
+    for ind in inListSNR]) \
+    for k in range(0,len(mBins) - 1)]
+#meanCatFracBinsSNR = np.array([np.mean(catFracOpt[ind]) for ind in inMassBins])
+
+for k in range(0,len(mBins)-1):
+    plt.errorbar(snrBinCentres,meanCatFracBinsSNR[k],yerr=stdCatFracBinsSNR[k],\
+        label = "$" + plot.scientificNotation(mBins[k]) + \
+        " < M/M_{\\odot} \leq " + \
+        plot.scientificNotation(mBins[k+1]) + "$")
+
+plt.xlabel('Mean SNR of voids')
+plt.ylabel('Mean Catalogue Fraction')
+plt.xscale('log')
+plt.legend()
+plt.show()
+
+# Relationship between density and snr:
+hist = plt.hist2d(1.0 + mean_field.reshape(256**3),snrField.reshape(256**3),\
+    bins = [10**np.linspace(-1,1,21),10**(np.linspace(-2,4,21))],cmap='Blues')
+#plt.imshow(hist[0],extent = (-1,1,1e-2,1e4),aspect='auto')
+plt.yscale('log')
+plt.xscale('log')
+plt.xlabel('$\\rho/\\bar{\\rho}$')
+plt.ylabel('SNR ($\\delta^2/\\sigma_{\\delta}^2$)')
+plt.title('Signal to Noise vs Density')
+plt.colorbar()
+plt.tight_layout()
+plt.show()
+
+
+plt.errorbar(snrBinCentres,meanCatFracSNR,yerr=stdCatFracSNR)
+plt.xlabel('Mean SNR of void')
+plt.ylabel('Mean Catalogue Fraction')
+plt.show()
+
 
 plt.clf()
 plt.scatter(snrList,catFractionsOpt)
@@ -4086,6 +4253,24 @@ plt.errorbar(plot.binCentres(snrBins),meanCatFracSNR,yerr=stdCatFracSNR)
 plt.xlabel('Signal-to-noise Ratio')
 plt.ylabel('Mean catalogue fraction')
 plt.savefig(figuresFolder + "supporting_plots/snr_vs_catFrac.pdf")
+plt.show()
+
+# Distribution of catalogue fraction:
+
+finalCatFracOpt
+mBins = [1e13,1e14,5e14,1e16]
+[inMassBins,noInMassBins] = plot_utilities.binValues(massMeanOpt,mBins)
+plt.hist(finalCatFracOpt,bins=4,alpha=0.5,label='All',density=True)
+
+for k in range(0,len(mBins)-1):
+    plt.hist(finalCatFracOpt[inMassBins[k]],bins=4,alpha=0.5,\
+        label="$" + plot.scientificNotation(mBins[k]) + \
+        " < M/M_{\\odot} \leq " + \
+        plot.scientificNotation(mBins[k+1]) + "$",density=True)
+
+plt.xlabel('Catalogue Fraction')
+plt.ylabel('Density')
+plt.legend()
 plt.show()
 
 
@@ -4210,7 +4395,7 @@ colourListAll = []
 laListAll = []
 labelListAll = []
 
-for ns in range(0,5):
+for ns in range(0,len(snapNumList)):
     asList = []
     colourList = []
     laList = []
@@ -4229,7 +4414,7 @@ for ns in range(0,5):
     labelListAll.append(labelList)
 
 
-for ns in range(0,5):
+for ns in range(0,len(snapNumList)):
     plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
         alpha_shapes = asListAll[ns],\
         largeAntihalos = laListAll[ns],hr=hrList[ns],\
@@ -4249,6 +4434,331 @@ for ns in range(0,5):
         voidAlpha = 0.6)
 
 plt.show()
+
+def getMeanCentresFromCombinedCatalogue(combinedCat,centresList):
+    meanCentresArray = np.zeros((len(combinedCat),3))
+    for nV in range(0,len(combinedCat)):
+        centresArray = []
+        for l in range(0,combinedCat.shape[1]):
+            if finalCatOpt[nV][l] > -1:
+                centresArray.append(centresList[l][combinedCat[nV,l] - 1])
+        meanCentresArray[nV,:] = np.mean(centresArray,0)
+    return meanCentresArray
+
+meanCentresArray = getMeanCentresFromCombinedCatalogue(finalCatOpt,\
+    centresListShort)
+
+distanceArray = np.sqrt(np.sum(meanCentresArray**2,1))
+
+
+# Simpler plot - just create a gif of one cluster:
+
+indList = []
+#nV = 26
+nV = 667
+for l in range(0,len(snapNumList)):
+    if finalCatOpt[nV][l] > -1:
+        indList.append(centralAntihalos[l][0][sortedList[l][finalCatOpt[nV][l]-1]])
+    else:
+        indList.append(-1)
+
+centresArray = []
+haveCentreCount = 0
+for l in range(0,len(snapNumList)):
+    if finalCatOpt[nV][l] > -1:
+        centresArray.append(centresListShort[l][finalCatOpt[nV,l] - 1])
+
+#meanCentre = np.flip(np.mean(centresArray,0)) + boxsize/2
+meanCentre = np.mean(centresArray,0)
+stdCentre = np.std(centresArray,0)
+meanCentre
+stdCentre
+
+# plot in a box around this void.
+Lbox = 100
+axis = 2
+Om0 = 0.3111
+rhoBar = Om0*2.7754e11
+nPix = 32
+ns = 0
+binEdgesX = np.linspace(meanCentre[0] - Lbox/2,meanCentre[0] + Lbox/2,nPix)
+binEdgesY = np.linspace(meanCentre[1] - Lbox/2,meanCentre[1] + Lbox/2,nPix)
+
+densitiesHR = [np.fromfile("new_chain/sample" + str(snap) + \
+    "/gadget_full_forward_512/snapshot_001.a_den",\
+    dtype=np.float32) for snap in snapNumList]
+densities256 = [np.reshape(density,(256,256,256),order='C') \
+    for density in densitiesHR]
+densities256F = [np.reshape(density,(256,256,256),order='F') \
+    for density in densitiesHR]
+
+filtCube = pynbody.filt.Cuboid(meanCentre[0] - Lbox/2,meanCentre[0] + Lbox/2,\
+    meanCentre[1] - Lbox/2,meanCentre[1] + Lbox/2,\
+    meanCentre[2] - Lbox/2,meanCentre[2] + Lbox/2)
+
+snapFilter = (snapList[ns]['pos'][:,0] > meanCentre[0] - Lbox/2) & \
+    (snapList[ns]['pos'][:,0] <= meanCentre[0] + Lbox/2) &\
+    (snapList[ns]['pos'][:,1] > meanCentre[1] - Lbox/2) & \
+    (snapList[ns]['pos'][:,1] <= meanCentre[1] + Lbox/2) &\
+    (snapList[ns]['pos'][:,2] > meanCentre[2] - Lbox/2) & \
+    (snapList[ns]['pos'][:,2] <= meanCentre[2] + Lbox/2)
+
+hist = np.histogram2d(snapList[ns]['pos'][snapFilter,0],\
+    snapList[ns]['pos'][snapFilter,1],\
+    bins = [binEdgesX,binEdgesY])
+
+cuboidVol = Lbox**3/(nPix**2)
+mUnit = snapList[0]['mass'][0]*1e10
+
+delta = mUnit*hist[0]/(cuboidVol*rhoBar) - 1.0
+
+# plot:
+plt.imshow(delta,norm=colors.LogNorm(vmin=1/70,vmax=70),cmap='PuOr_r')
+
+Lbox = 100
+zSlice = meanCentre[2]
+N = 256
+alphaVal = 0.2
+vmin = 1/1000
+vmax = 1000
+thickness = Lbox
+indLow = int((zSlice + boxsize/2)*N/boxsize) - int((thickness/2)*N/(boxsize))
+indUpp = int((zSlice + boxsize/2)*N/boxsize) + int((thickness/2)*N/(boxsize))
+
+indLowX = int((meanCentre[0] + boxsize/2)*N/boxsize) - int((thickness/2)*N/(boxsize))
+indUppX = int((meanCentre[0] + boxsize/2)*N/boxsize) + int((thickness/2)*N/(boxsize))
+indLowY = int((meanCentre[1] + boxsize/2)*N/boxsize) - int((thickness/2)*N/(boxsize))
+indUppY = int((meanCentre[1] + boxsize/2)*N/boxsize) + int((thickness/2)*N/(boxsize))
+
+sm = cm.ScalarMappable(colors.LogNorm(vmin=1/1000,vmax=1000),\
+            cmap='PuOr_r')
+
+phi = np.linspace(0,2*np.pi,1000)
+Xcirc = np.cos(phi)
+Ycirc = np.sin(phi)
+
+
+for ns in range(0,len(snapNumList)):
+    plt.clf()
+    denToPlot = np.mean(densities256[ns][indLowX:indUppX,indLowY:indUppY,\
+        indLow:indUpp],2)
+    plt.imshow(denToPlot,norm=colors.LogNorm(vmin=vmin,vmax=vmax),\
+            cmap='PuOr_r',extent=(meanCentre[0] - Lbox/2,\
+            meanCentre[0] + Lbox/2,\
+            meanCentre[1] - Lbox/2,meanCentre[1] + Lbox/2))
+    # Alpha shape:
+    if indList[ns] > -1:
+        halo = hrList[ns][indList[ns]+1]
+        positions = tools.remapAntiHaloCentre(\
+            snapList[ns]['pos'][snapSortList[ns][halo['iord']],:],boxsize)
+        #alphaVal = alphashape.optimizealpha(\
+        #    np.array([positions[:,0],positions[:,1]]).T)
+        alphaShapeVoid = alphashape.alphashape(np.array([positions[:,0],\
+            positions[:,1]]).T,alphaVal)
+        ax = plt.gca()
+        ax.add_patch(PolygonPatch(alphaShapeVoid,fc=None,ec='b',alpha=0.5,\
+            fill = False))
+        sampleCentre = centresListShort[ns][finalCatOpt[nV,ns] - 1]
+        plt.scatter(sampleCentre[0],sampleCentre[1],marker='x',color='b',\
+            label='Sample Centre')
+        plt.plot(sampleCentre[0] + radiiListOpt[nV,ns]*Xcirc,\
+            sampleCentre[1] + radiiListOpt[nV,ns]*Ycirc,\
+            linestyle='--',color='b',label='Effective radius\n$' + \
+            ("%.2g" % radiiListOpt[nV,ns]) + "\\mathrm{Mpc}^{-1}$")
+    plt.scatter(meanCentre[0],meanCentre[1],marker='x',color='r',\
+        label='Mean Centre')
+    plt.legend(frameon=False,loc="lower right")
+    plt.xlabel('x ($\\mathrm{Mpc}h^{-1}$)')
+    plt.ylabel('y ($\\mathrm{Mpc}h^{-1}$)')
+    plt.xlim([meanCentre[0] - Lbox/2,meanCentre[0] + Lbox/2])
+    plt.ylim([meanCentre[1] - Lbox/2,meanCentre[1] + Lbox/2])
+    plt.title('Sample ' + str(snapNumList[ns]))
+    cbar = plt.colorbar(sm, orientation="vertical")
+    plt.savefig(figuresFolder + "frame_" + str(ns) + ".png")
+    #plt.show()
+
+import glob
+from PIL import Image
+frames = []
+imgs = glob.glob(figuresFolder + "frame_*.png")
+for i in imgs:
+    new_frame = Image.open(i)
+    frames.append(new_frame)
+
+# Save into a GIF file that loops forever
+frames[0].save(figuresFolder + 'voids.gif', format='GIF',
+               append_images=frames[1:],
+               save_all=True,
+               duration=300, loop=0)
+
+
+# Plots of the anti-halos:
+hrcentres = [props[2] for props in ahProps]
+hrcentresListShort = [np.array([hrcentres[l][\
+        centralAntihalos[l][0][sortedList[l][k]],:] \
+        for k in range(0,np.min([ahCounts[l],max_index]))]) \
+        for l in range(0,len(snapNumList))]
+
+
+centresArrayRev = []
+haveCentreCount = 0
+for l in range(0,len(snapNumList)):
+    if finalCatOpt[nV][l] > -1:
+        centresArrayRev.append(hrcentresListShort[l][finalCatOpt[nV,l] - 1])
+
+#meanCentre = np.flip(np.mean(centresArray,0)) + boxsize/2
+meanCentreRev = np.mean(centresArrayRev,0)
+imProj = pynbody.plot.sph.image(snapListRev[0],\
+            qty='rho',width=boxsize/2,log=True,\
+            #units = "Msol h**2 Mpc**-3",\
+            units = "Msol h Mpc**-2",\
+            resolution=256,cmap='PuOr_r',show_cbar=False,av_z=False,\
+            noplot = True,ret_im = True)
+
+
+vmin = 1/70
+vmax = 70
+Lbox = 20
+showOtherHalos = True
+mLower = 1e14
+mUpper = 1e16
+imList = []
+for ns in range(0,len(snapNumList)):
+    subsnap = snapListRev[ns]
+    with pynbody.transformation.translate(subsnap,-meanCentreRev):
+        im = pynbody.plot.sph.image(subsnap,\
+            qty='rho',width=Lbox,log=True,\
+            #units = "Msol h**2 Mpc**-3",\
+            units = "Msol h Mpc**-2",\
+            resolution=128,cmap='PuOr_r',show_cbar=False,av_z=False,\
+            noplot = True,ret_im = True)
+    imList.append(im)
+
+for ns in range(0,len(snapNumList)):
+    plt.clf()
+    #denToPlot = np.mean(densities256[ns][indLowX:indUppX,indLowY:indUppY,\
+    #    indLow:indUpp],2)
+    #plt.imshow(denToPlot,norm=colors.LogNorm(vmin=vmin,vmax=vmax),\
+    #        cmap='PuOr_r',extent=(meanCentre[0] - Lbox/2,\
+    #        meanCentre[0] + Lbox/2,\
+    #        meanCentre[1] - Lbox/2,meanCentre[1] + Lbox/2))
+    plt.imshow(np.flipud(imList[ns])/np.mean(imProj),\
+        norm=colors.LogNorm(vmin=vmin,vmax=vmax),\
+        cmap='PuOr_r',extent=(meanCentreRev[0] - Lbox/2,\
+        meanCentreRev[0] + Lbox/2,\
+        meanCentreRev[1] - Lbox/2,meanCentreRev[1] + Lbox/2))
+    # Alpha shape:
+    if indList[ns] > -1:
+        halo = hrList[ns][indList[ns]+1]
+        sampleCentre = hrcentresListShort[ns][finalCatOpt[nV,ns] - 1]
+        plt.scatter(sampleCentre[0],\
+            sampleCentre[1],marker='x',color='b',\
+            label='Sample Centre\n$' + \
+            plot.scientificNotation(massListOpt[nV,ns]) + "M_{\\odot}h^{-1}$")
+        Rvir = halo.properties['Rvir']/1000
+        plt.plot(sampleCentre[0] + Rvir*Xcirc,\
+            sampleCentre[1] + Rvir*Ycirc,\
+            linestyle='--',color='b',label='Virial radius\n$' + \
+            ("%.2g" % Rvir) + \
+            "\\mathrm{Mpc}^{-1}$")
+    if showOtherHalos:
+        # Find other halos in this range:
+        inRangePos = \
+            (hrcentresListShort[ns][:,0] >= meanCentreRev[0] - Lbox/2) & \
+            (hrcentresListShort[ns][:,0] < meanCentreRev[0] + Lbox/2) & \
+            (hrcentresListShort[ns][:,1] >= meanCentreRev[1] - Lbox/2) & \
+            (hrcentresListShort[ns][:,1] < meanCentreRev[1] + Lbox/2) & \
+            (hrcentresListShort[ns][:,2] >= meanCentreRev[2] - Lbox/2) & \
+            (hrcentresListShort[ns][:,2] < meanCentreRev[2] + Lbox/2)
+        inRangeMass = (massListShort[ns] >= mLower) & \
+            (massListShort[ns] < mUpper)
+        ahIndices = np.array(centralAntihalos[ns][0])[sortedList[ns]]
+        antihalosToShow = inRangeMass & inRangePos# & \
+        #    (ahIndices != finalCatOpt[nV,ns] - 1)
+        allMasses = massListShort[ns][antihalosToShow]
+        allPositions = hrcentresListShort[ns][antihalosToShow,:]
+        allIndices = ahIndices[antihalosToShow]
+        plt.scatter(hrcentresListShort[ns][antihalosToShow,0],\
+            hrcentresListShort[ns][antihalosToShow,1],marker='x',color='k')
+        for k in range(0,np.sum(antihalosToShow)):
+            plt.text(allPositions[k,0],allPositions[k,1],\
+                str(allIndices[k]) + \
+                ", \n$" + plot.scientificNotation(allMasses[k]) + \
+                "M_{\\odot}h^{-1}$")
+    plt.scatter(meanCentreRev[0],meanCentreRev[1],marker='x',color='r',\
+        label='Mean Centre')
+    plt.legend(frameon=False,loc="lower right")
+    plt.xlabel('x ($\\mathrm{Mpc}h^{-1}$)')
+    plt.ylabel('y ($\\mathrm{Mpc}h^{-1}$)')
+    plt.xlim([meanCentreRev[0]- Lbox/2,meanCentreRev[0] + Lbox/2])
+    plt.ylim([meanCentreRev[1] - Lbox/2,meanCentreRev[1] + Lbox/2])
+    plt.title('Sample ' + str(snapNumList[ns]))
+    cbar = plt.colorbar(sm, orientation="vertical",\
+        label='$\\rho/\\bar{\\rho}$ (Projected)')
+    plt.savefig(figuresFolder + "reverse_frame_" + str(ns) + ".png")
+    #plt.show()
+
+frames = []
+imgs = glob.glob(figuresFolder + "reverse_frame_*.png")
+for i in imgs:
+    new_frame = Image.open(i)
+    frames.append(new_frame)
+
+# Save into a GIF file that loops forever
+frames[0].save(figuresFolder + 'antihalos.gif', format='GIF',
+               append_images=frames[1:],
+               save_all=True,
+               duration=300, loop=0)
+
+
+rBins = np.linspace(0,300,21)
+rBinCentres = plot_utilities.binCentres(rBins)
+[inBins,noInBins] = plot_utilities.binValues(distanceArray,rBins)
+
+meanCatFrac = np.array([np.mean(catFracOpt[ind]) for ind in inBins])
+stdCatFrac = np.array([np.std(catFracOpt[ind])/np.sqrt(len(ind)) \
+    for ind in inBins])
+
+plt.errorbar(rBinCentres,meanCatFrac,yerr=stdCatFrac)
+plt.xlabel('Distance from centres ($\\mathrm{Mpc}h^{-1}$)')
+plt.ylabel('Mean Catalogue Fraction')
+plt.show()
+
+
+# Cat fraction by mass bin:
+mBins = [1e13,1e14,5e14,1e16]
+[inMassBins,noInMassBins] = plot_utilities.binValues(massMeanOpt,mBins)
+
+meanCatFracBins = [np.array(\
+    [np.mean(catFracOpt[np.intersect1d(ind,inMassBins[k])]) \
+    for ind in inBins]) \
+    for k in range(0,len(mBins) - 1)]
+stdCatFracBins = [np.array(\
+    [np.std(catFracOpt[np.intersect1d(ind,inMassBins[k])])/\
+    np.sqrt(len(np.intersect1d(ind,inMassBins[k]))) \
+    for ind in inBins]) \
+    for k in range(0,len(mBins) - 1)]
+#meanCatFracBins = np.array([np.mean(catFracOpt[ind]) for ind in inMassBins])
+
+for k in range(0,len(mBins)-1):
+    plt.errorbar(rBinCentres,meanCatFracBins[k],yerr=stdCatFracBins[k],\
+        label = "$" + plot.scientificNotation(mBins[k]) + \
+        " < M/M_{\\odot} \leq " + \
+        plot.scientificNotation(mBins[k+1]) + "$")
+
+plt.xlabel('Distance from centres ($\\mathrm{Mpc}h^{-1}$)')
+plt.ylabel('Mean Catalogue Fraction')
+plt.legend()
+plt.show()
+
+
+
+
+fig, ax = plt.subplots()
+plot.plotDensitySlice(ax,densities256[0],meanCentre,50,boxsize,256,Lbox,\
+        meanCentre[2],1/1000,1000,\
+        'PuOr_r',markCentre=True,axesToShow = [0,1],losAxis=2,flip=False,\
+        flipud=False,fliplr=False,swapXZ = False,centreMarkerColour='r')
 
 
 
