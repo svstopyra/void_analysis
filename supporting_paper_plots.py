@@ -1127,9 +1127,9 @@ snapnameRev = "gadget_full_reverse_512/snapshot_001"
 #snapNumList = [7000,7200,7400,7600,8000]
 #snapNumList = [7000,7200,7400,7600,8000]
 
-snapNumList = [8800,9100,9400,9700,10000]
+#snapNumList = [8800,9100,9400,9700,10000]
 
-#snapNumList = [7000,7200,7400,7600,8000,8800,9100,9400,9700,10000]
+snapNumList = [7000,7200,7400,7600,8000,8800,9100,9400,9700,10000]
 
 snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" + \
     snapname) for snapNum in snapNumList]
@@ -4210,8 +4210,12 @@ plt.xscale('log')
 plt.legend()
 plt.show()
 
+
+centralPortion = tree.query_ball_point(np.array([0]*3),135)
+
 # Relationship between density and snr:
-hist = plt.hist2d(1.0 + mean_field.reshape(256**3),snrField.reshape(256**3),\
+hist = plt.hist2d(1.0 + mean_fieldLin[centralPortion],\
+    snrFieldLin[centralPortion],\
     bins = [10**np.linspace(-1,1,21),10**(np.linspace(-2,4,21))],cmap='Blues')
 #plt.imshow(hist[0],extent = (-1,1,1e-2,1e4),aspect='auto')
 plt.yscale('log')
@@ -4453,9 +4457,11 @@ distanceArray = np.sqrt(np.sum(meanCentresArray**2,1))
 
 # Simpler plot - just create a gif of one cluster:
 
+snapSortListRev = [np.argsort(snap['iord']) for snap in snapListRev]
+
 indList = []
 #nV = 26
-nV = 667
+nV = 33605
 for l in range(0,len(snapNumList)):
     if finalCatOpt[nV][l] > -1:
         indList.append(centralAntihalos[l][0][sortedList[l][finalCatOpt[nV][l]-1]])
@@ -4492,20 +4498,20 @@ densities256 = [np.reshape(density,(256,256,256),order='C') \
 densities256F = [np.reshape(density,(256,256,256),order='F') \
     for density in densitiesHR]
 
-filtCube = pynbody.filt.Cuboid(meanCentre[0] - Lbox/2,meanCentre[0] + Lbox/2,\
-    meanCentre[1] - Lbox/2,meanCentre[1] + Lbox/2,\
-    meanCentre[2] - Lbox/2,meanCentre[2] + Lbox/2)
+#filtCube = pynbody.filt.Cuboid(meanCentre[0] - Lbox/2,meanCentre[0] + Lbox/2,\
+#    meanCentre[1] - Lbox/2,meanCentre[1] + Lbox/2,\
+#    meanCentre[2] - Lbox/2,meanCentre[2] + Lbox/2)
 
-snapFilter = (snapList[ns]['pos'][:,0] > meanCentre[0] - Lbox/2) & \
-    (snapList[ns]['pos'][:,0] <= meanCentre[0] + Lbox/2) &\
-    (snapList[ns]['pos'][:,1] > meanCentre[1] - Lbox/2) & \
-    (snapList[ns]['pos'][:,1] <= meanCentre[1] + Lbox/2) &\
-    (snapList[ns]['pos'][:,2] > meanCentre[2] - Lbox/2) & \
-    (snapList[ns]['pos'][:,2] <= meanCentre[2] + Lbox/2)
+#snapFilter = (snapList[ns]['pos'][:,0] > meanCentre[0] - Lbox/2) & \
+#    (snapList[ns]['pos'][:,0] <= meanCentre[0] + Lbox/2) &\
+#    (snapList[ns]['pos'][:,1] > meanCentre[1] - Lbox/2) & \
+#    (snapList[ns]['pos'][:,1] <= meanCentre[1] + Lbox/2) &\
+#    (snapList[ns]['pos'][:,2] > meanCentre[2] - Lbox/2) & \
+#    (snapList[ns]['pos'][:,2] <= meanCentre[2] + Lbox/2)
 
-hist = np.histogram2d(snapList[ns]['pos'][snapFilter,0],\
-    snapList[ns]['pos'][snapFilter,1],\
-    bins = [binEdgesX,binEdgesY])
+#hist = np.histogram2d(snapList[ns]['pos'][snapFilter,0],\
+#    snapList[ns]['pos'][snapFilter,1],\
+#    bins = [binEdgesX,binEdgesY])
 
 cuboidVol = Lbox**3/(nPix**2)
 mUnit = snapList[0]['mass'][0]*1e10
@@ -4513,7 +4519,7 @@ mUnit = snapList[0]['mass'][0]*1e10
 delta = mUnit*hist[0]/(cuboidVol*rhoBar) - 1.0
 
 # plot:
-plt.imshow(delta,norm=colors.LogNorm(vmin=1/70,vmax=70),cmap='PuOr_r')
+#plt.imshow(delta,norm=colors.LogNorm(vmin=1/70,vmax=70),cmap='PuOr_r')
 
 Lbox = 100
 zSlice = meanCentre[2]
@@ -4615,7 +4621,10 @@ imProj = pynbody.plot.sph.image(snapListRev[0],\
             resolution=256,cmap='PuOr_r',show_cbar=False,av_z=False,\
             noplot = True,ret_im = True)
 
-
+showParticleDensityShare = False
+showMass = False
+showIndex = False
+showFrac = True
 vmin = 1/70
 vmax = 70
 Lbox = 20
@@ -4634,6 +4643,24 @@ for ns in range(0,len(snapNumList)):
             noplot = True,ret_im = True)
     imList.append(im)
 
+# Get list of particles that are involved in any snapshot:
+partLists = []
+for ns in range(0,len(snapNumList)):
+    if indList[ns] > -1:
+        partLists.append(hrList[ns][indList[ns]+1]['iord'])
+
+allPartList = partLists[0]
+for k in range(1,len(partLists)):
+    allPartList = np.union1d(partLists[k],allPartList)
+
+partFracsList = np.zeros(allPartList.shape)
+for k in range(0,len(partLists)):
+    partFracsList += np.isin(allPartList,partLists[k])
+
+partFracsList /= len(snapNumList)
+
+
+
 for ns in range(0,len(snapNumList)):
     plt.clf()
     #denToPlot = np.mean(densities256[ns][indLowX:indUppX,indLowY:indUppY,\
@@ -4642,11 +4669,33 @@ for ns in range(0,len(snapNumList)):
     #        cmap='PuOr_r',extent=(meanCentre[0] - Lbox/2,\
     #        meanCentre[0] + Lbox/2,\
     #        meanCentre[1] - Lbox/2,meanCentre[1] + Lbox/2))
-    plt.imshow(np.flipud(imList[ns])/np.mean(imProj),\
-        norm=colors.LogNorm(vmin=vmin,vmax=vmax),\
-        cmap='PuOr_r',extent=(meanCentreRev[0] - Lbox/2,\
-        meanCentreRev[0] + Lbox/2,\
-        meanCentreRev[1] - Lbox/2,meanCentreRev[1] + Lbox/2))
+    if showParticleDensityShare:
+        voidParticleHist = np.histogram2d(\
+            snapListRev[ns]['pos'][snapSortListRev[ns][allPartList],0],\
+            snapListRev[ns]['pos'][snapSortListRev[ns][allPartList],1],\
+            bins = [np.linspace(meanCentreRev[0] - Lbox/2,\
+                meanCentreRev[0] + Lbox/2,21),\
+                np.linspace(meanCentreRev[1] - Lbox/2,\
+                meanCentreRev[1] + Lbox/2,21)],weights=partFracsList)
+        vminFrac = 1e-4
+        vmaxFrac = np.max(voidParticleHist[0]/len(allPartList))
+        plt.imshow(voidParticleHist[0]/len(allPartList),cmap='Blues',\
+            extent=(meanCentreRev[0] - Lbox/2,\
+            meanCentreRev[0] + Lbox/2,\
+            meanCentreRev[1] - Lbox/2,meanCentreRev[1] + Lbox/2),\
+            norm=colors.LogNorm(vmin=vminFrac,vmax=vmaxFrac))
+        sm2 = cm.ScalarMappable(colors.LogNorm(vmin=vminFrac,vmax=vmaxFrac),\
+            cmap='Blues')
+        cbar = plt.colorbar(sm2, orientation="vertical",\
+            label='Particle fraction')
+    else:
+        plt.imshow(np.flipud(imList[ns])/np.mean(imProj),\
+            norm=colors.LogNorm(vmin=vmin,vmax=vmax),\
+            cmap='PuOr_r',extent=(meanCentreRev[0] - Lbox/2,\
+            meanCentreRev[0] + Lbox/2,\
+            meanCentreRev[1] - Lbox/2,meanCentreRev[1] + Lbox/2))
+        cbar = plt.colorbar(sm, orientation="vertical",\
+            label='$\\rho/\\bar{\\rho}$ (Projected)')
     # Alpha shape:
     if indList[ns] > -1:
         halo = hrList[ns][indList[ns]+1]
@@ -4661,6 +4710,9 @@ for ns in range(0,len(snapNumList)):
             linestyle='--',color='b',label='Virial radius\n$' + \
             ("%.2g" % Rvir) + \
             "\\mathrm{Mpc}^{-1}$")
+    #plt.scatter(snapListRev[ns]['pos'][snapSortListRev[ns][allPartList],0],\
+    #    snapListRev[ns]['pos'][snapSortListRev[ns][allPartList],1],\
+    #    label='Antihalo Particles',marker='.',color=seabornColormap[0])
     if showOtherHalos:
         # Find other halos in this range:
         inRangePos = \
@@ -4673,18 +4725,34 @@ for ns in range(0,len(snapNumList)):
         inRangeMass = (massListShort[ns] >= mLower) & \
             (massListShort[ns] < mUpper)
         ahIndices = np.array(centralAntihalos[ns][0])[sortedList[ns]]
+        antihaloParts = np.unique(np.hstack([np.intersect1d(allPartList,\
+            hrList[ns][otherAH+1]['iord']) \
+            for otherAH in ahIndices[inRangePos]]))
+        antihaloPartFrac = np.sum(partFracsList[\
+            np.isin(allPartList,antihaloParts)])/np.sum(partFracsList)
         antihalosToShow = inRangeMass & inRangePos# & \
         #    (ahIndices != finalCatOpt[nV,ns] - 1)
         allMasses = massListShort[ns][antihalosToShow]
         allPositions = hrcentresListShort[ns][antihalosToShow,:]
         allIndices = ahIndices[antihalosToShow]
+        #allShared = np.array([len(np.intersect1d(allPartList,\
+        #    hrList[ns][otherAH+1]['iord']))/len(allPartList) \
+        #    for otherAH in allIndices])
+        allShared = np.array([np.sum(partFracsList[np.isin(allPartList,\
+            hrList[ns][otherAH+1]['iord'])])/np.sum(partFracsList) \
+            for otherAH in allIndices])
         plt.scatter(hrcentresListShort[ns][antihalosToShow,0],\
             hrcentresListShort[ns][antihalosToShow,1],marker='x',color='k')
         for k in range(0,np.sum(antihalosToShow)):
-            plt.text(allPositions[k,0],allPositions[k,1],\
-                str(allIndices[k]) + \
-                ", \n$" + plot.scientificNotation(allMasses[k]) + \
-                "M_{\\odot}h^{-1}$")
+            textToShow = ""
+            if showIndex:
+                textToShow += str(allIndices[k]) + ", "
+            if showFrac:
+                textToShow += ("%.3g" % (allShared[k]*100))+ "%\n"
+            if showMass:
+                textToShow += "$" + plot.scientificNotation(allMasses[k]) + \
+                    "M_{\\odot}h^{-1}$"
+            plt.text(allPositions[k,0],allPositions[k,1],textToShow)
     plt.scatter(meanCentreRev[0],meanCentreRev[1],marker='x',color='r',\
         label='Mean Centre')
     plt.legend(frameon=False,loc="lower right")
@@ -4692,9 +4760,11 @@ for ns in range(0,len(snapNumList)):
     plt.ylabel('y ($\\mathrm{Mpc}h^{-1}$)')
     plt.xlim([meanCentreRev[0]- Lbox/2,meanCentreRev[0] + Lbox/2])
     plt.ylim([meanCentreRev[1] - Lbox/2,meanCentreRev[1] + Lbox/2])
-    plt.title('Sample ' + str(snapNumList[ns]))
-    cbar = plt.colorbar(sm, orientation="vertical",\
-        label='$\\rho/\\bar{\\rho}$ (Projected)')
+    titleText = 'Sample ' + str(snapNumList[ns])
+    if showOtherHalos:
+        titleText += " $(" +  ("%.3g" % (antihaloPartFrac * 100)) + \
+            "\%$ in anti-halos)"
+    plt.title(titleText)
     plt.savefig(figuresFolder + "reverse_frame_" + str(ns) + ".png")
     #plt.show()
 
