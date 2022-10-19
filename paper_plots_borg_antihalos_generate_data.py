@@ -685,7 +685,8 @@ def getAntihaloSkyPlotData(snapNumList,nToPlot=20,verbose=True,\
         snapnameRev = "gadget_full_reverse_512/snapshot_001",\
         reCentreSnaps = True,rCentre=135,figuresFolder='',\
         snapList = None,snapListRev = None,antihaloCatalogueList=None,\
-        snapsortList = None,ahProps = None,massRange = None,rRange = None):
+        snapsortList = None,ahProps = None,massRange = None,rRange = None,\
+        additionalFilters = None):
     # Load snapshots:
     if verbose:
         print("Loading snapshots...")
@@ -729,8 +730,13 @@ def getAntihaloSkyPlotData(snapNumList,nToPlot=20,verbose=True,\
         mRangeCond = [(antihaloMasses[k] > massRange[0]) & \
             (antihaloMasses[k] <= massRange[1]) \
             for k in range(0,len(snapNumList))]
+    filterCond = [rRangeCond[k] & mRangeCond[k] \
+        for k in range(0,len(snapNumList))]
+    if additionalFilters is not None:
+        filterCond = [filterCond[k] & additionalFilters[k] \
+            for k in range(0,len(snapNumList))]
     centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],\
-            rSphere,filterCondition = rRangeCond[k] & mRangeCond[k]) \
+            rSphere,filterCondition = filterCond[k]) \
             for k in range(0,len(snapNumList))]
     massSortCentral = [\
         np.flip(np.argsort(antihaloMasses[k][centralAntihalos[k][0]])) \
