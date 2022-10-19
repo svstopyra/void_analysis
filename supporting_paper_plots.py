@@ -19,6 +19,9 @@ from matplotlib import cm
 import matplotlib.colors as colors
 from matplotlib.ticker import NullFormatter
 
+import astropy.units as u
+from astropy.coordinates import SkyCoord
+
 figuresFolder = "borg-antihalos_paper_figures/"
 
 recomputeData = False
@@ -3012,6 +3015,32 @@ volSphere = 4*np.pi*rSphere**3/3
 combFracThresh = 0.1
 
 
+#massBins = [1e13,1e14,5e14,1e16]
+
+# As a function of mass bin:
+mUnit = 8*0.3111*2.7754e11*(677.7/512)**3
+mLower = 100*mUnit
+mUpper = 2e15
+
+massBins = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),7))
+
+#catFracThresholds = [0.6,0.6,0.411]
+
+catFracThresholds = [0.6, 0.6, 0.5, 0.3519999999999996, 0.2, 0.2]
+massFilter = [(massListMean > massBins[k]) & (massListMean <= massBins[k+1]) \
+    for k in range(0,len(massBins) - 1)]
+catFracFilter = [finalCatFracOpt > thresh for thresh in catFracThresholds]
+combinedFilter = np.zeros(massListMean.shape,dtype=bool)
+for k in range(0,len(catFracThresholds)):
+    combinedFilter = combinedFilter | (massFilter[k] & catFracFilter[k])
+
+
+
+
+massLow = 
+catFracFilter = () | ()
+
+
 massFunctionComparison(massListMean,\
     massListShort,volSphere,nBins=11,\
     labelLeft = "Combined anti-halo catalogue",\
@@ -3022,8 +3051,8 @@ massFunctionComparison(massListMean,\
     fontsize=10,massUpper = 2e15,\
     titleLeft = "Combined Catalogue",titleRight = "All catalogues average")
 
-massFunctionComparison(massListMean[catFracOpt > 0.5],\
-    massListShort,volSphere,nBins=11,\
+massFunctionComparison(massListMean[combinedFilter],\
+    massListShort,volSphere,nBins=7,\
     labelLeft = "Combined anti-halo catalogue",\
     labelRight="Average of " + str(len(snapNumList)) + " catalogues",\
     ylabel="Number of antihalos",savename=figuresFolder + \
@@ -4130,7 +4159,7 @@ snrList = np.array([np.mean(snrFieldLin[points]) for points in nearestPoints])
 
 # SNR distribution of voids:
 mBins = [1e13,1e14,5e14,1e16]
-rMaxInclude = 135
+rMaxInclude = 300
 lowDistance = np.sqrt(np.sum(meanCentreOpt**2,1)) < rMaxInclude
 [inMassBins,noInMassBins] = plot_utilities.binValues(massMeanOpt[lowDistance],\
     mBins)
@@ -4175,7 +4204,7 @@ plt.show()
 
 
 #snrBins = np.linspace(0,50,21)
-rMaxInclude = 135
+rMaxInclude = 300
 lowDistance = np.sqrt(np.sum(meanCentreOpt**2,1)) < rMaxInclude
 snrBins = 10**np.linspace(-1,2,11)
 snrBinCentres = plot_utilities.binCentres(snrBins)
@@ -4316,24 +4345,34 @@ sortedRadii = np.flip(np.argsort(radiiListMean))
 
 # To present this, we should plot the anti-halos that are matched:
 
-[alpha_shape_list_all,largeAntihalos_all,\
-        snapsortList_all] = tools.loadOrRecompute(figuresFolder + \
-            "skyplot_data_all.p",\
-            getAntihaloSkyPlotData,snapNumList,samplesFolder=samplesFolder,\
-            _recomputeData = recomputeData,recomputeData = recomputeData,\
-            nToPlot=200,snapList = snapList,snapListRev = snapListRev,\
-            antihaloCatalogueList = hrList,snapsortList = snapSortList,\
-            ahProps = ahProps,rCentre = rSphere,massRange = [mMin,mMax],\
-            rRange = [5,30])
-
-ns = 1
 snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" + \
         snapname) for snapNum in snapNumList]
 for snap in snapList:
     tools.remapBORGSimulation(snap,swapXZ=False,reverse=True)
 
 
+[alpha_shape_list_all,largeAntihalos_all,\
+        snapsortList_all] = tools.loadOrRecompute(figuresFolder + \
+            "skyplot_data_all.p",\
+            getAntihaloSkyPlotData,snapNumList,samplesFolder=samplesFolder,\
+            _recomputeData = recomputeData,recomputeData = recomputeData,\
+            nToPlot=1000,snapList = snapList,snapListRev = snapListRev,\
+            antihaloCatalogueList = hrList,snapsortList = snapSortList,\
+            ahProps = ahProps,rCentre = rSphere,massRange = [mMin,mMax],\
+            rRange = [5,30],reCentreSnaps = False)
 
+ns = 1
+
+
+clusterNames = np.array([['Perseus-Pisces (A426)'],
+       ['Hercules B (A2147)'],
+       ['Coma (A1656)'],
+       ['Norma (A3627)'],
+       ['Shapley (A3571)'],
+       ['A548'],
+       ['Hercules A (A2199)'],
+       ['Hercules C (A2063)'],
+       ['Leo (A1367)']], dtype='<U21')
 
 ns = 0
 snapToShow = pynbody.load(samplesFolder + "sample" + str(snapNumList[ns]) + \
@@ -4392,14 +4431,16 @@ catToUse = finalCatOpt
 #selection = np.arange(nVoidsToShow)
 #selection = sortedRadiiPyn[0:nVoidsToShow]
 #selection = sortedRadiiPyn[0:nVoidsToShow]
-selection = sortedRadiiOpt[:(nVoidsToShow)]
+lowRadius = np.where(distanceArray < 135)[0]
+selection = np.intersect1d(sortedRadiiOpt,lowRadius)[:(nVoidsToShow)]
 #selection = sortedRadii[np.where(finalCat[sortedRadii,1] == 32)[0]]
 asListAll = []
 colourListAll = []
 laListAll = []
 labelListAll = []
 
-for ns in range(0,len(snapNumList)):
+#for ns in range(0,len(snapNumList)):
+for ns in range(0,2):
     asList = []
     colourList = []
     laList = []
@@ -4418,7 +4459,8 @@ for ns in range(0,len(snapNumList)):
     labelListAll.append(labelList)
 
 
-for ns in range(0,len(snapNumList)):
+#for ns in range(0,len(snapNumList)):
+for ns in range(0,2):
     plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
         alpha_shapes = asListAll[ns],\
         largeAntihalos = laListAll[ns],hr=hrList[ns],\

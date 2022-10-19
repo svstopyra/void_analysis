@@ -43,8 +43,13 @@ def halo_centres_and_mass(h,save_file='none',haloFilter=None):
 
 # Gets halos in the reversed simulation (sr) and returns a list of their centres in the unreversed simulation.
 
-def computePeriodicCentreWeighted(positions,weight,periodicity,\
+def computePeriodicCentreWeighted(positions,weights=None,periodicity = None,\
         accelerate=False,unwrap=False):
+    if weights is None:
+        weights = np.ones(positions.shape[0])
+    if periodicity is None:
+        # In this case, we just use a regular weighted mean:
+        return np.sum(weights[:,None]*positions,0)/np.sum(weights)
     if np.isscalar(periodicity):
         period = (periodicity,periodicity,periodicity)
     else:
@@ -58,12 +63,12 @@ def computePeriodicCentreWeighted(positions,weight,periodicity,\
         theta[:,0] = (positions[:,0])*2.0*np.pi/period[0]
         theta[:,1] = (positions[:,1])*2.0*np.pi/period[1]
         theta[:,2] = (positions[:,2])*2.0*np.pi/period[2]
-        M = np.sum(weight)
+        M = np.sum(weights)
         xi = np.cos(theta)
         zeta = np.sin(theta)
         # Angular averages:
-        xibar = np.sum(weight[:,None]*xi,0)/M
-        zetabar = np.sum(weight[:,None]*zeta,0)/M
+        xibar = np.sum(weights[:,None]*xi,0)/M
+        zetabar = np.sum(weights[:,None]*zeta,0)/M
         # Back to theta:
         thetabar = np.arctan2(-zetabar,-xibar) + np.pi
         retVal = (period*thetabar/(2.0*np.pi))
@@ -74,10 +79,10 @@ def computePeriodicCentreWeighted(positions,weight,periodicity,\
             pos = positions[:,k]
             per = period[k]
             theta[:,k] = ne.evaluate("pos*2.0*PI/per")
-        M = ne.evaluate("sum(weight)")
+        M = ne.evaluate("sum(weights)")
         xi = ne.evaluate("cos(theta)")
         zeta = ne.evaluate("sin(theta)")
-        tempWeight = weight[:,None]
+        tempWeight = weights[:,None]
         # Angular averages:
         tempVar = ne.evaluate("sum(tempWeight*xi,0)")
         xibar = ne.evaluate("tempVar/M") # limitation of ne: reduction 

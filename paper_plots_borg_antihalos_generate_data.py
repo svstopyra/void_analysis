@@ -699,9 +699,6 @@ def getAntihaloSkyPlotData(snapNumList,nToPlot=20,verbose=True,\
         for snap in snapList:
             tools.remapBORGSimulation(snap,swapXZ=False,reverse=True)
             snap.recentred = True
-    else:
-        for snap in snaplist:
-            snap.recentred = False
     if verbose:
         print("Computing halo/antihalo centres...")
     boxsize = snapList[0].properties['boxsize'].ratio("Mpc a h**-1")
@@ -723,16 +720,17 @@ def getAntihaloSkyPlotData(snapNumList,nToPlot=20,verbose=True,\
         rRangeCond = [np.ones(len(antihaloRadii[k]),dtype=bool) \
             for k in range(0,len(snapNumList))]
     else:
-        rRangeCond = (antihaloRadii[k] > rMin) & \
-            (antihaloRadii[k] <= rMax)
-    if mRange is None:
+        rRangeCond = [(antihaloRadii[k] > rMin) & \
+            (antihaloRadii[k] <= rMax) for k in range(0,len(snapNumList))]
+    if massRange is None:
         mRangeCond = [np.ones(len(antihaloRadii[k]),dtype=bool) \
             for k in range(0,len(snapNumList))]
     else:
-        mRangeCond = (antihaloMasses[k] > massRange[0]) & \
-            (antihaloMasses[k] <= massRange[1])
+        mRangeCond = [(antihaloMasses[k] > massRange[0]) & \
+            (antihaloMasses[k] <= massRange[1]) \
+            for k in range(0,len(snapNumList))]
     centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],\
-            rSphere,filterCondition = rRangeCond & mRangeCond) \
+            rSphere,filterCondition = rRangeCond[k] & mRangeCond[k]) \
             for k in range(0,len(snapNumList))]
     massSortCentral = [\
         np.flip(np.argsort(antihaloMasses[k][centralAntihalos[k][0]])) \

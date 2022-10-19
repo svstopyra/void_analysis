@@ -41,6 +41,22 @@ def getAntiHalosInSphere(centres,radius,origin=np.array([0,0,0]),
             condition[inRadiusFinal[k],k] = True
     return [inRadiusFinal,condition]
 
+# Get the displacement of postions from centre, assuming periodicity:
+def getPeriodicDisplacement(positions,centre,boxsize=None):
+    if boxsize is None:
+        return positions - centre
+    else:
+        return snapedit.unwrap(positions - centre,boxsize)
+
+# Distance in a periodic box:
+def getPeriodicDistance(positions,centre,boxsize = None):
+    disp = getPeriodicDisplacement(positions,centre,boxsize=boxsize)
+    if len(positions.shape) < 2:
+        return np.sqrt(np.sum(disp**2))
+    else:
+        return np.sqrt(np.sum(disp**2,1))
+
+
 # Density contras in centres in a snapshot:
 def getCentredDensityConstrast(snap,centres,radius):
     tree = getKDTree(snap)
