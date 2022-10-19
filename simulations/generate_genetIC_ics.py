@@ -61,6 +61,10 @@ parser.add_argument("--seed_const",type=int,default=43940139,\
     help='Added to sample number to create predictable random seeds.')
 parser.add_argument("--sample",type=int,default=0,\
     help="Used to seed the seed generator for white noise.")
+parser.add_argument("--baseRes",type=int,default=256,\
+    help="Base Resolution before super-sampling")
+
+
 
 # Generate a transfer function file, if none exists:
 args = parser.parse_args()
@@ -73,15 +77,17 @@ if args.seed == 0:
     args.seed = np.random.randint(99999999)
 
 # Calculate super-sampling:
-if args.Nres != 256:
-    if (args.Nres > 256) and (args.Nres % 256 != 0):
-        raise Exception("Supersampled resolution must be a multiple of 256.")
-    elif (args.Nres < 256) and (256 ^ args.Nres != 0):
-        raise Exception("Subsampled resolution must be a factor of 256.")
-    if args.Nres > 256:
-        args.ssfactor = int(args.Nres/256)
+if args.Nres != args.baseRes:
+    if (args.Nres > args.baseRes) and (args.Nres % args.baseRes != 0):
+        raise Exception("Supersampled resolution must be a multiple of " + \
+            str(args.baseRes) + ".")
+    elif (args.Nres < args.baseRes) and (args.baseRes % args.Nres != 0):
+        raise Exception("Subsampled resolution must be a factor of " + \
+            str(args.baseRes) + ".")
+    if args.Nres > args.baseRes:
+        args.ssfactor = int(args.Nres/args.baseRes)
     else:
-        args.ssfactor = int(256/args.Nres)
+        args.ssfactor = int(args.baseRes/args.Nres)
 
 
 if args.transfer_file is None:
@@ -134,7 +140,7 @@ genetICParamFile += "outformat 2\n"
 
 # Grid size:
 genetICParamFile += "base_grid " + str(args.boxsize) + " " + \
-    "256" + "\n"
+    str(args.baseRes) + "\n"
 if args.wn_file is not None:
     # Check the wn file:
     fname, ext = os.path.splitext(args.wn_file)
@@ -158,9 +164,9 @@ else:
     print("WARNING: no white noise file. Generating random initial conditions.")
 
 if args.ssfactor != 1:
-    if args.Nres > 256:
+    if args.Nres > args.baseRes:
         genetICParamFile += "supersample " + str(args.ssfactor) + "\n"
-    elif args.Nres < 256:
+    elif args.Nres < args.baseRes:
         genetICParamFile += "subsample " + str(args.ssfactor) + "\n"
 
 

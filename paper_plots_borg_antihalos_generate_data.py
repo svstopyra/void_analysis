@@ -1033,8 +1033,9 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
         crossMatchThreshold = 0.5,distMax=20.0,sortMethod='ratio',\
         blockDuplicates=True,twoWayOnly = True,\
         snapList=None,snapListRev=None,ahProps=None,hrList=None,\
-        rMin = 5,rMax = 100,mode="fractional",massRange = None,\
-        snapSortList = None,overlapList = None,NWayMatch = False):
+        rMin = 5,rMax = 30,mode="fractional",massRange = None,\
+        snapSortList = None,overlapList = None,NWayMatch = False,\
+        additionalFilters = None):
     # Load snapshots:
     if verbose:
         print("Loading snapshots...")
@@ -1062,30 +1063,39 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
             for k in range(0,len(ahProps))]
     else:
         volumesList = [None for k in range(0,len(ahProps))]
-    if massRange is None:
-        centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],\
-            rSphere,filterCondition = (antihaloRadii[k] > rMin) & \
-            (antihaloRadii[k] <= rMax)) for k in range(0,len(snapNumList))]
-    else:
+    # Build up the filter for which anti-halos we include, first applying
+    # a radius cut:
+    filterCond = [(antihaloRadii[k] > rMin) & (antihaloRadii[k] <= rMax) \
+            for k in range(0,len(snapNumList))]
+    # Apply a mass cut if provided:
+    if massRange is not None:
         if len(massRange) < 2:
             raise Exception("Mass range must have an upper and a lower " + \
                 "limit.")
-        centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],\
-            rSphere,filterCondition = (antihaloRadii[k] > rMin) & \
-            (antihaloRadii[k] <= rMax) & (antihaloMasses[k] > massRange[0]) & \
-            (antihaloMasses[k] <= massRange[1])) \
-            for k in range(0,len(snapNumList))]
+        for k in range(0,len(snapNumList)):
+            filterCond[k] = filterCond[k] & \
+                (antihaloMasses[k] > massRange[0]) & \
+                (antihaloMasses[k] <= massRange[1])
+    # Apply and additional filters that have been provided:
+    if additionalFilters is not None:
+        for k in range(0,len(snapNumList)):
+            filterCond[k] = filterCond[k] & additionalFilters[k]
+    # Construct filtered anti-halo lists:
+    centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],\
+        rSphere,filterCondition = filterCond[k]) \
+        for k in range(0,len(snapNumList))]
     centralAntihaloMasses = [\
             antihaloMasses[k][centralAntihalos[k][0]] \
             for k in range(0,len(centralAntihalos))]
     ahCounts = np.array([len(cahs[0]) for cahs in centralAntihalos])
     if max_index is None:
         max_index = np.max(ahCounts)
-    # Construct constrained-only antihalo catalogues:
+    # Construct new antihalo catalogues from the filtered list:
     if verbose:
         print("Constructing constrained region catalogues...")
     if hrList is None:
         hrList = [snap.halos() for snap in snapListRev]
+    # Sort new catalogues in descending order of mass:
     sortedList = [np.flip(np.argsort(centralAntihaloMasses[k])) \
         for k in range(0,len(snapNumList))]
     if matchType == "pynbody" or sortMethod == "volumes":
@@ -1094,6 +1104,9 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
         hrListCentral = [None for halos in hrList]
     shortHaloList = []
     for l in range(0,len(snapNumList)):
+        # For the "volumes" sort method, we define a candidate to be
+        # the anti-halo with the greatest shared volume. This requires
+        # a list of Voronoi volumes.
         if matchType == "pynbody" or sortMethod == "volumes":
             hrListCentral[l]._halos = dict([(k+1,\
                 hrList[l][centralAntihalos[l][0][sortedList[l][k]]+1]) \
