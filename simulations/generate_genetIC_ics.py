@@ -105,8 +105,8 @@ if args.transfer_file is None:
     cosmo_par.h = args.hubble
     krange = np.exp(np.linspace(np.log(args.kmin),np.log(args.kmax),\
         args.ksteps))
-    #psBORGCalc = borg.cosmo.CosmoPower(cosmo_par).power(krange)
-    psBORGCalc = borg.cosmo.CosmoPower(cosmo_par,z=args.zin).power(krange)
+    psBORGCalc = borg.cosmo.CosmoPower(cosmo_par).power(krange)
+    #psBORGCalc = borg.cosmo.CosmoPower(cosmo_par,z=args.zin).power(krange)
     transferBORG = np.sqrt(psBORGCalc/(krange**args.ns))
     transferBORG /= transferBORG[0] # Normalise
     # Write to file:
@@ -149,7 +149,7 @@ if args.wn_file is not None:
         if os.path.dirname(args.wn_file) == '':
             wnFileName = "wn"
         else:
-            wnFileName = os.path.dirname(args.wn_file) + "/wn"
+            wnFileName = os.path.dirname(args.outname) + "/wn"
         mcmcFileToWhiteNoise(args.wn_file,wnFileName,\
             normalise = args.renormalise_noise,\
             fromInverseFourier=args.inverse_fourier,flip=args.flip,\
@@ -159,7 +159,7 @@ if args.wn_file is not None:
         wnFileName = args.wn_file
     else:
         raise Exception("Invalid White noise file.")
-    genetICParamFile += "import_noise 0 " + wnFileName + "\n"
+    genetICParamFile += "import_noise 0 " + os.path.basename(wnFileName) + "\n"
 else:
     print("WARNING: no white noise file. Generating random initial conditions.")
 

@@ -1,5 +1,6 @@
 # A collection of tools used for various aspects of the analysis.
 import scipy
+import scipy.spatial, scipy.stats, scipy.fft
 import numpy as np
 import numexpr as ne
 import alphashape

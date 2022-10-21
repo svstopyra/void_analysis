@@ -683,10 +683,10 @@ def getAntihaloSkyPlotData(snapNumList,nToPlot=20,verbose=True,\
         snapRevFolder = "gadget_full_reverse_512",\
         snapname = "gadget_full_forward_512/snapshot_001",\
         snapnameRev = "gadget_full_reverse_512/snapshot_001",\
-        reCentreSnaps = True,rCentre=135,figuresFolder='',\
+        reCentreSnaps = True,figuresFolder='',\
         snapList = None,snapListRev = None,antihaloCatalogueList=None,\
         snapsortList = None,ahProps = None,massRange = None,rRange = None,\
-        additionalFilters = None):
+        additionalFilters = None,rSphere=135):
     # Load snapshots:
     if verbose:
         print("Loading snapshots...")
@@ -715,14 +715,12 @@ def getAntihaloSkyPlotData(snapNumList,nToPlot=20,verbose=True,\
     if snapsortList is None:
         snapsortList = [np.argsort(snap['iord']) \
             for snap in snapList]
-    #centralAntihalos = [tools.getAntiHalosInSphere(hcentres,rCentre) \
-    #    for hcentres in antihaloCentres]
     if rRange is None:
         rRangeCond = [np.ones(len(antihaloRadii[k]),dtype=bool) \
             for k in range(0,len(snapNumList))]
     else:
-        rRangeCond = [(antihaloRadii[k] > rMin) & \
-            (antihaloRadii[k] <= rMax) for k in range(0,len(snapNumList))]
+        rRangeCond = [(antihaloRadii[k] > rRange[0]) & \
+            (antihaloRadii[k] <= rRange[1]) for k in range(0,len(snapNumList))]
     if massRange is None:
         mRangeCond = [np.ones(len(antihaloRadii[k]),dtype=bool) \
             for k in range(0,len(snapNumList))]
