@@ -4240,12 +4240,13 @@ plt.legend()
 plt.show()
 
 
-centralPortion = tree.query_ball_point(np.array([0]*3),135)
+centralPortion = tree.query_ball_point(np.array([0]*3),300)
 
 # Relationship between density and snr:
 hist = plt.hist2d(1.0 + mean_fieldLin[centralPortion],\
-    snrFieldLin[centralPortion],\
-    bins = [10**np.linspace(-1,1,21),10**(np.linspace(-2,4,21))],cmap='Blues')
+    snrFieldLin[centralPortion],density=True,\
+    bins = [10**np.linspace(-1,1,21),10**(np.linspace(-2,2,21))],cmap='Blues',\
+    norm=colors.LogNorm(vmin=0.01,vmax=20))
 #plt.imshow(hist[0],extent = (-1,1,1e-2,1e4),aspect='auto')
 plt.yscale('log')
 plt.xscale('log')

@@ -594,8 +594,8 @@ def plotMollweide(radius,snap,galaxyAngles=None,galaxyDistances=None,
 	if showGalaxies:
 		mollweideScatter(pointsToScatter,ax=ax)
 	if title is None:
-		plt.title("Spherical slice, $R = " + str(radius) + \
-			"\\mathrm{\\,Mpc}h^{-1}$, Thickness=$" + str(thickness) + \
+		plt.title("Spherical slice, $R = " + ("%.2g" % radius) + \
+			"\\mathrm{\\,Mpc}h^{-1}$, Thickness=$" + ("%.2g" % thickness) + \
 			"\\mathrm{\\,Mpc}h^{-1}$",
 			fontfamily=fontname,fontsize=titleFontSize)
 	else:
@@ -611,7 +611,7 @@ def mollweideScatter(angles,color='r',s=1,marker='.',angleCoord="ra_dec",
 		angleUnit="deg",text=None,
 		fontname='serif',fontsize=7,horizontalalignment='left',
 		verticalalignment='bottom',ax=None,textPos=None,textcoords='data',
-		arrowprops=None,arrowpad = 0,textColour='k'):
+		arrowprops=None,arrowpad = 0,textColour='k',label=None):
 	MW = healpy.projector.MollweideProj()
 	if ax is None:
 		fig, ax = plt.subplots()
@@ -631,9 +631,10 @@ def mollweideScatter(angles,color='r',s=1,marker='.',angleCoord="ra_dec",
 		raise Exception("Unrecognised angular coordinate " + \
 			"system (options = {'ra_dec','spherical'}).")
 	if marker == 'c':
-		ax.scatter(sgMW[0],sgMW[1],marker='o',s=s,edgecolors=color,facecolors=None)
+		ax.scatter(sgMW[0],sgMW[1],marker='o',s=s,edgecolors=color,\
+			facecolors=None,label=label)
 	else:
-		ax.scatter(sgMW[0],sgMW[1],marker=marker,s=s,color=color)
+		ax.scatter(sgMW[0],sgMW[1],marker=marker,s=s,color=color,label=label)
 	if text is not None:
 		if np.isscalar(sgMW[0]):
 			lensgMW = 1

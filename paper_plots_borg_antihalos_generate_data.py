@@ -1332,32 +1332,59 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
                     if NWayMatch:
                         # Track down all possible matches that are connected
                         # to this one:
-                        allCands = [[] for k in range(0,len(snapNumList))]
+                        allCands = [[] for m in range(0,len(snapNumList))]
                         lengthsList = np.zeros(len(snapNumList),dtype=int)
                         for m in range(0,len(snapNumList)):
-                            if matrixFull[l][k] > -1:
-                                allCands[k].append(matrixFull[l][k]-1)
+                            twoWayCand = matrixFull[l][m]
+                            haveMatch = twoWayCand > -1
+                            alreadyIncluded = alreadyMatched[m][twoWayCand - 1]
+                            if haveMatch and (not alreadyIncluded):
+                                allCands[m].append(twoWayCand-1)
                         lengthsListNew = np.array(\
                             [len(cand) for cand in allCands],dtype=int)
+                        # Keep iterating until we stop finding new matches:
                         while not np.all(lengthsListNew == lengthsList):
                             lengthsList = lengthsListNew
+                            # Loop over all catalogues:
                             for n in range(0,len(snapNumList)):
                                 if len(allCands[n]) > 0:
+                                    # If we have candidates, follow their 
+                                    # 2-way matches to the other catalogues.
+                                    # Loop over all other catalogues, d, and 
+                                    # the candidate anti-halos in catalogue n:
                                     for d in diffMap[n]:
                                         for m in range(0,len(allCands[n])):
-                                            if len(allCandidates[n][d][\
-                                                    allCands[n][m]]) > 0:
-                                                if not np.isin(\
-                                                        allCandidates[n][d][\
-                                                        allCands[n][m]][0],\
-                                                        allCands[d]) and \
-                                                        not alreadyMatched[n,\
-                                                        allCandidates[n][d]\
-                                                            [allCands[n]\
-                                                            [m]][0]]:
-                                                    allCands[d].append(\
-                                                        allCandidates[n][d][\
-                                                        allCands[n][m]][0])
+                                            # For each antihalo in catalogue n, 
+                                            # get the candidates in catalogue d
+                                            # to which it has two-way matches:
+                                            otherCatCandidates = \
+                                                allCandidates[n][d][\
+                                                allCands[n][m]]
+                                            if len(otherCatCandidates) > 0:
+                                                # The first candidate is the
+                                                # two way match:
+                                                bestCand = otherCatCandidates[0]
+                                                # Add this iff we haven't
+                                                # already found it, and it
+                                                # hasn't already been marked
+                                                # as belonging to another
+                                                # void:
+                                                inOtherList = np.isin(\
+                                                        bestCand,allCands[d])
+                                                #if inOtherList:
+                                                #    print("Found " + \
+                                                #        str(bestCand) + " in " + \
+                                                #        "catalogue " + str(d))
+                                                #    print(allCands[d])
+                                                alreadyIncluded = \
+                                                    alreadyMatched[d,bestCand]
+                                                #if alreadyIncluded:
+                                                #    print("Already matched void " + \
+                                                #        str(bestCand) + " in catalogue " + \
+                                                #        str(n))
+                                                if (not inOtherList) and \
+                                                        (not alreadyIncluded):
+                                                    allCands[d].append(bestCand)
                             lengthsListNew = np.array([len(cand) \
                                 for cand in allCands],dtype=int)
                         # Count two way matches:
@@ -1400,7 +1427,7 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
                         numberOfLinks = 0
                         for m in range(0,len(snapNumList)):
                             if len(allCands[m]) == 1:
-                                bestCandidates[m] = allCands[m][0]
+                                bestCandidates[m] = allCands[m][0] + 1
                                 bestRatios[m] = ratioAverages[m][0]
                                 bestDistances[m] = distAverages[m][0]
                                 numberOfLinks += twoWayMatchesAllCands[m][0]
@@ -1415,7 +1442,7 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
                                     haveMaxRat = np.where(\
                                         np.array(ratioAverages[m]) == maxRat)[0]
                                     bestCandidates[m] = allCands[m][\
-                                        haveMaxRat[0]]
+                                        haveMaxRat[0]] + 1
                                     bestRatios[m] = ratioAverages[m][\
                                         haveMaxRat[0]]
                                     bestDistances[m] = distAverages[m][\
@@ -1424,7 +1451,7 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
                                         haveMaxRat[0]]
                                 else:
                                     bestCandidates[m] = allCands[m][\
-                                        haveMaxTW[0]]
+                                        haveMaxTW[0]] + 1
                                     bestRatios[m] = ratioAverages[m][\
                                         haveMaxTW[0]]
                                     bestDistances[m] = distAverages[m][\
@@ -1434,7 +1461,7 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
                             # If no candidates, just leave it as -1
                         # Now we mark the other voids as already included:
                         for m in range(0,len(snapNumList)):
-                            alreadyMatched[m,bestCandidates[m]] = True
+                            alreadyMatched[m,bestCandidates[m] - 1] = True
                         finalCat.append(bestCandidates)
                         finalCandidates.append(candm)
                         finalRatios.append(bestRatios)
@@ -1464,7 +1491,7 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
     return [np.array(finalCat),shortHaloList,np.array(twoWayMatchLists),\
         finalCandidates,finalRatios,finalDistances,allCandidates,\
         candidateCounts,allRatios,np.array(finalCombinatoricFrac),\
-        np.array(finalCatFrac)]
+        np.array(finalCatFrac),alreadyMatched]
 
 def getMatchRatios(matchList,quantityList):
     ratioArray = np.zeros(matchList.shape)
