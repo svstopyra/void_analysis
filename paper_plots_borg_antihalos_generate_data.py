@@ -226,6 +226,112 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
     return [galaxyNumberCountExp,galaxyNumberCountsRobust]
 
 
+def getPPTForPoints(points,nBins = 31,nClust=9,nMagBins = 16,N=256,\
+        restartFile = 'new_chain_restart/merged_restart.h5',\
+        snapNumList = [7000, 7200, 7400],samplesFolder = 'new_chain/',\
+        surveyMaskPath = "./2mpp_data/",\
+        Om0 = 0.3111,Ode0 = 0.6889,boxsize = 677.7,h=0.6766,Mstarh = -23.28,\
+        mmin = 0.0,mmax = 12.5,recomputeData = False,rBinMin = 0.1,\
+        rBinMax = 20,abell_nums = [426,2147,1656,3627,3571,548,2197,2063,1367],\
+        nside = 4,nRadialSlices=10,rmax=600,tmppFile = "2mpp_data/2MPP.txt",\
+        reductions = 4,iterations = 20,verbose=True,hpIndices=None,\
+        centreMethod="density",catFolder="",\
+        snapname="/gadget_full_forward_512/snapshot_001"):
+    # Get tree of density voxel positions:
+    grid = snapedit.gridListPermutation(N,perm=(2,1,0))
+    centroids = grid*boxsize/N + boxsize/(2*N)
+    positions = snapedit.unwrap(centroids - np.array([boxsize/2]*3),boxsize)
+    tree = scipy.spatial.cKDTree(snapedit.wrap(positions + boxsize/2,boxsize),\
+        boxsize=boxsize)
+    # Cosmology:
+    cosmo = astropy.cosmology.LambdaCDM(100*h,Om0,Ode0)
+    nsamples = len(snapNumList)
+    # Heapix indices:
+    if hpIndices is None:
+        restart = h5py.File(restartFile)
+        hpIndices = restart['scalars']['colormap3d'][()]
+    hpIndicesLinear = hpIndices.reshape(N**3)
+    # Get bias data:
+    biasData = [h5py.File(samplesFolder + "/sample" + str(k) + "/mcmc_" + \
+        str(k) + ".h5",'r') for k in snapNumList]
+    mcmcDen = [1.0 + sample['scalars']['BORG_final_density'][()] \
+        for sample in biasData]
+    if N < mcmcDen[0].shape[0]:
+        print("Warning!!: requested resolution is lower than " + 
+        "the MCMC file. Density field will be downgraded.")
+        mcmcDen = [tools.downsample(den,int(den.shape[0]/N)) \
+            for den in mcmcDen]
+    elif N > mcmcDen[0].shape[0]:
+        print("Warning!!: requested resolution is higher than " + 
+        "the MCMC file. Density field will be interpolated.")
+        mcmcDen = [scipy.ndimage.zoom(den,N/den.shape[0]) \
+            for den in mcmcDen]
+    mcmcDenLin = [np.reshape(den,N**3) for den in mcmcDen]
+    mcmcDen_r = [np.reshape(den,(N,N,N),order='F') for den in mcmcDenLin]
+    mcmcDenLin_r = [np.reshape(den,N**3) for den in mcmcDen_r]
+    biasParam = [np.array([[sample['scalars']['galaxy_bias_' + str(k)][()] \
+        for k in range(0,nMagBins)]]) for sample in  biasData]
+    # Survey mask:
+    surveyMask11 = healpy.read_map(surveyMaskPath + "completeness_11_5.fits")
+    surveyMask12 = healpy.read_map(surveyMaskPath + "completeness_12_5.fits")
+    [mask,angularMask,radialMas,mask12,mask11] = tools.loadOrRecompute(\
+        "surveyMask.p",surveyMask,\
+        positions,surveyMask11,surveyMask12,cosmo,-0.94,\
+        Mstarh,keCorr = keCorr,mmin=mmin,numericalIntegration=True,\
+        mmax=mmax,splitApparent=True,splitAbsolute=True,returnComponents=True,\
+        _recomputeData=recomputeData)
+    # Get the posterior galaxy counts:
+    ngMCMC = np.vstack([tools.loadOrRecompute(samplesFolder + "sample" + \
+            str(snapNumList[k]) + "/ngMCMC.p",ngPerLBin,\
+            biasParam,return_samples=True,mask=mask,\
+            accelerate=True,N=N,\
+            delta = [mcmcDenLin_r[k]],contrast=False,sampleList=[0],\
+            beta=biasParam[k][:,:,1],rhog = biasParam[k][:,:,3],\
+            epsg=biasParam[k][:,:,2],\
+            nmean=biasParam[k][:,:,0],biasModel = biasNew,\
+            _recomputeData = recomputeData) \
+            for k in range(0,nsamples)])
+    ngHPMCMC = tools.loadOrRecompute("ngHPMCMC.p",getAllNgsToHealpix,ngMCMC,\
+        hpIndices,snapNumList,samplesFolder,nside,nres=N,\
+        _recomputeData=recomputeData)
+    # Compute counts in each healpix pixel for 2M++ survey:
+    ng2MPP = np.reshape(tools.loadOrRecompute("mg2mppK3.p",\
+        survey.griddedGalCountFromCatalogue,\
+        cosmo,tmppFile=tmppFile,Kcorrection = True,N=N,\
+        _recomputeData=recomputeData),(nMagBins,N**3))
+    ngHP = tools.loadOrRecompute("ngHP3.p",tools.getCountsInHealpixSlices,\
+        ng2MPP,hpIndices,nside=nside,nres=N,_recomputeData=recomputeData)
+    # Aalpha:
+    npixels = 12*(nside**2)
+    Aalpha = np.zeros((nsamples,nMagBins,npixels*nRadialSlices))
+    for k in range(0,nsamples):
+        nz = np.where(ngHPMCMC[k] != 0.0)
+        Aalpha[k][nz] = ngHP[nz]/ngHPMCMC[k][nz]
+    # Perform the PPT:
+    galaxyCountExp = np.zeros((nBins,nClust,nMagBins))
+    galaxyCountsRobustAll = np.zeros((nBins,nClust,nsamples,nMagBins))
+    rBins = np.linspace(rBinMin,rBinMax,nBins+1)
+    wrappedPos = snapedit.wrap(points + boxsize/2,boxsize)
+    for k in range(0,nBins):
+        indices = tree.query_ball_point(wrappedPos,rBins[k+1])
+        if np.any(np.array(indices,dtype=bool)):
+            for l in range(0,nClust):
+                for m in range(0,nMagBins):
+                    galaxyCountExp[k,l,m] = np.sum(ng2MPP[m][indices[l]])/\
+                        (4*np.pi*rBins[k+1]**3/3)
+                    for n in range(0,nsamples):
+                        galaxyCountsRobustAll[k,l,n,m] += np.sum(\
+                            Aalpha[n,m,hpIndicesLinear[indices[l]]]*\
+                            ngMCMC[n,m][indices[l]])/\
+                            (4*np.pi*rBins[k+1]**3/3)
+    galaxyCountsRobust = np.mean(galaxyCountsRobustAll,2)
+    # Convert density to galaxy counts:
+    galaxyNumberCountsRobust = (4*np.pi*rBins[1:,None,None]**3/3)*\
+        galaxyCountsRobust
+    galaxyNumberCountExp = np.array((4*np.pi*rBins[1:,None,None]**3/3)*\
+        galaxyCountExp,dtype=int)
+    return [galaxyNumberCountExp,galaxyNumberCountsRobust]
+
 def getHMFAMFDataFromSnapshots(snapNumList,snapname,snapnameRev,samplesFolder,\
         fileSuffix = '',recomputeData = False,reCentreSnap=True,rSphere=135,\
         Om0 = 0.3111,boxsize=677.7,verbose=True,recomputeCentres=False):
@@ -556,8 +662,9 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
         reCentreSnaps = False,N=512,boxsize=677.7,mMin = 1e14,mMax = 1e15,\
         rMin=5,rMax=25,verbose=True,combineSims=False,\
         method="poisson",errorType = "Weighted",\
-        unconstrainedCentreList = np.array([[0,0,0]]),\
-        additionalConditions = None):
+        unconstrainedCentreList = np.array([[0,0,0]]),rSphere=135,\
+        additionalConditions = None,densityRange=None,numDenSamples = 1000,\
+        randomSeed = 1000):
     # Load snapshots:
     if verbose:
         print("Loading snapshots...")
@@ -593,7 +700,7 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
     volumesList = [props[10] for props in ahPropsConstrained]
     rBins = ahPropsConstrained[0][8]
     rBinStackCentres = plot.binCentres(rBins)
-    centralAntihalosCon = [tools.getAntiHalosInSphere(hcentres,135) \
+    centralAntihalosCon = [tools.getAntiHalosInSphere(hcentres,rSphere) \
         for hcentres in ahCentresListRemap]
     # Unconstrained antihalo properties:
     ahCentresListUn = [props[5] \
@@ -606,8 +713,34 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
     deltaMeanListUn = [props[12] for props in ahPropsUnconstrained]
     pairCountsListUn = [props[9] for props in ahPropsUnconstrained]
     volumesListUn = [props[10] for props in ahPropsUnconstrained]
-    centralAntihalosUn = [[tools.getAntiHalosInSphere(hcentres,135,\
-        origin=centre) for centre in unconstrainedCentreList] \
+    # Density sampling, if specified:
+    if densityRange is None:
+        centreListUn = unconstrainedCentreList
+    else:
+        # Sample densities in each sphere to get densities in a particular
+        # range:
+        np.random.seed(randomSeed)
+        if len(densityRange) != 2:
+            raise Exception("Invalid densityRange")
+        sampleCentres = np.random.random((numDenSamples,3))*boxsize
+        unconstrainedTrees = [tools.getKDTree(snap) \
+            for snap in snapListUnconstrained]
+        Om = snapListUnconstrained[0].properties['omegaM0']
+        rhoM = 2.7754e11*Om
+        mUnit = rhoM*(boxsize/N)**3
+        densitiesInCentres = [mUnit*tree.query_ball_point(sampleCentres,\
+            rSearch,return_length=True,workers=-1)/\
+            (4*np.pi*rhoM*rSearch**3/3) - 1.0 \
+            for tree in unconstrainedTrees]
+        centreListUn = [sampleCentres[(den > densityRange[0]) & \
+            (den <= densityRange[1]),:] for den in densitiesInCentres]
+        lengths = np.array([len(cen) for cen in centreListUn])
+        if np.any(lengths < 1):
+            print(lengths)
+            raise Exception("Did not find random centres with appropriate " + \
+                "density. Expand density range, or increase number of samples.")
+    centralAntihalosUn = [[tools.getAntiHalosInSphere(hcentres,rSphere,\
+        origin=centre) for centre in centreListUn] \
         for hcentres in ahCentresListRemapUn]
     if additionalConditions is None:
         additionalConditions = [np.ones(len(centres),dtype=bool) \
@@ -659,7 +792,7 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
         volumesList,snapList,nbar,rBins,rMin,rMax,mMin,mMax)
     # Profiles in selected unconstrained regions:
     indStack = []
-    for l in range(0,len(unconstrainedCentreList)):
+    for l in range(0,len(centreListUn)):
         condition = [conditionListMrangeUn[k][l] \
             for k in range(0,len(snapNumListUncon))]
         indStack.append(stacking.computeMeanStacks(\

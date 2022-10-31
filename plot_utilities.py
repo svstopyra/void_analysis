@@ -1,10 +1,10 @@
 # This holds code used by plot that doesn't need to integrate with any graphical backends.
 # This avoids having to load those backends on systems (such as clusters) that might not support them
-import numpy as np
 from . import context, snapedit, tools
 import healpy
 import pynbody
 import numpy as np
+from scipy import stats
 # Returns the centres of the bins, specified from their boundaries. Has one fewer elements.
 def binCentres(bins):
     return (bins[1:len(bins)] + bins[0:(len(bins)-1)])/2
@@ -23,6 +23,17 @@ def binValues(values,bins):
         binList.append(inThisBin)
         noInBins[k] = len(inThisBin)		
     return [binList,noInBins]
+
+# Bernouli binning - get an uncertainty based on measurement uncertainties of 
+# the values being binned:
+def bernoulliBin(values,sigma,binEdges):
+    pki = np.zeros((len(values),len(binEdges)-1))
+    for k in range(0,len(values)):
+        pki[k,:] = stats.norm.cdf(binEdges[1:],loc=values[k],scale=sigma[k]) - \
+            stats.norm.cdf(binEdges[0:-1],loc=values[k],scale=sigma[k])
+    noInBins = np.sum(pki,0)
+    sigmaBins = np.sqrt(np.sum(pki*(1.0 - pki),0))
+    return [noInBins,sigmaBins]
 
 def binValues2d(values,bins):
     binList = []
