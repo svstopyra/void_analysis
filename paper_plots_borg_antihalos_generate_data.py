@@ -236,7 +236,8 @@ def getPPTForPoints(points,nBins = 31,nClust=9,nMagBins = 16,N=256,\
         nside = 4,nRadialSlices=10,rmax=600,tmppFile = "2mpp_data/2MPP.txt",\
         reductions = 4,iterations = 20,verbose=True,hpIndices=None,\
         centreMethod="density",catFolder="",\
-        snapname="/gadget_full_forward_512/snapshot_001"):
+        snapname="/gadget_full_forward_512/snapshot_001",\
+        returnAll=False):
     # Get tree of density voxel positions:
     grid = snapedit.gridListPermutation(N,perm=(2,1,0))
     centroids = grid*boxsize/N + boxsize/(2*N)
@@ -330,7 +331,13 @@ def getPPTForPoints(points,nBins = 31,nClust=9,nMagBins = 16,N=256,\
         galaxyCountsRobust
     galaxyNumberCountExp = np.array((4*np.pi*rBins[1:,None,None]**3/3)*\
         galaxyCountExp,dtype=int)
-    return [galaxyNumberCountExp,galaxyNumberCountsRobust]
+    if not returnAll:
+        return [galaxyNumberCountExp,galaxyNumberCountsRobust]
+    else:
+        galaxyNumberCountsAllRobust = (4*np.pi*rBins[1:,None,None,None]**3/3)*\
+            galaxyCountsRobustAll
+        return [galaxyNumberCountExp,galaxyNumberCountsRobust,\
+            galaxyNumberCountsAllRobust]
 
 def getHMFAMFDataFromSnapshots(snapNumList,snapname,snapnameRev,samplesFolder,\
         fileSuffix = '',recomputeData = False,reCentreSnap=True,rSphere=135,\
