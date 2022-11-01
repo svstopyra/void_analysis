@@ -736,8 +736,8 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
         rhoM = 2.7754e11*Om
         mUnit = rhoM*(boxsize/N)**3
         densitiesInCentres = [mUnit*tree.query_ball_point(sampleCentres,\
-            rSearch,return_length=True,workers=-1)/\
-            (4*np.pi*rhoM*rSearch**3/3) - 1.0 \
+            rSphere,return_length=True,workers=-1)/\
+            (4*np.pi*rhoM*rSphere**3/3) - 1.0 \
             for tree in unconstrainedTrees]
         centreListUn = [sampleCentres[(den > densityRange[0]) & \
             (den <= densityRange[1]),:] for den in densitiesInCentres]
