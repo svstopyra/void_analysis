@@ -1899,8 +1899,8 @@ def computeAndPlotPPTProfile(ax,expectedLine,realisedLine,rBins,rescale=False,\
     return [h1,h2,h3]
 
 # Adjusts the formatting of a grid of plots:
-def formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim,\
-        fontsize=8,fontfamily='serif',nCols = 3):
+def formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim=None,\
+        fontsize=8,fontfamily='serif',nCols = 3,xlim=None):
     if nRows < 2:
         if nCols > 1:
             axij = ax[j]
@@ -1927,6 +1927,7 @@ def formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim,\
         if (j == xlabelCol) and (i == nRows-1):
             axij.set_xlabel(xlabel,fontsize=fontsize,fontfamily=fontfamily)
     axij.set_ylim(ylim)
+    axij.set_xlim(xlim)
 
 
 # Plot the Posterior Predictive Test for a set of clusters. That is, we compare
