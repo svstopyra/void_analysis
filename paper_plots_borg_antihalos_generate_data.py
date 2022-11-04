@@ -672,7 +672,8 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
         unconstrainedCentreList = np.array([[0,0,0]]),rSphere=135,\
         additionalConditions = None,densityRange=None,numDenSamples = 1000,\
         randomSeed = 1000,redoPairCounts = False,\
-        rEffMax=3.0,rEffMin=0.0,nBins=31):
+        rEffMax=3.0,rEffMin=0.0,nBins=31,pairCountsListUn=None,\
+        volumesListUn=None,pairCountsList=None,volumesList=None):
     # Load snapshots:
     if verbose:
         print("Loading snapshots...")
@@ -718,10 +719,14 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
     deltaCentralListUn = [props[11] for props in ahPropsUnconstrained]
     deltaMeanListUn = [props[12] for props in ahPropsUnconstrained]
     if not redoPairCounts:
-        pairCountsListUn = [props[9] for props in ahPropsUnconstrained]
-        volumesListUn = [props[10] for props in ahPropsUnconstrained]
-        pairCountsList = [props[9] for props in ahPropsConstrained]
-        volumesList = [props[10] for props in ahPropsConstrained]
+        if pairCountsListUn is None:
+            pairCountsListUn = [props[9] for props in ahPropsUnconstrained]
+        if volumesListUn is None:
+            volumesListUn = [props[10] for props in ahPropsUnconstrained]
+        if pairCountsList is None:
+            pairCountsList = [props[9] for props in ahPropsConstrained]
+        if volumesList is None:
+            volumesList = [props[10] for props in ahPropsConstrained]
     else:
         # Recompute the profiles about each anti-halo from scratch:
         rBinStack = np.linspace(rEffMin,rEffMax,nBins)
