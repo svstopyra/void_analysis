@@ -8,6 +8,7 @@ from scipy.optimize import curve_fit
 thread_count = mp.cpu_count()
 import scipy.integrate as integrate
 from scipy.stats import kstest
+import gc
 
 # Weighted mean of a variable:
 def weightedMean(xi,wi,biasFactor = 0,axis=None):
@@ -83,9 +84,13 @@ def getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree=No
 	if (vorVolumes is None) and (method == "VTFE"):
 			raise Exception("Must provide voronoi volumes for VTFE.")
 	# Generate KDTree
-	boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+	if type(snap) == str:
+		snapLoaded = pynbody.load(snap)
+	else:
+		snapLoaded = snap
+	boxsize = snapLoaded.properties['boxsize'].ratio("Mpc a h**-1")
 	if tree is None:
-		tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
+		tree = scipy.spatial.cKDTree(snapLoaded['pos'],boxsize=boxsize)
 	# Volumes of the rBins
 	rBinsUp = rBins[1:]
 	rBinsLow = rBins[0:-1]
@@ -103,7 +108,7 @@ def getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree=No
 		# Volume weighted density in each shell:
 		for k in range(0,len(voidRadii)):
 			indicesList = np.array(tree.query_ball_point(voidCentres[k,:],rBins[-1]*voidRadii[k],workers=nThreads),dtype=np.int32)
-			disp = snap['pos'][indicesList,:] - voidCentres[k,:]
+			disp = snapLoaded['pos'][indicesList,:] - voidCentres[k,:]
 			r = np.array(np.sqrt(np.sum(disp**2,1)))
 			sort = np.argsort(r)
 			indicesSorted = indicesList[sort]
@@ -130,7 +135,7 @@ def getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree=No
 		#		volumesList[:,k] = volSum - volumesList[:,k-1]
 		for k in range(0,len(voidRadii)):
 			indicesList = np.array(tree.query_ball_point(voidCentres[k,:],rBins[-1]*voidRadii[k],workers=nThreads),dtype=np.int32)
-			disp = snap['pos'][indicesList,:] - voidCentres[k,:]
+			disp = snapLoaded['pos'][indicesList,:] - voidCentres[k,:]
 			r = np.array(np.sqrt(np.sum(disp**2,1)))
 			sort = np.argsort(r)
 			indicesSorted = indicesList[sort]
@@ -138,7 +143,8 @@ def getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree=No
 			print("Doing void " + str(k) + " of " + str(len(voidRadii)))
 			nPairsList[k,:] = np.diff(boundaries)
 			volumesCumulative = np.cumsum(vorVolumes[indicesSorted])
-			volumesList[k,:] = volumesCumulative[boundaries[1:]]			
+			volumesList[k,:] = volumesCumulative[boundaries[1:]]
+	gc.collect()
 	return [nPairsList,volumesList]
 
 def getRadialVelocityAverages(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,tree=None,method="poisson",vorVolumes=None):
@@ -260,7 +266,7 @@ def stackVoidsWithFilter(voidCentres,voidRadii,filterToApply,snap,rBins=None,nPa
 	if rBins is None:
 		rBins = np.linspace(0,3,31)
 	if (nPairsList is None) or (volumesList is None):
-		[nPairsList,volumesList] = getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=nThreads,tree=tree,method=method,vorVolumes=vorVolumes)
+		[nPairsList,volumesList] = getPairCounts(voidCentres[filterToApply,:],voidRadii[filterToApply],snap,rBins,nThreads=nThreads,tree=tree,method=method,vorVolumes=vorVolumes[filterToApply])
 	return stackScaledVoids(voidCentres[filterToApply,:],voidRadii[filterToApply],snap,rBins,nThreads=nThreads,tree=tree,method=method,nPairsList=nPairsList[filterToApply,:],volumesList=volumesList[filterToApply,:],errorType=errorType)
 		
 # Apply a filter to a stack of voids before summing their velocities.
@@ -462,28 +468,32 @@ def testNormAcrossBins(rho,arguments="fit"):
 	return pvals
 	
 # Compute mean stacks for a set of snapshots:
-def computeMeanStacks(centresList,radiiList,massesList,conditionList,pairsList,volumesList,
-		snapList,nbar,rBins,rMin,rMax,mMin,mMax,
+def computeMeanStacks(centresList,radiiList,massesList,conditionList,\
+		pairsList,volumesList,\
+		snapList,nbar,rBins,rMin,rMax,mMin,mMax,\
 		method="poisson",errorType = "Weighted",toInclude = "all"):
 	if toInclude == "all":
 		toInclude = range(0,len(centresList))
 	nToStack = len(toInclude)
 	nbarjStack = np.zeros((nToStack,len(rBins) - 1))
 	sigmaStack = np.zeros((nToStack,len(rBins) - 1))
+	if conditionList is None:
+		conditionList = [np.ones(len(centres),dtype=bool) \
+			for centres in centresList]
 	for k in range(0,nToStack):
 		[nbarj,sigma] = stackVoidsWithFilter(
 			centresList[toInclude[k]],radiiList[toInclude[k]],
 			np.where((radiiList[toInclude[k]] > rMin) & \
 			(radiiList[toInclude[k]] < rMax) & \
 			conditionList[toInclude[k]] & (massesList[toInclude[k]] > mMin) & \
-			(massesList[toInclude[k]] <= mMax))[0],snapList[toInclude[k]],rBins,
+			(massesList[toInclude[k]] <= mMax))[0],snapList[toInclude[k]],\
+			rBins = rBins,\
 			nPairsList = pairsList[toInclude[k]],
 			volumesList=volumesList[toInclude[k]],
 			method=method,errorType=errorType)
 		nbarjStack[k,:] = nbarj
 		sigmaStack[k,:] = sigma
 	return [nbarjStack,sigmaStack]
-		
 
 
 

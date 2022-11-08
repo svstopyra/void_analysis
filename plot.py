@@ -1111,7 +1111,7 @@ def plotConstrainedVsUnconstrainedProfiles(rBinStackCentres,nbarjStack,\
         meanErrorLabel = 'Mean unconstrained \nprofile',\
         profileErrorLabel = 'Standard Deviation of \nunconstrained profiles',\
         nbarjUnconstrainedStacks = None,sigmajUnconstrainedStacks=None,\
-        showMean = True):
+        showMean = True,xlim=None):
     nbarjMean = stacking.weightedMean(nbarjStack,1.0/sigmaStack**2,axis=0)
     sigmaMean = np.sqrt(stacking.weightedVariance(nbarjStack,\
         1.0/sigmaStack**2,axis=0))
@@ -1160,14 +1160,14 @@ def plotConstrainedVsUnconstrainedProfiles(rBinStackCentres,nbarjStack,\
     if not hideYLabels:
         ax.set_ylabel('$\\rho/\\bar{\\rho}$',fontsize=fontsize,\
             fontfamily=fontname)
-    ax.plot(rBinStackCentres,np.ones(rBinStackCentres.shape),
-        linestyle=guideStyle,color=guideColour)
-    ax.plot([1,1],ylim,linestyle=guideStyle,color=guideColour)
+    ax.axhline(1.0,linestyle=guideStyle,color=guideColour)
+    ax.axvline(1.0,linestyle=guideStyle,color=guideColour)
     if includeLegend:
         ax.legend(prop={"size":legendFontSize,"family":fontname},
             frameon=frameon,loc=legendLoc)
     ax.tick_params(axis='both',labelsize=fontsize)
     ax.set_ylim(ylim)
+    ax.set_xlim(xlim)
     if hideYLabels:
         ax.set_yticklabels([])
     plt.subplots_adjust(bottom=bottom,left=left)
