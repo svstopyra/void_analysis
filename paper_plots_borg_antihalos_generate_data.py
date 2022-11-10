@@ -852,36 +852,59 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
         nPairsList = stackedPairCounts,\
         volumesList = stackedVolumesList,\
         method=method,errorType=errorType)
-    stackedRadiiUn = np.hstack(antihaloRadiiUn)
-    stackedMassesUn = np.hstack(antihaloMassesListUn)
-    combinedConditionsUn = []
-    for ns in range(0,len(snapListUnconstrained)):
-        union = np.zeros(len(antihaloRadiiUn[ns]),dtype=bool)
-        for k in range(0,len(conditionListMrangeUn[ns])):
-            union = np.logical_or(union,conditionListMrangeUn[ns][k])
-        combinedConditionsUn.append(union)
-    stackedConditionsUn = np.hstack(combinedConditionsUn)
     #stackedConditionsUn = np.hstack(conditionListUn)
     # Stack voids from all bins for the combined unconstrained profile:
     if (pairCountsListUn is not None) and (volumesListUn is not None):
+        # Combined stacked withe known pair lists:
         stackedPairCountsUn = np.vstack(pairCountsListUn)
         stackedVolumesListUn = np.vstack(volumesListUn)
+        stackedRadiiUn = np.hstack(antihaloRadiiUn)
+        stackedMassesUn = np.hstack(antihaloMassesListUn)
+        stackedCentresUn = np.vstack(ahCentresListUn)
+        combinedUnAll = np.array([],dtype=bool)
+        for ns in range(0,len(snapListUnconstrained)):
+            union = np.zeros(len(antihaloRadii[ns]),dtype=bool)
+            for l in range(0,len(conditionListMrangeUn[ns])):
+                union = np.logical_or(union,conditionListMrangeUn[ns][l])
+            combinedUnAll = np.hstack([combinedUnAll,union])
+        [nbarjAllStackedUn,sigmaAllStackedUn] = stacking.stackVoidsWithFilter(\
+            stackedCentresUn,stackedRadiiUn,combinedUnAll,\
+            snapListUnconstrained[0],rBins,\
+            nPairsList = stackedPairCountsUn,\
+            volumesList = stackedVolumesListUn,\
+            method=method,errorType=errorType)
     else:
-        # Recompute only those which we need:
-        [newPairCountsUn,newVolumesListUn] = getPartialPairCountsAndVols(\
-            snapNameListUn,antihaloRadiiUn,antihaloMassesListUn,\
-            ahCentresListUn,vorVolsUn,rBins,method,\
-            rMin,rMax,mMin,mMax,boxsize,\
-            filterListToApply=combinedConditionsUn)
-        stackedPairCountsUn = np.vstack(newPairCountsUn)
-        stackedVolumesListUn = np.vstack(newVolumesListUn)
-    [nbarjAllStackedUn,sigmaAllStackedUn] = stacking.stackScaledVoids(\
-        np.vstack(ahCentresListUn)[stackedConditionsUn,:],\
-        stackedRadiiUn[stackedConditionsUn],\
-        snapListUnconstrained[0],rBins,\
-        nPairsList = stackedPairCountsUn,\
-        volumesList = stackedVolumesListUn,\
-        method=method,errorType=errorType)
+        # Recompute only those antihalo profiles we need:
+        allPairCountsUn = [[] for ns in range(0,len(snapListUnconstrained))]
+        allVolumesListsUn = [[] for ns in range(0,len(snapListUnconstrained))]
+        stackedPairCountsUn = np.zeros((0,nBins-1))
+        stackedVolumesListUn = np.zeros((0,nBins-1))
+        stackedRadiiUn= np.array([])
+        stackedMassesUn= np.array([])
+        stackedCentresUn = np.zeros((0,3))
+        for ns in range(0,len(snapListUnconstrained)):
+            for l in range(0,len(centreListUn[ns])):
+                [newPairCountsUn,newVolumesListUn] = getPartialPairCountsAndVols(\
+                    snapNameListUn,antihaloRadiiUn,antihaloMassesListUn,\
+                    ahCentresListUn,vorVolsUn,rBins,method,\
+                    rMin,rMax,mMin,mMax,boxsize,\
+                    filterListToApply=conditionListMrangeUn[ns][l])
+                allPairCountsUn[ns].append(newPairCountsUn)
+                allVolumesListsUn[ns].append(newVolumesListUn)
+                stackedPairCountsUn = np.vstack(\
+                    [stackedPairCountsUn,newPairCountsUn])
+                newVolumesListUn = np.vstack(\
+                    [newVolumesListUn,newVolumesListUn])
+                stackedRadiiUn = np.hstack([stackedRadiiUn,\
+                    antihaloRadiiUn[ns][conditionListMrangeUn[ns][l]]])
+                stackedMassesUn = np.hstack([stackedMassesUn,\
+                    antihaloMassesListUn[ns][conditionListMrangeUn[ns][l]]])
+                stackedCentresUn = np.vstack([stackedCentresUn,\
+                    ahCentresListUn[ns][conditionListMrangeUn[ns][l],:]])
+        [nbarjAllStackedUn,sigmaAllStackedUn] = stacking.stackScaledVoids(\
+            stackedCentresUn,stackedRadiiUn,snapListUnconstrained[0],rBins,\
+            nPairsList = stackedPairCountsUn,volumesList = stackedVolumesListUn,\
+            method=method,errorType=errorType)
     # Profiles in each constrained region separately:
     if pairCountsList is None:
         pCounts = newPairCounts
@@ -906,11 +929,11 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
     # Profiles in selected unconstrained regions:
     indStack = []
     if pairCountsListUn is None:
-        pCounts = [None for x in snapListUnconstrained]
-        vList = [None for x in snapListUnconstrained]
+        pCounts = allPairCountsUn
+        vList = allVolumesListsUn
     else:
-        pCounts = pairCountsListUn
-        vList = volumesListUn
+        pCounts = allPairCountsUn
+        vList = allVolumesListsUn
     if type(centreListUn) == np.ndarray:
         centreListUn = [centreListUn \
             for ns in range(0,len(snapListUnconstrained))]
@@ -924,8 +947,8 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
                 condition & (antihaloMassesListUn[ns] > mMin) & \
                 (antihaloMassesListUn[ns] <= mMax))[0],\
                 snapListUnconstrained[ns],rBins,
-                nPairsList = pCounts[ns],
-                volumesList=vList[ns]))
+                nPairsList = pCounts[ns][l],
+                volumesList=vList[ns][l]))
     nbarjSepStackUn = np.vstack([sim[0] for sim in indStack])
     sigmaSepStackUn = np.vstack([sim[1] for sim in indStack])
     return [rBinStackCentres,nbarjSepStack,\
