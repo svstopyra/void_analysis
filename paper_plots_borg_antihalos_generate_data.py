@@ -659,6 +659,14 @@ def getHMFAMFData(snapNumList,snapNumListOld,snapNumListUncon,\
         centralHalosOld,centralAntihalosOld,\
         centralHaloMassesOld,centralAntihaloMassesOld]
 
+# Load a pynbody snapshot if we provide a string, otherwise just return the 
+# snapshot.
+def getPynbodySnap(snap):
+    if type(snap) == str:
+        return pynbody.load(snap)
+    else:
+        return snap
+
 def getPartialPairCountsAndVols(snapNameList,antihaloRadii,antihaloMassesList,\
         ahCentresList,vorVols,rBins,method,\
         rMin,rMax,mMin,mMax,boxsize,filterListToApply=None):
@@ -672,7 +680,7 @@ def getPartialPairCountsAndVols(snapNameList,antihaloRadii,antihaloMassesList,\
                 (antihaloMassesList[ns] <= mMax))[0]
         else:
             filterToApply = filterListToApply[ns]
-        snap = pynbody.load(snapNameList[ns])
+        snap = getPynbodySnap(snapNameList[ns])
         gc.collect()
         tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
         gc.collect()
@@ -755,7 +763,7 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
     deltaMeanListUn = [props[12] for props in ahPropsUnconstrained]
     vorVols = [props[4] for props in ahPropsConstrained]
     vorVolsUn = [props[4] for props in ahPropsUnconstrained]
-    if redoPairCounts:
+    if not redoPairCounts:
         if pairCountsListUn is None:
             pairCountsListUn = [props[9] for props in ahPropsUnconstrained]
         if volumesListUn is None:
@@ -881,22 +889,23 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
                 # Regenerate them from scratch:
                 [newPairCountsUn,newVolumesListUn] = \
                     getPartialPairCountsAndVols(\
-                        snapNameListUn,antihaloRadiiUn,antihaloMassesListUn,\
-                        ahCentresListUn,vorVolsUn,rBins,method,\
+                        [snapNameListUn[ns]],[antihaloRadiiUn[ns]],\
+                        [antihaloMassesListUn[ns]],\
+                        [ahCentresListUn[ns]],[vorVolsUn[ns]],rBins,method,\
                         rMin,rMax,mMin,mMax,boxsize,\
-                        filterListToApply=conditionListMrangeUn[ns][l])
+                        filterListToApply=[conditionListMrangeUn[ns][l]])
                 stackedPairCountsUn = np.vstack(\
-                    [stackedPairCountsUn,newPairCountsUn])
+                    [stackedPairCountsUn,newPairCountsUn[0]])
                 stackedVolumesListUn = np.vstack(\
-                    [stackedVolumesListUn,newVolumesListUn])
+                    [stackedVolumesListUn,newVolumesListUn[0]])
                 stackedRadiiUn = np.hstack([stackedRadiiUn,\
                     antihaloRadiiUn[ns][conditionListMrangeUn[ns][l]]])
                 stackedMassesUn = np.hstack([stackedMassesUn,\
                     antihaloMassesListUn[ns][conditionListMrangeUn[ns][l]]])
                 stackedCentresUn = np.vstack([stackedCentresUn,\
                     ahCentresListUn[ns][conditionListMrangeUn[ns][l],:]])
-            allPairCountsUn[ns].append(newPairCountsUn)
-            allVolumesListsUn[ns].append(newVolumesListUn)
+            allPairCountsUn[ns].append(newPairCountsUn[0])
+            allVolumesListsUn[ns].append(newVolumesListUn[0])
     # Stack voids from all bins for the combined unconstrained profile:
     if (pairCountsListUn is not None) and (volumesListUn is not None):
         # Combined stacked withe known pair lists:
