@@ -174,7 +174,7 @@ def getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,\
     gc.collect()
     return [nPairsList,volumesList]
 
-    def getRadialVelocityAverages(voidCentres,voidRadii,snap,rBins,\
+def getRadialVelocityAverages(voidCentres,voidRadii,snap,rBins,\
         nThreads=thread_count,tree=None,method="poisson",vorVolumes=None):
     if (vorVolumes is None) and (method == "VTFE"):
             raise Exception("Must provide voronoi volumes for VTFE.")
@@ -269,47 +269,46 @@ def stackScaledVoids(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,\
 
 # Stack radial velocities of voids (Incidentally, this is mostly the same as the normal stacking, just with a different variable - would be better to merge them):
 def stackScaledVoidsVelocities(voidCentres,voidRadii,snap,rBins,\
-    nThreads=thread_count,tree=None,method="poisson",vorVolumes=None,\
-    nPairsList=None,volumesList=None,errorType="Mean"):
-if (nPairsList is None) or (volumesList is None):
-    [nPairsList,volumesList] = getRadialVelocityAverages(voidCentres,\
-        voidRadii,snap,rBins,nThreads=nThreads,tree=tree,method=method,\
-        vorVolumes=vorVolumes)
-if method == "poisson":
-    nbarj = (np.sum(nPairsList,0) + 1)/(np.sum(volumesList,0))
-    if errorType == "Mean":
-        sigmabarj = np.sqrt(len(voidCentres)*np.sum(nPairsList,0))/\
-            np.sum(volumesList,0)
-    elif errorType == "Profile":
-        sigmabarj = np.sqrt(weightedVariance(nPairsList/volumesList,\
-            volumesList,axis=0))/np.sqrt(len(voidCentres)-1)
-    elif errorType == "Standard":
-        sigmabarj = np.sqrt(weightedVariance(nPairsList/volumesList,\
-            volumesList,axis=0))
+        nThreads=thread_count,tree=None,method="poisson",vorVolumes=None,\
+        nPairsList=None,volumesList=None,errorType="Mean"):
+    if (nPairsList is None) or (volumesList is None):
+        [nPairsList,volumesList] = getRadialVelocityAverages(voidCentres,\
+            voidRadii,snap,rBins,nThreads=nThreads,tree=tree,method=method,\
+            vorVolumes=vorVolumes)
+    if method == "poisson":
+        nbarj = (np.sum(nPairsList,0) + 1)/(np.sum(volumesList,0))
+        if errorType == "Mean":
+            sigmabarj = np.sqrt(len(voidCentres)*np.sum(nPairsList,0))/\
+                np.sum(volumesList,0)
+        elif errorType == "Profile":
+            sigmabarj = np.sqrt(weightedVariance(nPairsList/volumesList,\
+                volumesList,axis=0))/np.sqrt(len(voidCentres)-1)
+        elif errorType == "Standard":
+            sigmabarj = np.sqrt(weightedVariance(nPairsList/volumesList,\
+                volumesList,axis=0))
+        else:
+            raise Exception("Invalid error type.")
+    elif method == "naive":
+        nbarj = np.sum(nPairsList/volumesList,0)/len(voidCentres)
+        if errorType == "Mean":
+            sigmabarj = np.std(nPairsList/volumesList,0)/np.sqrt(len(voidCentres)-1)
+        elif errorType == "Profile":
+            sigmabarj = np.std(nPairsList/volumesList,0)
+        else:
+            raise Exception("Invalid error type.")
+    elif method == "VTFE":
+        nbarj = np.sum(nPairsList,0)/(np.sum(volumesList,0))
+        if errorType == "Mean":
+            sigmabarj = np.sqrt(len(voidCentres)*np.sum(nPairsList,0))/\
+                np.sum(volumesList,0)
+        elif errorType == "Profile":
+            sigmabarj = np.sqrt(weightedVariance(nPairsList/volumesList,\
+                volumesList,axis=0))
+        else:
+            raise Exception("Invalid error type.")
     else:
-        raise Exception("Invalid error type.")
-elif method == "naive":
-    nbarj = np.sum(nPairsList/volumesList,0)/len(voidCentres)
-    if errorType == "Mean":
-        sigmabarj = np.std(nPairsList/volumesList,0)/np.sqrt(len(voidCentres)-1)
-    elif errorType == "Profile":
-        sigmabarj = np.std(nPairsList/volumesList,0)
-    else:
-        raise Exception("Invalid error type.")
-elif method == "VTFE":
-    nbarj = np.sum(nPairsList,0)/(np.sum(volumesList,0))
-    if errorType == "Mean":
-        sigmabarj = np.sqrt(len(voidCentres)*np.sum(nPairsList,0))/\
-            np.sum(volumesList,0)
-    elif errorType == "Profile":
-        sigmabarj = np.sqrt(weightedVariance(nPairsList/volumesList,\
-            volumesList,axis=0))
-    else:
-        raise Exception("Invalid error type.")
-else:
-    raise Exception("Unrecognised stacking method.")
-    
-return [nbarj,sigmabarj]
+        raise Exception("Unrecognised stacking method.")
+    return [nbarj,sigmabarj]
 
 
 # Apply a filter to a set of voids before stacking them:
