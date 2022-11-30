@@ -204,8 +204,7 @@ massFunctionComparison(massListMean[combinedFilter135],\
     fontsize=10,massUpper = mUpper,\
     titleLeft = "Combined catalogue, $<135\\mathrm{Mpc}h^{-1}$",\
     titleRight = "Combined catalogue, $<300\\mathrm{Mpc}h^{-1}$",\
-    volSimRight = volSphere,ylimRight=[1,1000],legendLoc="upper right",\
-    savename=figuresFolder + "mass_function_comparison.pdf")
+    volSimRight = volSphere,ylimRight=[1,1000],legendLoc="upper right")
 
 # Density Profiles:
 plt.clf()
