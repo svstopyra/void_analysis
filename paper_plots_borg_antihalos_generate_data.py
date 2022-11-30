@@ -715,7 +715,7 @@ def getCentreListUnconstrained(snapListUnconstrained,
     densitiesInCentres = []
     centreListUn = []
     denListUn = []
-    for ns in range(0,len(snapNumListUncon)):
+    for ns in range(0,len(snapListUnconstrained)):
         snap = pynbody.load(snapListUnconstrained[ns].filename)
         gc.collect()
         tree = tools.getKDTree(snap)
@@ -2289,6 +2289,317 @@ def getMeanProperty(propertyList,stripNaN=True,lowerLimit=0,stdError=True):
         if stdError:
             sigmaProperty[k] /= np.sqrt(len(haveProperty))
     return [meanProperty,sigmaProperty]
+
+
+def getFinalCatalogue(snapNumList,snrThresh = 10,\
+        snapname = "gadget_full_forward_512/snapshot_001",\
+        snapnameRev = "gadget_full_reverse_512/snapshot_001",\
+        samplesFolder="new_chain/",snapList = None,snapListRev = None,\
+        snapListUnconstrained = None,snapListUnconstrainedRev=None,\
+        mLower = "auto",mUpper = 2e15,nBins = 8,muOpt = 0.9,rSearchOpt = 1,\
+        rSphere = 300,rSphereInner = 135,NWayMatch = True,rMin=5,rMax=30,\
+        mMin=1e11,mMax = 1e16,percThresh=99,chainFile="chain_properties.p",\
+        Nden=256,recomputeUnconstrained = False,data_folder="./"):
+    # Load snapshots:
+    if snapList is None:
+        snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + \
+            "/" + snapname) for snapNum in snapNumList]
+    if snapListRev is None:
+        snapListRev =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + \
+            "/" + snapnameRev) for snapNum in snapNumList]
+    # Parameters:
+    Om = snapList[0].properties['omegaM0']
+    rhoc = 2.7754e11
+    boxsize = snapList[0].properties['boxsize'].ratio("Mpc a h**-1")
+    N = int(np.cbrt(len(snapList[0])))
+    mUnit = 8*Om*rhoc*(boxsize/N)**3
+    if mLower == "auto":
+        mLower = 100*mUnit
+    if mUpper == "auto":
+        mUpper = 10*mLower
+    # Load properties of the anti-halo catalogues:
+    hrList = [snap.halos() for snap in snapListRev]
+    ahProps = [pickle.load(\
+                open(snap.filename + ".AHproperties.p","rb")) \
+                for snap in snapList]
+    antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
+        for props in ahProps]
+    ahCentresUnmapped = [props[5] for props in ahProps]
+    antihaloMasses = [props[3] for props in ahProps]
+    vorVols = [props[4] for props in ahProps]
+    antihaloRadii = [props[7] for props in ahProps]
+    # SNR data:
+    [mcmcArray,num,N,NCAT,no_bias_params,bias_matrix,mean_field,\
+        std_field,hmc_Elh,hmc_Eprior,hades_accept_count,\
+        hades_attempt_count] = pickle.load(open(chainFile,"rb"))
+    snrField = mean_field**2/std_field**2
+    snrFieldLin = np.reshape(snrField,Nden**3)
+    # Centres about which to compute SNR:
+    grid = snapedit.gridListPermutation(Nden,perm=(2,1,0))
+    centroids = grid*boxsize/Nden + boxsize/(2*Nden)
+    positions = snapedit.unwrap(centroids - np.array([boxsize/2]*3),boxsize)
+    tree = scipy.spatial.cKDTree(snapedit.wrap(positions + boxsize/2,boxsize),\
+        boxsize=boxsize)
+    # SNR for each catalogue:
+    nearestPointsList = [tree.query_ball_point(\
+        snapedit.wrap(antihaloCentres[k] + boxsize/2,boxsize),\
+        antihaloRadii[k],workers=-1) \
+        for k in range(0,len(antihaloCentres))]
+    snrAllCatsList = [np.array([np.mean(snrFieldLin[points]) \
+        for points in nearestPointsList[k]]) for k in range(0,len(snapNumList))]
+    snrFilter = [snr > snrThresh for snr in snrAllCatsList]
+    # Central anti-halos with appropriate filteR:
+    centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],rSphere,\
+            filterCondition = (antihaloRadii[k] > rMin) & \
+            (antihaloRadii[k] <= rMax) & (antihaloMasses[k] > mMin) & \
+            (antihaloMasses[k] <= mMax) & snrFilter[k]) \
+            for k in range(0,len(snapNumList))]
+    centralAntihaloMasses = [\
+            antihaloMasses[k][centralAntihalos[k][0]] \
+            for k in range(0,len(centralAntihalos))]
+    sortedList = [np.flip(np.argsort(centralAntihaloMasses[k])) \
+            for k in range(0,len(snapNumList))]
+    # Gather these into shortened property lists for the anti-halos
+    # in the central region, including only those that match the filter:
+    ahCounts = np.array([len(cahs[0]) for cahs in centralAntihalos])
+    max_index = np.max(ahCounts)
+    massListShort = [np.array([antihaloMasses[l][\
+            centralAntihalos[l][0][sortedList[l][k]]] \
+            for k in range(0,np.min([ahCounts[l],max_index]))]) \
+            for l in range(0,len(snapNumList))]
+    centresListShort = [np.array([antihaloCentres[l][\
+            centralAntihalos[l][0][sortedList[l][k]],:] \
+            for k in range(0,np.min([ahCounts[l],max_index]))]) \
+            for l in range(0,len(snapNumList))]
+    radiiListShort = [np.array([antihaloRadii[l][\
+            centralAntihalos[l][0][sortedList[l][k]]] \
+            for k in range(0,np.min([ahCounts[l],max_index]))]) \
+            for l in range(0,len(snapNumList))]
+    # Maps from each catalogue to all the other catalogues:
+    diffMap = [np.setdiff1d(np.arange(0,len(snapNumList)),[k]) \
+        for k in range(0,len(snapNumList))]
+    # Catalogue construction:
+    [finalCatOpt,shortHaloListOpt,twoWayMatchListOpt,finalCandidatesOpt,\
+        finalRatiosOpt,finalDistancesOpt,allCandidatesOpt,candidateCountsOpt,\
+        allRatiosOpt,finalCombinatoricFracOpt,finalCatFracOpt,\
+        alreadyMatched] = \
+        constructAntihaloCatalogue(snapNumList,snapList=snapList,\
+        snapListRev=snapListRev,ahProps=ahProps,hrList=hrList,max_index=None,\
+        twoWayOnly=True,blockDuplicates=True,\
+        crossMatchThreshold = muOpt,distMax = rSearchOpt,rSphere=rSphere,\
+        massRange = [mMin,mMax],NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
+        additionalFilters = snrFilter)
+    # Mean radius, centre, and mass:
+    radiiListOpt = getPropertyFromCat(finalCatOpt,radiiListShort)
+    massListOpt = getPropertyFromCat(finalCatOpt,massListShort)
+    [radiiMeanOpt, radiiSigmaOpt]  = getMeanProperty(radiiListOpt)
+    [massMeanOpt, massSigmaOpt]  = getMeanProperty(massListOpt)
+    finalCentresOptList = np.array([getCentresFromCat(\
+        finalCatOpt,centresListShort,ns) for ns in range(0,len(snapNumList))])
+    meanCentreOpt = np.nanmean(finalCentresOptList,0)
+    [meanCentresArray,stdCentresArray] = getMeanCentresFromCombinedCatalogue(\
+        finalCatOpt,centresListShort,returnError=True)
+    # SNR about void centres:
+    nearestPoints = tree.query_ball_point(\
+        snapedit.wrap(meanCentreOpt + boxsize/2,boxsize),radiiMeanOpt,\
+        workers=-1)
+    snrList = np.array([np.mean(snrFieldLin[points]) \
+        for points in nearestPoints])
+    # Generate an unconstrained catalogue to determine threshold for
+    # spurious voids:
+    # Unconstrained catalogue:
+    unconstrainedCatFile = data_folder + "unconstrained_catalogue.p"
+    if (not os.path.isfile(unconstrainedCatFile)) or recomputeUnconstrained:
+        snapListUn = [pynbody.load("new_chain/unconstrained_samples/sample" + \
+            str(num) + "/gadget_full_forward_512/snapshot_001") \
+            for num in snapNumListUncon]
+        snapListRevUn = [pynbody.load(\
+            "new_chain/unconstrained_samples/sample" + \
+            str(num) + "/gadget_full_reverse_512/snapshot_001") \
+            for num in snapNumListUncon]
+        hrListUn = [snap.halos() for snap in snapListRevUn]
+        ahPropsUn = [pickle.load(\
+                    open(snap.filename + ".AHproperties.p","rb")) \
+                    for snap in snapListUn]
+        [finalCatUn,shortHaloListUn,twoWayMatchListUn,finalCandidatesOUn,\
+            finalRatiosUn,finalDistancesUn,allCandidatesUn,candidateCountsUn,\
+            allRatiosUn,finalCombinatoricFracUn,finalCatFracUn,\
+            alreadyMatched] = \
+            constructAntihaloCatalogue(snapNumListUncon,snapList=snapListUn,\
+            snapListRev=snapListRevUn,ahProps=ahPropsUn,hrList=hrListUn,\
+            max_index=None,twoWayOnly=True,blockDuplicates=True,\
+            crossMatchThreshold = muOpt,distMax = rSearchOpt,rSphere=rSphere,\
+            massRange = [mMin,mMax],NWayMatch = NWayMatch,rMin=rMin,rMax=rMax)
+        antihaloCentresUn = [tools.remapAntiHaloCentre(props[5],boxsize) \
+            for props in ahPropsUn]
+        antihaloMassesUn = [props[3] for props in ahPropsUn]
+        antihaloRadiiUn = [props[7] for props in ahPropsUn]
+        centralAntihalosUn = [tools.getAntiHalosInSphere(antihaloCentresUn[k],\
+            rSphere,filterCondition = (antihaloRadiiUn[k] > rMin) & \
+            (antihaloRadiiUn[k] <= rMax) & (antihaloMassesUn[k] > mMin) & \
+            (antihaloMassesUn[k] <= mMax)) \
+            for k in range(0,len(snapNumListUncon))]
+        centralAntihaloMassesUn = [\
+            antihaloMassesUn[k][centralAntihalosUn[k][0]] \
+            for k in range(0,len(centralAntihalosUn))]
+        sortedListUn = [np.flip(np.argsort(centralAntihaloMassesUn[k])) \
+            for k in range(0,len(snapNumListUncon))]
+        ahCountsUn = np.array([len(cahs[0]) for cahs in centralAntihalosUn])
+        max_indexUn = np.max(ahCountsUn)
+        radiiListShortUn = [np.array([antihaloRadiiUn[l][\
+            centralAntihalosUn[l][0][sortedListUn[l][k]]] \
+            for k in range(0,np.min([ahCountsUn[l],max_indexUn]))]) \
+            for l in range(0,len(snapNumListUncon))]
+        massListShortUn = [np.array([antihaloMassesUn[l][\
+                centralAntihalosUn[l][0][sortedListUn[l][k]]] \
+                for k in range(0,np.min([ahCountsUn[l],max_indexUn]))]) \
+                for l in range(0,len(snapNumListUncon))]
+        pickle.dump([finalCatUn,shortHaloListUn,twoWayMatchListUn,\
+            finalCandidatesOUn,\
+            finalRatiosUn,finalDistancesUn,allCandidatesUn,candidateCountsUn,\
+            allRatiosUn,finalCombinatoricFracUn,finalCatFracUn,\
+            antihaloCentresUn,antihaloMassesUn,antihaloRadiiUn,\
+            centralAntihalosUn,centralAntihaloMassesUn,sortedListUn,\
+            ahCountsUn,radiiListShortUn,massListShortUn],\
+            open(unconstrainedCatFile,"wb"))
+    else:
+        [finalCatUn,shortHaloListUn,twoWayMatchListUn,\
+            finalCandidatesOUn,\
+            finalRatiosUn,finalDistancesUn,allCandidatesUn,candidateCountsUn,\
+            allRatiosUn,finalCombinatoricFracUn,finalCatFracUn,\
+            antihaloCentresUn,antihaloMassesUn,antihaloRadiiUn,\
+            centralAntihalosUn,centralAntihaloMassesUn,sortedListUn,\
+            ahCountsUn,radiiListShortUn,massListShortUn] = pickle.load(open(\
+                unconstrainedCatFile,"rb"))
+    # Unconstrained radii and masses:
+    radiiListCombUn = getPropertyFromCat(finalCatUn,radiiListShortUn)
+    massListCombUn = getPropertyFromCat(finalCatUn,massListShortUn)
+    [radiiListMeanUn,radiiListSigmaUn] = getMeanProperty(radiiListCombUn)
+    [massListMeanUn,massListSigmaUn] = getMeanProperty(massListCombUn)
+    # Determine percentiles from the unconstrained catalogues:
+    massBins = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),nBins))
+    [inMassBins,noInMassBins] = plot.binValues(massListMeanUn,massBins)
+    percentilesComb = []
+    percentilesCat = []
+    for k in range(0,len(inMassBins)):
+        if len(inMassBins[k]) > 0:
+            #percentiles.append(np.percentile(finalCatFracUn[inMassBins[k]],\
+            #    percThresh))
+            percentilesComb.append(np.percentile(\
+                finalCombinatoricFracUn[inMassBins[k]],percThresh))
+            percentilesCat.append(np.percentile(\
+                finalCatFracUn[inMassBins[k]],percThresh))
+        else:
+            percentilesComb.append(0.0)
+            percentilesCat.append(0.0)
+    massListComb = getPropertyFromCat(finalCatOpt,massListShort)
+    [massListMean,massListSigma] = getMeanProperty(massListComb)
+    # Construct the filter by mass bin:
+    catFracThresholds = percentilesCat
+    massFilter = [(massListMean > massBins[k]) & \
+        (massListMean <= massBins[k+1]) \
+        for k in range(0,len(massBins) - 1)]
+    catFracFilter = [finalCatFracOpt > thresh for thresh in percentilesCat]
+    combFracFilter = [finalCombinatoricFracOpt > thresh \
+        for thresh in percentilesComb]
+    combinedFilter = np.zeros(massListMean.shape,dtype=bool)
+    for k in range(0,len(catFracThresholds)):
+        combinedFilter = combinedFilter | (massFilter[k] & catFracFilter[k] & \
+            combFracFilter[k])
+    combinedFilter = combinedFilter & (snrList > snrThresh)
+    distanceArray = np.sqrt(np.sum(meanCentresArray**2,1))
+    combinedFilter135 = combinedFilter135 = combinedFilter & \
+        (distanceArray < 135)
+    # Conditions to supply to the void profile code:
+    additionalConditions = [np.isin(np.arange(0,len(antihaloMasses[k])),\
+        np.array(centralAntihalos[k][0])[sortedList[k][finalCatOpt[\
+            (finalCatOpt[:,k] >= 0) & \
+            combinedFilter135,k] - 1]]) \
+        for k in range(0,len(snapList))]
+    # Data for unconstrained sims:
+    snapListUnconstrained = [pynbody.load(unconstrainedFolderNew + "sample" \
+            + str(snapNum) + "/" + snapname) for snapNum in snapNumListUncon]
+    snapListUnconstrainedRev = [pynbody.load(unconstrainedFolderNew + \
+            "sample" + str(snapNum) + "/" + snapnameRev) \
+            for snapNum in snapNumListUncon]
+    ahPropsUnconstrained = [tools.loadPickle(snap.filename + ".AHproperties.p")\
+            for snap in snapListUnconstrained]
+    ahCentresList = [props[5] for props in ahProps]
+    ahCentresListUn = [props[5] for props in ahPropsUnconstrained]
+    antihaloRadiiUn = [props[7] for props in ahPropsUnconstrained]
+    rEffMin = 0.0
+    rEffMax = 10.0
+    nBins = 101
+    rBinStack = np.linspace(rEffMin,rEffMax,nBins)
+    vorVols = [props[4] for props in ahProps]
+    vorVolsUn = [props[4] for props in ahPropsUnconstrained]
+    pairCountsList = []
+    volumesList = []
+    pairCountsListUn = []
+    volumesListUn = []
+    # Centres of regions with similar density contrast to the BORG region:
+    [centreListUn,densitiesInCentres,denListUn] = tools.loadOrRecompute(\
+        data_folder + "centre_list_unconstrained_data.p",\
+        getCentreListUnconstrained,\
+        snapListUnconstrained,
+        randomSeed = 1000,numDenSamples = 1000,rSphere = 135,\
+        densityRange = [-0.051,-0.049],_recomputeData=recomputeData)
+    gc.collect()
+    [rBinStackCentresCombined,nbarjSepStackCombined,\
+            sigmaSepStackCombined,nbarjSepStackUnCombined,\
+            sigmaSepStackUnCombined,\
+            nbarjAllStackedCombined,sigmaAllStackedCombined,\
+            nbarjAllStackedUnCombined,sigmaAllStackedUnCombined,\
+            nbar,rMin2,mMin2,mMax2] = tools.loadOrRecompute(\
+                data_folder + "void_profiles_data_combined.p",\
+                getVoidProfilesData,\
+                snapNumList,snapNumListUncon,\
+                snapList = snapList,snapListRev = snapListRev,\
+                samplesFolder="new_chain/",\
+                unconstrainedFolder="new_chain/unconstrained_samples/",\
+                snapname = "gadget_full_forward_512/snapshot_001",\
+                snapnameRev = "gadget_full_reverse_512/snapshot_001",\
+                reCentreSnaps = False,N=512,boxsize=677.7,mMin = mLower,\
+                mMax = mUpper,rMin=5,rMax=30,verbose=True,combineSims=False,\
+                method="poisson",errorType = "Weighted",\
+                unconstrainedCentreList = centreListUn,\
+                additionalConditions = additionalConditions,\
+                redoPairCounts=True,rEffMax=10.0,rEffMin=0.0,nBins=101,\
+                pairCountsListUn=None,\
+                volumesListUn=None,pairCountsList=None,\
+                volumesList=None,\
+                ahPropsConstrained = ahProps,\
+                ahPropsUnconstrained = ahPropsUnconstrained,\
+                snapListUnconstrained=snapListUnconstrained,\
+                snapListUnconstrainedRev=snapListUnconstrainedRev)
+    gc.collect()
+    [rBinStackCentres,nbarjSepStack,\
+            sigmaSepStack,nbarjSepStackUn,sigmaSepStackUn,\
+            nbarjAllStacked,sigmaAllStacked,nbarjAllStackedUn,\
+            sigmaAllStackedUn,\
+            nbar,rMin2,mMin2,mMax2] = tools.loadOrRecompute(\
+                data_folder + "void_profiles_data_all.p",\
+                getVoidProfilesData,\
+                snapNumList,snapNumListUncon,\
+                snapList = snapList,snapListRev = snapListRev,\
+                samplesFolder="new_chain/",\
+                unconstrainedFolder="new_chain/unconstrained_samples/",\
+                snapname = "gadget_full_forward_512/snapshot_001",\
+                snapnameRev = "gadget_full_reverse_512/snapshot_001",\
+                reCentreSnaps = False,N=512,boxsize=677.7,mMin = mLower,\
+                mMax = mUpper,rMin=5,rMax=30,verbose=True,combineSims=False,\
+                method="poisson",errorType = "Weighted",\
+                unconstrainedCentreList = centreListUn,\
+                additionalConditions = None,\
+                redoPairCounts=True,rEffMax=10.0,rEffMin=0.0,nBins=101,\
+                pairCountsListUn=None,\
+                volumesListUn=None,pairCountsList=None,\
+                volumesList=None,\
+                ahPropsConstrained = ahProps,\
+                ahPropsUnconstrained = ahPropsUnconstrained,\
+                snapListUnconstrained=snapListUnconstrained,\
+                snapListUnconstrainedRev=snapListUnconstrainedRev)
+    gc.collect()
 
 
 
