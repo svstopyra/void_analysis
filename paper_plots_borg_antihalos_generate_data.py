@@ -1,10 +1,13 @@
 # CONFIGURATION
 from void_analysis import plot, snapedit, tools, simulation_tools, halos
-from void_analysis import stacking, real_clusters, survey
+from void_analysis import stacking, real_clusters, survey, cosmology
 from void_analysis.tools import loadOrRecompute
 from void_analysis.simulation_tools import ngPerLBin
 from void_analysis.simulation_tools import biasNew, biasOld
 from void_analysis.survey import radialCompleteness, surveyMask
+from void_analysis import plot_utilities
+import seaborn as sns
+seabornColormap = sns.color_palette("colorblind",as_cmap=True)
 import numpy as np
 import scipy
 import pynbody
@@ -14,6 +17,8 @@ import gc
 import copy
 import h5py
 import healpy
+import matplotlib.pylab as plt
+
 
 
 # KE correction used to compute magnitudes. Used by PPTs:
@@ -692,6 +697,41 @@ def getPartialPairCountsAndVols(snapNameList,antihaloRadii,antihaloMassesList,\
         newPairCounts.append(pairs)
         newVolumesList.append(vols)
     return [newPairCounts,newVolumesList]
+
+
+def getCentreListUnconstrained(snapListUnconstrained,
+        randomSeed = 1000,numDenSamples = 1000,rSphere = 135,\
+        densityRange = [-0.051,-0.049]):
+    np.random.seed(randomSeed)
+    boxsize = snapListUnconstrained[0].properties['boxsize'].ratio(\
+        "Mpc a h**-1")
+    sampleCentresUnmapped = np.random.random((numDenSamples,3))*boxsize
+    sampleCentresMapped = tools.remapAntiHaloCentre(sampleCentresUnmapped,\
+        boxsize)
+    N = int(np.cbrt(len(snapListUnconstrained[0])))
+    Om = snapListUnconstrained[0].properties['omegaM0']
+    rhoM = 2.7754e11*Om
+    mUnit = rhoM*(boxsize/N)**3
+    densitiesInCentres = []
+    centreListUn = []
+    denListUn = []
+    for ns in range(0,len(snapNumListUncon)):
+        snap = pynbody.load(snapListUnconstrained[ns].filename)
+        gc.collect()
+        tree = tools.getKDTree(snap)
+        gc.collect()
+        den = mUnit*tree.query_ball_point(\
+            sampleCentresUnmapped,\
+            rSphere,return_length=True,workers=-1)/\
+            (4*np.pi*rhoM*rSphere**3/3) - 1.0
+        densitiesInCentres.append(den)
+        centreListUn.append(tools.remapAntiHaloCentre(\
+            sampleCentresMapped[(den > densityRange[0]) & \
+            (den <= densityRange[1]),:],boxsize))
+        denListUn.append(den[(den > densityRange[0]) & \
+            (den <= densityRange[1])])
+        gc.collect()
+    return [centreListUn,densitiesInCentres,denListUn]
 
 def getVoidProfilesData(snapNumList,snapNumListUncon,\
         snapList = None,snapListRev = None,\
@@ -1803,8 +1843,452 @@ def getMatchRatios(matchList,quantityList):
 
 
 
+def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,\
+        Delta=200,sigma8=0.8,fontsize=12,legendFontsize=10,font="serif",\
+        Ob0=0.049,mass_function='Tinker',delta_wrt='SOCritical',massLower=5e13,\
+        massUpper=1e15,figsize=(4,4),marker='x',linestyle='--',\
+        color=seabornColormap[0],colorTheory = seabornColormap[1],\
+        nBins=21,poisson_interval = 0.95,legendLoc='lower left',\
+        label="Gadget Simulation",transfer_model='EH',fname=None,\
+        xlabel="Mass [$M_{\odot}h^{-1}$]",ylabel="Number of halos",\
+        ylim=[1e1,2e4],title="Gadget Simulation",showLegend=True,\
+        tickRight=False,tickLeft=True,savename=None):
+    [dndm,m] = cosmology.TMF_from_hmf(massLower,massUpper,\
+        h=h,Om0=Om0,Delta=Delta,delta_wrt=delta_wrt,\
+        mass_function=mass_function,sigma8=sigma8,Ob0 = Ob0,\
+        transfer_model=transfer_model,fname=fname,ns=ns)
+    massBins = 10**np.linspace(np.log10(massLower),np.log10(massUpper),nBins)
+    n = cosmology.dndm_to_n(m,dndm,massBins)
+    bounds = np.array(scipy.stats.poisson(n*volSim).interval(poisson_interval))
+    massBinCentres = plot_utilities.binCentres(massBins)
+    alphaO2 = (1.0 - poisson_interval)/2.0
+    if type(masses) == list:
+        [noInBins,sigmaBins] = plot.computeMeanHMF(masses,\
+            massLower=massLower,massUpper=massUpper,nBins = nBins)
+    else:
+        noInBins = plot_utilities.binValues(masses,massBins)[1]
+        sigmaBins = np.abs(np.array([scipy.stats.chi2.ppf(\
+            alphaO2,2*noInBins)/2,\
+            scipy.stats.chi2.ppf(1.0 - alphaO2,2*(noInBins+1))/2]) - \
+            noInBins)
+    if ax is None:
+        fig, ax = plt.subplots(1,1,figsize=(8,4))
+    ax.errorbar(massBinCentres,noInBins,sigmaBins,marker=marker,\
+        linestyle=linestyle,label=label,color=color)
+    ax.plot(massBinCentres,n*volSim,":",label=mass_function + ' prediction',\
+                    color=seabornColormap[1])
+    ax.fill_between(massBinCentres,
+                    bounds[0],bounds[1],
+                    facecolor=colorTheory,alpha=0.5,interpolate=True,\
+                    label='$' + str(100*poisson_interval) + \
+                    '\%$ Confidence \nInterval')
+    if showLegend:
+        ax.legend(prop={"size":legendFontsize,"family":font},
+            loc=legendLoc,frameon=False)
+    ax.set_title(title,fontsize=fontsize,fontfamily=font)
+    ax.set_xlabel(xlabel,fontsize=fontsize,fontfamily=font)
+    ax.set_ylabel(ylabel,fontsize=fontsize,fontfamily=font)
+    ax.tick_params(axis='both',labelsize=fontsize,\
+        labelright=tickRight,right=tickRight)
+    ax.tick_params(axis='both',which='minor',bottom=True,labelsize=fontsize)
+    ax.tick_params(axis='y',which='minor')
+    ax.yaxis.grid(color='grey',linestyle=':',alpha=0.5)
+    ax.set_ylim(ylim)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+
+def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
+        Delta=200,sigma8=0.8,fontsize=12,legendFontsize=10,font="serif",\
+        Ob0=0.049,mass_function='Tinker',delta_wrt='SOCritical',massLower=5e13,\
+        massUpper=1e15,figsize=(8,4),marker='x',linestyle='--',ax=None,\
+        color=seabornColormap[0],colorTheory = seabornColormap[1],\
+        nBins=21,poisson_interval = 0.95,legendLoc='lower left',\
+        labelLeft = 'Gadget Simulation',labelRight='ML Simulation',\
+        xlabel="Mass [$M_{\odot}h^{-1}$]",ylabel="Number of halos",\
+        ylim=[1e1,2e4],savename=None,show=True,transfer_model='EH',fname=None,\
+        returnAx = False,ns=1.0,rows=1,cols=2,titleLeft = "Gadget Simulation",\
+        titleRight = "Gadget Simulation",saveLeft=None,saveRight=None,\
+        ylimRight=None,volSimRight=None):
+    if ax is None:
+        fig, ax = plt.subplots(rows,cols,figsize=(8,4))
+    if volSimRight is None:
+        volSimRight = volSim
+    if ylimRight is None:
+        ylimRight = ylim
+    plotMassFunction(massesLeft,volSim,ax=ax[0],Om0=Om0,h=h,ns=ns,\
+        Delta=Delta,sigma8=sigma8,fontsize=fontsize,\
+        legendFontsize=legendFontsize,font="serif",\
+        Ob0=Ob0,mass_function=mass_function,delta_wrt=delta_wrt,\
+        massLower=massLower,title=titleLeft,\
+        massUpper=massUpper,marker=marker,linestyle=linestyle,\
+        color=color,colorTheory = colorTheory,\
+        nBins=nBins,poisson_interval = poisson_interval,legendLoc=legendLoc,\
+        label=labelLeft,transfer_model=transfer_model,ylim=ylim,\
+        savename=saveLeft)
+    plotMassFunction(massesRight,volSimRight,ax=ax[1],Om0=Om0,h=h,ns=ns,\
+        Delta=Delta,sigma8=sigma8,fontsize=fontsize,\
+        legendFontsize=legendFontsize,font="serif",\
+        Ob0=Ob0,mass_function=mass_function,delta_wrt=delta_wrt,\
+        massLower=massLower,title = titleRight,\
+        massUpper=massUpper,marker=marker,linestyle=linestyle,\
+        color=color,colorTheory = colorTheory,\
+        nBins=nBins,poisson_interval = poisson_interval,legendLoc=legendLoc,\
+        label=labelRight,transfer_model=transfer_model,ylim=ylimRight,\
+        savename=saveRight)
+    plt.tight_layout()
+    if savename is not None:
+        plt.savefig(savename)
+    if show:
+        plt.show()
+    if returnAx:
+        return ax
 
 
+def getPoissonSamples(lam,nSamples):
+    if np.isscalar(lam):
+        samples = np.random.poisson(lam,nSamples)
+    else:
+        samples = np.zeros((len(lam),nSamples),dtype=int)
+        for k in range(0,len(lam)):
+            samples[k,:] = np.random.poisson(lam[k],nSamples)
+    return samples
+
+def estimatePoissonRatioErrorbarMonteCarlo(n1,n2,errorVal = 0.67,seed = None,\
+        nSamples=1000,returnSamples=False):
+    interval1 = scipy.stats.poisson(n1).interval(errorVal)
+    interval2 = scipy.stats.poisson(n2).interval(errorVal)
+    np.random.seed(seed)
+    # Generate random samples
+    n1Samples = getPoissonSamples(n1,nSamples)
+    n2Samples = getPoissonSamples(n2,nSamples)
+    nonZero = np.where(n2Samples != 0)
+    ratioValues = np.zeros(n1Samples.shape)
+    ratioValues[nonZero] = n1Samples[nonZero]/n2Samples[nonZero]
+    if np.isscalar(n1):
+        lower = np.percentile(ratioValues,100*(0.5 - errorVal/2))
+        upper = np.percentile(ratioValues,100*(0.5 + errorVal/2))
+    else:
+        lower = np.zeros(n1.shape)
+        upper = np.zeros(n1.shape)
+        for k in range(0,len(n1)):
+            lower[k] = np.percentile(ratioValues[k,:],0.5 - errorVal/2)
+            upper[k] = np.percentile(ratioValues[k,:],100*(0.5 + errorVal/2))
+    returnList = [n1/n2,lower,upper]
+    if returnSamples:
+        returnList.append(ratioValues)
+    return returnList
+
+
+def getRadialUniqueFractions(rMax,rWidth,centresListShort,catalogue,\
+        candidateCounts,errorInterval = 0.67,errorType="Monte Carlo",\
+        nSamples = 10000,seed=None):
+    numCats = catalogue.shape[1]
+    diffMap = [np.setdiff1d(np.arange(0,numCats),[k]) \
+        for k in range(0,numCats)]
+    candCountStripped = [candidateCounts[k][diffMap[k],:] \
+        for k in range(0,numCats)]
+    radialBins = np.arange(0,rMax,rWidth)
+    radialBinCentres = plot.binCentres(radialBins)
+    distances = [np.sqrt(np.sum(centres**2,1)) \
+        for centres in centresListShort]
+    uniqueMatchFracDistAll = np.zeros(len(radialBinCentres))
+    if errorType == "gaussian":
+        uniqueMatchFracDistAllErr = np.zeros(len(radialBinCentres))
+    else:
+        uniqueMatchFracDistAllErr = np.zeros((2,len(radialBinCentres)))
+    for k in range(0,len(radialBins)-1):
+        inRangeDistAll = [np.where(\
+            (distances[ns] > radialBins[k]) & \
+            (distances[ns] <= radialBins[k+1]))[0] \
+            for ns in range(0,numCats)]
+        if errorType == "gaussian":
+            uniqueMatchFracDistAll[k] = np.mean(\
+                [[len(np.where(candCountStripped[m][\
+                l,inRangeDistAll[m]] == 1)[0])/\
+                np.max([1,len(inRangeDistAll[diffMap[m][l]])]) \
+                for l in range(0,numCats-1)] \
+                for m in range(0,numCats)])
+            uniqueMatchFracDistAllErr[k] = np.std(\
+                [[len(np.where(candCountStripped[m][\
+                l,inRangeDistAll[m]] == 1)[0])/\
+                np.max([1,len(inRangeDistAll[diffMap[m][l]])]) \
+                for l in range(0,numCats-1)] \
+                for m in range(0,numCats)])/\
+                np.sqrt(numCats*(numCats-1))
+        elif errorType == "Poisson":
+            numerator = np.sum(\
+                [[len(np.where(candCountStripped[m][\
+                l,inRangeDistAll[m]] == 1)[0]) \
+                for l in range(0,numCats-1)] \
+                for m in range(0,numCats)])
+            denominator = np.max([1,np.sum([[\
+                len(inRangeDistAll[m]) \
+                for l in range(0,numCats-1)] \
+                for m in range(0,numCats)])])
+            interval = scipy.stats.poisson(numerator).interval(errorInterval)
+            uniqueMatchFracDistAll[k] = numerator/denominator
+            uniqueMatchFracDistAllErr[0,k] = (numerator - interval[0])/\
+                denominator
+            uniqueMatchFracDistAllErr[1,k] = (interval[1] - numerator)/\
+                denominator
+        elif errorType == "Monte Carlo":
+            #numerators = np.array([[len(np.where(candCountStripped[m][\
+            #    l,inRangeDistAll[m]] == 1)[0]) \
+            #    for l in range(0,numCats-1)] \
+            #    for m in range(0,numCats)]).reshape(numCats*(numCats-1))
+            #denominators = np.array(\
+            #    [[len(inRangeDistAll[diffMap[m][l]]) \
+            #    for l in range(0,numCats-1)] \
+            #    for m in range(0,numCats)]).reshape(numCats*(numCats-1))
+            #[rat,lower,upper] = estimatePoissonRatioErrorbarMonteCarlo(\
+            #    numerators,denominators,errorVal = errorInterval,\
+            #    nSamples=nSamples,seed=seed)
+            #finite = np.isfinite(rat) & (rat != 0.0)
+            #meanError = (lower[finite] + upper[finite])/2
+            #uniqueMatchFracDistAll[k] = stacking.weightedMean(rat[finite],\
+            #    1.0/meanError**2)
+            #uniqueMatchFracDistAllErr[k] = np.sqrt(\
+            #    np.sum((rat[finite] - uniqueMatchFracDistAll[k])**2\
+            #        /meanError**4)/\
+            #        np.sum(1.0/meanError**2)**2)
+            numerator = np.sum(\
+                [[len(np.where(candCountStripped[m][\
+                l,inRangeDistAll[m]] == 1)[0]) \
+                for l in range(0,numCats-1)] \
+                for m in range(0,numCats)])
+            denominator = np.max([1,np.sum([[\
+                len(inRangeDistAll[m]) \
+                for l in range(0,numCats-1)] \
+                for m in range(0,numCats)])])
+            [rat,lower,upper] = estimatePoissonRatioErrorbarMonteCarlo(\
+                numerator,denominator,errorVal = errorInterval,\
+                nSamples=nSamples,seed=seed)
+            uniqueMatchFracDistAll[k] = numerator/denominator
+            uniqueMatchFracDistAllErr[0,k] = rat - lower
+            uniqueMatchFracDistAllErr[1,k] = upper - rat
+        else:
+            raise Exception("Unrecognised error type")
+    return [radialBinCentres,uniqueMatchFracDistAll,uniqueMatchFracDistAllErr]
+
+def getRadialCatalogueFractions(rMax,rWidth,centresListShort,catalogue,\
+        candidateCounts):
+    numCats = catalogue.shape[1]
+    diffMap = [np.setdiff1d(np.arange(0,numCats),[k]) \
+        for k in range(0,numCats)]
+    candCountStripped = [candidateCounts[k][diffMap[k],:] \
+        for k in range(0,numCats)]
+    radialBins = np.arange(0,rMax,rWidth)
+    radialBinCentres = plot.binCentres(radialBins)
+    distances = [np.sqrt(np.sum(centres**2,1)) \
+        for centres in centresListShort]
+    [distancesOpt,distErrOpt] = getMeanProperty(\
+        getPropertyFromCat(catalogue,distances))
+    catFractionFinalDistanceAll = np.zeros(len(radialBinCentres))
+    catFractionFinalDistanceAllErr = np.zeros(len(radialBinCentres))
+    for k in range(0,len(radialBins)-1):
+        inRangeDist = np.where(\
+            (distancesOpt > radialBins[k]) & \
+            (distancesOpt <= radialBins[k+1]))[0]
+        catFractionFinalDistanceAll[k] = np.mean(\
+            np.sum(catalogue[inRangeDist,:] > 0,1)/numCats)
+        catFractionFinalDistanceAllErr[k] = np.std(\
+            np.sum(catalogue[inRangeDist,:] > 0,1)/numCats)/\
+            np.sqrt(len(inRangeDist))
+    return [radialBinCentres,catFractionFinalDistanceAll,\
+        catFractionFinalDistanceAllErr]
+
+
+def getMeanCentresFromCombinedCatalogue(combinedCat,centresList,\
+        returnError=False,boxsize=None):
+    meanCentresArray = np.zeros((len(combinedCat),3))
+    if returnError:
+        stdCentresArray = np.zeros((len(combinedCat),3))
+    for nV in range(0,len(combinedCat)):
+        centresArray = []
+        for l in range(0,combinedCat.shape[1]):
+            if combinedCat[nV][l] > -1:
+                centresArray.append(centresList[l][combinedCat[nV,l] - 1])
+        meanCentresArray[nV,:] = np.mean(centresArray,0)
+        if returnError:
+            stdCentresArray[nV,:] = np.std(centresArray,0)/\
+                np.sqrt(len(centresArray))
+    if returnError:
+        return [meanCentresArray,stdCentresArray]
+    else:
+        return meanCentresArray
+
+
+def getMeanCentreDistance(combinedCat,centresList,returnError=False,\
+        boxsize=None):
+    meanDistanceArray = np.zeros(len(combinedCat))
+    if returnError:
+        stdDistanceArray = np.zeros(len(combinedCat))
+    for nV in range(0,len(combinedCat)):
+        centresArray = []
+        for l in range(0,combinedCat.shape[1]):
+            if combinedCat[nV][l] > -1:
+                centresArray.append(centresList[l][combinedCat[nV,l] - 1])
+        meanCentre = context.computePeriodicCentreWeighted(\
+            np.array(centresArray),periodicity=boxsize)
+        distances = np.array([tools.getPeriodicDistance(\
+            meanCentre,centre,boxsize=boxsize) \
+            for centre in centresArray])
+        meanDistanceArray[nV] = np.mean(distances)
+        if returnError:
+            stdDistanceArray[nV,:] = np.std(distances)/\
+                np.sqrt(len(centresArray))
+    if returnError:
+        return [meanDistanceArray,stdDistanceArray]
+    else:
+        return meanDistanceArray
+
+# Search radii around centre that have some threshold density relative
+# to the mean density.
+def getThresholdRadius(centres,snap,thresh=0.2,rSearchMax = 100,\
+        rSearchMin=5.0):
+    tree = tools.getKDTree(snap)
+    radii = np.array(len(centres))
+    Om = snap.properties['omegaM0']
+    N = np.cbrt(len(snap))
+    rhoM = 2.7754e11*Om
+    mUnit = rhoM*(boxsize/N)**3
+    for k in range(0,len(centres)):
+        func = lambda r: mUnit*tree.query_ball_point(centres[k,:],r,\
+            return_length=True,workers=-1)/(4*np.pi*rhoM*r**3/3) - thresh
+        valMin = func(rSearchMin)
+        valMax = func(rSearchMax)
+        if valMax*valMin > 0:
+            radii[k] = -1
+        else:
+            radii[k] = scipy.optimize.brentq(func,rSearchMin,rSearchMax)[0]
+    return radii
+
+
+
+
+def getDistanceMatrix(ahIndices,centresList,lowerTriangleOnly=False):
+    centres = [centresList[k][ahIndices[k]-1] \
+        for k in range(0,len(ahIndices))]
+    matrix = np.zeros((len(ahIndices),len(ahIndices)))
+    for k in range(0,len(ahIndices)):
+        for l in range(0,len(ahIndices)):
+            if l > k and lowerTriangleOnly:
+                continue
+            if l == k:
+                continue
+            if ahIndices[k] > 0 and ahIndices[l] > 0:
+                matrix[k,l] = np.sqrt(np.sum((centres[k] - centres[l])**2))
+            else:
+                matrix[k,l] = np.nan
+    return matrix
+
+def getBestCandidateMeanDistance(catalogue,centresList):
+    meanDistances = np.zeros(len(catalogue))
+    if len(catalogue) == 0:
+        return np.array([])
+    lowerTriInd = np.tril_indices(len(catalogue[0]),k=-1)
+    for k in range(0,len(catalogue)):
+        matrix = getDistanceMatrix(catalogue[k],centresList,\
+            lowerTriangleOnly=True)
+        meanDistances[k] = np.nanmean(matrix[lowerTriInd])
+    return meanDistances
+
+# Ratio of two radii, smallest/biggest
+def getRadiusRatio(radii1,radii2):
+    if np.isscalar(radii1):
+        if np.isscalar(radii2):
+            if radii2 > radii1:
+                return radii1/radii2
+            else:
+                return radii2/radii1
+        else:
+            returnArr = radii2/radii1
+            bigger = np.where(radii2 > radii1)[0]
+            returnArr[bigger] = radii1/radii2[bigger]
+            return returnArr
+    else:
+        if np.isscalar(radii2):
+            returnArr = radii1/radii2
+            smaller = np.where(radii2 < radii1)[0]
+            returnArr[smaller] = radii2/radii1[smaller]
+            return returnArr
+        else:
+            returnArr = radii2/radii1
+            bigger = np.where(radii2 > radii1)[0]
+            returnArr[bigger] = radii1[bigger]/radii2[bigger]
+            return returnArr
+
+def getRatioMatrix(ahIndices,radiiList,lowerTriangleOnly = False):
+    radii = [radiiList[:,k][ahIndices[k]-1] \
+        for k in range(0,len(ahIndices))]
+    matrix = np.ones((len(ahIndices),len(ahIndices)))
+    for k in range(0,len(ahIndices)):
+        for l in range(0,len(ahIndices)):
+            if l > k and lowerTriangleOnly:
+                continue
+            if l == k:
+                continue
+            if ahIndices[k] > 0 and ahIndices[l] > 0:
+                matrix[k,l] = getRadiusRatio(radii[k],radii[l])
+            else:
+                matrix[k,l] = np.nan
+    return matrix
+
+def getBestCandidateMeanRatio(catalogue,radiiList):
+    meanRatios = np.zeros(len(catalogue))
+    if len(catalogue) == 0:
+        return np.array([])
+    lowerTriInd = np.tril_indices(len(catalogue[0]),k=-1)
+    for k in range(0,len(catalogue)):
+        matrix = getRatioMatrix(catalogue[k],radiiList,lowerTriangleOnly=True)
+        # Exclude the diagonals:
+        meanRatios[k] = np.nanmean(matrix[lowerTriInd])
+    return meanRatios
+
+# Get statistics on performance for different parameters:
+def specialNanMin(x):
+    if len(x) == 0:
+        return np.nan
+    else:
+        return np.nanmin(x)
+
+def specialNanMax(x):
+    if len(x) == 0:
+        return np.nan
+    else:
+        return np.nanmax(x)
+
+
+def getPropertyFromCat(catList,propertyList):
+    propertyListOut = -np.ones(catList.shape,dtype=float)
+    for k in range(0,len(catList)):
+        for l in range(0,len(catList[0])):
+            if catList[k,l] > 0:
+                propertyListOut[k,l] = propertyList[l][catList[k,l]-1]
+    return propertyListOut
+
+def getCentresFromCat(catList,centresList,ns):
+    centresListOut = np.zeros((len(catList),3),dtype=float)
+    for k in range(0,len(catList)):
+        if catList[k,ns] > 0:
+            centresListOut[k,:] = centresList[ns][catList[k,ns]-1]
+        else:
+            centresListOut[k,:] = np.nan
+    return centresListOut
+
+def getMeanProperty(propertyList,stripNaN=True,lowerLimit=0,stdError=True):
+    meanProperty = np.zeros(len(propertyList))
+    sigmaProperty = np.zeros(len(propertyList))
+    for k in range(0,len(propertyList)):
+        condition = propertyList[k,:] > lowerLimit
+        if stripNaN:
+            condition = condition & (np.isfinite(propertyList[k,:] > 0))
+        haveProperty = np.where(condition)[0]
+        meanProperty[k] = np.mean(propertyList[k,haveProperty])
+        sigmaProperty[k] = np.std(propertyList[k,haveProperty])
+        if stdError:
+            sigmaProperty[k] /= np.sqrt(len(haveProperty))
+    return [meanProperty,sigmaProperty]
 
 
 
