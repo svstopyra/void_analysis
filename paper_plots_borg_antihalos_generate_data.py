@@ -678,6 +678,7 @@ def getPartialPairCountsAndVols(snapNameList,antihaloRadii,antihaloMassesList,\
         rMin,rMax,mMin,mMax,boxsize,filterListToApply=None):
     newPairCounts = []
     newVolumesList = []
+    filtersList = []
     for ns in range(0,len(snapNameList)):
         if filterListToApply is None:
             filterToApply = np.where((antihaloRadii[ns] > rMin) & \
@@ -697,7 +698,8 @@ def getPartialPairCountsAndVols(snapNameList,antihaloRadii,antihaloMassesList,\
             method=method,vorVolumes=vorVols[ns])
         newPairCounts.append(pairs)
         newVolumesList.append(vols)
-    return [newPairCounts,newVolumesList]
+        filtersList.append(filterToApply)
+    return [newPairCounts,newVolumesList,filtersList]
 
 
 def getCentreListUnconstrained(snapListUnconstrained,
