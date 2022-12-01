@@ -2604,7 +2604,13 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
                 snapListUnconstrained=snapListUnconstrained,\
                 snapListUnconstrainedRev=snapListUnconstrainedRev)
     gc.collect()
-
+    return [massListMean,combinedFilter135,combinedFilter,rBinStackCentresCombined,\
+    nbarjSepStackCombined,sigmaSepStackCombined,\
+    nbarjAllStackedUnCombined,sigmaAllStackedUnCombined,nbar,rMin2,\
+    mMin2,mMax2,nbarjSepStackUn,sigmaSepStackUn,\
+    rBinStackCentres,nbarjSepStack,\
+    sigmaSepStack,nbarjAllStackedUn,sigmaAllStackedUn,\
+    nbarjSepStackUn,sigmaSepStackUn]
 
 
 
