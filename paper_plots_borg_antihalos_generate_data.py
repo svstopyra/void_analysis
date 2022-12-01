@@ -18,6 +18,7 @@ import copy
 import h5py
 import healpy
 import matplotlib.pylab as plt
+import os
 
 
 
