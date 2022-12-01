@@ -2302,7 +2302,8 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
         mLower = "auto",mUpper = 2e15,nBins = 8,muOpt = 0.9,rSearchOpt = 1,\
         rSphere = 300,rSphereInner = 135,NWayMatch = True,rMin=5,rMax=30,\
         mMin=1e11,mMax = 1e16,percThresh=99,chainFile="chain_properties.p",\
-        Nden=256,recomputeUnconstrained = False,data_folder="./"):
+        Nden=256,recomputeUnconstrained = False,data_folder="./",\
+        unconstrainedFolderNew = "new_chain/unconstrained_samples/"):
     # Load snapshots:
     if snapList is None:
         snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + \
