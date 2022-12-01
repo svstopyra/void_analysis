@@ -171,6 +171,7 @@ mLimLower = referenceSnap['mass'][0]*1e10*100*8
     sigmaSepStack,nbarjAllStackedUn,sigmaAllStackedUn,\
     nbarjSepStackUn,sigmaSepStackUn] = tools.loadOrRecompute(\
         data_folder + "finalCatData.p",getFinalCatalogue,snapNumList,\
+        snapNumListUncon,\
         snrThresh = 10,snapname = "gadget_full_forward_512/snapshot_001",\
         snapnameRev = "gadget_full_reverse_512/snapshot_001",\
         samplesFolder="new_chain/",snapList = None,snapListRev = None,\

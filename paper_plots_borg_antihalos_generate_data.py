@@ -2294,7 +2294,7 @@ def getMeanProperty(propertyList,stripNaN=True,lowerLimit=0,stdError=True):
     return [meanProperty,sigmaProperty]
 
 
-def getFinalCatalogue(snapNumList,snrThresh = 10,\
+def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
         snapname = "gadget_full_forward_512/snapshot_001",\
         snapnameRev = "gadget_full_reverse_512/snapshot_001",\
         samplesFolder="new_chain/",snapList = None,snapListRev = None,\
