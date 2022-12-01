@@ -2303,7 +2303,8 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
         rSphere = 300,rSphereInner = 135,NWayMatch = True,rMin=5,rMax=30,\
         mMin=1e11,mMax = 1e16,percThresh=99,chainFile="chain_properties.p",\
         Nden=256,recomputeUnconstrained = False,data_folder="./",\
-        unconstrainedFolderNew = "new_chain/unconstrained_samples/"):
+        unconstrainedFolderNew = "new_chain/unconstrained_samples/",\
+        recomputeData=True):
     # Load snapshots:
     if snapList is None:
         snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + \
@@ -2575,7 +2576,8 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
                 ahPropsConstrained = ahProps,\
                 ahPropsUnconstrained = ahPropsUnconstrained,\
                 snapListUnconstrained=snapListUnconstrained,\
-                snapListUnconstrainedRev=snapListUnconstrainedRev)
+                snapListUnconstrainedRev=snapListUnconstrainedRev,\
+                _recomputeData=recomputeData)
     gc.collect()
     [rBinStackCentres,nbarjSepStack,\
             sigmaSepStack,nbarjSepStackUn,sigmaSepStackUn,\
@@ -2602,7 +2604,8 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
                 ahPropsConstrained = ahProps,\
                 ahPropsUnconstrained = ahPropsUnconstrained,\
                 snapListUnconstrained=snapListUnconstrained,\
-                snapListUnconstrainedRev=snapListUnconstrainedRev)
+                snapListUnconstrainedRev=snapListUnconstrainedRev,\
+                _recomputeData=recomputeData)
     gc.collect()
     return [massListMean,combinedFilter135,combinedFilter,rBinStackCentresCombined,\
     nbarjSepStackCombined,sigmaSepStackCombined,\
