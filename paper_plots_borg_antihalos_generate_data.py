@@ -889,7 +889,8 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
         stackedVolumesList = np.vstack(volumesList)
     else:
         # Recompute only those which we need:
-        [newPairCounts,newVolumesList] = getPartialPairCountsAndVols(\
+        [newPairCounts,newVolumesList,filtersList] = \
+            getPartialPairCountsAndVols(\
             snapNameList,antihaloRadii,antihaloMassesList,\
             ahCentresList,vorVols,rBins,method,\
             rMin,rMax,mMin,mMax,boxsize,\
@@ -930,7 +931,7 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
                     conditionListMrangeUn[ns][l],:]
             else:
                 # Regenerate them from scratch:
-                [newPairCountsUn,newVolumesListUn] = \
+                [newPairCountsUn,newVolumesListUn,filtersListUn] = \
                     getPartialPairCountsAndVols(\
                         [snapNameListUn[ns]],[antihaloRadiiUn[ns]],\
                         [antihaloMassesListUn[ns]],\
