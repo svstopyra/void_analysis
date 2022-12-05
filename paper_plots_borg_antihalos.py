@@ -13,6 +13,7 @@ import astropy.units as u
 from astropy.coordinates import SkyCoord
 import scipy
 import os
+import sys
 
 figuresFolder = "borg-antihalos_paper_figures/all_samples"
 
@@ -171,6 +172,8 @@ mLimLower = referenceSnap['mass'][0]*1e10*100*8
 
 doCat = True
 if doCat:
+    print("Doing catalogue construction...")
+    sys.stdout.flush()  
     [massListMean,combinedFilter135,combinedFilter,rBinStackCentresCombined,\
         nbarjSepStackCombined,sigmaSepStackCombined,\
         nbarjAllStackedUnCombined,sigmaAllStackedUnCombined,nbar,rMin2,\
