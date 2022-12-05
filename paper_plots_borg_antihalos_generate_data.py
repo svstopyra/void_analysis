@@ -19,6 +19,7 @@ import h5py
 import healpy
 import matplotlib.pylab as plt
 import os
+import sys
 
 
 
@@ -2309,6 +2310,7 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     # Load snapshots:
     if verbose:
         print("Catalogue construction. \nLoading snapshots..")
+        sys.stdout.flush()
     if snapList is None:
         snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + \
             "/" + snapname) for snapNum in snapNumList]
@@ -2339,6 +2341,7 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     # SNR data:
     if verbose:
         print("Loading chain data...")
+        sys.stdout.flush()
     [mcmcArray,num,N,NCAT,no_bias_params,bias_matrix,mean_field,\
         std_field,hmc_Elh,hmc_Eprior,hades_accept_count,\
         hades_attempt_count] = pickle.load(open(chainFile,"rb"))
@@ -2347,6 +2350,7 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     # Centres about which to compute SNR:
     if verbose:
         print("Computing SNR...")
+        sys.stdout.flush()
     grid = snapedit.gridListPermutation(Nden,perm=(2,1,0))
     centroids = grid*boxsize/Nden + boxsize/(2*Nden)
     positions = snapedit.unwrap(centroids - np.array([boxsize/2]*3),boxsize)
@@ -2363,6 +2367,7 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     # Central anti-halos with appropriate filteR:
     if verbose:
         print("Filtering voids...")
+        sys.stdout.flush()
     centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],rSphere,\
             filterCondition = (antihaloRadii[k] > rMin) & \
             (antihaloRadii[k] <= rMax) & (antihaloMasses[k] > mMin) & \
@@ -2395,6 +2400,7 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     # Catalogue construction:
     if verbose:
         print("Constructing catalogue...")
+        sys.stdout.flush()
     [finalCatOpt,shortHaloListOpt,twoWayMatchListOpt,finalCandidatesOpt,\
         finalRatiosOpt,finalDistancesOpt,allCandidatesOpt,candidateCountsOpt,\
         allRatiosOpt,finalCombinatoricFracOpt,finalCatFracOpt,\
@@ -2409,6 +2415,7 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     # Mean radius, centre, and mass:
     if verbose:
         print("Computing catalogue properties...")
+        sys.stdout.flush()
     radiiListOpt = getPropertyFromCat(finalCatOpt,radiiListShort)
     massListOpt = getPropertyFromCat(finalCatOpt,massListShort)
     [radiiMeanOpt, radiiSigmaOpt]  = getMeanProperty(radiiListOpt)
@@ -2435,6 +2442,7 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     # Unconstrained catalogue:
     if verbose:
         print("Getting random catalogue...")
+        sys.stdout.flush()
     unconstrainedCatFile = data_folder + "unconstrained_catalogue.p"
     if (not os.path.isfile(unconstrainedCatFile)) or recomputeUnconstrained:
         snapListUn = [pynbody.load("new_chain/unconstrained_samples/sample" + \
@@ -2524,6 +2532,7 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     # Construct the filter by mass bin:
     if verbose:
         print("Filtering voids by mass bin...")
+        sys.stdout.flush()
     catFracThresholds = percentilesCat
     massFilter = [(massListMean > massBins[k]) & \
         (massListMean <= massBins[k+1]) \
@@ -2548,6 +2557,7 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     # Data for unconstrained sims:
     if verbose:
         print("Getting unconstrained regions with similar density...")
+        sys.stdout.flush()
     snapListUnconstrained = [pynbody.load(unconstrainedFolderNew + "sample" \
             + str(snapNum) + "/" + snapname) for snapNum in snapNumListUncon]
     snapListUnconstrainedRev = [pynbody.load(unconstrainedFolderNew + \
@@ -2578,6 +2588,7 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     gc.collect()
     if verbose:
         print("Computing combined catalogue profiles...")
+        sys.stdout.flush()
     [rBinStackCentresCombined,nbarjSepStackCombined,\
             sigmaSepStackCombined,nbarjSepStackUnCombined,\
             sigmaSepStackUnCombined,\

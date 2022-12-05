@@ -129,7 +129,8 @@ if doHMFs:
                     unconstrainedFolderOld = unconstrainedFolderOld,\
                     snapnameNew = snapnameNew,snapnameNewRev=snapnameNewRev,\
                     snapnameOld = snapnameOld,snapnameOldRev = snapnameOldRev,\
-                    samplesFolder = samplesFolder,samplesFolderOld=samplesFolderOld)
+                    samplesFolder = samplesFolder,samplesFolderOld=samplesFolderOld,\
+                    data_folder=data_folder)
 
 # Void profile data:
 if runTests:
@@ -173,7 +174,7 @@ mLimLower = referenceSnap['mass'][0]*1e10*100*8
 doCat = True
 if doCat:
     print("Doing catalogue construction...")
-    sys.stdout.flush()  
+    sys.stdout.flush()
     [massListMean,combinedFilter135,combinedFilter,rBinStackCentresCombined,\
         nbarjSepStackCombined,sigmaSepStackCombined,\
         nbarjAllStackedUnCombined,sigmaAllStackedUnCombined,nbar,rMin2,\
@@ -191,7 +192,7 @@ if doCat:
             rSphere = 300,rSphereInner = 135,NWayMatch = True,rMin=5,rMax=30,\
             mMin=1e11,mMax = 1e16,percThresh=99,chainFile="chain_properties.p",\
             Nden=256,recomputeUnconstrained = True,data_folder=data_folder,\
-            _recomputeData = recomputeData)
+            _recomputeData = recomputeData,recomputeData=recomputeData)
 
 nBins = 8
 Om = referenceSnap.properties['omegaM0']
