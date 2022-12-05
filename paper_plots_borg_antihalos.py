@@ -193,6 +193,9 @@ if doCat:
             mMin=1e11,mMax = 1e16,percThresh=99,chainFile="chain_properties.p",\
             Nden=256,recomputeUnconstrained = True,data_folder=data_folder,\
             _recomputeData = recomputeData,recomputeData=recomputeData)
+    print("Finished catalogue construction...")
+    sys.stdout.flush()
+
 
 nBins = 8
 Om = referenceSnap.properties['omegaM0']
