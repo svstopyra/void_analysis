@@ -16,7 +16,7 @@ import os
 
 figuresFolder = "borg-antihalos_paper_figures/all_samples"
 
-recomputeData = True
+recomputeData = False
 testDataFolder = figuresFolder + "tests_data/"
 runTests = False
 
@@ -163,6 +163,7 @@ snapsort = np.argsort(referenceSnap['iord'])
 mLimLower = referenceSnap['mass'][0]*1e10*100*8
 
 
+
 [massListMean,combinedFilter135,combinedFilter,rBinStackCentresCombined,\
     nbarjSepStackCombined,sigmaSepStackCombined,\
     nbarjAllStackedUnCombined,sigmaAllStackedUnCombined,nbar,rMin2,\
@@ -179,13 +180,14 @@ mLimLower = referenceSnap['mass'][0]*1e10*100*8
         mLower = "auto",mUpper = 2e15,nBins = 8,muOpt = 0.9,rSearchOpt = 1,\
         rSphere = 300,rSphereInner = 135,NWayMatch = True,rMin=5,rMax=30,\
         mMin=1e11,mMax = 1e16,percThresh=99,chainFile="chain_properties.p",\
-        Nden=256,recomputeUnconstrained = False,data_folder=data_folder)
+        Nden=256,recomputeUnconstrained = False,data_folder=data_folder,\
+        _recomputeData = recomputeData)
 
 nBins = 8
-Om = snapList[0].properties['omegaM0']
+Om = referenceSnap.properties['omegaM0']
 rhoc = 2.7754e11
-boxsize = snapList[0].properties['boxsize'].ratio("Mpc a h**-1")
-N = int(np.cbrt(len(snapList[0])))
+boxsize = referenceSnap.properties['boxsize'].ratio("Mpc a h**-1")
+N = int(np.cbrt(len(referenceSnap)))
 mUnit = 8*Om*rhoc*(boxsize/N)**3
 mLower = 100*mUnit
 mUpper = 2e15
