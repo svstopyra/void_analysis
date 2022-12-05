@@ -2389,7 +2389,8 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
         finalRatiosOpt,finalDistancesOpt,allCandidatesOpt,candidateCountsOpt,\
         allRatiosOpt,finalCombinatoricFracOpt,finalCatFracOpt,\
         alreadyMatched] = \
-        constructAntihaloCatalogue(snapNumList,snapList=snapList,\
+        tools.loadOrRecompute(data_folder + "catalogue_all_data.p",\
+        constructAntihaloCatalogue,snapNumList,snapList=snapList,\
         snapListRev=snapListRev,ahProps=ahProps,hrList=hrList,max_index=None,\
         twoWayOnly=True,blockDuplicates=True,\
         crossMatchThreshold = muOpt,distMax = rSearchOpt,rSphere=rSphere,\
@@ -2411,6 +2412,12 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
         workers=-1)
     snrList = np.array([np.mean(snrFieldLin[points]) \
         for points in nearestPoints])
+    # Save catalogue details:
+    np.savez(data_folder + "catalogue_data.npz",catalogue=finalCatOpt,\
+        radii=radiiMeanOpt,sigma_radii=radiiSigmaOpt,mass=massMeanOpt,\
+        sigma_mass=massSigmaOpt,centres=meanCentresArray,\
+        sigma_centres=stdCentresArray,snr=snrList,\
+        cat_frac=finalCatFracOpt,comb_frac=finalCombinatoricFracOpt)
     # Generate an unconstrained catalogue to determine threshold for
     # spurious voids:
     # Unconstrained catalogue:
