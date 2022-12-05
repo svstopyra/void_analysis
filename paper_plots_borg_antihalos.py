@@ -77,19 +77,21 @@ if runTests:
         recomputeData = True)
 
 nBinsPPT = 30
-
-[galaxyNumberCountExp,galaxyNumberCountsRobust] = tools.loadOrRecompute(\
-    figuresFolder + "ppt_plots_data.p",getPPTPlotData,\
-    _recomputeData = recomputeData,nBins = nBinsPPT,nClust=9,nMagBins = 16,\
-        N=256,restartFile = 'new_chain_restart/merged_restart.h5',\
-        snapNumList = snapNumList,samplesFolder = 'new_chain/',\
-        surveyMaskPath = "./2mpp_data/",\
-        Om0 = 0.3111,Ode0 = 0.6889,boxsize = 677.7,h=0.6766,Mstarh = -23.28,\
-        mmin = 0.0,mmax = 12.5,recomputeData = recomputeData,rBinMin = 0.1,\
-        rBinMax = 20,abell_nums = [426,2147,1656,3627,3571,548,2197,2063,1367],\
-        nside = 4,nRadialSlices=10,rmax=600,tmppFile = "2mpp_data/2MPP.txt",\
-        reductions = 4,iterations = 20,verbose=True,hpIndices=None,\
-        centreMethod="density")
+print("Doing ppts")
+doPPTs = False
+if doPPTs:
+    [galaxyNumberCountExp,galaxyNumberCountsRobust] = tools.loadOrRecompute(\
+        figuresFolder + "ppt_plots_data.p",getPPTPlotData,\
+        _recomputeData = recomputeData,nBins = nBinsPPT,nClust=9,nMagBins = 16,\
+            N=256,restartFile = 'new_chain_restart/merged_restart.h5',\
+            snapNumList = snapNumList,samplesFolder = 'new_chain/',\
+            surveyMaskPath = "./2mpp_data/",\
+            Om0 = 0.3111,Ode0 = 0.6889,boxsize = 677.7,h=0.6766,Mstarh = -23.28,\
+            mmin = 0.0,mmax = 12.5,recomputeData = recomputeData,rBinMin = 0.1,\
+            rBinMax = 20,abell_nums = [426,2147,1656,3627,3571,548,2197,2063,1367],\
+            nside = 4,nRadialSlices=10,rmax=600,tmppFile = "2mpp_data/2MPP.txt",\
+            reductions = 4,iterations = 20,verbose=True,hpIndices=None,\
+            centreMethod="density")
 
 
 # Load or recompute the HMF/AMF data:
@@ -103,27 +105,30 @@ if runTests:
         snapnameOld = snapnameOld,snapnameOldRev = snapnameOldRev,\
         samplesFolder = samplesFolder,samplesFolderOld=samplesFolderOld)
 
-[constrainedHaloMasses512New,constrainedAntihaloMasses512New,\
-        deltaListMeanNew,deltaListErrorNew,\
-        constrainedHaloMasses512Old,constrainedAntihaloMasses512Old,\
-        deltaListMeanOld,deltaListErrorOld,\
-        comparableHalosNew,comparableHaloMassesNew,\
-        comparableAntihalosNew,comparableAntihaloMassesNew,\
-        centralHalosNew,centralAntihalosNew,\
-        centralHaloMassesNew,centralAntihaloMassesNew,\
-        comparableHalosOld,comparableHaloMassesOld,\
-        comparableAntihalosOld,comparableAntihaloMassesOld,\
-        centralHalosOld,centralAntihalosOld,\
-        centralHaloMassesOld,centralAntihaloMassesOld] = \
-            tools.loadOrRecompute(figuresFolder + "amf_hmf_data.p",\
-                getHMFAMFData,snapNumList,snapNumListOld,snapNumListUncon,\
-                snapNumListUnconOld,_recomputeData = recomputeData,\
-                recomputeData = [False,False,False,False],\
-                unconstrainedFolderNew = unconstrainedFolderNew,\
-                unconstrainedFolderOld = unconstrainedFolderOld,\
-                snapnameNew = snapnameNew,snapnameNewRev=snapnameNewRev,\
-                snapnameOld = snapnameOld,snapnameOldRev = snapnameOldRev,\
-                samplesFolder = samplesFolder,samplesFolderOld=samplesFolderOld)
+
+doHMFs = False
+if doHMFs:
+    [constrainedHaloMasses512New,constrainedAntihaloMasses512New,\
+            deltaListMeanNew,deltaListErrorNew,\
+            constrainedHaloMasses512Old,constrainedAntihaloMasses512Old,\
+            deltaListMeanOld,deltaListErrorOld,\
+            comparableHalosNew,comparableHaloMassesNew,\
+            comparableAntihalosNew,comparableAntihaloMassesNew,\
+            centralHalosNew,centralAntihalosNew,\
+            centralHaloMassesNew,centralAntihaloMassesNew,\
+            comparableHalosOld,comparableHaloMassesOld,\
+            comparableAntihalosOld,comparableAntihaloMassesOld,\
+            centralHalosOld,centralAntihalosOld,\
+            centralHaloMassesOld,centralAntihaloMassesOld] = \
+                tools.loadOrRecompute(figuresFolder + "amf_hmf_data.p",\
+                    getHMFAMFData,snapNumList,snapNumListOld,snapNumListUncon,\
+                    snapNumListUnconOld,_recomputeData = recomputeData,\
+                    recomputeData = [False,False,False,False],\
+                    unconstrainedFolderNew = unconstrainedFolderNew,\
+                    unconstrainedFolderOld = unconstrainedFolderOld,\
+                    snapnameNew = snapnameNew,snapnameNewRev=snapnameNewRev,\
+                    snapnameOld = snapnameOld,snapnameOldRev = snapnameOldRev,\
+                    samplesFolder = samplesFolder,samplesFolderOld=samplesFolderOld)
 
 # Void profile data:
 if runTests:
@@ -164,25 +169,26 @@ snapsort = np.argsort(referenceSnap['iord'])
 mLimLower = referenceSnap['mass'][0]*1e10*100*8
 
 
-
-[massListMean,combinedFilter135,combinedFilter,rBinStackCentresCombined,\
-    nbarjSepStackCombined,sigmaSepStackCombined,\
-    nbarjAllStackedUnCombined,sigmaAllStackedUnCombined,nbar,rMin2,\
-    mMin2,mMax2,nbarjSepStackUn,sigmaSepStackUn,\
-    rBinStackCentres,nbarjSepStack,\
-    sigmaSepStack,nbarjAllStackedUn,sigmaAllStackedUn,\
-    nbarjSepStackUn,sigmaSepStackUn] = tools.loadOrRecompute(\
-        data_folder + "finalCatData.p",getFinalCatalogue,snapNumList,\
-        snapNumListUncon,\
-        snrThresh = 10,snapname = "gadget_full_forward_512/snapshot_001",\
-        snapnameRev = "gadget_full_reverse_512/snapshot_001",\
-        samplesFolder="new_chain/",snapList = None,snapListRev = None,\
-        snapListUnconstrained = None,snapListUnconstrainedRev=None,\
-        mLower = "auto",mUpper = 2e15,nBins = 8,muOpt = 0.9,rSearchOpt = 1,\
-        rSphere = 300,rSphereInner = 135,NWayMatch = True,rMin=5,rMax=30,\
-        mMin=1e11,mMax = 1e16,percThresh=99,chainFile="chain_properties.p",\
-        Nden=256,recomputeUnconstrained = True,data_folder=data_folder,\
-        _recomputeData = recomputeData)
+doCat = True
+if doCat:
+    [massListMean,combinedFilter135,combinedFilter,rBinStackCentresCombined,\
+        nbarjSepStackCombined,sigmaSepStackCombined,\
+        nbarjAllStackedUnCombined,sigmaAllStackedUnCombined,nbar,rMin2,\
+        mMin2,mMax2,nbarjSepStackUn,sigmaSepStackUn,\
+        rBinStackCentres,nbarjSepStack,\
+        sigmaSepStack,nbarjAllStackedUn,sigmaAllStackedUn,\
+        nbarjSepStackUn,sigmaSepStackUn] = tools.loadOrRecompute(\
+            data_folder + "finalCatData.p",getFinalCatalogue,snapNumList,\
+            snapNumListUncon,\
+            snrThresh = 10,snapname = "gadget_full_forward_512/snapshot_001",\
+            snapnameRev = "gadget_full_reverse_512/snapshot_001",\
+            samplesFolder="new_chain/",snapList = None,snapListRev = None,\
+            snapListUnconstrained = None,snapListUnconstrainedRev=None,\
+            mLower = "auto",mUpper = 2e15,nBins = 8,muOpt = 0.9,rSearchOpt = 1,\
+            rSphere = 300,rSphereInner = 135,NWayMatch = True,rMin=5,rMax=30,\
+            mMin=1e11,mMax = 1e16,percThresh=99,chainFile="chain_properties.p",\
+            Nden=256,recomputeUnconstrained = True,data_folder=data_folder,\
+            _recomputeData = recomputeData)
 
 nBins = 8
 Om = referenceSnap.properties['omegaM0']
@@ -264,10 +270,12 @@ if runTests:
         getAntihaloSkyPlotData,\
         [7000, 7200, 7400],samplesFolder=samplesFolder,recomputeData = True)
 
-[alpha_shape_list,largeAntihalos,\
-        snapsortList] = tools.loadOrRecompute(figuresFolder + "skyplot_data.p",
-            getAntihaloSkyPlotData,snapNumList,samplesFolder=samplesFolder,\
-            _recomputeData = recomputeData,recomputeData = recomputeData)
+doSky = False
+if doSky:
+    [alpha_shape_list,largeAntihalos,\
+            snapsortList] = tools.loadOrRecompute(figuresFolder + "skyplot_data.p",
+                getAntihaloSkyPlotData,snapNumList,samplesFolder=samplesFolder,\
+                _recomputeData = recomputeData,recomputeData = recomputeData)
 
 # Can't really un-pickle the halo catalogues without loading the snapshots, so
 # we will have to load these, unfortunately. We should change this, as it 
@@ -314,47 +322,47 @@ plot.plotPPTProfiles(np.sum(galaxyNumberCountExp,2),\
 # HMF/AMF PLOT:
 
 savename = figuresFolder + "hmf_amf_old_vs_new_forward_model.pdf"
-
-plot.plotHMFAMFComparison(\
-        constrainedHaloMasses512Old,deltaListMeanOld,deltaListErrorOld,\
-        comparableHaloMassesOld,constrainedAntihaloMasses512Old,\
-        comparableAntihaloMassesOld,\
-        constrainedHaloMasses512New,deltaListMeanNew,deltaListErrorNew,\
-        comparableHaloMassesNew,constrainedAntihaloMasses512New,\
-        comparableAntihaloMassesNew,\
-        referenceSnap,referenceSnapOld,\
-        savename = figuresFolder + "test_hmf_amf.pdf",\
-        ylabelStartOld = 'Old reconstruction',\
-        ylabelStartNew = 'New reconstruction',\
-        fontsize=fontsize,legendFontsize=legendFontsize,density=True,\
-        xlim = (mLimLower,3e15),nMassBins=11,mLower=1e14,mUpper=3e15)
+if doHMFs:
+    plot.plotHMFAMFComparison(\
+            constrainedHaloMasses512Old,deltaListMeanOld,deltaListErrorOld,\
+            comparableHaloMassesOld,constrainedAntihaloMasses512Old,\
+            comparableAntihaloMassesOld,\
+            constrainedHaloMasses512New,deltaListMeanNew,deltaListErrorNew,\
+            comparableHaloMassesNew,constrainedAntihaloMasses512New,\
+            comparableAntihaloMassesNew,\
+            referenceSnap,referenceSnapOld,\
+            savename = figuresFolder + "test_hmf_amf.pdf",\
+            ylabelStartOld = 'Old reconstruction',\
+            ylabelStartNew = 'New reconstruction',\
+            fontsize=fontsize,legendFontsize=legendFontsize,density=True,\
+            xlim = (mLimLower,3e15),nMassBins=11,mLower=1e14,mUpper=3e15)
 
 
 #-------------------------------------------------------------------------------
 # HMF/AMF PLOT, UNDERDENSE:
-
-plot.plotHMFAMFUnderdenseComparison(\
-        constrainedHaloMasses512New,deltaListMeanNew,deltaListErrorNew,\
-        comparableHaloMassesNew,constrainedAntihaloMasses512New,\
-        comparableAntihaloMassesNew,centralHalosNew,centralAntihalosNew,\
-        centralHaloMassesNew,centralAntihaloMassesNew,\
-        savename = figuresFolder + "hmf_amf_underdense_comparison.pdf",\
-        xlim = (mLimLower,3e15),nMassBins=11,mLower=1e14,mUpper=3e15)
+if doHMFs:
+    plot.plotHMFAMFUnderdenseComparison(\
+            constrainedHaloMasses512New,deltaListMeanNew,deltaListErrorNew,\
+            comparableHaloMassesNew,constrainedAntihaloMasses512New,\
+            comparableAntihaloMassesNew,centralHalosNew,centralAntihalosNew,\
+            centralHaloMassesNew,centralAntihaloMassesNew,\
+            savename = figuresFolder + "hmf_amf_underdense_comparison.pdf",\
+            xlim = (mLimLower,3e15),nMassBins=11,mLower=1e14,mUpper=3e15)
 
 #-------------------------------------------------------------------------------
 # RADIAL VOID PROFILES
-
-plot.plotConstrainedVsUnconstrainedProfiles(rBinStackCentres,nbarjSepStack,\
-    sigmaSepStack,nbarjAllStackedUn,sigmaAllStackedUn,nbar,rMin,mMin,mMax,\
-    showImmediately = True,fontsize = fontsize,legendFontSize=legendFontsize,\
-    labelCon='Constrained',\
-    labelRand='Unconstrained \nmean',\
-    savename=figuresFolder + "profiles1415.pdf",\
-    showTitle=False,\
-    meanErrorLabel = 'Unconstrained \nMean',\
-    profileErrorLabel = 'Profile \nvariation \n',\
-    nbarjUnconstrainedStacks=nbarjSepStackUn,\
-    sigmajUnconstrainedStacks = sigmaSepStackUn,showMean=True)
+if doCat:
+    plot.plotConstrainedVsUnconstrainedProfiles(rBinStackCentres,nbarjSepStack,\
+        sigmaSepStack,nbarjAllStackedUn,sigmaAllStackedUn,nbar,rMin,mMin,mMax,\
+        showImmediately = True,fontsize = fontsize,legendFontSize=legendFontsize,\
+        labelCon='Constrained',\
+        labelRand='Unconstrained \nmean',\
+        savename=figuresFolder + "profiles1415.pdf",\
+        showTitle=False,\
+        meanErrorLabel = 'Unconstrained \nMean',\
+        profileErrorLabel = 'Profile \nvariation \n',\
+        nbarjUnconstrainedStacks=nbarjSepStackUn,\
+        sigmajUnconstrainedStacks = sigmaSepStackUn,showMean=True)
 
 #-------------------------------------------------------------------------------
 # ANTIHALO SKY PLOT:
@@ -384,45 +392,44 @@ bound_box = transforms.Bbox([[cropPoint[0], cropPoint[1]],
 
 # Cluster locations:
 # Galaxy positions:
-[combinedAbellN,combinedAbellPos,abell_nums] = \
-    real_clusters.getCombinedAbellCatalogue()
+if doSky:
+    [combinedAbellN,combinedAbellPos,abell_nums] = \
+        real_clusters.getCombinedAbellCatalogue()
+    abell_nums = [426,2147,1656,3627,3545,548,2197,2052,1367]
+    [abell_l,abell_b,abell_n,abell_z,\
+            abell_d,p_abell,coordAbell] = getClusterSkyPositions("./")
+    clusterInd = [np.where(combinedAbellN == n)[0] for n in abell_nums]
+    clusterIndMain = [ind[0] for ind in clusterInd]
+    coordCombinedAbellCart = SkyCoord(x=combinedAbellPos[:,0]*u.Mpc,\
+            y = combinedAbellPos[:,1]*u.Mpc,z = combinedAbellPos[:,2]*u.Mpc,\
+            frame='icrs',representation_type='cartesian')
+    equatorialRThetaPhi = np.vstack(\
+        [coordCombinedAbellCart.icrs.spherical.distance.value,\
+        coordCombinedAbellCart.icrs.spherical.lat.value*np.pi/180.0,\
+        coordCombinedAbellCart.icrs.spherical.lon.value*np.pi/180]).transpose()
+    coordCombinedAbellSphere = SkyCoord(distance=\
+        coordCombinedAbellCart.icrs.spherical.distance.value*u.Mpc,\
+        ra = coordCombinedAbellCart.icrs.spherical.lon.value*u.deg,\
+        dec = coordCombinedAbellCart.icrs.spherical.lat.value*u.deg,\
+        frame='icrs')
 
-abell_nums = [426,2147,1656,3627,3545,548,2197,2052,1367]
-[abell_l,abell_b,abell_n,abell_z,\
-        abell_d,p_abell,coordAbell] = getClusterSkyPositions("./")
-clusterInd = [np.where(combinedAbellN == n)[0] for n in abell_nums]
-clusterIndMain = [ind[0] for ind in clusterInd]
 
-coordCombinedAbellCart = SkyCoord(x=combinedAbellPos[:,0]*u.Mpc,\
-        y = combinedAbellPos[:,1]*u.Mpc,z = combinedAbellPos[:,2]*u.Mpc,\
-        frame='icrs',representation_type='cartesian')
-
-equatorialRThetaPhi = np.vstack(\
-    [coordCombinedAbellCart.icrs.spherical.distance.value,\
-    coordCombinedAbellCart.icrs.spherical.lat.value*np.pi/180.0,\
-    coordCombinedAbellCart.icrs.spherical.lon.value*np.pi/180]).transpose()
-
-coordCombinedAbellSphere = SkyCoord(distance=\
-    coordCombinedAbellCart.icrs.spherical.distance.value*u.Mpc,\
-    ra = coordCombinedAbellCart.icrs.spherical.lon.value*u.deg,\
-    dec = coordCombinedAbellCart.icrs.spherical.lat.value*u.deg,\
-    frame='icrs')
-
-plot.plotLocalUniverseMollweide(rCut,snapToShow,\
-    alpha_shapes = alpha_shape_list[ns][1],
-    largeAntihalos = largeAntihalos[ns],hr=antihaloCatalogueList[ns],
-    coordAbell = coordCombinedAbellSphere,abellListLocation = clusterIndMain,\
-    nameListLargeClusters = [name[0] for name in clusterNames],\
-    ha = ha,va= va, annotationPos = annotationPos,\
-    title = 'Local super-volume: large voids (antihalos) within $' + \
-    str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",
-    vmin=1e-2,vmax=1e2,legLoc = 'lower left',bbox_to_anchor = (-0.1,-0.2),
-    snapsort = snapsortList[ns],antihaloCentres = None,
-    figOut = figuresFolder + "/antihalos_sky_plot.pdf",
-    showFig=True,figsize = (scale*textwidth,scale*0.55*textwidth),
-    voidColour = seabornColormap[0],antiHaloLabel='inPlot',
-    bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
-    galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False)
+if doSky:
+    plot.plotLocalUniverseMollweide(rCut,snapToShow,\
+        alpha_shapes = alpha_shape_list[ns][1],
+        largeAntihalos = largeAntihalos[ns],hr=antihaloCatalogueList[ns],
+        coordAbell = coordCombinedAbellSphere,abellListLocation = clusterIndMain,\
+        nameListLargeClusters = [name[0] for name in clusterNames],\
+        ha = ha,va= va, annotationPos = annotationPos,\
+        title = 'Local super-volume: large voids (antihalos) within $' + \
+        str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",
+        vmin=1e-2,vmax=1e2,legLoc = 'lower left',bbox_to_anchor = (-0.1,-0.2),
+        snapsort = snapsortList[ns],antihaloCentres = None,
+        figOut = figuresFolder + "/antihalos_sky_plot.pdf",
+        showFig=True,figsize = (scale*textwidth,scale*0.55*textwidth),
+        voidColour = seabornColormap[0],antiHaloLabel='inPlot',
+        bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
+        galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False)
 
 #-------------------------------------------------------------------------------
 # MASS CONVERGENCE PLOT:
@@ -440,20 +447,22 @@ sampleList = ["sample7422","sample7500","sample8000",\
 
 # Comparison between two different types of mass:
 clusterFilter = np.array([2,4,6],dtype=int) # Coma, Shapley, Hercules A
-plot.plotMassTypeComparison(np.array(massList200c)[:,:,clusterFilter],\
-    np.array(massListFull200c)[:,clusterFilter],\
-    np.array(massList100m)[:,:,clusterFilter],\
-    np.array(massListFull100m)[:,clusterFilter],\
-    stepsListGADGET,stepsList,logstepsList,stepsList1024,\
-    stepsListEPS_0p662,resStepsList,clusterNames[clusterFilter,:],\
-    name1 = "$M_{200\\mathrm{c}}$",name2 = "$M_{100\\mathrm{m}}$",\
-    show=True,save = True,colorLinear = seabornColormap[0],\
-    colorLog=seabornColormap[1],colorGadget='k',colorAdaptive='grey',\
-    showGadgetAdaptive = True,showResMasses = False,\
-    savename = figuresFolder + "mass_convergence_comparison.pdf",\
-    massName = "M",\
-    extraMasses = None,extraMassLabel = 'Extra mass scale',\
-    xlabel='Number of Steps',nsamples = len(sampleList),\
-    returnHandles=False,showLegend=True,nCols=3,resList=resList)
+doCon=False
+if doCon:
+    plot.plotMassTypeComparison(np.array(massList200c)[:,:,clusterFilter],\
+        np.array(massListFull200c)[:,clusterFilter],\
+        np.array(massList100m)[:,:,clusterFilter],\
+        np.array(massListFull100m)[:,clusterFilter],\
+        stepsListGADGET,stepsList,logstepsList,stepsList1024,\
+        stepsListEPS_0p662,resStepsList,clusterNames[clusterFilter,:],\
+        name1 = "$M_{200\\mathrm{c}}$",name2 = "$M_{100\\mathrm{m}}$",\
+        show=True,save = True,colorLinear = seabornColormap[0],\
+        colorLog=seabornColormap[1],colorGadget='k',colorAdaptive='grey',\
+        showGadgetAdaptive = True,showResMasses = False,\
+        savename = figuresFolder + "mass_convergence_comparison.pdf",\
+        massName = "M",\
+        extraMasses = None,extraMassLabel = 'Extra mass scale',\
+        xlabel='Number of Steps',nsamples = len(sampleList),\
+        returnHandles=False,showLegend=True,nCols=3,resList=resList)
 
 

@@ -2305,8 +2305,10 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
         mMin=1e11,mMax = 1e16,percThresh=99,chainFile="chain_properties.p",\
         Nden=256,recomputeUnconstrained = False,data_folder="./",\
         unconstrainedFolderNew = "new_chain/unconstrained_samples/",\
-        recomputeData=True):
+        recomputeData=True,verbose=True):
     # Load snapshots:
+    if verbose:
+        print("Catalogue construction. \nLoading snapshots..")
     if snapList is None:
         snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + \
             "/" + snapname) for snapNum in snapNumList]
@@ -2335,12 +2337,16 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     vorVols = [props[4] for props in ahProps]
     antihaloRadii = [props[7] for props in ahProps]
     # SNR data:
+    if verbose:
+        print("Loading chain data...")
     [mcmcArray,num,N,NCAT,no_bias_params,bias_matrix,mean_field,\
         std_field,hmc_Elh,hmc_Eprior,hades_accept_count,\
         hades_attempt_count] = pickle.load(open(chainFile,"rb"))
     snrField = mean_field**2/std_field**2
     snrFieldLin = np.reshape(snrField,Nden**3)
     # Centres about which to compute SNR:
+    if verbose:
+        print("Computing SNR...")
     grid = snapedit.gridListPermutation(Nden,perm=(2,1,0))
     centroids = grid*boxsize/Nden + boxsize/(2*Nden)
     positions = snapedit.unwrap(centroids - np.array([boxsize/2]*3),boxsize)
@@ -2355,6 +2361,8 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
         for points in nearestPointsList[k]]) for k in range(0,len(snapNumList))]
     snrFilter = [snr > snrThresh for snr in snrAllCatsList]
     # Central anti-halos with appropriate filteR:
+    if verbose:
+        print("Filtering voids...")
     centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],rSphere,\
             filterCondition = (antihaloRadii[k] > rMin) & \
             (antihaloRadii[k] <= rMax) & (antihaloMasses[k] > mMin) & \
@@ -2385,6 +2393,8 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     diffMap = [np.setdiff1d(np.arange(0,len(snapNumList)),[k]) \
         for k in range(0,len(snapNumList))]
     # Catalogue construction:
+    if verbose:
+        print("Constructing catalogue...")
     [finalCatOpt,shortHaloListOpt,twoWayMatchListOpt,finalCandidatesOpt,\
         finalRatiosOpt,finalDistancesOpt,allCandidatesOpt,candidateCountsOpt,\
         allRatiosOpt,finalCombinatoricFracOpt,finalCatFracOpt,\
@@ -2397,6 +2407,8 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
         massRange = [mMin,mMax],NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
         additionalFilters = snrFilter)
     # Mean radius, centre, and mass:
+    if verbose:
+        print("Computing catalogue properties...")
     radiiListOpt = getPropertyFromCat(finalCatOpt,radiiListShort)
     massListOpt = getPropertyFromCat(finalCatOpt,massListShort)
     [radiiMeanOpt, radiiSigmaOpt]  = getMeanProperty(radiiListOpt)
@@ -2421,6 +2433,8 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     # Generate an unconstrained catalogue to determine threshold for
     # spurious voids:
     # Unconstrained catalogue:
+    if verbose:
+        print("Getting random catalogue...")
     unconstrainedCatFile = data_folder + "unconstrained_catalogue.p"
     if (not os.path.isfile(unconstrainedCatFile)) or recomputeUnconstrained:
         snapListUn = [pynbody.load("new_chain/unconstrained_samples/sample" + \
@@ -2508,6 +2522,8 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     massListComb = getPropertyFromCat(finalCatOpt,massListShort)
     [massListMean,massListSigma] = getMeanProperty(massListComb)
     # Construct the filter by mass bin:
+    if verbose:
+        print("Filtering voids by mass bin...")
     catFracThresholds = percentilesCat
     massFilter = [(massListMean > massBins[k]) & \
         (massListMean <= massBins[k+1]) \
@@ -2530,6 +2546,8 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
             combinedFilter135,k] - 1]]) \
         for k in range(0,len(snapList))]
     # Data for unconstrained sims:
+    if verbose:
+        print("Getting unconstrained regions with similar density...")
     snapListUnconstrained = [pynbody.load(unconstrainedFolderNew + "sample" \
             + str(snapNum) + "/" + snapname) for snapNum in snapNumListUncon]
     snapListUnconstrainedRev = [pynbody.load(unconstrainedFolderNew + \
@@ -2558,6 +2576,8 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
         randomSeed = 1000,numDenSamples = 1000,rSphere = 135,\
         densityRange = [-0.051,-0.049],_recomputeData=recomputeData)
     gc.collect()
+    if verbose:
+        print("Computing combined catalogue profiles...")
     [rBinStackCentresCombined,nbarjSepStackCombined,\
             sigmaSepStackCombined,nbarjSepStackUnCombined,\
             sigmaSepStackUnCombined,\
@@ -2587,6 +2607,8 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
                 snapListUnconstrainedRev=snapListUnconstrainedRev,\
                 _recomputeData=recomputeData)
     gc.collect()
+    if verbose:
+        print("Computing all voids profiles...")
     [rBinStackCentres,nbarjSepStack,\
             sigmaSepStack,nbarjSepStackUn,sigmaSepStackUn,\
             nbarjAllStacked,sigmaAllStacked,nbarjAllStackedUn,\
