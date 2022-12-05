@@ -66,6 +66,7 @@ snapNumList = [7000,7300,7600,7900,8200,8500,8800,9100,9400,9700,10000,\
 
 #snapNumListUncon = [1,2,3,4,5]
 snapNumListUncon = [1,2,3,4,5,6,7,8,9,10]
+#snapNumListUncon = [2,4,5,6,7,8,9,10]
 snapNumListUnconOld = [1,2,3,5,6]
 boxsize = 677.7
 
@@ -180,7 +181,7 @@ mLimLower = referenceSnap['mass'][0]*1e10*100*8
         mLower = "auto",mUpper = 2e15,nBins = 8,muOpt = 0.9,rSearchOpt = 1,\
         rSphere = 300,rSphereInner = 135,NWayMatch = True,rMin=5,rMax=30,\
         mMin=1e11,mMax = 1e16,percThresh=99,chainFile="chain_properties.p",\
-        Nden=256,recomputeUnconstrained = False,data_folder=data_folder,\
+        Nden=256,recomputeUnconstrained = True,data_folder=data_folder,\
         _recomputeData = recomputeData)
 
 nBins = 8
