@@ -270,6 +270,14 @@ def getHaloMassesAndVirials(snap,centres,overden=200,rho_def = 'critical',
         virials[k] = rvir.in_units(distanceUnit)
     return [masses,virials]
 
+# Load a pynbody snapshot if we provide a string, otherwise just return the 
+# snapshot.
+def getPynbodySnap(snap):
+    if type(snap) == str:
+        return pynbody.load(snap)
+    else:
+        return snap
+
 # Function to either load data, or recompute it:
 def loadOrRecompute(filename,func,*args,_recomputeData = False,_cacheData=True,\
         **kwargs):

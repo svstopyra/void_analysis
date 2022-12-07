@@ -2673,7 +2673,59 @@ def plotHMFAMFUnderdenseComparison(\
         plt.show()
 
 
-
+# Void profiles plot for the voids paper:
+def plotVoidProfilesPaper(rBinStackCentres,nbarjMean,sigmaMean,nbar,\
+        nbarjUnMean,sigmaUnMean,sigmaUn,\
+        labelCon='Constrained',labelRand='Unconstrained \nmean',\
+        fmtCon = '-',colourCon = 'r',colorRandMean='k',showMean=True,\
+        errorAlpha=0.5,meanErrorLabel = 'Unconstrained \nMean',\
+        profileErrorLabel = 'Profile \nvariation \n',colourRand = 'grey',
+        title=None,showTitle=True,rMin=5,mMin=1e11,mMax=1e16,\
+        legendFontSize=12,fontname="serif",fontsize=12,frameon=False,\
+        legendLoc = 'upper right',bottom=0.125,left=0.125,includeLegend=True,\
+        show = True,hideYLabels = False,ylim = [0,1.4],xlim=None,\
+        guideColour = 'grey',guideStyle='--',savename=None,ax=None):
+    if ax is None:
+        fig, ax = plt.subplots()
+    ax.errorbar(rBinStackCentres,nbarjMean/nbar,
+        yerr=sigmaMean/nbar,label=labelCon,fmt=fmtCon,color=colourCon)
+    if showMean:
+        ax.fill_between(rBinStackCentres,\
+            y1 = (nbarjUnMean - sigmaUnMean)/nbar,\
+            y2 = (nbarjUnMean + sigmaUnMean)/nbar,alpha=errorAlpha,\
+            color = colorRandMean,label=meanErrorLabel)
+    ax.fill_between(rBinStackCentres,\
+        y1 = (nbarjUnMean - sigmaUn)/nbar,\
+        y2 = (nbarjUnMean + sigmaUn)/nbar,alpha=errorAlpha,\
+        color = colourRand,\
+        label=profileErrorLabel)
+    if title is None:
+        title = 'Void Profiles, $R_{\\mathrm{eff}} > ' + \
+            str(rMin) + '\\mathrm{\\,Mpc}h^{-1}$, $' + \
+            plot.scientificNotation(mMin) + ' < M/(M_{\\odot}h^{-1}) < ' + \
+            plot.scientificNotation(mMax) + '$'
+    if showTitle:
+        ax.set_title(title,fontsize=fontsize,fontfamily=fontname)
+    ax.set_xlabel('$R/R_{\\mathrm{eff}}$',fontsize=fontsize,\
+        fontfamily=fontname)
+    if not hideYLabels:
+        ax.set_ylabel('$\\rho/\\bar{\\rho}$',fontsize=fontsize,\
+            fontfamily=fontname)
+    ax.axhline(1.0,linestyle=guideStyle,color=guideColour)
+    ax.axvline(1.0,linestyle=guideStyle,color=guideColour)
+    if includeLegend:
+        ax.legend(prop={"size":legendFontSize,"family":fontname},
+            frameon=frameon,loc=legendLoc)
+    ax.tick_params(axis='both',labelsize=fontsize)
+    ax.set_ylim(ylim)
+    ax.set_xlim(xlim)
+    if hideYLabels:
+        ax.set_yticklabels([])
+    plt.subplots_adjust(bottom=bottom,left=left)
+    if savename is not None:
+        plt.savefig(savename)
+    if show:
+        plt.show()
 
 
 

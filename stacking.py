@@ -2,7 +2,7 @@
 import Corrfunc
 import scipy.spatial
 import numpy as np
-from . import snapedit, plot_utilities
+from . import snapedit, plot_utilities, tools
 import multiprocessing as mp
 from scipy.optimize import curve_fit
 thread_count = mp.cpu_count()
@@ -100,6 +100,8 @@ def getAutoCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,rMin = 0,\
     xiVV = simulationCorrelation(rRange,boxsize,vdPos,nThreads=nThreads)
     return [xiAA,xiVV]
 
+
+
 def getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,\
         tree=None,method="poisson",vorVolumes=None):
     if (vorVolumes is None) and (method == "VTFE"):
@@ -174,6 +176,65 @@ def getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,\
     gc.collect()
     return [nPairsList,volumesList]
 
+# Stakcing done around fixed points and with fixed radius, in each
+# sample:
+def pairCountsFixedPosition(snapNameList,centres,radii,rBins,\
+        method="poisson"):
+    pairsListMean = []
+    volsListMean = []
+    for ns in range(0,len(snapNameList)):
+        snap = tools.getPynbodySnap(snapNameList[ns])
+        gc.collect()
+        tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
+        gc.collect()
+        [pairs,vols] = getPairCounts(centres,\
+                radii,snap,rBins,nThreads=-1,tree=tree,method=method)
+        pairsListMean.append(pairs)
+        volsListMean.append(vols)
+    return [pairsListMean,volsListMean]
+
+
+# Unconstrained stacks with same radius distribution:
+def stackUnconstrainedWithConstrainedRadii(snapListUn,rBins,antihaloRadiusBins,\
+        binCounts,conditionList,antihaloRadiiUn,ahCentresListUn,\
+        allPairCountsUn,allVolumesListsUn,\
+        seed=100,method="poisson",errorType="Weighted",selection="all"):
+    # Set the seed for consistency:
+    np.random.seed(100)
+    counter = 0
+    if selection == "all":
+        selection = range(0,len(snapListUn))
+    conditionListLengths = np.array([len(cond) for cond in conditionList])
+    nSamples = np.sum(conditionListLengths[selection])
+    nbarjUnSameRadii = np.zeros((nSamples,len(rBins)-1))
+    sigmaUnSameRadii = np.zeros((nSamples,len(rBins)-1))
+    for ns in selection:
+        for l in range(0,len(conditionList[ns])):
+            condition = conditionList[ns][l]
+            [binListUn,noInBinsUn] = plot.binValues(\
+                antihaloRadiiUn[ns][condition],radiiBins)
+            if np.any(noInBinsUn == 0):
+                allRandIndices = []
+                for k in range(0,len(binListUn)):
+                    if noInBinsUn[k] != 0:
+                        allRandIndices.append(np.random.choice(binListUn[k],\
+                            binCounts[k]))
+                randSelect = np.hstack(allRandIndices)
+            else:
+                randSelect = np.hstack([np.random.choice(binListUn[k],\
+                    binCounts[k]) for k in range(0,len(binListUn))])
+            [nbarj,sigma] = stacking.stackScaledVoids(
+                    ahCentresListUn[ns][condition,:][randSelect],\
+                    antihaloRadiiUn[ns][condition][randSelect],\
+                    snapListUn[ns],rBins,\
+                    nPairsList = allPairCountsUn[ns][l][randSelect],\
+                    volumesList=allVolumesListsUn[ns][l][randSelect],\
+                    method=method,errorType=errorType)
+            nbarjUnSameRadii[counter,:] = nbarj
+            sigmaUnSameRadii[counter,:] = sigma
+            counter += 1
+    return [nbarjUnSameRadii,sigmaUnSameRadii]
+
 def getRadialVelocityAverages(voidCentres,voidRadii,snap,rBins,\
         nThreads=thread_count,tree=None,method="poisson",vorVolumes=None):
     if (vorVolumes is None) and (method == "VTFE"):
@@ -207,6 +268,80 @@ def getRadialVelocityAverages(voidCentres,voidRadii,snap,rBins,\
                     np.sum(vorVolumes[boundaries[l]:boundaries[l+1]])
                 nPartList[k,l] = len(indices)
     return [vRList,volumesList]
+
+# Stack from individual void profiles:
+def stackProfilesWithError(rhoi,sigmaRhoi,volumesList,biasTerm=1.0,\
+        combinationMethod="quadrature"):
+    # Volume weights for the stack:
+    weights = volumesList/np.sum(volumesList,0)
+    # Variance of the mean profile:
+    meanVariance = np.var(rhoi,0)*np.sum(weights**2,0)
+    # Variance of individual profiles:
+    profileVariance = np.sum(weights**2*sigmaRhoi**2,0)
+    # Combine the variances as an approximation of the error:
+    if combinationMethod=="quadrature":
+        combinedVariance = meanVariance + profileVariance
+    else:
+        raise Exception("Unrecognised combinationMethod")
+    # Compute the stacked void profile:
+    nbarMean = (biasTerm + np.sum(rhoi*volumesList,0))/np.sum(volumesList,0)
+    return [nbarMean,np.sqrt(combinedVariance)]
+
+
+# Average individual void profiles to compute profiles with an error:
+def computeAveragedIndividualProfiles(catalogue,allPairCounts,allVols,\
+        existingOnly=False,additionalFilter=None,errorType="Mean"):
+    # "catalogue" should be an Nv x Ns array, with Nv then umber of voids we 
+    # wish to compute averaged profiles for, and Ns the number of samples over #
+    # which we are averaging. It is assumed that this is offset by 1 
+    # (ie, first void is 1, not zero), so that we need to subtract 1 when 
+    # referencing the arrays The interpretation of "catalogue" is that is 
+    # gives a list of Nv voids, each of which has a representative antihalo
+    # in each of the Ns samples. The code allows for the possibility that some
+    # samples may simply not have representative (indicated by a negative void
+    # number). These are skipped from the average.
+    Ns = selection.shape[1] # Number of MCMC samples
+    # Trim the catalogue to include only a subset of voids:
+    if additionalFilter is not None:
+        # additionalFilter is a boolean array with length equal to the catalogue
+        # which allows us to select a subset of the catalogue:
+        inTrimmedCatalogue = np.any((catalogue >= 0) & \
+            additionalFilter[:,None],1)
+    else:
+        inTrimmedCatalogue = np.any((catalogue >= 0),1)
+    trimmedCatalogue = catalogue[inTrimmedCatalogue]
+    selectedVoids = np.where(trimmedCatalogue)[0]
+    Nv = len(trimmedCatalogue) # Number of voids in the catalogue
+    nBins = len(allPairCounts[0][0]) # Number of radius bins
+    nbarCombined = np.zeros((Nv,nBins))
+    sigmaCombined = np.zeros((Nv,nBins))
+    for k in range(0,Nv):
+        # Iterating over all voids
+        pairs = [] # Pair counts in spherical shells
+        vols = [] # volumes of spherical shells
+        if existingOnly:
+            # Only average over samples which have an extant representative of 
+            # of the void
+            for ns in range(0,Ns):
+                # Iterating over all samples:
+                if catalogue[k,ns] >= 0:
+                    pairs.append(allPairCounts[ns][trimmedCatalogue[k,ns]-1])
+                    vols.append(allVols[ns][trimmedCatalogue[k,ns]-1])
+        else:
+            # Average over all samples, regardless of whether there is a void
+            # there or not:
+            ind = selectedVoids[k]
+            for ns in range(0,Ns):
+                pairs.append(allPairCounts[ns][ind])
+                vols.append(allVols[ns][ind])
+        nbarj = np.mean(np.vstack(pairs)/np.vstack(vols),0)
+        variance = np.var(np.vstack(pairs)/np.vstack(vols),0)
+        if errorType == "Mean":
+            variance /= Ns
+        sigmabarj = np.sqrt(variance)
+        nbarCombined[k,:] = nbarj
+        sigmaCombinedMean[k,:] = sigmabarj
+    return [nbarCombined,sigmaCombinedMean]
 
 # Direct pair counting in rescaled variables:
 def stackScaledVoids(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,\

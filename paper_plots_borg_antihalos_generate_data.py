@@ -666,13 +666,7 @@ def getHMFAMFData(snapNumList,snapNumListOld,snapNumListUncon,\
         centralHalosOld,centralAntihalosOld,\
         centralHaloMassesOld,centralAntihaloMassesOld]
 
-# Load a pynbody snapshot if we provide a string, otherwise just return the 
-# snapshot.
-def getPynbodySnap(snap):
-    if type(snap) == str:
-        return pynbody.load(snap)
-    else:
-        return snap
+
 
 def getPartialPairCountsAndVols(snapNameList,antihaloRadii,antihaloMassesList,\
         ahCentresList,vorVols,rBins,method,\
@@ -688,7 +682,7 @@ def getPartialPairCountsAndVols(snapNameList,antihaloRadii,antihaloMassesList,\
                 (antihaloMassesList[ns] <= mMax))[0]
         else:
             filterToApply = filterListToApply[ns]
-        snap = getPynbodySnap(snapNameList[ns])
+        snap = tools.getPynbodySnap(snapNameList[ns])
         gc.collect()
         tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
         gc.collect()
@@ -752,7 +746,8 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
         rEffMax=3.0,rEffMin=0.0,nBins=31,pairCountsListUn=None,\
         volumesListUn=None,pairCountsList=None,volumesList=None,\
         ahPropsConstrained = None,ahPropsUnconstrained = None,\
-        snapListUnconstrained=None,snapListUnconstrainedRev=None):
+        snapListUnconstrained=None,snapListUnconstrainedRev=None,\
+        data_folder = "./",recomputeData=True):
     # Load snapshots:
     if verbose:
         print("Loading snapshots...")
@@ -891,11 +886,15 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
     else:
         # Recompute only those which we need:
         [newPairCounts,newVolumesList,filtersList] = \
-            getPartialPairCountsAndVols(\
+            tools.loadOrRecompute(data_folder + "pair_counts_data.p",\
+            getPartialPairCountsAndVols,\
             snapNameList,antihaloRadii,antihaloMassesList,\
             ahCentresList,vorVols,rBins,method,\
             rMin,rMax,mMin,mMax,boxsize,\
-            filterListToApply=conditionListMrange)
+            filterListToApply=conditionListMrange,\
+            _recomputeData=recomputeData)
+        if len(newPairCounts) != len(snapList):
+            raise Exception("Pair counts list does not match sample list.")
         stackedPairCounts = np.vstack(newPairCounts)
         stackedVolumesList = np.vstack(newVolumesList)
     [nbarjAllStacked,sigmaAllStacked] = stacking.stackScaledVoids(\
@@ -933,12 +932,16 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
             else:
                 # Regenerate them from scratch:
                 [newPairCountsUn,newVolumesListUn,filtersListUn] = \
-                    getPartialPairCountsAndVols(\
+                    tools.loadOrRecompute(data_folder + \
+                        "pair_counts_data_unconstrained_sample_" + \
+                        str(ns) + "_region_" + str(l) _ ".p",\
+                        getPartialPairCountsAndVols,\
                         [snapNameListUn[ns]],[antihaloRadiiUn[ns]],\
                         [antihaloMassesListUn[ns]],\
                         [ahCentresListUn[ns]],[vorVolsUn[ns]],rBins,method,\
                         rMin,rMax,mMin,mMax,boxsize,\
-                        filterListToApply=[conditionListMrangeUn[ns][l]])
+                        filterListToApply=[conditionListMrangeUn[ns][l]],\
+                        _recomputeData=recomputeData)
                 stackedPairCountsUn = np.vstack(\
                     [stackedPairCountsUn,newPairCountsUn[0]])
                 stackedVolumesListUn = np.vstack(\
@@ -2296,6 +2299,7 @@ def getMeanProperty(propertyList,stripNaN=True,lowerLimit=0,stdError=True):
     return [meanProperty,sigmaProperty]
 
 
+
 def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
         snapname = "gadget_full_forward_512/snapshot_001",\
         snapnameRev = "gadget_full_reverse_512/snapshot_001",\
@@ -2547,7 +2551,7 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     combinedFilter = combinedFilter & (snrList > snrThresh)
     distanceArray = np.sqrt(np.sum(meanCentresArray**2,1))
     combinedFilter135 = combinedFilter135 = combinedFilter & \
-        (distanceArray < 135)
+        (distanceArray < rSphereInner)
     # Conditions to supply to the void profile code:
     additionalConditions = [np.isin(np.arange(0,len(antihaloMasses[k])),\
         np.array(centralAntihalos[k][0])[sortedList[k][finalCatOpt[\
