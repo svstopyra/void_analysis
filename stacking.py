@@ -212,8 +212,8 @@ def stackUnconstrainedWithConstrainedRadii(snapListUn,rBins,antihaloRadiusBins,\
     for ns in selection:
         for l in range(0,len(conditionList[ns])):
             condition = conditionList[ns][l]
-            [binListUn,noInBinsUn] = plot.binValues(\
-                antihaloRadiiUn[ns][condition],radiiBins)
+            [binListUn,noInBinsUn] = plot_utilities.binValues(\
+                antihaloRadiiUn[ns][condition],antihaloRadiusBins)
             if np.any(noInBinsUn == 0):
                 allRandIndices = []
                 for k in range(0,len(binListUn)):
@@ -224,7 +224,7 @@ def stackUnconstrainedWithConstrainedRadii(snapListUn,rBins,antihaloRadiusBins,\
             else:
                 randSelect = np.hstack([np.random.choice(binListUn[k],\
                     binCounts[k]) for k in range(0,len(binListUn))])
-            [nbarj,sigma] = stacking.stackScaledVoids(
+            [nbarj,sigma] = stackScaledVoids(
                     ahCentresListUn[ns][condition,:][randSelect],\
                     antihaloRadiiUn[ns][condition][randSelect],\
                     snapListUn[ns],rBins,\
