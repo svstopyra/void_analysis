@@ -184,6 +184,7 @@ def pairCountsFixedPosition(snapNameList,centres,radii,rBins,\
     volsListMean = []
     for ns in range(0,len(snapNameList)):
         snap = tools.getPynbodySnap(snapNameList[ns])
+        boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
         gc.collect()
         tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
         gc.collect()
