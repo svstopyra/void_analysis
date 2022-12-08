@@ -21,7 +21,7 @@ Ol=0.6889 # Dark energy density fraction
 hubble=0.6766 # Hubble constant, in units of 100 km/s/Mpc
 zin=50 # Initial redshift of the simulations
 Ob=0.04897468161869667 # Baryonic matter density fraction
-
+sigma8=0.8288 # value of sigma8
 # Running options:
 resolution=512
 
@@ -48,5 +48,13 @@ declare -a subfolders=("gadget_full_forward_${resolution}" "gadget_full_reverse_
 # Name of snapshots to be analysed (only change this is also changed in the
 # gadget and AHF scripts):
 snapname=snapshot_001
+
+# If "constrained" then will try to import white noise from BORG. 
+# If "unconstrained", will create unconstrained simulations with the same
+# setup:
+mode="constrained"
+
+
+
 
 

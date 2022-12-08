@@ -301,7 +301,7 @@ def computeAveragedIndividualProfiles(catalogue,allPairCounts,allVols,\
     # in each of the Ns samples. The code allows for the possibility that some
     # samples may simply not have representative (indicated by a negative void
     # number). These are skipped from the average.
-    Ns = selection.shape[1] # Number of MCMC samples
+    Ns = catalogue.shape[1] # Number of MCMC samples
     # Trim the catalogue to include only a subset of voids:
     if additionalFilter is not None:
         # additionalFilter is a boolean array with length equal to the catalogue
@@ -341,8 +341,8 @@ def computeAveragedIndividualProfiles(catalogue,allPairCounts,allVols,\
             variance /= Ns
         sigmabarj = np.sqrt(variance)
         nbarCombined[k,:] = nbarj
-        sigmaCombinedMean[k,:] = sigmabarj
-    return [nbarCombined,sigmaCombinedMean]
+        sigmaCombined[k,:] = sigmabarj
+    return [nbarCombined,sigmaCombined]
 
 # Direct pair counting in rescaled variables:
 def stackScaledVoids(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,\
