@@ -2620,7 +2620,7 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
                 ahPropsUnconstrained = ahPropsUnconstrained,\
                 snapListUnconstrained=snapListUnconstrained,\
                 snapListUnconstrainedRev=snapListUnconstrainedRev,\
-                _recomputeData=recomputeData)
+                _recomputeData=recomputeData,data_folder=data_folder)
     gc.collect()
     if verbose:
         print("Computing all voids profiles...")
@@ -2650,7 +2650,7 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
                 ahPropsUnconstrained = ahPropsUnconstrained,\
                 snapListUnconstrained=snapListUnconstrained,\
                 snapListUnconstrainedRev=snapListUnconstrainedRev,\
-                _recomputeData=recomputeData)
+                _recomputeData=recomputeData,data_folder=data_folder)
     gc.collect()
     return [massListMean,combinedFilter135,combinedFilter,rBinStackCentresCombined,\
     nbarjSepStackCombined,sigmaSepStackCombined,\
