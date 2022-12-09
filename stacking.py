@@ -311,7 +311,7 @@ def computeAveragedIndividualProfiles(catalogue,allPairCounts,allVols,\
     else:
         inTrimmedCatalogue = np.any((catalogue >= 0),1)
     trimmedCatalogue = catalogue[inTrimmedCatalogue]
-    selectedVoids = np.where(trimmedCatalogue)[0]
+    selectedVoids = np.where(inTrimmedCatalogue)[0]
     Nv = len(trimmedCatalogue) # Number of voids in the catalogue
     nBins = len(allPairCounts[0][0]) # Number of radius bins
     nbarCombined = np.zeros((Nv,nBins))
