@@ -6,6 +6,9 @@ for j in "${arr[@]}"
 do
     # GADGET run:
     # Run GADGET2:
+    if [ ! -d "sample${j}" ]; then
+        mkdir "sample${j}"
+    fi
     if [ ! -d "sample${j}/${subfolders[1]}" ]; then
         mkdir "sample${j}/${subfolders[1]}"
     fi

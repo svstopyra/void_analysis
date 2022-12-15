@@ -1860,11 +1860,13 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,\
         label="Gadget Simulation",transfer_model='EH',fname=None,\
         xlabel="Mass [$M_{\odot}h^{-1}$]",ylabel="Number of halos",\
         ylim=[1e1,2e4],title="Gadget Simulation",showLegend=True,\
-        tickRight=False,tickLeft=True,savename=None):
+        tickRight=False,tickLeft=True,savename=None,\
+        linking_length=0.2):
     [dndm,m] = cosmology.TMF_from_hmf(massLower,massUpper,\
         h=h,Om0=Om0,Delta=Delta,delta_wrt=delta_wrt,\
         mass_function=mass_function,sigma8=sigma8,Ob0 = Ob0,\
-        transfer_model=transfer_model,fname=fname,ns=ns)
+        transfer_model=transfer_model,fname=fname,ns=ns,\
+        linking_length=linking_length)
     massBins = 10**np.linspace(np.log10(massLower),np.log10(massUpper),nBins)
     n = cosmology.dndm_to_n(m,dndm,massBins)
     bounds = np.array(scipy.stats.poisson(n*volSim).interval(poisson_interval))

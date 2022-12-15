@@ -200,7 +200,7 @@ class HorizonRunFittingFunction(Bhattacharya):
 # Mmin - log10 of minimum mass, in units of Msol/h
 # Mmax - log10 of maximum halo mass, in units of Msol/h
 # dlog10m - step between Mmin and Mmax, in log10 space.
-def TMF_from_hmf(Mmin,Mmax,dlog10m=0.01,h = 0.677,Tcmb0 = 2.725,Om0=0.307,Ob0 = 0.0486,returnObjects = False,sigma8 = 0.8159,delta_wrt='SOCritical',Delta=200,z=0,mass_function = "Tinker",Ol0 = None,transfer_model='CAMB',fname=None,ns=0.9667):
+def TMF_from_hmf(Mmin,Mmax,dlog10m=0.01,h = 0.677,Tcmb0 = 2.725,Om0=0.307,Ob0 = 0.0486,returnObjects = False,sigma8 = 0.8159,delta_wrt='SOCritical',Delta=200,z=0,mass_function = "Tinker",Ol0 = None,transfer_model='CAMB',fname=None,ns=0.9667,linking_length=0.2):
     if Ol0 is None:
         cosmo = astropy.cosmology.FlatLambdaCDM(H0 = 100*h,Om0 = Om0, Tcmb0 = Tcmb0, Ob0 = Ob0)
     else:
@@ -218,22 +218,39 @@ def TMF_from_hmf(Mmin,Mmax,dlog10m=0.01,h = 0.677,Tcmb0 = 2.725,Om0=0.307,Ob0 = 
     elif mass_function == "HR4":
         hmf_model = HorizonRunFittingFunction
         hfactor = h
+    elif mass_function == "FOF":
+        hmf_model = hmf.fitting_functions.Watson_FoF
     else:
         raise Exception("Unrecognised fitting function requested.")
     hfactor = 1
     if fname is None:
-        tmf = hmf.hmf.MassFunction(Mmin=np.log10(Mmin/hfactor),\
-            Mmax=np.log10(Mmax/hfactor),hmf_model=hmf_model,cosmo_model=cosmo,\
-            sigma_8 = sigma8,mdef_model=delta_wrt,z=z,\
-            mdef_params={"overdensity":Delta},\
-            disable_mass_conversion=False,transfer_model=transfer_model,n=ns)
+        if mass_function == "FOF":
+            tmf = hmf.hmf.MassFunction(Mmin=np.log10(Mmin/hfactor),\
+                Mmax=np.log10(Mmax/hfactor),hmf_model=hmf_model,cosmo_model=cosmo,\
+                sigma_8 = sigma8,mdef_model="FOF",z=z,\
+                mdef_params={"linking_length":linking_length},\
+                disable_mass_conversion=False,transfer_model=transfer_model,n=ns)
+        else:
+            tmf = hmf.hmf.MassFunction(Mmin=np.log10(Mmin/hfactor),\
+                Mmax=np.log10(Mmax/hfactor),hmf_model=hmf_model,cosmo_model=cosmo,\
+                sigma_8 = sigma8,mdef_model=delta_wrt,z=z,\
+                mdef_params={"overdensity":Delta},\
+                disable_mass_conversion=False,transfer_model=transfer_model,n=ns)
     else:
-        tmf = hmf.hmf.MassFunction(Mmin=np.log10(Mmin/hfactor),\
-            Mmax=np.log10(Mmax/hfactor),hmf_model=hmf_model,cosmo_model=cosmo,\
-            sigma_8 = sigma8,mdef_model=delta_wrt,z=z,\
-            mdef_params={"overdensity":Delta},\
-            disable_mass_conversion=False,transfer_model=transfer_model,\
-            transfer_params={'fname':fname},n=ns)
+        if mass_function == "FOF":
+            tmf = hmf.hmf.MassFunction(Mmin=np.log10(Mmin/hfactor),\
+                Mmax=np.log10(Mmax/hfactor),hmf_model=hmf_model,cosmo_model=cosmo,\
+                sigma_8 = sigma8,mdef_model="FOF",z=z,\
+                mdef_params={"linking_length":linking_length},\
+                disable_mass_conversion=False,transfer_model=transfer_model,\
+                transfer_params={'fname':fname},n=ns)
+        else:
+            tmf = hmf.hmf.MassFunction(Mmin=np.log10(Mmin/hfactor),\
+                Mmax=np.log10(Mmax/hfactor),hmf_model=hmf_model,cosmo_model=cosmo,\
+                sigma_8 = sigma8,mdef_model=delta_wrt,z=z,\
+                mdef_params={"overdensity":Delta},\
+                disable_mass_conversion=False,transfer_model=transfer_model,\
+                transfer_params={'fname':fname},n=ns)
     if returnObjects:
         return [tmf.dndm,tmf.m*hfactor,tmf,cosmo]
     else:
