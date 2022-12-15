@@ -3,6 +3,7 @@
 from void_analysis import plot, tools, snapedit
 from void_analysis.paper_plots_borg_antihalos_generate_data import *
 from void_analysis.real_clusters import getClusterSkyPositions
+from void_analysis import massconstraintsplot
 from matplotlib import transforms
 import pickle
 import numpy as np
@@ -60,7 +61,7 @@ snapNumListOld = [7422,7500,8000,8500,9000,9500]
 # Batch5-4:
 #snapNumList = [11500,11800,12100,12400,12700]
 # Batch10-1 
-snapNumList = [7000,7300,7600,7900,8200,8500,8800,9100,9400,9700]
+snapNumList = [8800,9100,9400,9700,10000]
 # Batch10-2
 #snapNumList = [10000,10300,10600,10900,11200,11500,11800,12100,12400,12700]
 
@@ -70,6 +71,11 @@ snapNumListUncon = [1,2,3,4,5,6,7,8,9,10]
 #snapNumListUncon = [2,4,5,6,7,8,9,10]
 snapNumListUnconOld = [1,2,3,5,6]
 boxsize = 677.7
+
+
+snapNameList = ["new_chain/sample" + str(k) + \
+    "/gadget_full_forward_512/snapshot_001" \
+    for k in snapNumList]
 
 # PPT plots data:
 if runTests:
@@ -83,14 +89,17 @@ doPPTs = False
 if doPPTs:
     [galaxyNumberCountExp,galaxyNumberCountsRobust] = tools.loadOrRecompute(\
         figuresFolder + "ppt_plots_data.p",getPPTPlotData,\
-        _recomputeData = recomputeData,nBins = nBinsPPT,nClust=9,nMagBins = 16,\
-            N=256,restartFile = 'new_chain_restart/merged_restart.h5',\
+            _recomputeData = recomputeData,nBins = nBinsPPT,nClust=9,\
+            nMagBins = 16,N=256,\
+            restartFile = 'new_chain_restart/merged_restart.h5',\
             snapNumList = snapNumList,samplesFolder = 'new_chain/',\
             surveyMaskPath = "./2mpp_data/",\
-            Om0 = 0.3111,Ode0 = 0.6889,boxsize = 677.7,h=0.6766,Mstarh = -23.28,\
-            mmin = 0.0,mmax = 12.5,recomputeData = recomputeData,rBinMin = 0.1,\
-            rBinMax = 20,abell_nums = [426,2147,1656,3627,3571,548,2197,2063,1367],\
-            nside = 4,nRadialSlices=10,rmax=600,tmppFile = "2mpp_data/2MPP.txt",\
+            Om0 = 0.3111,Ode0 = 0.6889,boxsize = 677.7,h=0.6766,\
+            Mstarh = -23.28,mmin = 0.0,mmax = 12.5,\
+            recomputeData = recomputeData,rBinMin = 0.1,rBinMax = 20,\
+            abell_nums = [426,2147,1656,3627,3571,548,2197,2063,1367],\
+            nside = 4,nRadialSlices=10,rmax=600,\
+            tmppFile = "2mpp_data/2MPP.txt",\
             reductions = 4,iterations = 20,verbose=True,hpIndices=None,\
             centreMethod="density")
 
@@ -129,7 +138,8 @@ if doHMFs:
                     unconstrainedFolderOld = unconstrainedFolderOld,\
                     snapnameNew = snapnameNew,snapnameNewRev=snapnameNewRev,\
                     snapnameOld = snapnameOld,snapnameOldRev = snapnameOldRev,\
-                    samplesFolder = samplesFolder,samplesFolderOld=samplesFolderOld,\
+                    samplesFolder = samplesFolder,\
+                    samplesFolderOld=samplesFolderOld,\
                     data_folder=data_folder)
 
 # Void profile data:
@@ -195,70 +205,16 @@ if doCat:
             _recomputeData = recomputeData,recomputeData=recomputeData)
     print("Finished catalogue construction...")
     sys.stdout.flush()
+    # Centres with similar under-density:
+    [centreListUn,densitiesInCentres,denListUn] = tools.loadPickle(\
+        data_folder + "centre_list_unconstrained_data.p")
+    # New method for void profiles:
+    [rBinStackCentres,nbarMean,sigmaMean,nbar,\
+        nbarjUnSameRadii,sigmaUnSameRadii] = getVoidProfilesForPaper(\
+            finalCatOpt,combinedFilter135,snapNameList,\
+            snapNumListUncon,centreListUn,data_folder = data_folder,\
+            recomputeData=recomputeData)
 
-
-nBins = 8
-Om = referenceSnap.properties['omegaM0']
-rhoc = 2.7754e11
-boxsize = referenceSnap.properties['boxsize'].ratio("Mpc a h**-1")
-N = int(np.cbrt(len(referenceSnap)))
-mUnit = 8*Om*rhoc*(boxsize/N)**3
-mLower = 100*mUnit
-mUpper = 2e15
-rSphere = 300
-rSphereInner = 135
-
-# Check mass functions:
-volSphere135 = 4*np.pi*rSphereInner**3/3
-volSphere = 4*np.pi*rSphere**3/3
-massFunctionComparison(massListMean[combinedFilter135],\
-    massListMean[combinedFilter],volSphere135,nBins=nBins,\
-    labelLeft = "Combined catalogue",\
-    labelRight  ="Combined catalogue",\
-    ylabel="Number of antihalos",savename=figuresFolder + \
-    "mass_function_combined_300vs135.pdf",massLower=mLower,\
-    ylim=[1,1000],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,\
-    fontsize=10,massUpper = mUpper,\
-    titleLeft = "Combined catalogue, $<135\\mathrm{Mpc}h^{-1}$",\
-    titleRight = "Combined catalogue, $<300\\mathrm{Mpc}h^{-1}$",\
-    volSimRight = volSphere,ylimRight=[1,1000],legendLoc="upper right")
-
-# Density Profiles:
-plt.clf()
-textwidth=7.1014
-fontsize = 12
-legendFontsize=10
-fig, ax = plt.subplots(1,2,figsize=(textwidth,0.5*textwidth))
-plot.plotConstrainedVsUnconstrainedProfiles(rBinStackCentresCombined,\
-    nbarjSepStackCombined,sigmaSepStackCombined,\
-    nbarjAllStackedUnCombined,sigmaAllStackedUnCombined,nbar,rMin2,\
-    mMin2,mMax2,fontsize = fontsize,legendFontSize=legendFontsize,\
-    labelCon='Constrained',\
-    labelRand='Unconstrained \nmean',\
-    savename=figuresFolder + "profiles1415.pdf",\
-    showTitle=True,ax = ax[0],title="Combined Catalogue",\
-    meanErrorLabel = 'Unconstrained \nMean',\
-    profileErrorLabel = 'Profile \nvariation \n',\
-    nbarjUnconstrainedStacks=nbarjSepStackUn,legendLoc='lower right',\
-    sigmajUnconstrainedStacks = sigmaSepStackUn,showMean=True,show=False,\
-    xlim=[0,10])
-plot.plotConstrainedVsUnconstrainedProfiles(rBinStackCentres,nbarjSepStack,\
-    sigmaSepStack,nbarjAllStackedUn,sigmaAllStackedUn,nbar,rMin2,\
-    mMin2,mMax2,fontsize = fontsize,legendFontSize=legendFontsize,\
-    labelCon='Constrained',\
-    labelRand='Unconstrained \nmean',\
-    savename=figuresFolder + "profiles1415.pdf",\
-    showTitle=True,ax = ax[1],title="All Catalogues",\
-    meanErrorLabel = 'Unconstrained \nMean',\
-    profileErrorLabel = 'Profile \nvariation \n',\
-    nbarjUnconstrainedStacks=nbarjSepStackUn,legendLoc='lower right',\
-    sigmajUnconstrainedStacks = sigmaSepStackUn,showMean=True,show=False,\
-    xlim=[0,10])
-ax[0].axhline(0.95,color='grey',linestyle=':')
-ax[1].axhline(0.95,color='grey',linestyle=':')
-plt.tight_layout()
-plt.savefig(figuresFolder + "profiles_plot_vs_underdense.pdf")
-plt.show()
 
 # Timesteps data. Rerunning this from here not yet implemented 
 #(see timesteps.py):
@@ -277,12 +233,12 @@ if runTests:
         getAntihaloSkyPlotData,\
         [7000, 7200, 7400],samplesFolder=samplesFolder,recomputeData = True)
 
-doSky = False
+doSky = True
 if doSky:
     [alpha_shape_list,largeAntihalos,\
-            snapsortList] = tools.loadOrRecompute(figuresFolder + "skyplot_data.p",
-                getAntihaloSkyPlotData,snapNumList,samplesFolder=samplesFolder,\
-                _recomputeData = recomputeData,recomputeData = recomputeData)
+        snapsortList] = tools.loadOrRecompute(figuresFolder + "skyplot_data.p",
+        getAntihaloSkyPlotData,snapNumList,samplesFolder=samplesFolder,\
+        _recomputeData = recomputeData,recomputeData = recomputeData)
 
 # Can't really un-pickle the halo catalogues without loading the snapshots, so
 # we will have to load these, unfortunately. We should change this, as it 
@@ -315,15 +271,15 @@ suffix = ''
 #rBins = np.logspace(np.log10(0.1),np.log10(20),31)
 rBins = np.linspace(0.1,20,nBinsPPT+1)
 
-
-plot.plotPPTProfiles(np.sum(galaxyNumberCountExp,2),\
-    np.sum(galaxyNumberCountsRobust,2),\
-    savename=figuresFolder + "ppt_Ngal_robust" + suffix + ".pdf",\
-    title="Posterior predicted galaxy counts " + \
-    " vs 2M++ galaxy counts",ylim=[1,1000],\
-    show=True,rBins=rBins,clusterNames=clusterNames,rescale=False,\
-    density=False,legLoc = [0.3,0.1],hspace=0.3,\
-    ylabel='Number of galaxies $ < r$')
+if doPPTs:
+    plot.plotPPTProfiles(np.sum(galaxyNumberCountExp,2),\
+        np.sum(galaxyNumberCountsRobust,2),\
+        savename=figuresFolder + "ppt_Ngal_robust" + suffix + ".pdf",\
+        title="Posterior predicted galaxy counts " + \
+        " vs 2M++ galaxy counts",ylim=[1,1000],\
+        show=True,rBins=rBins,clusterNames=clusterNames,rescale=False,\
+        density=False,legLoc = [0.3,0.1],hspace=0.3,\
+        ylabel='Number of galaxies $ < r$')
 
 #-------------------------------------------------------------------------------
 # HMF/AMF PLOT:
@@ -361,11 +317,10 @@ if doHMFs:
 if doCat:
     plot.plotConstrainedVsUnconstrainedProfiles(rBinStackCentres,nbarjSepStack,\
         sigmaSepStack,nbarjAllStackedUn,sigmaAllStackedUn,nbar,rMin,mMin,mMax,\
-        showImmediately = True,fontsize = fontsize,legendFontSize=legendFontsize,\
-        labelCon='Constrained',\
+        showImmediately = True,fontsize = fontsize,\
+        legendFontSize=legendFontsize,labelCon='Constrained',\
         labelRand='Unconstrained \nmean',\
-        savename=figuresFolder + "profiles1415.pdf",\
-        showTitle=False,\
+        savename=figuresFolder + "profiles1415.pdf",showTitle=False,\
         meanErrorLabel = 'Unconstrained \nMean',\
         profileErrorLabel = 'Profile \nvariation \n',\
         nbarjUnconstrainedStacks=nbarjSepStackUn,\
@@ -402,7 +357,7 @@ bound_box = transforms.Bbox([[cropPoint[0], cropPoint[1]],
 if doSky:
     [combinedAbellN,combinedAbellPos,abell_nums] = \
         real_clusters.getCombinedAbellCatalogue()
-    abell_nums = [426,2147,1656,3627,3545,548,2197,2052,1367]
+    abell_nums = [426,2147,1656,3627,3571,548,2197,2052,1367]
     [abell_l,abell_b,abell_n,abell_z,\
             abell_d,p_abell,coordAbell] = getClusterSkyPositions("./")
     clusterInd = [np.where(combinedAbellN == n)[0] for n in abell_nums]
@@ -419,6 +374,53 @@ if doSky:
         ra = coordCombinedAbellCart.icrs.spherical.lon.value*u.deg,\
         dec = coordCombinedAbellCart.icrs.spherical.lat.value*u.deg,\
         frame='icrs')
+
+clusterLoc = np.array([np.array([\
+    coordCombinedAbellCart[ind].x.value,\
+    coordCombinedAbellCart[ind].y.value,\
+    coordCombinedAbellCart[ind].z.value]) for ind in clusterIndMain])
+
+referenceSnap = snapToShow
+Om0 = referenceSnap.properties['omegaM0']
+Ode0 = referenceSnap.properties['omegaL0']
+H0 = referenceSnap.properties['h']*100
+h = referenceSnap.properties['h']
+boxsize = referenceSnap.properties['boxsize'].ratio("Mpc a h**-1")
+cosmo = astropy.cosmology.LambdaCDM(H0,Om0,Ode0)
+
+
+# 2M++ Data:
+catFile = "./2mpp_data/2m++.txt"
+catalogue = np.loadtxt(catFile,delimiter='|',skiprows=31,
+    usecols=(1,2,3,4,5,6,7,8,10,11,12,13,14,15,16))
+# Filter useable galaxies:
+useGalaxy = (catalogue[:,10] == 0.0) & (catalogue[:,5] > 0)
+c = 299792.458 # Speed of light in km/s
+z = catalogue[:,5]/c # Redshift
+# Cosmological parameters:
+
+# Comoving distance to all galaxies, in Mpc/h:
+dcz = cosmo.comoving_distance(z[useGalaxy]).value*cosmo.h
+# Co-ordinates of the galaxies (in Mpc/h):
+coord = astropy.coordinates.SkyCoord(\
+    ra = catalogue[useGalaxy,0]*astropy.units.degree,\
+    dec=catalogue[useGalaxy,1]*astropy.units.degree,\
+    distance=dcz*astropy.units.Mpc)
+# Cartesian positions of galaxies in equatorial, comoving co-ordinates (Mpc/h):
+equatorialXYZ = np.vstack((coord.cartesian.x.value,\
+    coord.cartesian.y.value,coord.cartesian.z.value)).T
+
+equatorialRThetaPhi = np.vstack((coord.icrs.spherical.distance.value,\
+    coord.icrs.spherical.lon.value,\
+    coord.icrs.spherical.lat.value)).T
+
+doClusterMasses = True
+if doClusterMasses:
+    [meanMasses,meanCentres,sigmaMasses,sigmaCentres,\
+            clusterMasses,clusterCentres,clusterCounterparts] = \
+                tools.loadOrRecompute(data_folder + "mean_cluster_masses.p",\
+                    getBORGClusterMassEstimates,snapNameList,clusterLoc,\
+                    equatorialXYZ,_recomputeData=recomputeData)
 
 
 if doSky:
@@ -437,6 +439,68 @@ if doSky:
         voidColour = seabornColormap[0],antiHaloLabel='inPlot',
         bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
         galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False)
+
+#-------------------------------------------------------------------------------
+# CLUSTER MASS PLOT
+
+# Mass comparison plot!
+if doClusterMasses:
+    massconstraintsplot.showClusterMassConstraints(meanMasses,sigmaMasses,\
+            figOut = figuresFolder,catFolder = "./catalogues/",h=h,Om0 = Om0,\
+            savename = "mass_constraints_plot.pdf")
+
+#-------------------------------------------------------------------------------
+# MASS FUNCTIONS PLOT 135 VS 300
+if doCat:
+    nBins = 8
+    Om = referenceSnap.properties['omegaM0']
+    rhoc = 2.7754e11
+    boxsize = referenceSnap.properties['boxsize'].ratio("Mpc a h**-1")
+    N = int(np.cbrt(len(referenceSnap)))
+    mUnit = 8*Om*rhoc*(boxsize/N)**3
+    mLower = 100*mUnit
+    mUpper = 2e15
+    rSphere = 300
+    rSphereInner = 135
+    # Check mass functions:
+    volSphere135 = 4*np.pi*rSphereInner**3/3
+    volSphere = 4*np.pi*rSphere**3/3
+    massFunctionComparison(massListMean[combinedFilter135],\
+        massListMean[combinedFilter],volSphere135,nBins=nBins,\
+        labelLeft = "Combined catalogue",\
+        labelRight  ="Combined catalogue",\
+        ylabel="Number of antihalos",savename=figuresFolder + \
+        "mass_function_combined_300vs135.pdf",massLower=mLower,\
+        ylim=[1,1000],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,\
+        fontsize=10,massUpper = mUpper,\
+        titleLeft = "Combined catalogue, $<135\\mathrm{Mpc}h^{-1}$",\
+        titleRight = "Combined catalogue, $<300\\mathrm{Mpc}h^{-1}$",\
+        volSimRight = volSphere,ylimRight=[1,1000],legendLoc="upper right")
+
+#-------------------------------------------------------------------------------
+# UNDERDENSE PROFILES PLOT
+
+
+# Plot for the paper, using the new method:
+if doCat:
+    textwidth=7.1014
+    fontsize = 12
+    legendFontsize=10
+    fig, ax = plt.subplots(1,1,figsize=(0.5*textwidth,0.5*textwidth))
+    plot.plotVoidProfilesPaper(rBinStackCentres,nbarMean,sigmaMean,nbar,\
+        stacking.weightedMean(nbarjUnSameRadii,1.0/sigmaUnSameRadii**2,axis=0),\
+        np.sqrt(stacking.weightedVariance(nbarjUnSameRadii,\
+        1.0/sigmaUnSameRadii**2,axis=0)/nbarjUnSameRadii.shape[0]),\
+        np.sqrt(stacking.weightedVariance(nbarjUnSameRadii,\
+        1.0/sigmaUnSameRadii**2,axis=0)),ax=ax,show=False,\
+        title="Combined BORG Catalogue",legendFontSize=10,\
+        legendLoc='lower right',xlim=[0,3])
+    #ax[0].axhline(0.95,color='grey',linestyle=':')
+    #ax[1].axhline(0.95,color='grey',linestyle=':')
+    plt.tight_layout()
+    plt.savefig(figuresFolder + "profiles_plot_vs_underdense.pdf")
+    plt.show()
+
 
 #-------------------------------------------------------------------------------
 # MASS CONVERGENCE PLOT:

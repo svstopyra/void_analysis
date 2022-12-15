@@ -139,9 +139,9 @@ def showClusterMassConstraints(meanCriticalMass,stdErrorCriticalMass,\
     R500c_Planck_low = R500c_Planck - \
         np.cbrt(3*(M500c_Planck - M500c_Planck_low)/(4*np.pi*200*rhocrit))
     #ACO = [426,2147,1656,3627,3571,548,2199,2063,1367]
-    ACT = fits.open("/data2/UCL_data_backup/catalogues/ACT2020/" + \
+    ACT = fits.open(catFolder + "/ACT2020/" + \
         "DR5_cluster-catalog_v1.1_forSZDB.fits")
-    PLANCK = fits.open("/data2/UCL_data_backup/catalogues/PSZ2v1.fits")
+    PLANCK = fits.open(catFolder + "/PSZ2v1.fits")
     # Planck 2015 M200c masses:
     Planck2015 = {\
         'A1656':MassConstraint(M200c_Planck[2],M200c_Planck_low[2],\

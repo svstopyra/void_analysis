@@ -1051,8 +1051,8 @@ def getAntihaloSkyPlotData(snapNumList,nToPlot=20,verbose=True,\
         ahProps = [tools.loadPickle(snap.filename + ".AHproperties.p") \
             for snap in snapList]
     antihaloRadii = [props[7] for props in ahProps]
-    antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
-        for props in ahProps]
+    antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize,\
+        swapXZ=False,reverse=True) for props in ahProps]
     antihaloMasses = [props[3] for props in ahProps]
     if snapsortList is None:
         snapsortList = [np.argsort(snap['iord']) \
@@ -2661,10 +2661,180 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     nbarjSepStackUn,sigmaSepStackUn]
 
 
+# Estimate the masses of clusters in the vicinity of the supplies points,
+# clusterLoc, using halos nearby.
+def getClusterMassEstimatesFromSnapshot(clusterLoc,snap,equatorialXYZ2MPP,\
+        reductions=4,iterations=20,gatherRadius=5,neighbourRadius=10,\
+        ahProps=None,recomputeData=True,recentre=True,hncentres=None,\
+        hnmasses=None):
+    boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+    if recentre:
+        # Make sure that we re-centre the simulation about the local
+        # centre of mass, to account for drift between BORG realisations:
+        recentredLocs = snapedit.unwrap(simulation_tools.getClusterCentres(\
+                    clusterLoc,snap=snap,snapPath = snap.filename,\
+                    fileSuffix = "clusters1",\
+                    recompute=recomputeData,method="snapshot",\
+                    reductions=reductions,\
+                    iterations=iterations) + boxsize/2,boxsize)
+    else:
+        recentredLocs = clusterLoc
+    # Load halo properties:
+    if ahProps is None and ((hncentres is None) or (hnmasses is None)):
+        ahProps = tools.loadPickle(snap.filename + ".AHproperties.p")
+    # Adjust positions to ICRS co-ordinates (simulation co-ordinates
+    # are different):
+    if hncentres is None:
+        hncentres = -snapedit.unwrap((ahProps[0] - boxsize/2),boxsize/2)
+    if hnmasses is None:
+        hnmasses = ahProps[1] # Halo masses
+    # Find the counterpart halos corresponding to the supplied clusters:
+    [counterpartClusters,counterpartHalos] = \
+        simulation_tools.matchClustersAndHalos(recentredLocs,hncentres,\
+        hnmasses,boxsize,equatorialXYZ2MPP,\
+        gatherRadius=gatherRadius,neighbourRadius=neighbourRadius)
+    if np.all(counterpartHalos >= 0):
+        clusterMasses = hnmasses[counterpartHalos]
+        clusterCentres = hncentres[counterpartHalos,:]
+    else:
+        # Handle the case when we couldn't find a candidate:
+        clusterMasses = -np.ones(len(clusterLoc))
+        clusterCentres = -np.ones(clusterLoc.shape)
+        for k in range(0,len(clusterLoc)):
+            if counterpartHalos[k] >= 0:
+                clusterMasses[k] = hnmasses[counterpartHalos[k]]
+                clusterCentres[k,:] = hncentres[counterpartHalos[k],:]
+    return [clusterMasses,clusterCentres,counterpartHalos]
 
+# Helper function to compute mass estimates from all samples:
+def getBORGClusterMassEstimates(snapList,clusterLoc,equatorialXYZ2MPP,\
+        reductions=4,iterations=20,gatherRadius=5,neighbourRadius=10,\
+        allAhProps = None,recomputeData=True,recentre=True):
+    clusterMasses = -np.ones((len(snapList),len(clusterLoc)))
+    clusterCentres = -np.ones((len(snapList),len(clusterLoc),3))
+    clusterCounterparts = -np.ones((len(snapList),len(clusterLoc)),dtype=int)
+    for ns in range(0,len(snapList)):
+        snap = tools.getPynbodySnap(snapList[ns])
+        gc.collect()
+        # Transform the snapshot appropriately:
+        tools.remapBORGSimulation(snap,swapXZ=False,reverse=True)
+        # Use existing ahProps list if available. Otherwise we will
+        # just load it manually:
+        if allAhProps is None:
+            ahProps = None
+        else:
+            ahProps = allAhProps[ns]
+        # Computation of masses for a single snapshot:
+        [masses,centres,counterparts] = getClusterMassEstimatesFromSnapshot(\
+            clusterLoc,snap,equatorialXYZ2MPP,\
+            reductions=reductions,iterations=iterations,\
+            gatherRadius=gatherRadius,neighbourRadius=neighbourRadius,\
+            ahProps=ahProps,recomputeData=recomputeData,recentre=recentre)
+        clusterMasses[ns,:] = masses
+        clusterCentres[ns,:,:] = centres
+        clusterCounterparts[ns,:] = counterparts
+    # Compute means, accounting for any missing data:
+    meanMasses = -np.ones(len(clusterLoc))
+    meanCentres = -np.ones(clusterLoc.shape)
+    sigmaMasses = -np.ones(len(clusterLoc))
+    sigmaCentres = -np.ones(clusterLoc.shape)
+    for nc in range(0,len(clusterLoc)):
+        haveData = np.where(clusterMasses[:,nc] >= 0.0)[0]
+        meanMasses[nc] = np.mean(clusterMasses[haveData,nc])
+        sigmaMasses[nc] = np.std(clusterMasses[haveData,nc])/\
+            np.sqrt(len(haveData))
+        meanCentres[nc,:] = np.mean(clusterCentres[haveData,nc,:],0)
+        sigmaCentres[nc,:] = np.std(clusterCentres[haveData,nc,:],0)/\
+            np.sqrt(len(haveData))
+    return [meanMasses,meanCentres,sigmaMasses,sigmaCentres,\
+        clusterMasses,clusterCentres,clusterCounterparts]
 
-
-
-
+# Get void profile plot:
+def getVoidProfilesForPaper(finalCatOpt,combinedFilter,snapNameList,\
+        snapNumListUncon,centreListUn,\
+        rSphereInner=135,data_folder="./",recomputeData=True,catData=None,\
+        rEffMin = 0.0,rEffMax = 10.0,nBins = 101,rMin=5,rMax=30,\
+        mUpper=2e15,mLower="auto",ahRBinsMin=10,ahRBinsMax=20,ahRBins=6,\
+        unconstrainedFolderNew="new_chain/unconstrained_samples/",\
+        snapname="gadget_full_forward_512/snapshot_001"):
+    if catData is None:
+        catData = np.load(data_folder + "catalogue_data.npz")
+    unmappedCentres = snapedit.wrap(\
+        np.fliplr(catData['centres']) + boxsize/2,boxsize)
+    # Compute the trimmed catalogue:
+    inTrimmedCatalogue = np.any((finalCatOpt >= 0) & combinedFilter[:,None],1)
+    trimmedCatalogue = finalCatOpt[inTrimmedCatalogue]
+    selectedVoids = np.where(inTrimmedCatalogue)[0]
+    rBins = np.linspace(rEffMin,rEffMax,nBins)
+    # Data for unconstrained simulations:
+    snapListUnconstrained = [pynbody.load(unconstrainedFolderNew + "sample" \
+        + str(snapNum) + "/" + snapname) for snapNum in snapNumListUncon]
+    refSnap = snapListUnconstrained[0]
+    boxsize = refSnap.properties['boxsize'].ratio("Mpc a h**-1")
+    Om = refSnap.properties['omegaM0']
+    N = int(np.cbrt(len(refSnap)))
+    nbar = len(refSnap)/boxsize**3
+    mUnit = 8*Om*2.7754e11*(boxsize/N)**3
+    if mLower == "auto":
+        mLower = 100*mUnit
+    ahPropsUnconstrained = [tools.loadPickle(snap.filename + ".AHproperties.p")\
+        for snap in snapListUnconstrained]
+    ahCentresListUn = [props[5] for props in ahPropsUnconstrained]
+    ahCentresListRemapUn = [tools.remapAntiHaloCentre(props[5],boxsize) \
+        for props in ahPropsUnconstrained]
+    antihaloRadiiUn = [props[7] for props in ahPropsUnconstrained]
+    antihaloMassesListUn = [props[3] for props in ahPropsUnconstrained]
+    deltaCentralListUn = [props[11] for props in ahPropsUnconstrained]
+    centralAntihalosUn = [[tools.getAntiHalosInSphere(ahCentresListRemapUn[ns],\
+            rSphereInner,origin=centre) for centre in centreListUn[ns]] \
+            for ns in range(0,len(snapListUnconstrained))]
+    conditionListMrangeUn = [[(deltaCentralListUn[ns] < 0) & \
+        (centralAHs[1]) & (antihaloMassesListUn[ns] > mLower) & \
+        (antihaloMassesListUn[ns] <= mUpper) & \
+        (antihaloRadiiUn[ns] > rMin) & \
+        (antihaloRadiiUn[ns] <= rMax)
+        for centralAHs in centralAntihalosUn[ns]] \
+        for ns in range(0,len(snapNumListUncon))]
+    antihaloRadiusBins = np.linspace(ahRBinsMin,ahRBinsMax,ahRBins)
+    [binListCon,noInBinsCon] = plot.binValues(\
+        catData['radii'][combinedFilter],antihaloRadiusBins)
+    allPairCountsUn = [[] for ns in range(0,len(snapNumListUncon))]
+    allVolumesListsUn = [[] for ns in range(0,len(snapNumListUncon))]
+    # Load the pair counts:
+    for ns in range(0,len(snapNumListUncon)):
+        for l in range(0,len(centreListUn[ns])):
+            [newPairCountsUn,newVolumesListUn,filtersListUn] = \
+                tools.loadPickle(data_folder + \
+                    "pair_counts_data_unconstrained_sample_" + \
+                    str(ns) + "_region_" + str(l) + ".p")
+            allPairCountsUn[ns].append(newPairCountsUn[0])
+            allVolumesListsUn[ns].append(newVolumesListUn[0])
+    # Unconstrained profiles:
+    [nbarjUnSameRadii,sigmaUnSameRadii] = \
+    stacking.stackUnconstrainedWithConstrainedRadii(snapNumListUncon,\
+        rBins,antihaloRadiusBins,noInBinsCon,conditionListMrangeUn,\
+        antihaloRadiiUn,ahCentresListUn,allPairCountsUn,allVolumesListsUn)
+    # Get pair counts about fixed void positions:
+    [pairsListMean,volsListMean] = tools.loadOrRecompute(\
+        data_folder + "fixed_centres.p",\
+        stacking.pairCountsFixedPosition,snapNameList,\
+        unmappedCentres,catData['radii'],rBins,_recomputeData=recomputeData)
+    # Compute averaged void profiles:
+    [nbarj,sigmaj] = tools.loadOrRecompute(data_folder + "mean_profiles.p",\
+        stacking.computeAveragedIndividualProfiles,finalCatOpt,\
+        pairsListMean,volsListMean,additionalFilter = combinedFilter,\
+        _recomputeData=recomputeData)
+    # Get the trimmed volumes list:
+    radiiCombined = catData['radii'][selectedVoids]
+    rBinsUp = rBins[1:]
+    rBinsLow = rBins[0:-1]
+    volumes = 4*np.pi*(rBinsUp**3 - rBinsLow**3)/3
+    volumesListCombined = np.outer(radiiCombined**3,volumes)
+    # Get mean profile:
+    [nbarMean,sigmaMean] = tools.loadOrRecompute(\
+        data_folder + "combined_profile.p",stacking.stackProfilesWithError,\
+        nbarj,sigmaj,volumesListCombined,_recomputeData=recomputeData)
+    return [rBinStackCentres,nbarMean,sigmaMean,nbar,\
+        nbarjUnSameRadii,sigmaUnSameRadii]
 
 

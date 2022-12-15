@@ -229,12 +229,13 @@ def remapBORGSimulation(snap,swapXZ = True,translate=True,reverse=False):
 
 
 # Remap a set of points to the correct co-ordinates:
-def remapAntiHaloCentre(hrcentres,boxsize):
+def remapAntiHaloCentre(hrcentres,boxsize,swapXZ=True,reverse=False):
     hrcentresRemap = np.zeros(hrcentres.shape)
-    hrcentresRemap[:,0] = hrcentres[:,2]
-    hrcentresRemap[:,1] = hrcentres[:,1]
-    hrcentresRemap[:,2] = hrcentres[:,0]
+    if swapXZ:
+        hrcentresRemap = np.fliplr(hrcentres)
     hrcentresRemap = snapedit.unwrap(hrcentresRemap - np.array([boxsize/2]*3),boxsize)
+    if reverse:
+        hrcentresRemap = -hrcentresRemap
     return hrcentresRemap
 
 def zobovVolumesToPhysical(zobovVolumes,snap,dtype=np.double,offset=4):
