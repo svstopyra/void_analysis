@@ -16,7 +16,7 @@ import scipy
 import os
 import sys
 
-figuresFolder = "borg-antihalos_paper_figures/all_samples"
+figuresFolder = "borg-antihalos_paper_figures/all_samples/"
 
 recomputeData = False
 testDataFolder = figuresFolder + "tests_data/"
@@ -50,8 +50,8 @@ snapNumListOld = [7422,7500,8000,8500,9000,9500]
 #snapNumList = [7000,7200,7400,7600,7800,8000]
 #snapNumList = np.arange(7000,10300 +1,300)
 #snapNumList = [8800,9100,9400,9700,10000]
-#snapNumList = [7000,7300,7600,7900,8200,8500,8800,9100,9400,9700,10000,\
-#    10300,10600,10900,11200,11500,11800,12100,12400,12700,13000]
+snapNumList = [7300,7600,7900,8200,8500,8800,9100,9400,9700,10000,\
+    10300,10600,10900,11200,11500,11800,12100,12400,12700,13000]
 # Batch5-1:
 #snapNumList = [7000,7300,7600,7900,8200]
 # Batch5-2:
@@ -61,7 +61,7 @@ snapNumListOld = [7422,7500,8000,8500,9000,9500]
 # Batch5-4:
 #snapNumList = [11500,11800,12100,12400,12700]
 # Batch10-1 
-snapNumList = [8800,9100,9400,9700,10000]
+#snapNumList = [8800,9100,9400,9700,10000]
 # Batch10-2
 #snapNumList = [10000,10300,10600,10900,11200,11500,11800,12100,12400,12700]
 
@@ -208,6 +208,13 @@ if doCat:
     # Centres with similar under-density:
     [centreListUn,densitiesInCentres,denListUn] = tools.loadPickle(\
         data_folder + "centre_list_unconstrained_data.p")
+    # Catalogue data:
+    [finalCatOpt,shortHaloListOpt,twoWayMatchListOpt,finalCandidatesOpt,\
+        finalRatiosOpt,finalDistancesOpt,allCandidatesOpt,candidateCountsOpt,\
+        allRatiosOpt,finalCombinatoricFracOpt,finalCatFracOpt,\
+        alreadyMatched] = pickle.load(\
+            open(data_folder + "catalogue_all_data.p","rb"))
+    catData = np.load(data_folder + "catalogue_data.npz")
     # New method for void profiles:
     [rBinStackCentres,nbarMean,sigmaMean,nbar,\
         nbarjUnSameRadii,sigmaUnSameRadii] = getVoidProfilesForPaper(\

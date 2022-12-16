@@ -2761,8 +2761,6 @@ def getVoidProfilesForPaper(finalCatOpt,combinedFilter,snapNameList,\
         snapname="gadget_full_forward_512/snapshot_001"):
     if catData is None:
         catData = np.load(data_folder + "catalogue_data.npz")
-    unmappedCentres = snapedit.wrap(\
-        np.fliplr(catData['centres']) + boxsize/2,boxsize)
     # Compute the trimmed catalogue:
     inTrimmedCatalogue = np.any((finalCatOpt >= 0) & combinedFilter[:,None],1)
     trimmedCatalogue = finalCatOpt[inTrimmedCatalogue]
@@ -2773,6 +2771,8 @@ def getVoidProfilesForPaper(finalCatOpt,combinedFilter,snapNameList,\
         + str(snapNum) + "/" + snapname) for snapNum in snapNumListUncon]
     refSnap = snapListUnconstrained[0]
     boxsize = refSnap.properties['boxsize'].ratio("Mpc a h**-1")
+    unmappedCentres = snapedit.wrap(\
+        np.fliplr(catData['centres']) + boxsize/2,boxsize)
     Om = refSnap.properties['omegaM0']
     N = int(np.cbrt(len(refSnap)))
     nbar = len(refSnap)/boxsize**3
