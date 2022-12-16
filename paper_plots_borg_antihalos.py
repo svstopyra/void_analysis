@@ -455,7 +455,7 @@ if doSky:
 if doClusterMasses:
     massconstraintsplot.showClusterMassConstraints(meanMasses,sigmaMasses,\
             figOut = figuresFolder,catFolder = "./catalogues/",h=h,Om0 = Om0,\
-            savename = "mass_constraints_plot.pdf")
+            savename = figuresFolder + "mass_constraints_plot.pdf")
 
 #-------------------------------------------------------------------------------
 # MASS FUNCTIONS PLOT 135 VS 300

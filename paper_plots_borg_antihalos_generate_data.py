@@ -348,7 +348,8 @@ def getPPTForPoints(points,nBins = 31,nClust=9,nMagBins = 16,N=256,\
 
 def getHMFAMFDataFromSnapshots(snapNumList,snapname,snapnameRev,samplesFolder,\
         fileSuffix = '',recomputeData = False,reCentreSnap=True,rSphere=135,\
-        Om0 = 0.3111,boxsize=677.7,verbose=True,recomputeCentres=False):
+        Om0 = 0.3111,boxsize=677.7,verbose=True,recomputeCentres=False,\
+        data_folder="./"):
     # Load snapshots:
     if verbose:
         print("Loading snapshots...")
@@ -367,14 +368,14 @@ def getHMFAMFDataFromSnapshots(snapNumList,snapname,snapnameRev,samplesFolder,\
     if recomputeCentres:
         if verbose:
             print("Computing halo centres...")
-        massesAndCentres512 = loadOrRecompute(samplesFolder + \
+        massesAndCentres512 = loadOrRecompute(data_folder + \
             "all_halo_properties_512" + fileSuffix + ".p",\
             halos.getAllHaloCentresAndMasses,\
             snapList,boxsize,recompute=recomputeData,\
             _recomputeData=recomputeData)
         if verbose:
             print("Computing antihalo centres...")
-        antihaloMassesAndCentres512 = loadOrRecompute(samplesFolder + \
+        antihaloMassesAndCentres512 = loadOrRecompute(data_folder + \
             "all_antihalo_properties_512" + fileSuffix + ".p",\
             halos.getAllAntihaloCentresAndMassesFromSnaplists,\
             snapList,snapListRev,\
