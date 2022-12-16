@@ -434,7 +434,8 @@ if doSky:
     plot.plotLocalUniverseMollweide(rCut,snapToShow,\
         alpha_shapes = alpha_shape_list[ns][1],
         largeAntihalos = largeAntihalos[ns],hr=antihaloCatalogueList[ns],
-        coordAbell = coordCombinedAbellSphere,abellListLocation = clusterIndMain,\
+        coordAbell = coordCombinedAbellSphere,\
+        abellListLocation = clusterIndMain,\
         nameListLargeClusters = [name[0] for name in clusterNames],\
         ha = ha,va= va, annotationPos = annotationPos,\
         title = 'Local super-volume: large voids (antihalos) within $' + \
