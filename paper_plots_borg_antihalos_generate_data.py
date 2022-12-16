@@ -592,7 +592,8 @@ def getHMFAMFData(snapNumList,snapNumListOld,snapNumListUncon,\
         unconstrainedFolderNew = "new_chain/unconstrained_samples/",\
         unconstrainedFolderOld = "unconstrainedSamples/",verbose=True,\
         reCentreSnaps = True,Om0=0.3111,rSphere=135,nRandCentres = 10000,\
-        meanDensityMethod = "selection",meanThreshold=0.02):
+        meanDensityMethod = "selection",meanThreshold=0.02,\
+        data_folder="./"):
     if type(recomputeData) == bool:
         recomputeDataList = [recomputeData for k in range(0,4)]
     elif type(recomputeData) == list:
@@ -604,7 +605,7 @@ def getHMFAMFData(snapNumList,snapNumListOld,snapNumListUncon,\
     # New snapshots, constrained:
     [constrainedHaloMasses512New,constrainedAntihaloMasses512New,\
         deltaListMeanNew,deltaListErrorNew] = tools.loadOrRecompute(\
-        "constrained_new.p",\
+        data_folder + "constrained_new.p",\
         getHMFAMFDataFromSnapshots,\
         snapNumList,snapnameNew,snapnameNewRev,samplesFolder,\
         recomputeData = recomputeDataList[0],reCentreSnap=reCentreSnaps,\
@@ -614,7 +615,7 @@ def getHMFAMFData(snapNumList,snapNumListOld,snapNumListUncon,\
     # Old snapshots, constrained:
     [constrainedHaloMasses512Old,constrainedAntihaloMasses512Old,\
         deltaListMeanOld,deltaListErrorOld] = tools.loadOrRecompute(\
-        "constrained_old.p",\
+        data_folder + "constrained_old.p",\
         getHMFAMFDataFromSnapshots,\
         snapNumListOld,snapnameOld,snapnameOldRev,samplesFolderOld,\
         recomputeData=recomputeDataList[1],reCentreSnap=reCentreSnaps,\
@@ -626,7 +627,7 @@ def getHMFAMFData(snapNumList,snapNumListOld,snapNumListUncon,\
             comparableAntihalosNew,comparableAntihaloMassesNew,\
             centralHalosNew,centralAntihalosNew,\
             centralHaloMassesNew,centralAntihaloMassesNew] = \
-                tools.loadOrRecompute("unconstrained_new.p",\
+                tools.loadOrRecompute(data_folder + "unconstrained_new.p",\
                     getUnconstrainedHMFAMFData,\
                     snapNumListUncon,snapnameNew,\
                     snapnameNewRev,unconstrainedFolderNew,deltaListMeanNew,\
@@ -642,7 +643,7 @@ def getHMFAMFData(snapNumList,snapNumListOld,snapNumListUncon,\
             comparableAntihalosOld,comparableAntihaloMassesOld,\
             centralHalosOld,centralAntihalosOld,\
             centralHaloMassesOld,centralAntihaloMassesOld] = \
-                tools.loadOrRecompute("unconstrained_old.p",\
+                tools.loadOrRecompute(data_folder + "unconstrained_old.p",\
                     getUnconstrainedHMFAMFData,\
                     snapNumListUnconOld,snapnameOld,\
                     snapnameOldRev,unconstrainedFolderOld,deltaListMeanOld,\
@@ -2553,7 +2554,7 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
             combFracFilter[k])
     combinedFilter = combinedFilter & (snrList > snrThresh)
     distanceArray = np.sqrt(np.sum(meanCentresArray**2,1))
-    combinedFilter135 = combinedFilter135 = combinedFilter & \
+    combinedFilter135 = combinedFilter & \
         (distanceArray < rSphereInner)
     # Conditions to supply to the void profile code:
     additionalConditions = [np.isin(np.arange(0,len(antihaloMasses[k])),\

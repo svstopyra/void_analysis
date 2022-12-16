@@ -194,6 +194,23 @@ def pairCountsFixedPosition(snapNameList,centres,radii,rBins,\
         volsListMean.append(vols)
     return [pairsListMean,volsListMean]
 
+# Stacking around the position of each anti-halo in a given sample:
+def pairCountsVariablePosition(snapNameList,finalCatOpt,centresList,radiiList,\
+        rBins,method="poisson"):
+    pairsListMean = []
+    volsListMean = []
+    for ns in range(0,len(snapNameList)):
+        snap = tools.getPynbodySnap(snapNameList[ns])
+        boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+        gc.collect()
+        tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
+        gc.collect()
+        pairsAll = -np.ones(
+        [pairs,vols] = getPairCounts(centres,\
+                radii,snap,rBins,nThreads=-1,tree=tree,method=method)
+        pairsListMean.append(pairs)
+        volsListMean.append(vols)
+    return [pairsListMean,volsListMean]
 
 # Unconstrained stacks with same radius distribution:
 def stackUnconstrainedWithConstrainedRadii(snapListUn,rBins,antihaloRadiusBins,\
