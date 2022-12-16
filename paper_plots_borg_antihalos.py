@@ -85,7 +85,7 @@ if runTests:
 
 nBinsPPT = 30
 print("Doing ppts")
-doPPTs = False
+doPPTs = True
 if doPPTs:
     [galaxyNumberCountExp,galaxyNumberCountsRobust] = tools.loadOrRecompute(\
         figuresFolder + "ppt_plots_data.p",getPPTPlotData,\
@@ -116,7 +116,7 @@ if runTests:
         samplesFolder = samplesFolder,samplesFolderOld=samplesFolderOld)
 
 
-doHMFs = False
+doHMFs = True
 if doHMFs:
     [constrainedHaloMasses512New,constrainedAntihaloMasses512New,\
             deltaListMeanNew,deltaListErrorNew,\
