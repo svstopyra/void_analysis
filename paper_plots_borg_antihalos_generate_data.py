@@ -2753,16 +2753,88 @@ def getBORGClusterMassEstimates(snapList,clusterLoc,equatorialXYZ2MPP,\
     return [meanMasses,meanCentres,sigmaMasses,sigmaCentres,\
         clusterMasses,clusterCentres,clusterCounterparts]
 
+def getShortPairCounts(snapNameList,centresList,radiiList,rBins,vorVols,\
+        method="poisson"):
+    pairsListVar = []
+    volsListVar = []
+    for ns in range(0,len(snapNameList)):
+        snap = tools.getPynbodySnap(snapNameList[ns])
+        gc.collect()
+        tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
+        gc.collect()
+        [pairs,vols] = stacking.getPairCounts(\
+                centresList[ns],\
+                radiiList[ns],snap,rBins,\
+                nThreads=-1,tree=tree,\
+                method=method,vorVolumes=vorVols[ns])
+        pairsListVar.append(pairs)
+        volsListVar.append(vols)
+    return [pairsListVar,volsListVar]
+
 # Get void profile plot:
-def getVoidProfilesForPaper(finalCatOpt,combinedFilter,snapNameList,\
-        snapNumListUncon,centreListUn,\
+def getVoidProfilesForPaper(finalCatOpt,combinedFilter,\
+        snapNameList,snapNumListUncon,centreListUn,rSphere=300,\
         rSphereInner=135,data_folder="./",recomputeData=True,catData=None,\
-        rEffMin = 0.0,rEffMax = 10.0,nBins = 101,rMin=5,rMax=30,\
-        mUpper=2e15,mLower="auto",ahRBinsMin=10,ahRBinsMax=20,ahRBins=6,\
-        unconstrainedFolderNew="new_chain/unconstrained_samples/",\
-        snapname="gadget_full_forward_512/snapshot_001"):
+        rEffMin = 0.0,rEffMax = 10.0,nBins = 101,rMin=5,rMax=30,mMin=1e11,\
+        mMax = 1e16,mUpper=2e15,mLower="auto",ahRBinsMin=10,ahRBinsMax=20,\
+        ahRBins=6,unconstrainedFolderNew="new_chain/unconstrained_samples/",\
+        snapname="gadget_full_forward_512/snapshot_001",\
+        chainFile="chain_properties.p",Nden=256):
     if catData is None:
         catData = np.load(data_folder + "catalogue_data.npz")
+    # reference snap:
+    refSnap = pynbody.load(snapNameList[0])
+    boxsize = refSnap.properties['boxsize'].ratio("Mpc a h**-1")
+    # Get centres and radii for catalogues in each sample:
+    allProps = [tools.loadPickle(name + ".AHproperties.p") \
+        for name in snapNameList]
+    antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
+            for props in allProps]
+    antihaloCentresUnmapped = [props[5] for props in allProps]
+    # SNR data:
+    [mcmcArray,num,N,NCAT,no_bias_params,bias_matrix,mean_field,\
+        std_field,hmc_Elh,hmc_Eprior,hades_accept_count,\
+        hades_attempt_count] = pickle.load(open(chainFile,"rb"))
+    snrField = mean_field**2/std_field**2
+    snrFieldLin = np.reshape(snrField,Nden**3)
+    # Centres about which to compute SNR:
+    grid = snapedit.gridListPermutation(Nden,perm=(2,1,0))
+    centroids = grid*boxsize/Nden + boxsize/(2*Nden)
+    positions = snapedit.unwrap(centroids - np.array([boxsize/2]*3),boxsize)
+    tree = scipy.spatial.cKDTree(snapedit.wrap(positions + boxsize/2,boxsize),\
+        boxsize=boxsize)
+    nearestPointsList = [tree.query_ball_point(\
+            snapedit.wrap(antihaloCentres[k] + boxsize/2,boxsize),\
+            antihaloRadii[k],workers=-1) \
+            for k in range(0,len(antihaloCentres))]
+    snrAllCatsList = [np.array([np.mean(snrFieldLin[points]) \
+            for points in nearestPointsList[k]]) \
+            for k in range(0,len(snapNameList))]
+    snrFilter = [snr > snrThresh for snr in snrAllCatsList]
+    # More AH properties:
+    antihaloMasses = [props[3] for props in allProps]
+    antihaloRadii = [props[7] for props in allProps]
+    vorVols = [props[4] for props in allProps]
+    centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],rSphere,\
+                filterCondition = (antihaloRadii[k] > rMin) & \
+                (antihaloRadii[k] <= rMax) & (antihaloMasses[k] > mMin) & \
+                (antihaloMasses[k] <= mMax) & snrFilter[k]) \
+                for k in range(0,len(snapNameList))]
+    centralAntihaloMasses = [\
+                antihaloMasses[k][centralAntihalos[k][0]] \
+                for k in range(0,len(centralAntihalos))]
+    sortedList = [np.flip(np.argsort(centralAntihaloMasses[k])) \
+            for k in range(0,len(snapNameList))]
+    ahCounts = np.array([len(cahs[0]) for cahs in centralAntihalos])
+    max_index = np.max(ahCounts)
+    centresListShortUnmapped = [np.array([antihaloCentresUnmapped[l][\
+        centralAntihalos[l][0][sortedList[l][k]],:] \
+        for k in range(0,np.min([ahCounts[l],max_index]))]) \
+        for l in range(0,len(snapNameList))]
+    radiiListShort = [np.array([antihaloRadii[l][\
+        centralAntihalos[l][0][sortedList[l][k]]] \
+        for k in range(0,np.min([ahCounts[l],max_index]))]) \
+        for l in range(0,len(snapNameList))]
     # Compute the trimmed catalogue:
     inTrimmedCatalogue = np.any((finalCatOpt >= 0) & combinedFilter[:,None],1)
     trimmedCatalogue = finalCatOpt[inTrimmedCatalogue]
@@ -2771,8 +2843,6 @@ def getVoidProfilesForPaper(finalCatOpt,combinedFilter,snapNameList,\
     # Data for unconstrained simulations:
     snapListUnconstrained = [pynbody.load(unconstrainedFolderNew + "sample" \
         + str(snapNum) + "/" + snapname) for snapNum in snapNumListUncon]
-    refSnap = snapListUnconstrained[0]
-    boxsize = refSnap.properties['boxsize'].ratio("Mpc a h**-1")
     unmappedCentres = snapedit.wrap(\
         np.fliplr(catData['centres']) + boxsize/2,boxsize)
     Om = refSnap.properties['omegaM0']
@@ -2823,11 +2893,21 @@ def getVoidProfilesForPaper(finalCatOpt,combinedFilter,snapNameList,\
         data_folder + "fixed_centres.p",\
         stacking.pairCountsFixedPosition,snapNameList,\
         unmappedCentres,catData['radii'],rBins,_recomputeData=recomputeData)
+    [pairsListVar,volsListVar] = tools.loadOrRecompute(\
+        data_folder + "variable_centres.p",getShortPairCounts,snapNameList,\
+        centresListShortUnmapped,radiiListShort,rBins,vorVols,\
+        _recomputeData=recomputeData)
     # Compute averaged void profiles:
-    [nbarj,sigmaj] = tools.loadOrRecompute(data_folder + "mean_profiles.p",\
+    [nbarj,sigmaj] = tools.loadOrRecompute(\
+        data_folder + "mean_profiles.p",\
         stacking.computeAveragedIndividualProfiles,finalCatOpt,\
         pairsListMean,volsListMean,additionalFilter = combinedFilter,\
         _recomputeData=recomputeData)
+    [nbarjVar,sigmajVar] = tools.loadOrRecompute(\
+        data_folder + "var_profiles.p",\
+        stacking.computeAveragedIndividualProfiles,finalCatOpt,\
+        pairsListVar,volsListVar,additionalFilter = combinedFilter135,\
+        existingOnly=True,_recomputeData=recomputeData)
     # Get the trimmed volumes list:
     radiiCombined = catData['radii'][selectedVoids]
     rBinsUp = rBins[1:]
@@ -2836,8 +2916,13 @@ def getVoidProfilesForPaper(finalCatOpt,combinedFilter,snapNameList,\
     volumesListCombined = np.outer(radiiCombined**3,volumes)
     # Get mean profile:
     [nbarMean,sigmaMean] = tools.loadOrRecompute(\
-        data_folder + "combined_profile.p",stacking.stackProfilesWithError,\
+        data_folder + "combined_profile_mean.p",\
+        stacking.stackProfilesWithError,\
         nbarj,sigmaj,volumesListCombined,_recomputeData=recomputeData)
+    [nbarVar,sigmaVar] = tools.loadOrRecompute(\
+        data_folder + "combined_profile_var.p",\
+        stacking.stackProfilesWithError,\
+        nbarjVar,sigmajVar,volumesListCombined,_recomputeData=recomputeData)
     return [rBinStackCentres,nbarMean,sigmaMean,nbar,\
         nbarjUnSameRadii,sigmaUnSameRadii]
 
