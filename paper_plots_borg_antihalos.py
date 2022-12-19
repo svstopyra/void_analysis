@@ -180,6 +180,15 @@ snapsort = np.argsort(referenceSnap['iord'])
 # Resolution limit (256^3):
 mLimLower = referenceSnap['mass'][0]*1e10*100*8
 
+mMin = 1e11
+mMax = 1e16
+rMin = 5
+rMax = 30
+muOpt = 0.9
+rSearchOpt = 1
+rSphere = 300
+rSphereInner = 135
+
 
 doCat = True
 if doCat:
@@ -198,9 +207,10 @@ if doCat:
             snapnameRev = "gadget_full_reverse_512/snapshot_001",\
             samplesFolder="new_chain/",snapList = None,snapListRev = None,\
             snapListUnconstrained = None,snapListUnconstrainedRev=None,\
-            mLower = "auto",mUpper = 2e15,nBins = 8,muOpt = 0.9,rSearchOpt = 1,\
-            rSphere = 300,rSphereInner = 135,NWayMatch = True,rMin=5,rMax=30,\
-            mMin=1e11,mMax = 1e16,percThresh=99,chainFile="chain_properties.p",\
+            mLower = "auto",mUpper = 2e15,nBins = 8,muOpt = muOpt,\
+            rSearchOpt = rSearchOpt,rSphere = rSphere,\
+            rSphereInner = rSphereInner,NWayMatch = True,rMin=rMin,rMax=rMax,\
+            mMin=mMin,mMax = mMax,percThresh=99,chainFile="chain_properties.p",\
             Nden=256,recomputeUnconstrained = True,data_folder=data_folder,\
             _recomputeData = recomputeData,recomputeData=recomputeData)
     print("Finished catalogue construction...")
@@ -242,10 +252,19 @@ if runTests:
 
 doSky = True
 if doSky:
-    [alpha_shape_list,largeAntihalos,\
-        snapsortList] = tools.loadOrRecompute(figuresFolder + "skyplot_data.p",
-        getAntihaloSkyPlotData,snapNumList,samplesFolder=samplesFolder,\
-        _recomputeData = recomputeData,recomputeData = recomputeData)
+    #[alpha_shape_list,largeAntihalos,\
+    #    snapsortList] = tools.loadOrRecompute(figuresFolder + "skyplot_data.p",
+    #    getAntihaloSkyPlotData,snapNumList,samplesFolder=samplesFolder,\
+    #    _recomputeData = recomputeData,recomputeData = recomputeData)
+    [alpha_shape_list_all,largeAntihalos_all,\
+        snapsortList_all] = tools.loadOrRecompute(figuresFolder + \
+            "skyplot_data_all_snr_filtered.p",\
+            getAntihaloSkyPlotData,snapNumList,samplesFolder=samplesFolder,\
+            _recomputeData = recomputeData,recomputeData = recomputeData,\
+            nToPlot=20,massRange = [mMin,mMax],\
+            rRange = [5,30],reCentreSnaps = True,\
+            additionalFilters=combinedFilter135,rSphere=rSphereInner)
+
 
 # Can't really un-pickle the halo catalogues without loading the snapshots, so
 # we will have to load these, unfortunately. We should change this, as it 
@@ -321,17 +340,17 @@ if doHMFs:
 
 #-------------------------------------------------------------------------------
 # RADIAL VOID PROFILES
-if doCat:
-    plot.plotConstrainedVsUnconstrainedProfiles(rBinStackCentres,nbarjSepStack,\
-        sigmaSepStack,nbarjAllStackedUn,sigmaAllStackedUn,nbar,rMin,mMin,mMax,\
-        showImmediately = True,fontsize = fontsize,\
-        legendFontSize=legendFontsize,labelCon='Constrained',\
-        labelRand='Unconstrained \nmean',\
-        savename=figuresFolder + "profiles1415.pdf",showTitle=False,\
-        meanErrorLabel = 'Unconstrained \nMean',\
-        profileErrorLabel = 'Profile \nvariation \n',\
-        nbarjUnconstrainedStacks=nbarjSepStackUn,\
-        sigmajUnconstrainedStacks = sigmaSepStackUn,showMean=True)
+#if doCat:
+#    plot.plotConstrainedVsUnconstrainedProfiles(rBinStackCentres,nbarjSepStack,\
+#        sigmaSepStack,nbarjAllStackedUn,sigmaAllStackedUn,nbar,rMin,mMin,mMax,\
+#        showImmediately = True,fontsize = fontsize,\
+#        legendFontSize=legendFontsize,labelCon='Constrained',\
+#        labelRand='Unconstrained \nmean',\
+#        savename=figuresFolder + "profiles1415.pdf",showTitle=False,\
+#        meanErrorLabel = 'Unconstrained \nMean',\
+#        profileErrorLabel = 'Profile \nvariation \n',\
+#        nbarjUnconstrainedStacks=nbarjSepStackUn,\
+#        sigmajUnconstrainedStacks = sigmaSepStackUn,showMean=True)
 
 #-------------------------------------------------------------------------------
 # ANTIHALO SKY PLOT:
@@ -429,24 +448,75 @@ if doClusterMasses:
                     getBORGClusterMassEstimates,snapNameList,clusterLoc,\
                     equatorialXYZ,_recomputeData=recomputeData)
 
+sortedRadiiOpt = np.flip(np.argsort(catData['radii']))
+catToUse = finalCatOpt
+filterToUse = np.where(combinedFilter135)[0]
+nVoidsToShow = 10
+selection = np.intersect1d(sortedRadiiOpt,filterToUse)[:(nVoidsToShow)]
+asListAll = []
+colourListAll = []
+laListAll = []
+labelListAll = []
 
 if doSky:
-    plot.plotLocalUniverseMollweide(rCut,snapToShow,\
-        alpha_shapes = alpha_shape_list[ns][1],
-        largeAntihalos = largeAntihalos[ns],hr=antihaloCatalogueList[ns],
-        coordAbell = coordCombinedAbellSphere,\
-        abellListLocation = clusterIndMain,\
-        nameListLargeClusters = [name[0] for name in clusterNames],\
-        ha = ha,va= va, annotationPos = annotationPos,\
-        title = 'Local super-volume: large voids (antihalos) within $' + \
-        str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",
-        vmin=1e-2,vmax=1e2,legLoc = 'lower left',bbox_to_anchor = (-0.1,-0.2),
-        snapsort = snapsortList[ns],antihaloCentres = None,
-        figOut = figuresFolder + "/antihalos_sky_plot.pdf",
-        showFig=True,figsize = (scale*textwidth,scale*0.55*textwidth),
-        voidColour = seabornColormap[0],antiHaloLabel='inPlot',
-        bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
-        galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False)
+    #
+    #plot.plotLocalUniverseMollweide(rCut,snapToShow,\
+    #    alpha_shapes = alpha_shape_list[ns][1],
+    #    largeAntihalos = largeAntihalos[ns],hr=antihaloCatalogueList[ns],
+    #    coordAbell = coordCombinedAbellSphere,\
+    #    abellListLocation = clusterIndMain,\
+    #    nameListLargeClusters = [name[0] for name in clusterNames],\
+    #    ha = ha,va= va, annotationPos = annotationPos,\
+    #    title = 'Local super-volume: large voids (antihalos) within $' + \
+    #    str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",
+    #    vmin=1e-2,vmax=1e2,legLoc = 'lower left',bbox_to_anchor = (-0.1,-0.2),
+    #    snapsort = snapsortList[ns],antihaloCentres = None,
+    #    figOut = figuresFolder + "/antihalos_sky_plot.pdf",
+    #    showFig=True,figsize = (scale*textwidth,scale*0.55*textwidth),
+    #    voidColour = seabornColormap[0],antiHaloLabel='inPlot',
+    #    bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
+    #    galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False)
+    for ns in range(0,len(snapNameList)):
+        asList = []
+        colourList = []
+        laList = []
+        labelList = []
+        for k in range(0,np.min([nVoidsToShow,len(selection)])):
+            if catToUse[selection[k],ns] > 0:
+                asList.append(alpha_shape_list_all[ns][1][\
+                    catToUse[selection[k],ns]-1])
+                laList.append(\
+                    largeAntihalos_all[ns][catToUse[selection[k],ns]-1])
+                colourList.append(seabornColormap[np.mod(k,len(seabornColormap))])
+                labelList.append(str(catToUse[selection[k],ns]))
+        asListAll.append(asList)
+        colourListAll.append(colourList)
+        laListAll.append(laList)
+        labelListAll.append(labelList)
+    plt.clf()
+    for ns in range(0,len(snapNumList)):
+        plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
+            alpha_shapes = asListAll[ns],\
+            largeAntihalos = laListAll[ns],hr=hrList[ns],\
+            coordAbell = coordCombinedAbellSphere,\
+            abellListLocation = clusterIndMain,\
+            nameListLargeClusters = [name[0] for name in clusterNames],\
+            ha = ha,va= va, annotationPos = annotationPos,\
+            title = 'Local super-volume: large voids (antihalos) within $' + \
+            str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",\
+            vmin=1e-2,vmax=1e2,legLoc = 'lower left',bbox_to_anchor = (-0.1,-0.2),\
+            snapsort = snapsortList_all[ns],antihaloCentres = None,\
+            figOut = figuresFolder + "/ah_match_sample_" + \
+            str(ns) + ".png",\
+            showFig=False,figsize = (scale*textwidth,scale*0.55*textwidth),\
+            voidColour = colourListAll[ns],antiHaloLabel=labelListAll[ns],\
+            bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
+            galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
+            voidAlpha = 0.6)
+    plt.show()
+
+
+    
 
 #-------------------------------------------------------------------------------
 # CLUSTER MASS PLOT

@@ -230,9 +230,10 @@ def remapBORGSimulation(snap,swapXZ = True,translate=True,reverse=False):
 
 # Remap a set of points to the correct co-ordinates:
 def remapAntiHaloCentre(hrcentres,boxsize,swapXZ=True,reverse=False):
-    hrcentresRemap = np.zeros(hrcentres.shape)
     if swapXZ:
         hrcentresRemap = np.fliplr(hrcentres)
+    else:
+        hrcentresRemap = hrcentres
     hrcentresRemap = snapedit.unwrap(hrcentresRemap - np.array([boxsize/2]*3),boxsize)
     if reverse:
         hrcentresRemap = -hrcentresRemap
