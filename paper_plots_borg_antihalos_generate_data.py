@@ -2785,6 +2785,8 @@ def getVoidProfilesForPaper(finalCatOpt,combinedFilter,\
     # reference snap:
     refSnap = pynbody.load(snapNameList[0])
     boxsize = refSnap.properties['boxsize'].ratio("Mpc a h**-1")
+    rBins = np.linspace(rEffMin,rEffMax,nBins)
+    rBinStackCentres = plot.binCentres(rBins)
     # Get centres and radii for catalogues in each sample:
     allProps = [tools.loadPickle(name + ".AHproperties.p") \
         for name in snapNameList]
@@ -2923,7 +2925,7 @@ def getVoidProfilesForPaper(finalCatOpt,combinedFilter,\
         data_folder + "combined_profile_var.p",\
         stacking.stackProfilesWithError,\
         nbarjVar,sigmajVar,volumesListCombined,_recomputeData=recomputeData)
-    return [rBinStackCentres,nbarMean,sigmaMean,nbar,\
+    return [rBinStackCentres,nbarMean,sigmaMean,nbarVar,sigmaVar,nbar,\
         nbarjUnSameRadii,sigmaUnSameRadii]
 
 

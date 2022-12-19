@@ -216,7 +216,7 @@ if doCat:
             open(data_folder + "catalogue_all_data.p","rb"))
     catData = np.load(data_folder + "catalogue_data.npz")
     # New method for void profiles:
-    [rBinStackCentres,nbarMean,sigmaMean,nbar,\
+    [rBinStackCentres,nbarMean,sigmaMean,nbarVar,sigmaVar,nbar,\
         nbarjUnSameRadii,sigmaUnSameRadii] = getVoidProfilesForPaper(\
             finalCatOpt,combinedFilter135,snapNameList,\
             snapNumListUncon,centreListUn,data_folder = data_folder,\
