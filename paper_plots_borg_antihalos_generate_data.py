@@ -47,7 +47,8 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
         nside = 4,nRadialSlices=10,rmax=600,tmppFile = "2mpp_data/2MPP.txt",\
         reductions = 4,iterations = 20,verbose=True,hpIndices=None,\
         centreMethod="density",catFolder="",\
-        snapname="/gadget_full_forward_512/snapshot_001"):
+        snapname="/gadget_full_forward_512/snapshot_001",\
+        data_folder = './'):
     # Parameters:
         # nBins - Number of radial bins for galaxy counts in PPT
         # nClust - Number of clusters to do PPTs for.
@@ -130,7 +131,7 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
     surveyMask11 = healpy.read_map(surveyMaskPath + "completeness_11_5.fits")
     surveyMask12 = healpy.read_map(surveyMaskPath + "completeness_12_5.fits")
     [mask,angularMask,radialMas,mask12,mask11] = tools.loadOrRecompute(\
-        "surveyMask.p",surveyMask,\
+        data_folder + "surveyMask.p",surveyMask,\
         positions,surveyMask11,surveyMask12,cosmo,-0.94,\
         Mstarh,keCorr = keCorr,mmin=mmin,numericalIntegration=True,\
         mmax=mmax,splitApparent=True,splitAbsolute=True,returnComponents=True,\
@@ -165,17 +166,19 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
     # Convert MCMC galaxy counts in voxels to counts in each healpix patch:
     if verbose:
         print("Converting voxel counts to healpix patch counts...")
-    ngHPMCMC = tools.loadOrRecompute("ngHPMCMC.p",getAllNgsToHealpix,ngMCMC,\
+    ngHPMCMC = tools.loadOrRecompute(data_folder + "ngHPMCMC.p",\
+        getAllNgsToHealpix,ngMCMC,\
         hpIndices,snapNumList,samplesFolder,nside,nres=N,\
         _recomputeData=recomputeData)
     # Compute counts in each healpix pixel for 2M++ survey:
     if verbose:
         print("Computing 2M++ galaxy counts...")
-    ng2MPP = np.reshape(tools.loadOrRecompute("mg2mppK3.p",\
+    ng2MPP = np.reshape(tools.loadOrRecompute(data_folder + "mg2mppK3.p",\
         survey.griddedGalCountFromCatalogue,\
         cosmo,tmppFile=tmppFile,Kcorrection = True,N=N,\
         _recomputeData=recomputeData),(nMagBins,N**3))
-    ngHP = tools.loadOrRecompute("ngHP3.p",tools.getCountsInHealpixSlices,\
+    ngHP = tools.loadOrRecompute(data_folder + "ngHP3.p",\
+        tools.getCountsInHealpixSlices,\
         ng2MPP,hpIndices,nside=nside,nres=N,_recomputeData=recomputeData)
     # Amplitudes of the bias model in each healpix patch:
     if verbose:
@@ -242,7 +245,7 @@ def getPPTForPoints(points,nBins = 31,nClust=9,nMagBins = 16,N=256,\
         rBinMax = 20,abell_nums = [426,2147,1656,3627,3571,548,2197,2063,1367],\
         nside = 4,nRadialSlices=10,rmax=600,tmppFile = "2mpp_data/2MPP.txt",\
         reductions = 4,iterations = 20,verbose=True,hpIndices=None,\
-        centreMethod="density",catFolder="",\
+        centreMethod="density",catFolder="",data_folder = './',\
         snapname="/gadget_full_forward_512/snapshot_001",\
         returnAll=False):
     # Get tree of density voxel positions:
@@ -283,7 +286,7 @@ def getPPTForPoints(points,nBins = 31,nClust=9,nMagBins = 16,N=256,\
     surveyMask11 = healpy.read_map(surveyMaskPath + "completeness_11_5.fits")
     surveyMask12 = healpy.read_map(surveyMaskPath + "completeness_12_5.fits")
     [mask,angularMask,radialMas,mask12,mask11] = tools.loadOrRecompute(\
-        "surveyMask.p",surveyMask,\
+        data_folder + "surveyMask.p",surveyMask,\
         positions,surveyMask11,surveyMask12,cosmo,-0.94,\
         Mstarh,keCorr = keCorr,mmin=mmin,numericalIntegration=True,\
         mmax=mmax,splitApparent=True,splitAbsolute=True,returnComponents=True,\
@@ -299,15 +302,17 @@ def getPPTForPoints(points,nBins = 31,nClust=9,nMagBins = 16,N=256,\
             nmean=biasParam[k][:,:,0],biasModel = biasNew,\
             _recomputeData = recomputeData) \
             for k in range(0,nsamples)])
-    ngHPMCMC = tools.loadOrRecompute("ngHPMCMC.p",getAllNgsToHealpix,ngMCMC,\
+    ngHPMCMC = tools.loadOrRecompute(data_folder + "ngHPMCMC.p",\
+        getAllNgsToHealpix,ngMCMC,\
         hpIndices,snapNumList,samplesFolder,nside,nres=N,\
         _recomputeData=recomputeData)
     # Compute counts in each healpix pixel for 2M++ survey:
-    ng2MPP = np.reshape(tools.loadOrRecompute("mg2mppK3.p",\
+    ng2MPP = np.reshape(tools.loadOrRecompute(data_folder + "mg2mppK3.p",\
         survey.griddedGalCountFromCatalogue,\
         cosmo,tmppFile=tmppFile,Kcorrection = True,N=N,\
         _recomputeData=recomputeData),(nMagBins,N**3))
-    ngHP = tools.loadOrRecompute("ngHP3.p",tools.getCountsInHealpixSlices,\
+    ngHP = tools.loadOrRecompute(data_folder + "ngHP3.p",\
+        tools.getCountsInHealpixSlices,\
         ng2MPP,hpIndices,nside=nside,nres=N,_recomputeData=recomputeData)
     # Aalpha:
     npixels = 12*(nside**2)
@@ -1030,7 +1035,7 @@ def getAntihaloSkyPlotData(snapNumList,nToPlot=20,verbose=True,\
         reCentreSnaps = True,figuresFolder='',\
         snapList = None,snapListRev = None,antihaloCatalogueList=None,\
         snapsortList = None,ahProps = None,massRange = None,rRange = None,\
-        additionalFilters = None,rSphere=135):
+        additionalFilters = None,rSphere=135,data_folder="./"):
     # Load snapshots:
     if verbose:
         print("Loading snapshots...")
@@ -1045,7 +1050,7 @@ def getAntihaloSkyPlotData(snapNumList,nToPlot=20,verbose=True,\
             tools.remapBORGSimulation(snap,swapXZ=False,reverse=True)
             snap.recentred = True
     if verbose:
-        print("Computing halo/antihalo centres...")
+        print("Loading antihalo properties...")
     boxsize = snapList[0].properties['boxsize'].ratio("Mpc a h**-1")
     if antihaloCatalogueList is None:
         antihaloCatalogueList = [snap.halos() for snap in snapListRev]
@@ -1056,9 +1061,11 @@ def getAntihaloSkyPlotData(snapNumList,nToPlot=20,verbose=True,\
     antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize,\
         swapXZ=False,reverse=True) for props in ahProps]
     antihaloMasses = [props[3] for props in ahProps]
+    print("Getting snapsort lists...")
     if snapsortList is None:
         snapsortList = [np.argsort(snap['iord']) \
             for snap in snapList]
+    print("Constructing filters...")
     if rRange is None:
         rRangeCond = [np.ones(len(antihaloRadii[k]),dtype=bool) \
             for k in range(0,len(snapNumList))]
@@ -1077,6 +1084,7 @@ def getAntihaloSkyPlotData(snapNumList,nToPlot=20,verbose=True,\
     if additionalFilters is not None:
         filterCond = [filterCond[k] & additionalFilters[k] \
             for k in range(0,len(snapNumList))]
+    print("Selecting antihalos...")
     centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],\
             rSphere,filterCondition = filterCond[k]) \
             for k in range(0,len(snapNumList))]
@@ -2557,11 +2565,13 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     combinedFilter135 = combinedFilter & \
         (distanceArray < rSphereInner)
     # Conditions to supply to the void profile code:
-    additionalConditions = [np.isin(np.arange(0,len(antihaloMasses[k])),\
+    filteredCatalogues = [\
         np.array(centralAntihalos[k][0])[sortedList[k][finalCatOpt[\
-            (finalCatOpt[:,k] >= 0) & \
-            combinedFilter135,k] - 1]]) \
+        (finalCatOpt[:,k] >= 0) & combinedFilter135,k] - 1]] \
         for k in range(0,len(snapList))]
+    additionalConditions = [np.isin(np.arange(0,len(antihaloMasses[k])),\
+        filteredCatalogues[k]) for k in range(0,len(snapList))]
+    tools.savePickle(filteredCatalogues,data_folder + "filtered_catalogue.p")
     # Data for unconstrained sims:
     if verbose:
         print("Getting unconstrained regions with similar density...")

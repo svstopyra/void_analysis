@@ -17,6 +17,7 @@ import os
 import sys
 
 figuresFolder = "borg-antihalos_paper_figures/all_samples/"
+#figuresFolder = "borg-antihalos_paper_figures/batch5-2/"
 
 recomputeData = False
 testDataFolder = figuresFolder + "tests_data/"
@@ -101,7 +102,7 @@ if doPPTs:
             nside = 4,nRadialSlices=10,rmax=600,\
             tmppFile = "2mpp_data/2MPP.txt",\
             reductions = 4,iterations = 20,verbose=True,hpIndices=None,\
-            centreMethod="density")
+            centreMethod="density",data_folder = data_folder)
 
 
 # Load or recompute the HMF/AMF data:
@@ -226,11 +227,11 @@ if doCat:
             open(data_folder + "catalogue_all_data.p","rb"))
     catData = np.load(data_folder + "catalogue_data.npz")
     # New method for void profiles:
-    [rBinStackCentres,nbarMean,sigmaMean,nbarVar,sigmaVar,nbar,\
-        nbarjUnSameRadii,sigmaUnSameRadii] = getVoidProfilesForPaper(\
-            finalCatOpt,combinedFilter135,snapNameList,\
-            snapNumListUncon,centreListUn,data_folder = data_folder,\
-            recomputeData=recomputeData)
+    #[rBinStackCentres,nbarMean,sigmaMean,nbarVar,sigmaVar,nbar,\
+    #    nbarjUnSameRadii,sigmaUnSameRadii] = getVoidProfilesForPaper(\
+    #        finalCatOpt,combinedFilter135,snapNameList,\
+    #        snapNumListUncon,centreListUn,data_folder = data_folder,\
+    #        recomputeData=recomputeData)
 
 
 # Timesteps data. Rerunning this from here not yet implemented 
@@ -250,6 +251,72 @@ if runTests:
         getAntihaloSkyPlotData,\
         [7000, 7200, 7400],samplesFolder=samplesFolder,recomputeData = True)
 
+
+# Centres about which to compute SNR:
+Nden = 256
+snrThresh=10
+chainFile="chain_properties.p"
+[mcmcArray,num,N,NCAT,no_bias_params,bias_matrix,mean_field,\
+    std_field,hmc_Elh,hmc_Eprior,hades_accept_count,\
+    hades_attempt_count] = pickle.load(open(chainFile,"rb"))
+snrField = mean_field**2/std_field**2
+snrFieldLin = np.reshape(snrField,Nden**3)
+allProps = [tools.loadPickle(snapname + ".AHproperties.p") \
+    for snapname in snapNameList]
+antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
+        for props in allProps]
+antihaloCentresUnmapped = [props[5] for props in allProps]
+antihaloMasses = [props[3] for props in allProps]
+antihaloRadii = [props[7] for props in allProps]
+grid = snapedit.gridListPermutation(Nden,perm=(2,1,0))
+centroids = grid*boxsize/Nden + boxsize/(2*Nden)
+positions = snapedit.unwrap(centroids - np.array([boxsize/2]*3),boxsize)
+tree = scipy.spatial.cKDTree(snapedit.wrap(positions + boxsize/2,boxsize),\
+    boxsize=boxsize)
+nearestPointsList = [tree.query_ball_point(\
+        snapedit.wrap(antihaloCentres[k] + boxsize/2,boxsize),\
+        antihaloRadii[k],workers=-1) \
+        for k in range(0,len(antihaloCentres))]
+snrAllCatsList = [np.array([np.mean(snrFieldLin[points]) \
+        for points in nearestPointsList[k]]) for k in range(0,len(snapNumList))]
+snrFilter = [snr > snrThresh for snr in snrAllCatsList]
+centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],rSphere,\
+            filterCondition = (antihaloRadii[k] > rMin) & \
+            (antihaloRadii[k] <= rMax) & (antihaloMasses[k] > mMin) & \
+            (antihaloMasses[k] <= mMax) & snrFilter[k]) \
+            for k in range(0,len(snapNumList))]
+centralAntihaloMasses = [\
+            antihaloMasses[k][centralAntihalos[k][0]] \
+            for k in range(0,len(centralAntihalos))]
+sortedList = [np.flip(np.argsort(centralAntihaloMasses[k])) \
+        for k in range(0,len(snapNumList))]
+
+ahCounts = np.array([len(cahs[0]) for cahs in centralAntihalos])
+max_index = np.max(ahCounts)
+centresListShort = [np.array([antihaloCentres[l][\
+    centralAntihalos[l][0][sortedList[l][k]],:] \
+    for k in range(0,np.min([ahCounts[l],max_index]))]) \
+    for l in range(0,len(snapNumList))]
+
+centresListShortUnmapped = [np.array([antihaloCentresUnmapped[l][\
+    centralAntihalos[l][0][sortedList[l][k]],:] \
+    for k in range(0,np.min([ahCounts[l],max_index]))]) \
+    for l in range(0,len(snapNumList))]
+
+radiiListShort = [np.array([antihaloRadii[l][\
+        centralAntihalos[l][0][sortedList[l][k]]] \
+        for k in range(0,np.min([ahCounts[l],max_index]))]) \
+        for l in range(0,len(snapNumList))]
+
+
+
+
+additionalConditions = [np.isin(np.arange(0,len(antihaloMasses[k])),\
+    np.array(centralAntihalos[k][0])[\
+    sortedList[k][finalCatOpt[(finalCatOpt[:,k] >= 0) & \
+    combinedFilter135,k] - 1]]) for k in range(0,len(snapNameList))]
+
+
 doSky = True
 if doSky:
     #[alpha_shape_list,largeAntihalos,\
@@ -261,9 +328,9 @@ if doSky:
             "skyplot_data_all_snr_filtered.p",\
             getAntihaloSkyPlotData,snapNumList,samplesFolder=samplesFolder,\
             _recomputeData = recomputeData,recomputeData = recomputeData,\
-            nToPlot=20,massRange = [mMin,mMax],\
+            nToPlot=np.sum(combinedFilter135),massRange = [mMin,mMax],\
             rRange = [5,30],reCentreSnaps = True,\
-            additionalFilters=combinedFilter135,rSphere=rSphereInner)
+            additionalFilters=additionalConditions,rSphere=rSphere)
 
 
 # Can't really un-pickle the halo catalogues without loading the snapshots, so
@@ -272,6 +339,8 @@ if doSky:
 samplesFolder = "new_chain/"
 snapListRev =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
         + "gadget_full_reverse_512/snapshot_001") for snapNum in snapNumList]
+snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
+        + "gadget_full_forward_512/snapshot_001") for snapNum in snapNumList]
 antihaloCatalogueList = [snap.halos() for snap in snapListRev]
 
 #-------------------------------------------------------------------------------
@@ -359,6 +428,13 @@ ns = 0
 snapToShow = pynbody.load(samplesFolder + "sample" + str(snapNumList[ns]) + \
     "/gadget_full_forward_512/snapshot_001")
 tools.remapBORGSimulation(snapToShow,swapXZ=False,reverse=True)
+
+snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
+        + "gadget_full_forward_512/snapshot_001") for snapNum in snapNumList]
+
+for snap in snapList:
+    tools.remapBORGSimulation(snap,swapXZ=False,reverse=True)
+
 
 rCut = 135
 ha = ['right','left','left','left','left','center','right',\
@@ -448,11 +524,20 @@ if doClusterMasses:
                     getBORGClusterMassEstimates,snapNameList,clusterLoc,\
                     equatorialXYZ,_recomputeData=recomputeData)
 
-sortedRadiiOpt = np.flip(np.argsort(catData['radii']))
-catToUse = finalCatOpt
+sortedRadiiOpt = np.flip(np.argsort(catData['radii'][combinedFilter135]))
+catToUse = finalCatOpt[combinedFilter135]
+haveVoids = [np.where(catToUse[:,ns] > 0)[0] \
+    for ns in range(0,len(snapNameList))]
+
+for ns in range(0,len(snapNameList)):
+    catToUse[haveVoids[ns],ns] = np.arange(1,len(haveVoids[ns])+1)
+
+
+
 filterToUse = np.where(combinedFilter135)[0]
 nVoidsToShow = 10
-selection = np.intersect1d(sortedRadiiOpt,filterToUse)[:(nVoidsToShow)]
+#selection = np.intersect1d(sortedRadiiOpt,filterToUse)[:(nVoidsToShow)]
+selection = sortedRadiiOpt[np.arange(0,nVoidsToShow)]
 asListAll = []
 colourListAll = []
 laListAll = []
@@ -483,12 +568,13 @@ if doSky:
         labelList = []
         for k in range(0,np.min([nVoidsToShow,len(selection)])):
             if catToUse[selection[k],ns] > 0:
-                asList.append(alpha_shape_list_all[ns][1][\
-                    catToUse[selection[k],ns]-1])
-                laList.append(\
-                    largeAntihalos_all[ns][catToUse[selection[k],ns]-1])
+                finder = np.where(largeAntihalos_all[ns] == np.where(\
+                    centralAntihalos[ns][1])[0][\
+                    finalCatOpt[combinedFilter135][selection[k],ns]-1])[0]
+                asList.append(alpha_shape_list_all[ns][1][finder[0]])
+                laList.append(largeAntihalos_all[ns][finder[0]])
                 colourList.append(seabornColormap[np.mod(k,len(seabornColormap))])
-                labelList.append(str(catToUse[selection[k],ns]))
+                labelList.append(str(k+1))
         asListAll.append(asList)
         colourListAll.append(colourList)
         laListAll.append(laList)
@@ -497,7 +583,7 @@ if doSky:
     for ns in range(0,len(snapNumList)):
         plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
             alpha_shapes = asListAll[ns],\
-            largeAntihalos = laListAll[ns],hr=hrList[ns],\
+            largeAntihalos = laListAll[ns],hr=antihaloCatalogueList[ns],\
             coordAbell = coordCombinedAbellSphere,\
             abellListLocation = clusterIndMain,\
             nameListLargeClusters = [name[0] for name in clusterNames],\
@@ -515,8 +601,6 @@ if doSky:
             voidAlpha = 0.6)
     plt.show()
 
-
-    
 
 #-------------------------------------------------------------------------------
 # CLUSTER MASS PLOT
@@ -560,7 +644,8 @@ if doCat:
 
 
 # Plot for the paper, using the new method:
-if doCat:
+doProfiles = False
+if doCat and doProfiles:
     textwidth=7.1014
     fontsize = 12
     legendFontsize=10
