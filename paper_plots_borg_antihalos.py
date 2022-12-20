@@ -19,7 +19,7 @@ import sys
 figuresFolder = "borg-antihalos_paper_figures/all_samples/"
 #figuresFolder = "borg-antihalos_paper_figures/batch5-2/"
 
-recomputeData = False
+recomputeData = True
 testDataFolder = figuresFolder + "tests_data/"
 runTests = False
 
