@@ -1026,7 +1026,54 @@ def getVoidProfilesData(snapNumList,snapNumListUncon,\
         nbarjAllStacked,sigmaAllStacked,nbarjAllStackedUn,sigmaAllStackedUn,\
         nbar,rMin,mMin,mMax]
 
-def getAntihaloSkyPlotData(snapNumList,nToPlot=20,verbose=True,\
+
+# Constructs a grid of points for a given boxsize at which we can evaluate
+# densities, SNR etc...
+# NB - these positions are designed to work with the positions
+# output by the tools.remapAntiHaloCentres fuction when applies to the 
+# constrained simulations. If the layout changes, then this function
+# will no longer work!
+def getGridPositionsAndTreeForSims(boxsize,Nden=256,perm=(2,1,0)):
+    grid = snapedit.gridListPermutation(Nden,perm=(2,1,0))
+    centroids = grid*boxsize/Nden + boxsize/(2*Nden)
+    positions = snapedit.unwrap(centroids - np.array([boxsize/2]*3),boxsize)
+    tree = scipy.spatial.cKDTree(snapedit.wrap(positions + boxsize/2,boxsize),\
+        boxsize=boxsize)
+    return [positions,tree]
+
+
+# Construct an SNR filter from a chain file:
+def getSNRFilterFromChainFile(chainFile,snrThresh,snapNameList,Nden = 256,\
+        allProps=None):
+    [mcmcArray,num,N,NCAT,no_bias_params,bias_matrix,mean_field,\
+        std_field,hmc_Elh,hmc_Eprior,hades_accept_count,\
+        hades_attempt_count] = tools.loadPickle(chainFile)
+    snrField = mean_field**2/std_field**2
+    snrFieldLin = np.reshape(snrField,Nden**3)
+    if allProps is None:
+        allProps = [tools.loadPickle(snapname + ".AHproperties.p") \
+           for snapname in snapNameList]
+    antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
+            for props in allProps]
+    antihaloCentresUnmapped = [props[5] for props in allProps]
+    antihaloMasses = [props[3] for props in allProps]
+    antihaloRadii = [props[7] for props in allProps]
+    # Get positions at which to compute the SNR:
+    [positions,tree] = getGridPositionsAndTreeForSims(boxsize,Nden=Nden)
+    # Locate the points within one anti-halo effective radii of each void
+    # centre. We define the void SNR as the average SNR of these points:
+    nearestPointsList = [tree.query_ball_point(\
+            snapedit.wrap(antihaloCentres[k] + boxsize/2,boxsize),\
+            antihaloRadii[k],workers=-1) \
+            for k in range(0,len(antihaloCentres))]
+    snrAllCatsList = [np.array([np.mean(snrFieldLin[points]) \
+            for points in nearestPointsList[k]]) \
+            for k in range(0,len(snapNumList))]
+    # Filter those above the threshold:
+    snrFilter = [snr > snrThresh for snr in snrAllCatsList]
+    return snrFilter
+
+def getAntihaloSkyPlotData(snapNumList,nToPlot=None,verbose=True,\
         samplesFolder = "new_chain/",recomputeData = False,\
         snapForFolder = "gadget_full_forward_512",\
         snapRevFolder = "gadget_full_reverse_512",\
@@ -1035,7 +1082,8 @@ def getAntihaloSkyPlotData(snapNumList,nToPlot=20,verbose=True,\
         reCentreSnaps = True,figuresFolder='',\
         snapList = None,snapListRev = None,antihaloCatalogueList=None,\
         snapsortList = None,ahProps = None,massRange = None,rRange = None,\
-        additionalFilters = None,rSphere=135,data_folder="./"):
+        additionalFilters = None,rSphere=135,data_folder="./",\
+        centralAntihalos = None):
     # Load snapshots:
     if verbose:
         print("Loading snapshots...")
@@ -1065,35 +1113,42 @@ def getAntihaloSkyPlotData(snapNumList,nToPlot=20,verbose=True,\
     if snapsortList is None:
         snapsortList = [np.argsort(snap['iord']) \
             for snap in snapList]
-    print("Constructing filters...")
-    if rRange is None:
-        rRangeCond = [np.ones(len(antihaloRadii[k]),dtype=bool) \
+    if centralAntihalos is None:
+        print("Constructing filters...")
+        if rRange is None:
+            rRangeCond = [np.ones(len(antihaloRadii[k]),dtype=bool) \
+                for k in range(0,len(snapNumList))]
+        else:
+            rRangeCond = [(antihaloRadii[k] > rRange[0]) & \
+                (antihaloRadii[k] <= rRange[1]) \
+                for k in range(0,len(snapNumList))]
+        if massRange is None:
+            mRangeCond = [np.ones(len(antihaloRadii[k]),dtype=bool) \
+                for k in range(0,len(snapNumList))]
+        else:
+            mRangeCond = [(antihaloMasses[k] > massRange[0]) & \
+                (antihaloMasses[k] <= massRange[1]) \
+                for k in range(0,len(snapNumList))]
+        filterCond = [rRangeCond[k] & mRangeCond[k] \
             for k in range(0,len(snapNumList))]
-    else:
-        rRangeCond = [(antihaloRadii[k] > rRange[0]) & \
-            (antihaloRadii[k] <= rRange[1]) for k in range(0,len(snapNumList))]
-    if massRange is None:
-        mRangeCond = [np.ones(len(antihaloRadii[k]),dtype=bool) \
-            for k in range(0,len(snapNumList))]
-    else:
-        mRangeCond = [(antihaloMasses[k] > massRange[0]) & \
-            (antihaloMasses[k] <= massRange[1]) \
-            for k in range(0,len(snapNumList))]
-    filterCond = [rRangeCond[k] & mRangeCond[k] \
-        for k in range(0,len(snapNumList))]
-    if additionalFilters is not None:
-        filterCond = [filterCond[k] & additionalFilters[k] \
-            for k in range(0,len(snapNumList))]
-    print("Selecting antihalos...")
-    centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],\
-            rSphere,filterCondition = filterCond[k]) \
-            for k in range(0,len(snapNumList))]
+        if additionalFilters is not None:
+            filterCond = [filterCond[k] & additionalFilters[k] \
+                for k in range(0,len(snapNumList))]
+        print("Selecting antihalos...")
+        centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],\
+                rSphere,filterCondition = filterCond[k]) \
+                for k in range(0,len(snapNumList))]
     massSortCentral = [\
         np.flip(np.argsort(antihaloMasses[k][centralAntihalos[k][0]])) \
         for k in range(0,len(centralAntihalos))]
-    largeAntihalos = [np.array(centralAntihalos[ns][0],dtype=int)[\
-        massSortCentral[ns][0:nToPlot]] \
-        for ns in range(0,len(snapList))]
+    if nToPlot is None:
+        largeAntihalos = [np.array(centralAntihalos[ns][0],dtype=int)[\
+            massSortCentral[ns]] \
+            for ns in range(0,len(snapList))]
+    else:
+        largeAntihalos = [np.array(centralAntihalos[ns][0],dtype=int)[\
+            massSortCentral[ns][0:nToPlot]] \
+            for ns in range(0,len(snapList))]
     if verbose:
         print("Computing alpha shapes...")
     alpha_shape_list = [tools.computeMollweideAlphaShapes(\

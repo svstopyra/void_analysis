@@ -19,7 +19,7 @@ import sys
 figuresFolder = "borg-antihalos_paper_figures/all_samples/"
 #figuresFolder = "borg-antihalos_paper_figures/batch5-2/"
 
-recomputeData = True
+recomputeData = False
 testDataFolder = figuresFolder + "tests_data/"
 runTests = False
 
@@ -256,11 +256,10 @@ if runTests:
 Nden = 256
 snrThresh=10
 chainFile="chain_properties.p"
-[mcmcArray,num,N,NCAT,no_bias_params,bias_matrix,mean_field,\
-    std_field,hmc_Elh,hmc_Eprior,hades_accept_count,\
-    hades_attempt_count] = pickle.load(open(chainFile,"rb"))
-snrField = mean_field**2/std_field**2
-snrFieldLin = np.reshape(snrField,Nden**3)
+
+snrFilter = getSNRFilterFromChainFile(chainFile,snrThresh,snapNameList)
+
+
 allProps = [tools.loadPickle(snapname + ".AHproperties.p") \
     for snapname in snapNameList]
 antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
@@ -268,18 +267,8 @@ antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
 antihaloCentresUnmapped = [props[5] for props in allProps]
 antihaloMasses = [props[3] for props in allProps]
 antihaloRadii = [props[7] for props in allProps]
-grid = snapedit.gridListPermutation(Nden,perm=(2,1,0))
-centroids = grid*boxsize/Nden + boxsize/(2*Nden)
-positions = snapedit.unwrap(centroids - np.array([boxsize/2]*3),boxsize)
-tree = scipy.spatial.cKDTree(snapedit.wrap(positions + boxsize/2,boxsize),\
-    boxsize=boxsize)
-nearestPointsList = [tree.query_ball_point(\
-        snapedit.wrap(antihaloCentres[k] + boxsize/2,boxsize),\
-        antihaloRadii[k],workers=-1) \
-        for k in range(0,len(antihaloCentres))]
-snrAllCatsList = [np.array([np.mean(snrFieldLin[points]) \
-        for points in nearestPointsList[k]]) for k in range(0,len(snapNumList))]
-snrFilter = [snr > snrThresh for snr in snrAllCatsList]
+
+
 centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],rSphere,\
             filterCondition = (antihaloRadii[k] > rMin) & \
             (antihaloRadii[k] <= rMax) & (antihaloMasses[k] > mMin) & \
@@ -316,6 +305,12 @@ additionalConditions = [np.isin(np.arange(0,len(antihaloMasses[k])),\
     sortedList[k][finalCatOpt[(finalCatOpt[:,k] >= 0) & \
     combinedFilter135,k] - 1]]) for k in range(0,len(snapNameList))]
 
+centralAntihalosAdditional = [tools.getAntiHalosInSphere(antihaloCentres[k],\
+            rSphere,filterCondition = (antihaloRadii[k] > rMin) & \
+            (antihaloRadii[k] <= rMax) & (antihaloMasses[k] > mMin) & \
+            (antihaloMasses[k] <= mMax) & additionalConditions[k]) \
+            for k in range(0,len(snapNumList))]
+
 
 doSky = True
 if doSky:
@@ -323,14 +318,22 @@ if doSky:
     #    snapsortList] = tools.loadOrRecompute(figuresFolder + "skyplot_data.p",
     #    getAntihaloSkyPlotData,snapNumList,samplesFolder=samplesFolder,\
     #    _recomputeData = recomputeData,recomputeData = recomputeData)
+    # IMPORTANT - additionalFilters much match the filter used above for
+    # centralAntihalos, otherwise we get inconsistent centralAntihalos lists
+    # which leads to errors constructing the plots.
+    # TODO - fix this constant reconstructing of the centralAntihalos list.
+    # It makes sense to reconstruct it as needed, but we should change it so 
+    # that we can provide a precomputed list and only recompute if this 
+    # isn't provided.
     [alpha_shape_list_all,largeAntihalos_all,\
         snapsortList_all] = tools.loadOrRecompute(figuresFolder + \
             "skyplot_data_all_snr_filtered.p",\
             getAntihaloSkyPlotData,snapNumList,samplesFolder=samplesFolder,\
             _recomputeData = recomputeData,recomputeData = recomputeData,\
-            nToPlot=np.sum(combinedFilter135),massRange = [mMin,mMax],\
+            massRange = [mMin,mMax],nToPlot = 200,\
             rRange = [5,30],reCentreSnaps = True,\
-            additionalFilters=additionalConditions,rSphere=rSphere)
+            additionalFilters=snrFilter,rSphere=rSphere,\
+            centralAntihalos=centralAntihalos)
 
 
 # Can't really un-pickle the halo catalogues without loading the snapshots, so
