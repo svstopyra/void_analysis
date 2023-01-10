@@ -1068,7 +1068,7 @@ def getSNRFilterFromChainFile(chainFile,snrThresh,snapNameList,boxsize,\
             for k in range(0,len(antihaloCentres))]
     snrAllCatsList = [np.array([np.mean(snrFieldLin[points]) \
             for points in nearestPointsList[k]]) \
-            for k in range(0,len(snapNumList))]
+            for k in range(0,len(snapNameList))]
     # Filter those above the threshold:
     snrFilter = [snr > snrThresh for snr in snrAllCatsList]
     return snrFilter
