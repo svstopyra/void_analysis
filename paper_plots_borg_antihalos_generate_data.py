@@ -353,7 +353,7 @@ def getPPTForPoints(points,nBins = 31,nClust=9,nMagBins = 16,N=256,\
 
 def getHMFAMFDataFromSnapshots(snapNumList,snapname,snapnameRev,samplesFolder,\
         fileSuffix = '',recomputeData = False,reCentreSnap=True,rSphere=135,\
-        Om0 = 0.3111,boxsize=677.7,verbose=True,recomputeCentres=False,\
+        boxsize=677.7,verbose=True,recomputeCentres=False,\
         data_folder="./"):
     # Load snapshots:
     if verbose:
@@ -419,6 +419,7 @@ def getHMFAMFDataFromSnapshots(snapNumList,snapname,snapnameRev,samplesFolder,\
     mUnit = snapList[0]['mass'][0]*1e10
     volSphere = 4*np.pi*rSphere**3/3
     rhoCrit = 2.7754e11
+    Om0 = snapList[0].properties['omegaM0']
     rhoMean = rhoCrit*Om0
     deltaList = []
     for k in range(0,len(snapList)):
@@ -428,7 +429,7 @@ def getHMFAMFDataFromSnapshots(snapNumList,snapname,snapnameRev,samplesFolder,\
         tree = tools.getKDTree(snap)
         gc.collect()
         deltaList.append(mUnit*tree.query_ball_point(\
-            [boxsize/2,boxsize/2,boxsize/2],135,\
+            [boxsize/2,boxsize/2,boxsize/2],rSphere,\
             workers=-1,return_length=True)/(volSphere*rhoMean) - 1.0)
     deltaListMean = np.mean(deltaList)
     deltaListError = np.std(deltaList)/np.sqrt(len(snapList))

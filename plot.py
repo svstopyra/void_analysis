@@ -2273,6 +2273,11 @@ def plotHMFAMFComparison(constrainedHaloMasses512Old,deltaListMeanOld,\
         factor = 1.0
     massBinCentres = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),\
         nMassBins))
+    # Cosmological parameters for the two runs:
+    omegaList = [referenceSnapOld.properties['omegaM0'],\
+        referenceSnap.properties['omegaM0']]
+    hList = [referenceSnapOld.properties['h'],\
+        referenceSnap.properties['h']]
     fig, ax = plt.subplots(2,2,figsize=(textwidth,textwidth))
     for i in range(0,2):
         if i == 0:
@@ -2352,7 +2357,7 @@ def plotHMFAMFComparison(constrainedHaloMasses512Old,deltaListMeanOld,\
                 ylabel = ylabelStart + '\nNumber of Halos or Antihalos'
             if j == 0:
                 [axij,h1,h2,h3] = plotAverageHMF(constrainedHaloMasses512,\
-                    boxsize,h=h,omegaM0=omegaM0,\
+                    boxsize,h=hlist[i],omegaM0=omegaList[i],\
                     volSim = volSim,show=False,ax=axij,\
                     labelLine = None,\
                     label = "Constrained",delta_wrt=haloType[i],\
