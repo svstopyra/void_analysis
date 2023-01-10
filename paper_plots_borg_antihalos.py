@@ -134,7 +134,8 @@ if doHMFs:
                 tools.loadOrRecompute(figuresFolder + "amf_hmf_data.p",\
                     getHMFAMFData,snapNumList,snapNumListOld,snapNumListUncon,\
                     snapNumListUnconOld,_recomputeData = recomputeData,\
-                    recomputeData = [False,False,False,False],\
+                    recomputeData = [recomputeData,recomputeData,\
+                        recomputeData,recomputeData],\
                     unconstrainedFolderNew = unconstrainedFolderNew,\
                     unconstrainedFolderOld = unconstrainedFolderOld,\
                     snapnameNew = snapnameNew,snapnameNewRev=snapnameNewRev,\

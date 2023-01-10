@@ -2357,7 +2357,7 @@ def plotHMFAMFComparison(constrainedHaloMasses512Old,deltaListMeanOld,\
                 ylabel = ylabelStart + '\nNumber of Halos or Antihalos'
             if j == 0:
                 [axij,h1,h2,h3] = plotAverageHMF(constrainedHaloMasses512,\
-                    boxsize,h=hlist[i],omegaM0=omegaList[i],\
+                    boxsize,h=hList[i],omegaM0=omegaList[i],\
                     volSim = volSim,show=False,ax=axij,\
                     labelLine = None,\
                     label = "Constrained",delta_wrt=haloType[i],\
@@ -2409,7 +2409,7 @@ def plotHMFAMFComparison(constrainedHaloMasses512Old,deltaListMeanOld,\
             else:
                 [axij,h1,h2,h3] = plotAverageHMF(\
                     constrainedAntihaloMasses512,\
-                    boxsize,h=h,omegaM0=omegaM0,\
+                    boxsize,h=hList[i],omegaM0=omegaList[i],\
                     volSim = volSim,show=False,ax=axij,\
                     labelLine = None,mass_function=mass_function,\
                     label = "Constrained",delta_wrt=haloType[i],\
