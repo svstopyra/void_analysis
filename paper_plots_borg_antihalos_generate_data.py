@@ -1043,8 +1043,8 @@ def getGridPositionsAndTreeForSims(boxsize,Nden=256,perm=(2,1,0)):
 
 
 # Construct an SNR filter from a chain file:
-def getSNRFilterFromChainFile(chainFile,snrThresh,snapNameList,Nden = 256,\
-        allProps=None):
+def getSNRFilterFromChainFile(chainFile,snrThresh,snapNameList,boxsize,\
+        Nden = 256,allProps=None):
     [mcmcArray,num,N,NCAT,no_bias_params,bias_matrix,mean_field,\
         std_field,hmc_Elh,hmc_Eprior,hades_accept_count,\
         hades_attempt_count] = tools.loadPickle(chainFile)

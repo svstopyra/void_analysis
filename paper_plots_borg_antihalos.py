@@ -257,7 +257,7 @@ Nden = 256
 snrThresh=10
 chainFile="chain_properties.p"
 
-snrFilter = getSNRFilterFromChainFile(chainFile,snrThresh,snapNameList)
+snrFilter = getSNRFilterFromChainFile(chainFile,snrThresh,snapNameList,boxsize)
 
 
 allProps = [tools.loadPickle(snapname + ".AHproperties.p") \
