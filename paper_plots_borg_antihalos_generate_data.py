@@ -441,7 +441,7 @@ def getHMFAMFDataFromSnapshots(snapNumList,snapname,snapnameRev,samplesFolder,\
 def getUnconstrainedHMFAMFData(snapNumListUncon,snapName,snapNameRev,\
         unconstrainedFolder,deltaListMean,deltaListError,\
         fileSuffix = '',recomputeData=False,boxsize=677.7,verbose=True,\
-        reCentreSnaps = True,Om0=0.3111,rSphere=135,nRandCentres = 10000,\
+        reCentreSnaps = True,rSphere=135,nRandCentres = 10000,\
         recomputeCentres = False,randomSeed=1000,meanDensityMethod="selection",\
         meanThreshold=0.02,nRandMax=100):
     # Load unconstrained snaps:
@@ -497,6 +497,7 @@ def getUnconstrainedHMFAMFData(snapNumListUncon,snapName,snapNameRev,\
     if verbose:
         print("Computing random centres and overdensities...")
     rhoCrit = 2.7754e11
+    Om0 = snapListUnconstrained[0].properties['omegaM0']
     rhoMean = rhoCrit*Om0
     volSphere = 4*np.pi*rSphere**3/3
     # Seed RNG:
@@ -615,7 +616,7 @@ def getHMFAMFData(snapNumList,snapNumListOld,snapNumListUncon,\
         getHMFAMFDataFromSnapshots,\
         snapNumList,snapnameNew,snapnameNewRev,samplesFolder,\
         recomputeData = recomputeDataList[0],reCentreSnap=reCentreSnaps,\
-        rSphere=rSphere,Om0 = Om0,boxsize=boxsize,verbose=verbose,\
+        rSphere=rSphere,boxsize=boxsize,verbose=verbose,\
         _recomputeData=recomputeDataList[0])
     gc.collect()
     # Old snapshots, constrained:
@@ -625,7 +626,7 @@ def getHMFAMFData(snapNumList,snapNumListOld,snapNumListUncon,\
         getHMFAMFDataFromSnapshots,\
         snapNumListOld,snapnameOld,snapnameOldRev,samplesFolderOld,\
         recomputeData=recomputeDataList[1],reCentreSnap=reCentreSnaps,\
-        rSphere=rSphere,Om0 = Om0,boxsize=boxsize,verbose=verbose,\
+        rSphere=rSphere,boxsize=boxsize,verbose=verbose,\
         fileSuffix = '_old',_recomputeData=recomputeDataList[1])
     gc.collect()
     # Unconstrained halos/antihalos with similar underdensity:
@@ -638,7 +639,7 @@ def getHMFAMFData(snapNumList,snapNumListOld,snapNumListUncon,\
                     snapNumListUncon,snapnameNew,\
                     snapnameNewRev,unconstrainedFolderNew,deltaListMeanNew,\
                     deltaListErrorNew,boxsize=boxsize,\
-                    reCentreSnaps = reCentreSnaps,Om0=Om0,rSphere=rSphere,\
+                    reCentreSnaps = reCentreSnaps,rSphere=rSphere,\
                     nRandCentres=nRandCentres,verbose=verbose,\
                     recomputeData=recomputeDataList[2],\
                     meanThreshold=meanThreshold,\
@@ -654,7 +655,7 @@ def getHMFAMFData(snapNumList,snapNumListOld,snapNumListUncon,\
                     snapNumListUnconOld,snapnameOld,\
                     snapnameOldRev,unconstrainedFolderOld,deltaListMeanOld,\
                     deltaListErrorOld,boxsize=boxsize,\
-                    reCentreSnaps = reCentreSnaps,Om0=Om0,rSphere=rSphere,\
+                    reCentreSnaps = reCentreSnaps,rSphere=rSphere,\
                     nRandCentres=nRandCentres,verbose=verbose,\
                     fileSuffix = '_old',recomputeData=recomputeDataList[3],\
                     meanThreshold=meanThreshold,\
