@@ -1922,23 +1922,25 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,\
         Delta=200,sigma8=0.8,fontsize=12,legendFontsize=10,font="serif",\
         Ob0=0.049,mass_function='Tinker',delta_wrt='SOCritical',massLower=5e13,\
         massUpper=1e15,figsize=(4,4),marker='x',linestyle='--',\
-        color=seabornColormap[0],colorTheory = seabornColormap[1],\
+        color=None,colorTheory = None,\
         nBins=21,poisson_interval = 0.95,legendLoc='lower left',\
         label="Gadget Simulation",transfer_model='EH',fname=None,\
         xlabel="Mass [$M_{\odot}h^{-1}$]",ylabel="Number of halos",\
         ylim=[1e1,2e4],title="Gadget Simulation",showLegend=True,\
         tickRight=False,tickLeft=True,savename=None,\
-        linking_length=0.2):
+        linking_length=0.2,showTheory=True,returnHandles=False):
     [dndm,m] = cosmology.TMF_from_hmf(massLower,massUpper,\
         h=h,Om0=Om0,Delta=Delta,delta_wrt=delta_wrt,\
         mass_function=mass_function,sigma8=sigma8,Ob0 = Ob0,\
         transfer_model=transfer_model,fname=fname,ns=ns,\
         linking_length=linking_length)
     massBins = 10**np.linspace(np.log10(massLower),np.log10(massUpper),nBins)
-    n = cosmology.dndm_to_n(m,dndm,massBins)
-    bounds = np.array(scipy.stats.poisson(n*volSim).interval(poisson_interval))
-    massBinCentres = plot_utilities.binCentres(massBins)
+    if showTheory:
+        n = cosmology.dndm_to_n(m,dndm,massBins)
+        bounds = np.array(scipy.stats.poisson(n*volSim).interval(\
+            poisson_interval))
     alphaO2 = (1.0 - poisson_interval)/2.0
+    massBinCentres = plot_utilities.binCentres(massBins)
     if type(masses) == list:
         [noInBins,sigmaBins] = plot.computeMeanHMF(masses,\
             massLower=massLower,massUpper=massUpper,nBins = nBins)
@@ -1950,15 +1952,21 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,\
             noInBins)
     if ax is None:
         fig, ax = plt.subplots(1,1,figsize=(8,4))
-    ax.errorbar(massBinCentres,noInBins,sigmaBins,marker=marker,\
-        linestyle=linestyle,label=label,color=color)
-    ax.plot(massBinCentres,n*volSim,":",label=mass_function + ' prediction',\
-                    color=seabornColormap[1])
-    ax.fill_between(massBinCentres,
-                    bounds[0],bounds[1],
-                    facecolor=colorTheory,alpha=0.5,interpolate=True,\
-                    label='$' + str(100*poisson_interval) + \
-                    '\%$ Confidence \nInterval')
+    if color is None:
+        color = seabornColormap[0]
+    handles = []
+    handles.append(ax.errorbar(massBinCentres,noInBins,sigmaBins,marker=marker,\
+        linestyle=linestyle,label=label,color=color))
+    if showTheory:
+        if colorTheory is None:
+            colorTheory = colorTheory
+        handles.append(ax.plot(massBinCentres,n*volSim,":",\
+            label=mass_function + ' prediction',color=colorTheory))
+        handles.append(ax.fill_between(massBinCentres,
+                        bounds[0],bounds[1],
+                        facecolor=colorTheory,alpha=0.5,interpolate=True,\
+                        label='$' + str(100*poisson_interval) + \
+                        '\%$ Confidence \nInterval'))
     if showLegend:
         ax.legend(prop={"size":legendFontsize,"family":font},
             loc=legendLoc,frameon=False)
@@ -1973,6 +1981,11 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,\
     ax.set_ylim(ylim)
     ax.set_xscale('log')
     ax.set_yscale('log')
+    if savename is not None:
+        plt.tight_layout()
+        plt.savefig(savename)
+    if returnHandles:
+        return handles
 
 def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
         Delta=200,sigma8=0.8,fontsize=12,legendFontsize=10,font="serif",\

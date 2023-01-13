@@ -144,6 +144,24 @@ if doHMFs:
                     samplesFolderOld=samplesFolderOld,\
                     data_folder=data_folder)
 
+
+[constrainedHaloMasses512New2,constrainedAntihaloMasses512New2,\
+    deltaListMeanNew2,deltaListErrorNew2,\
+    constrainedHaloMasses512Old2,constrainedAntihaloMasses512Old2,\
+    deltaListMeanOld2,deltaListErrorOld2,\
+    comparableHalosNew2,comparableHaloMassesNew2,\
+    comparableAntihalosNew2,comparableAntihaloMassesNew2,\
+    centralHalosNew2,centralAntihalosNew2,\
+    centralHaloMassesNew2,centralAntihaloMassesNew2,\
+    comparableHalosOld2,comparableHaloMassesOld2,\
+    comparableAntihalosOld2,comparableAntihaloMassesOld2,\
+    centralHalosOld2,centralAntihalosOld2,\
+    centralHaloMassesOld2,centralAntihaloMassesOld2] = tools.loadPickle(\
+        figuresFolder + "amf_hmf_data_old.p")
+
+
+
+
 # Void profile data:
 if runTests:
     testComputation(testDataFolder + "void_profiles_pipeline_test.p",\
@@ -394,10 +412,175 @@ if doHMFs:
             comparableAntihaloMassesNew,\
             referenceSnap,referenceSnapOld,\
             savename = figuresFolder + "test_hmf_amf.pdf",\
-            ylabelStartOld = 'Old reconstruction',\
-            ylabelStartNew = 'New reconstruction',\
-            fontsize=fontsize,legendFontsize=legendFontsize,density=True,\
-            xlim = (mLimLower,3e15),nMassBins=11,mLower=1e14,mUpper=3e15)
+            ylabelStartOld = 'PM10 forward model',\
+            ylabelStartNew = 'COLA20 forward model',\
+            fontsize=fontsize,legendFontsize=legendFontsize,density=False,\
+            xlim = (mLimLower,3e15),nMassBins=7,mLower=1e14,mUpper=2e15,\
+            ylim=(1e-1,200),showTheory=False,sigma8List=[0.8288,0.8102])
+
+
+# Plots of individual mass functions:
+
+def singleMassFunctionPlot(masses,mlow,mupp,nMassBins,textwidth=7.1014,\
+        mLimLower=None,comparableHaloMasses=None,\
+        rSphere=135,density=False,poisson_interval=0.95,nmax=200,\
+        ns=0.9611,Om0=0.3,sigma8=0.8,Ob0=0.04825,h=0.7,\
+        mass_function='Tinker',delta_wrt='SOCritical',\
+        marker='x',linestyle='--',plotColour=seabornColormap[0],\
+        colorTheory = seabornColormap[1],\
+        legendLoc='lower left',label="PM10 constrained",transfer_model='EH',\
+        fname=None,xlabel="Mass [$M_{\odot}h^{-1}$]",ylabel="Number of halos",\
+        title=None,showLegend=True,tickRight=False,tickLeft=True,\
+        savename=None,compColour=seabornColormap[0],\
+        deltaListMean=-0.06,deltaListError=0.003,showTheory=True,ax=None,\
+        returnHandles=False):
+    volSim = 4*np.pi*rSphere**3/3
+    ylim=[1,nmax]
+    poisson_interval = 0.95
+    if density:
+        ylimHMF = np.array(ylim)/volSim
+        factor = 1.0/volSim
+    else:
+        ylimHMF = np.array(ylim)
+        factor = 1.0
+    if ax is None:
+        fig, ax = plt.subplots(1,1,figsize=(0.45*textwidth,0.45*textwidth))
+    handles = plotMassFunction(masses,volSim,ax=ax,\
+        Om0=referenceSnapOld.properties['omegaM0'],\
+        h=referenceSnapOld.properties['h'],ns=ns,\
+            Delta=200,sigma8=sigma8,fontsize=12,legendFontsize=10,font="serif",\
+            Ob0=Ob0,mass_function=mass_function,delta_wrt=delta_wrt,\
+            massLower=mlow,massUpper=mupp,figsize=(4,4),\
+            marker=marker,linestyle=linestyle,\
+            color=plotColour,colorTheory = colorTheory,\
+            nBins=nMassBins,poisson_interval = poisson_interval,\
+            legendLoc=legendLoc,\
+            label=label,transfer_model=transfer_model,fname=fname,\
+            xlabel=xlabel,ylabel=ylabel,\
+            ylim=ylim,title=title,showLegend=showLegend,\
+            tickRight=tickRight,tickLeft=tickLeft,savename=savename,\
+            showTheory=showTheory,returnHandles=True)
+    if mLimLower is None:
+        mLimLower = mlow
+    ax.set_xlim((mLimLower,mupp))
+    # Add in the comparison with the unconstrained data:
+    if comparableHaloMasses is not None:
+        nsamples = len(comparableHaloMasses)
+        hmfUnderdense = [plot.computeMeanHMF(hmasses,massLower = mlow,\
+                        massUpper = mupp,nBins = nMassBins) \
+                        for hmasses in comparableHaloMasses]
+        #hmfUnderdensePoisson = np.array(scipy.stats.poisson(\
+        #    np.sum(np.array([hmf[0] \
+        #    for hmf in hmfUnderdense]),0)).interval(poisson_interval))/\
+        #    nsamples
+        hmfUnderdenseMean = np.mean(np.array([hmf[0] \
+            for hmf in hmfUnderdense]),0)
+        hmfUnderdensePoisson = np.array(scipy.stats.poisson(\
+            np.mean(np.array([hmf[0] \
+            for hmf in hmfUnderdense]),0)).interval(poisson_interval))
+        massBins = 10**(np.linspace(np.log10(mlow),np.log10(mupp),\
+            nMassBins))
+        massBinCentres = plot.binCentres(massBins)
+        handles.append(ax.fill_between(massBinCentres,\
+            hmfUnderdensePoisson[0]*factor,\
+            hmfUnderdensePoisson[1]*factor,\
+            label = 'Unconstrained, \n' + \
+            '$' + ("%.2g" % (deltaListMean - deltaListError)) + \
+            ' \\leq \\delta < ' + \
+            ("%.2g" % (deltaListMean + deltaListError)) + \
+            '$',color=compColour,alpha=0.5))
+    plt.tight_layout()
+    if savename is not None:
+        plt.savefig(savename)
+    if returnHandles:
+        return handles
+
+singleMassFunctionPlot(constrainedHaloMasses512Old,5e13,2e15,11,\
+    Om0=referenceSnapOld.properties['omegaM0'],\
+    h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
+    Ob0=0.04825,mLimLower=mLimLower,\
+    comparableHaloMasses=comparableHaloMassesOld,\
+    deltaListMean=deltaListMeanOld,deltaListError=deltaListErrorOld,\
+    savename=figuresFolder + "pm10_mass_function.pdf",showTheory=False)
+
+
+singleMassFunctionPlot(constrainedHaloMasses512New,5e13,2e15,11,\
+    Om0=referenceSnap.properties['omegaM0'],\
+    h=referenceSnap.properties['h'],ns=0.9665,sigma8=0.8102,\
+    Ob0=0.04897468161869667,mLimLower=mLimLower,\
+    comparableHaloMasses=comparableHaloMassesNew,\
+    deltaListMean=deltaListMeanNew,deltaListError=deltaListErrorNew,\
+    savename=figuresFolder + "cola20_mass_function.pdf",\
+    label="COLA20 constrained",showTheory=False)
+
+
+def flatten(handles):
+    handlesOut = []
+    for h in handles:
+        if type(h) == list:
+            handlesOut += flatten(h)
+        else:
+            handlesOut.append(h)
+    return handlesOut
+
+# HMF/AMF comparison:
+textwidth=7.1014
+fig, ax = plt.subplots(1,2,figsize=(textwidth,0.5*textwidth))
+singleMassFunctionPlot(constrainedHaloMasses512Old,5e13,2e15,11,\
+    Om0=referenceSnapOld.properties['omegaM0'],\
+    h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
+    Ob0=0.04825,mLimLower=mLimLower,\
+    comparableHaloMasses=comparableHaloMassesOld,\
+    deltaListMean=deltaListMeanOld,deltaListError=deltaListErrorOld,\
+    savename=None,showTheory=False,legendLoc='lower left',\
+    ax=ax[0],ylabel='Number of halos',showLegend=False,\
+    title="Halos")
+handles = singleMassFunctionPlot(constrainedAntihaloMasses512Old,5e13,2e15,11,\
+    Om0=referenceSnapOld.properties['omegaM0'],\
+    h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
+    Ob0=0.04825,mLimLower=mLimLower,\
+    comparableHaloMasses=comparableAntihaloMassesOld,\
+    deltaListMean=deltaListMeanOld,deltaListError=deltaListErrorOld,\
+    savename=None,showTheory=False,\
+    ax=ax[1],ylabel='Number of antihalos',returnHandles=True,showLegend=False,\
+    title="Antihalos")
+plt.tight_layout()
+plt.savefig(figuresFolder + "pm10_amf_hmf.pdf")
+ax[1].legend(handles=handles,prop={"size":10,"family":"serif"},
+            loc='lower left',frameon=False)
+plt.show()
+
+
+
+
+# HMF/AMF comparison:
+textwidth=7.1014
+fig, ax = plt.subplots(1,2,figsize=(textwidth,0.5*textwidth))
+singleMassFunctionPlot(constrainedHaloMasses512New,5e13,2e15,11,\
+    Om0=referenceSnapOld.properties['omegaM0'],\
+    h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
+    Ob0=0.04825,mLimLower=mLimLower,\
+    comparableHaloMasses=comparableHaloMassesNew,\
+    deltaListMean=deltaListMeanNew,deltaListError=deltaListErrorNew,\
+    savename=None,showTheory=False,legendLoc='lower left',\
+    ax=ax[0],ylabel='Number of halos',showLegend=False,\
+    title="Halos")
+handles = singleMassFunctionPlot(constrainedAntihaloMasses512New,5e13,2e15,11,\
+    Om0=referenceSnapOld.properties['omegaM0'],\
+    h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
+    Ob0=0.04825,mLimLower=mLimLower,\
+    comparableHaloMasses=comparableAntihaloMassesNew,\
+    deltaListMean=deltaListMeanNew,deltaListError=deltaListErrorNew,\
+    savename=None,showTheory=False,\
+    ax=ax[1],ylabel='Number of antihalos',returnHandles=True,showLegend=False,\
+    title="Antihalos")
+plt.tight_layout()
+plt.savefig(figuresFolder + "cola20_amf_hmf.pdf")
+ax[1].legend(handles=flatten(handles),prop={"size":10,"family":"serif"},
+            loc='lower left',frameon=False)
+plt.show()
+
+
 
 
 #-------------------------------------------------------------------------------
@@ -702,5 +885,204 @@ if doCon:
         extraMasses = None,extraMassLabel = 'Extra mass scale',\
         xlabel='Number of Steps',nsamples = len(sampleList),\
         returnHandles=False,showLegend=True,nCols=3,resList=resList)
+
+
+#-------------------------------------------------------------------------------
+# COMA PROFILES TEST
+
+
+def tick_function(X):
+    V = 4*np.pi*X**3/(3*1e4)
+    return ["%.2f" % z for z in V]
+
+
+
+def compareDensityProfile(radii,mProf,mProfError,mProfPost,mProfPostError,\
+        constraintList=None,refList = None,radiiPost = None,\
+        textwidth=7.1014,textheight=9.0971,widthFactor = 0.87,\
+        yscale = 1e16,color1='grey',alpha1=0.75,alpha2=0.25,ylim=[1e-2,3],\
+        xlim=[0,30],showMean=True,savename = None,ax=None,show=True,\
+        returnAx = False,meanColour='tab:blue',label='Gadget density',\
+        label2 = 'Cola density',title=None,omegaM=0.3111,\
+        color2 = seabornColormap[3],fontsize=10,fontname='serif'):
+    if radiiPost is None:
+        radiiPost = radii
+    colorList = ['grey','y','tab:orange','k','c','r','b',seabornColormap[0],\
+        seabornColormap[1],seabornColormap[4]]
+    fig, ax = plt.subplots(figsize=(textwidth,widthFactor*textwidth))
+    plt.fill_between(radii,(mProf - mProfError)/yscale,\
+        (mProf + mProfError)/yscale,\
+        color=color1,alpha=alpha1)
+    plt.fill_between(radii,(mProf - 2*mProfError)/yscale,\
+        (mProf + 2*mProfError)/yscale,color=color1,alpha=alpha2)
+    plt.semilogy(radii,mProf/yscale,label=label,color=color1)
+    plt.fill_between(radiiPost,(mProfPost - mProfErrorPost)/yscale,\
+        (mProfPost + mProfErrorPost)/yscale,color=color2,alpha=alpha2)
+    plt.fill_between(radiiPost,(mProfPost - 2*mProfErrorPost)/yscale,\
+        (mProfPost + 2*mProfErrorPost)/yscale,color=color2,alpha=alpha1)
+    plt.semilogy(radiiPost,mProfPost/yscale,label=label2,color=color2)
+    if showMean:
+        rhom = 2.7754e11*omegaM 
+        plt.semilogy(radii,rhom*4*np.pi*radii**3/(3*yscale),\
+            label='Mean Universe Density',color=meanColour)
+    # Add mass estimates to the plot:
+    if constraintList is not None:
+        if refList is None:
+            raise Exception("refList must be supplied.")
+        for k in range(0,len(constraintList)):
+            Y = np.array([estimate.mass \
+                for estimate in constraintList[k]])/(yscale)
+            Yerr = np.vstack((np.array([estimate.massLow \
+                for estimate in constraintList[k]]),\
+                np.array([estimate.massHigh \
+                for estimate in constraintList[k]])))/yscale
+            X = np.array([estimate.virial for estimate in constraintList[k]])
+            Xerr = np.vstack((np.array([estimate.virialLow \
+                for estimate in constraintList[k]]),\
+                np.array([estimate.virialHigh \
+                for estimate in constraintList[k]])))
+            plt.errorbar(X,Y,xerr = Xerr,yerr=Yerr,label=refList[k],\
+                marker='x',color=colorList[k],linestyle='')
+    plt.ylim(ylim)
+    plt.yscale('log')
+    plt.xlim(xlim)
+    plt.xlabel('$R [\\mathrm{Mpc}h^{-1}]$',fontsize=fontsize,\
+        fontfamily=fontname)
+    plt.ylabel('$M(<r) [10^{16}M_{\\odot}h^{-1}]$',fontsize=fontsize,\
+        fontfamily=fontname)
+    ax2 = ax.twiny()
+    ax2.set_xlabel('$V [10^4(\\mathrm{\\,Mpc}h^{-3})^3]$',fontsize=fontsize,\
+        fontfamily=fontname)
+    ax2.set_xlim(ax.get_xlim())
+    ax2.set_xticks(ax.get_xticks())
+    ax2.set_xticklabels(tick_function(ax.get_xticks()))
+    ax.legend(prop={"size":fontsize,"family":"serif"})
+    ax.grid()
+    ax.tick_params(axis='both',labelsize=fontsize)
+    ax2.tick_params(axis='both',labelsize=fontsize)
+    if title is not None:
+        plt.title(title)
+    plt.tight_layout()
+    if savename is not None:
+        plt.savefig(savename)
+    if show:
+        plt.show()
+    if returnAx:
+        return ax
+
+# Get mass at different radii:
+radii = np.linspace(0,30,31)
+dataFile = "coma_profile_data.p"
+comaData2 = "coma_profile_data2.p"
+[mPart,mProf,mProfError,mPartPost,\
+    mProfPost,mProfErrorPost,counts,countsPost] = pickle.load(open(dataFile,"rb"))
+[mPart2,mProf2,mProfError2,mPartPost2,\
+        mProfPost2,mProfErrorPost2,counts2,countsPost2] = pickle.load(\
+        open(comaData2,"rb"))
+
+
+[mPart,mProfGad,mProfGadError,\
+    mProfBorg,mProfBorgError,countsGad,countsBorg] = \
+    getClusterProfilesFromSnaps(snapNumList,snapPath,clusterLoc,\
+        useGadCentre = True)
+from void_analysis.tools import MassConstraint
+h = 0.705
+geller1999 = [MassConstraint(1.65e15,0.41e15,0.41e15,10,0,0,method='X-Ray'),\
+    MassConstraint(1.44e15,0.29e15,0.29e15,5.5,0,0,method='X-Ray')]
+kubo2007 = [MassConstraint(1.88e15*h/0.7,0.56e15*h/0.7,0.65e15*h/0.7,1.99*h/0.7,0,0,method='Weak Lensing')]
+hughes1989 = [MassConstraint(3e14*h/0.5,0.4e14*h/0.5,0.4e14*h/0.5,0.5*h/0.5,0,0,method='Dynamical'),\
+    MassConstraint(0.95e15*h/0.5,0.15e15*h/0.5,0.15e15*h/0.5,2.5*h/0.5,0,0,method='Dynamical')]
+theWhite1986 = [MassConstraint(1.9e15,0.3*1.9e15,0.3*1.9e15,5.4,0,0,method='Dynamical')]
+colless2006 = [MassConstraint(3.1e14,0.5e14,0.5e14,1,0,0,method='Dynamical'),\
+    MassConstraint(6.5e14,2.5e14,2.5e14,3,0,0,method='Dynamical')]
+#gavazzi2009 = [MassConstraint(5.1e14,2.1e14,4.3e14,1.8,0.3,0.6,method='Weak Lensing'),\
+#    MassConstraint(9.7e14,3.5e14,6.1e14,2.2,0.2,0.3,method='Weak Lensing'),\
+#    MassConstraint(6.1e14,3.5e14,12.1e14,2.5,0.5,0.8,method='Weak Lensing'),
+#    MassConstraint(11.1e14,6.1e14,16.7e14,3.6,0.7,1.1,method='Weak Lensing')]
+gavazzi2009 = [MassConstraint(5.1e14,2.1e14,4.3e14,1.8,0.3,0.6,method='Weak Lensing'),\
+    MassConstraint(9.7e14,3.5e14,6.1e14,2.2,0.2,0.3,method='Weak Lensing')]
+falco2014 = [MassConstraint(9.7e14*h,3.6e14*h,3.6e14*h,2.5*h,0,0,'Dynamical')]
+
+constraintList = [geller1999,kubo2007,hughes1989,theWhite1986,colless2006,gavazzi2009,\
+    falco2014]
+refList = ['Geller (1999)','Kubo (2007)','Hughes (1989)','The & White (1986)',\
+    'Colless (2006)','Gavazzi (2009)','Falco (2014)']
+
+constraintList = [geller1999,kubo2007,hughes1989,theWhite1986,colless2006,gavazzi2009,\
+    falco2014]
+refList = ['Geller (1999)','Kubo (2007)','Hughes (1989)','The & White (1986)',\
+    'Colless (2006)','Gavazzi (2009)','Falco (2014)']
+
+mPiff = np.array([6.1508e14,2.4052e14,4.2846e14,2.1360e14,4.5067e14,1.3823e14,2.9626e14,\
+    2.1598e14,2.1398e14],\
+    dtype=np.double)
+meanErrorFrac_upp = 0.08 # Assume 20% errors, because MCXC don't give any???
+meanErrorFrac_low = 0.08
+zPiff = np.array([0.0179,0.0353,0.0231,0.0157,0.0391,0.0420,0.0299,0.0355,0.0214],dtype=np.double)
+mPiffLow = meanErrorFrac_low*mPiff
+mPiffHigh = meanErrorFrac_upp*mPiff
+mPiff200c = -np.ones(mPiff.shape)
+mPiff200cLow = -np.ones(mPiff.shape)
+mPiff200cHigh = -np.ones(mPiff.shape)
+Om0 = 0.307
+Ol = 1-Om0
+D1 = 500
+D2 = 200
+for k in range(0,len(mPiff)):
+    if mPiff[k] > 0:
+        # Convert masses to M200c:
+        mass200c = cosmology.convertCriticalMass(mPiff[k],D1,D2=D2,\
+            Om=Om0,z = zPiff[k],Ol = 1 - Om0,h=h,returnError=True)
+        mPiff200c[k] = mass200c[0]
+        # Errors on M500c estimate converted to M200c errors:
+        errorM500c_upp = cosmology.convertCriticalMass(mPiff[k] + \
+            mPiffHigh[k],D1,D2) - mPiff200c[k]
+        errorM500c_low = mPiff200c[k] - \
+            cosmology.convertCriticalMass(mPiff[k] - mPiffLow[k],\
+            D1,D2)
+        # Errors from conversion to M200c (due to scatter in assumed concentration-mass
+        # relationship):
+        errorCon_upp = mass200c[2]
+        errorCon_low = mass200c[1]
+        # Combine errors in quadrature to estimate the new error:
+        mPiff200cLow[k] = np.sqrt(errorCon_low**2 + errorM500c_low**2)
+        mPiff200cHigh[k] = np.sqrt(errorCon_upp**2 + errorM500c_upp**2)
+
+rhocrit = 2.7754e11
+rPiff200c = -np.ones(mPiff.shape)
+rPiff200c[np.where(mPiff200c > 0)] = np.cbrt(3*mPiff200c[np.where(mPiff200c > 0)]/\
+    (4*np.pi*200*rhocrit))
+
+Piffaretti2011_200c = [MassConstraint(mPiff200c[2]*h,mPiff200cLow[2]*h,\
+    mPiff200cHigh[2]*h,rPiff200c[2]*h,0,0,method='X-Ray')]
+Okabe2014 = [MassConstraint(6.23e14,1.58e14,2.53e14,1.75,0,0,method='Weak Lensing')]
+Lokas2003 = [MassConstraint(1.4e15,0.3*1.4e15,0.3*1.4e15,2.9,0,0,method='Dynamical')]
+
+
+constraintList = [geller1999,kubo2007,hughes1989,theWhite1986,colless2006,gavazzi2009,\
+    falco2014,Piffaretti2011_200c,Okabe2014,Lokas2003]
+refList = ['Geller (1999)','Kubo (2007)','Hughes (1989)','The & White (1986)',\
+    'Colless (2006)','Gavazzi (2009)','Falco (2014)',\
+    'Piffaretti (2011)','Okabe (2014)','Lokas (2014)']
+
+
+
+
+
+
+
+compareDensityProfile(radii[1:],mProf,mProfError,mProfPost2,mProfErrorPost2,\
+    constraintList=constraintList,radiiPost=radii[1:],refList=refList,\
+    label = "GADGET",label2="BORG 10-step PM (particles)",\
+    savename=figuresFolder + "coma_density_plot.pdf")
+
+
+
+
+
+
+
+
+
 
 
