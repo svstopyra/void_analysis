@@ -21,6 +21,8 @@ do
             ${python_exec} ${simulationDir}/generate_genetIC_ics.py sample${j}/ic/gadget_ic_${resolution} --wn_file sample${j}/mcmc_${j}.h5 --Ob ${Ob} --Om ${Om} --Ol ${Ol} --ns ${ns} --hubble ${hubble} --zin ${zin} --renormalise_noise True --inverse_fourier False --flip False --reverse True --generate_reversed True --genetic_dir ${genetic_dir} --Nres ${resolution} --sample ${j} --s8 ${sigma8} --baseRes ${base_res}
         elif [ ${mode} == "unconstrained" ]; then
             ${python_exec} ${simulationDir}/generate_genetIC_ics.py sample${j}/ic/gadget_ic_${resolution} --Ob ${Ob} --Om ${Om} --Ol ${Ol} --ns ${ns} --hubble ${hubble} --zin ${zin} --renormalise_noise True --inverse_fourier False --flip False --reverse True --generate_reversed True --genetic_dir ${genetic_dir} --Nres ${resolution} --sample ${j} --s8 ${sigma8} --baseRes ${base_res}
+        elif [ ${mode} == "npy" ]; then
+            ${python_exec} ${simulationDir}/generate_genetIC_ics.py sample${j}/ic/gadget_ic_${resolution} --wn_file sample${j}/wn.npy --Ob ${Ob} --Om ${Om} --Ol ${Ol} --ns ${ns} --hubble ${hubble} --zin ${zin} --renormalise_noise True --inverse_fourier False --flip False --reverse True --generate_reversed True --genetic_dir ${genetic_dir} --Nres ${resolution} --sample ${j} --s8 ${sigma8} --baseRes ${base_res}
         else
             echo "Variable mode is not recognised!"
             exit 1
