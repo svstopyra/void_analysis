@@ -39,11 +39,11 @@ do
             if [ -f restart.0 ]; then
                 echo "Restarting forward simulation for sample ${j}." >> timings_newchain.txt
                 SECONDS=0
-                ${mpiexec} -n ${NTASKS} ${gadget_exec} "${simulationDir}/parameters_full_forward_${resolution}.params" 1
+                ${mpiexec} -n ${NTASKS} ${gadget_exec} "${simulationDir}/${params_forward}" 1
                 duration=$SECONDS
             else
                 SECONDS=0
-                ${mpiexec} -n ${NTASKS} ${gadget_exec} "${simulationDir}/parameters_full_forward_${resolution}.params"
+                ${mpiexec} -n ${NTASKS} ${gadget_exec} "${simulationDir}/${params_forward}"
                 duration=$SECONDS
             fi
             echo "sample${j}, GADGET, forward: $duration s" >> timings_newchain.txt
@@ -61,11 +61,11 @@ do
             if [ -f restart.0 ]; then
                 echo "Restarting reverse simulation for sample ${j}." >> timings_newchain.txt
                 SECONDS=0
-                ${mpiexec} -n ${NTASKS} ${gadget_exec} "${simulationDir}/parameters_full_reverse_${resolution}.params" 1
+                ${mpiexec} -n ${NTASKS} ${gadget_exec} "${simulationDir}/${params_reverse}" 1
                 duration=$SECONDS
             else
                 SECONDS=0
-                ${mpiexec} -n ${NTASKS} ${gadget_exec} "${simulationDir}/parameters_full_reverse_${resolution}.params"
+                ${mpiexec} -n ${NTASKS} ${gadget_exec} "${simulationDir}/${params_reverse}"
                 duration=$SECONDS
             fi
             echo "sample${j}, GADGET, reversed: $duration s" >> timings_newchain.txt

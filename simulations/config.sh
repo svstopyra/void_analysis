@@ -26,6 +26,10 @@ sigma8=0.8288 # value of sigma8
 resolution=512
 base_res=256
 
+# GADGET2 parameter file names:
+params_forward="parameters_full_forward_${resolution}.params"
+params_reverse="parameters_full_reverse_${resolution}.params"
+
 # Paths to external codes:
 dtfe_exec=${codeDir}/DTFE_source_1.1.1/build/DTFE # DTFE executable
 ahf_exec=${codeDir}/ahf/ahf-v1.0-084/bin/AHF-v1.0-084 # AHD executable
