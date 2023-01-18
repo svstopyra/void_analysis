@@ -5,6 +5,7 @@ from void_analysis.paper_plots_borg_antihalos_generate_data import *
 from void_analysis.real_clusters import getClusterSkyPositions
 from void_analysis import massconstraintsplot
 from matplotlib import transforms
+import matplotlib.ticker
 import pickle
 import numpy as np
 import seaborn as sns
@@ -16,8 +17,8 @@ import scipy
 import os
 import sys
 
-figuresFolder = "borg-antihalos_paper_figures/all_samples/"
-#figuresFolder = "borg-antihalos_paper_figures/batch5-2/"
+#figuresFolder = "borg-antihalos_paper_figures/all_samples/"
+figuresFolder = "borg-antihalos_paper_figures/batch5-2/"
 
 recomputeData = False
 testDataFolder = figuresFolder + "tests_data/"
@@ -144,20 +145,21 @@ if doHMFs:
                     samplesFolderOld=samplesFolderOld,\
                     data_folder=data_folder)
 
-
-[constrainedHaloMasses512New2,constrainedAntihaloMasses512New2,\
-    deltaListMeanNew2,deltaListErrorNew2,\
-    constrainedHaloMasses512Old2,constrainedAntihaloMasses512Old2,\
-    deltaListMeanOld2,deltaListErrorOld2,\
-    comparableHalosNew2,comparableHaloMassesNew2,\
-    comparableAntihalosNew2,comparableAntihaloMassesNew2,\
-    centralHalosNew2,centralAntihalosNew2,\
-    centralHaloMassesNew2,centralAntihaloMassesNew2,\
-    comparableHalosOld2,comparableHaloMassesOld2,\
-    comparableAntihalosOld2,comparableAntihaloMassesOld2,\
-    centralHalosOld2,centralAntihalosOld2,\
-    centralHaloMassesOld2,centralAntihaloMassesOld2] = tools.loadPickle(\
-        figuresFolder + "amf_hmf_data_old.p")
+loadOld = False
+if loadOld:
+    [constrainedHaloMasses512New2,constrainedAntihaloMasses512New2,\
+        deltaListMeanNew2,deltaListErrorNew2,\
+        constrainedHaloMasses512Old2,constrainedAntihaloMasses512Old2,\
+        deltaListMeanOld2,deltaListErrorOld2,\
+        comparableHalosNew2,comparableHaloMassesNew2,\
+        comparableAntihalosNew2,comparableAntihaloMassesNew2,\
+        centralHalosNew2,centralAntihalosNew2,\
+        centralHaloMassesNew2,centralAntihaloMassesNew2,\
+        comparableHalosOld2,comparableHaloMassesOld2,\
+        comparableAntihalosOld2,comparableAntihaloMassesOld2,\
+        centralHalosOld2,centralAntihalosOld2,\
+        centralHaloMassesOld2,centralAntihaloMassesOld2] = tools.loadPickle(\
+            figuresFolder + "amf_hmf_data_old.p")
 
 
 
@@ -433,7 +435,7 @@ def singleMassFunctionPlot(masses,mlow,mupp,nMassBins,textwidth=7.1014,\
         title=None,showLegend=True,tickRight=False,tickLeft=True,\
         savename=None,compColour=seabornColormap[0],\
         deltaListMean=-0.06,deltaListError=0.003,showTheory=True,ax=None,\
-        returnHandles=False):
+        returnHandles=False,xticks=None,fontsize=11,legendFontsize=11):
     volSim = 4*np.pi*rSphere**3/3
     ylim=[1,nmax]
     poisson_interval = 0.95
@@ -448,7 +450,8 @@ def singleMassFunctionPlot(masses,mlow,mupp,nMassBins,textwidth=7.1014,\
     handles = plotMassFunction(masses,volSim,ax=ax,\
         Om0=referenceSnapOld.properties['omegaM0'],\
         h=referenceSnapOld.properties['h'],ns=ns,\
-            Delta=200,sigma8=sigma8,fontsize=12,legendFontsize=10,font="serif",\
+            Delta=200,sigma8=sigma8,fontsize=fontsize,\
+            legendFontsize=legendFontsize,font="serif",\
             Ob0=Ob0,mass_function=mass_function,delta_wrt=delta_wrt,\
             massLower=mlow,massUpper=mupp,figsize=(4,4),\
             marker=marker,linestyle=linestyle,\
@@ -490,6 +493,13 @@ def singleMassFunctionPlot(masses,mlow,mupp,nMassBins,textwidth=7.1014,\
             ("%.2g" % (deltaListMean + deltaListError)) + \
             '$',color=compColour,alpha=0.5))
     plt.tight_layout()
+    if xticks is not None:
+        ax.get_xaxis().set_major_formatter(\
+            matplotlib.ticker.ScalarFormatter())
+        #ax.xaxis.get_major_formatter().set_scientific(True)
+        ax.set_xticks(xticks)
+        ax.xaxis.set_ticklabels([plot.scientificNotation(i,latex=True) \
+            for i in xticks])
     if savename is not None:
         plt.savefig(savename)
     if returnHandles:
@@ -525,29 +535,32 @@ def flatten(handles):
 
 # HMF/AMF comparison:
 textwidth=7.1014
+fontsize=8
 fig, ax = plt.subplots(1,2,figsize=(textwidth,0.5*textwidth))
 singleMassFunctionPlot(constrainedHaloMasses512Old,5e13,2e15,11,\
     Om0=referenceSnapOld.properties['omegaM0'],\
     h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
     Ob0=0.04825,mLimLower=mLimLower,\
+    fontsize=fontsize,legendFontsize=fontsize,\
     comparableHaloMasses=comparableHaloMassesOld,\
     deltaListMean=deltaListMeanOld,deltaListError=deltaListErrorOld,\
     savename=None,showTheory=False,legendLoc='lower left',\
     ax=ax[0],ylabel='Number of halos',showLegend=False,\
-    title="Halos")
+    title="Halos",xticks=[2e14,5e14,1e15])
 handles = singleMassFunctionPlot(constrainedAntihaloMasses512Old,5e13,2e15,11,\
     Om0=referenceSnapOld.properties['omegaM0'],\
     h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
     Ob0=0.04825,mLimLower=mLimLower,\
+    fontsize=fontsize,legendFontsize=fontsize,\
     comparableHaloMasses=comparableAntihaloMassesOld,\
     deltaListMean=deltaListMeanOld,deltaListError=deltaListErrorOld,\
     savename=None,showTheory=False,\
     ax=ax[1],ylabel='Number of antihalos',returnHandles=True,showLegend=False,\
-    title="Antihalos")
+    title="Antihalos",xticks=[2e14,5e14,1e15])
 plt.tight_layout()
+ax[1].legend(handles=handles,prop={"size":fontsize,"family":"serif"},
+            loc='upper right',frameon=False)
 plt.savefig(figuresFolder + "pm10_amf_hmf.pdf")
-ax[1].legend(handles=handles,prop={"size":10,"family":"serif"},
-            loc='lower left',frameon=False)
 plt.show()
 
 
@@ -555,6 +568,7 @@ plt.show()
 
 # HMF/AMF comparison:
 textwidth=7.1014
+fontsize=8
 fig, ax = plt.subplots(1,2,figsize=(textwidth,0.5*textwidth))
 singleMassFunctionPlot(constrainedHaloMasses512New,5e13,2e15,11,\
     Om0=referenceSnapOld.properties['omegaM0'],\
@@ -563,21 +577,22 @@ singleMassFunctionPlot(constrainedHaloMasses512New,5e13,2e15,11,\
     comparableHaloMasses=comparableHaloMassesNew,\
     deltaListMean=deltaListMeanNew,deltaListError=deltaListErrorNew,\
     savename=None,showTheory=False,legendLoc='lower left',\
+    fontsize=fontsize,legendFontsize=fontsize,\
     ax=ax[0],ylabel='Number of halos',showLegend=False,\
-    title="Halos")
+    title="Halos",label="COLA20 constrained",xticks=[2e14,5e14,1e15])
 handles = singleMassFunctionPlot(constrainedAntihaloMasses512New,5e13,2e15,11,\
     Om0=referenceSnapOld.properties['omegaM0'],\
     h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
     Ob0=0.04825,mLimLower=mLimLower,\
     comparableHaloMasses=comparableAntihaloMassesNew,\
     deltaListMean=deltaListMeanNew,deltaListError=deltaListErrorNew,\
-    savename=None,showTheory=False,\
+    savename=None,showTheory=False,fontsize=fontsize,legendFontsize=fontsize,\
     ax=ax[1],ylabel='Number of antihalos',returnHandles=True,showLegend=False,\
-    title="Antihalos")
+    title="Antihalos",label="COLA20 constrained",xticks=[2e14,5e14,1e15])
 plt.tight_layout()
+ax[1].legend(handles=flatten(handles),prop={"size":fontsize,"family":"serif"},
+            loc='upper right',frameon=False)
 plt.savefig(figuresFolder + "cola20_amf_hmf.pdf")
-ax[1].legend(handles=flatten(handles),prop={"size":10,"family":"serif"},
-            loc='lower left',frameon=False)
 plt.show()
 
 

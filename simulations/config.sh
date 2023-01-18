@@ -24,6 +24,7 @@ Ob=0.04897468161869667 # Baryonic matter density fraction
 sigma8=0.8288 # value of sigma8
 # Running options:
 resolution=512
+base_res=256
 
 # Paths to external codes:
 dtfe_exec=${codeDir}/DTFE_source_1.1.1/build/DTFE # DTFE executable
