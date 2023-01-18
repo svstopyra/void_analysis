@@ -17,8 +17,8 @@ import scipy
 import os
 import sys
 
-#figuresFolder = "borg-antihalos_paper_figures/all_samples/"
-figuresFolder = "borg-antihalos_paper_figures/batch5-2/"
+figuresFolder = "borg-antihalos_paper_figures/all_samples/"
+#figuresFolder = "borg-antihalos_paper_figures/batch5-2/"
 
 recomputeData = False
 testDataFolder = figuresFolder + "tests_data/"
@@ -884,8 +884,11 @@ sampleList = ["sample7422","sample7500","sample8000",\
 # Comparison between two different types of mass:
 clusterFilter = np.array([2,4,6],dtype=int) # Coma, Shapley, Hercules A
 doCon=False
+
+from void_analyis.plot import plotMassTypeComparison
+
 if doCon:
-    plot.plotMassTypeComparison(np.array(massList200c)[:,:,clusterFilter],\
+    plotMassTypeComparison(np.array(massList200c)[:,:,clusterFilter],\
         np.array(massListFull200c)[:,clusterFilter],\
         np.array(massList100m)[:,:,clusterFilter],\
         np.array(massListFull100m)[:,clusterFilter],\

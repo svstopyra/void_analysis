@@ -2734,6 +2734,248 @@ def plotVoidProfilesPaper(rBinStackCentres,nbarjMean,sigmaMean,nbar,\
 
 
 
+def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
+        stepsListGADGET,stepsList,logstepsList,stepsList1024,\
+        stepsListEPS_0p662,clusterNames,name1 = "$M_{200\\mathrm{c}}$",\
+        name2 = "$M_{100\\mathrm{m}}$",\
+        show=False,save = True,colorLinear = seabornColors[0],\
+        colorLog=seabornColors[1],colorGadget='k',colorAdaptive='grey',\
+        showGadgetAdaptive = True,showGadget1024=False,\
+        showGadgetEps0p662=False,savename = "mass_convergence_comparison.pdf",\
+        massName = "M",extraMasses = None,extraMassLabel = 'Extra mass scale',\
+        xlabel='Number of Steps',ylim1=[0,2.5e15],ylim2=[0,3.5e15],\
+        xlim=[0.9,256],returnHandles=False,showLegend=True,nCols=3,alpha=0.5,\
+        markerGadget=None,markerCOLA=None,markerPM=None,markerOther=None,\
+        wspace=0,hspace=0.2,top=0.9,bottom=0.1,left=0.1,right=0.95,scale=1e15,\
+        fontsize=8,fontfamily='serif',colorRes = seabornColors[2],\
+        showGADGET=True,showPM=True,showCOLA=True,markerRes='x',\
+        showResMasses = True,resList = [256,512,1024,2048],\
+        resToShow=None):
+    if resToShow is None:
+        resToShow = np.arange(0,len(resList))
+    # Compute means over all samples:
+    meanMassFull1 = np.mean(np.vstack(massListFull1),0)/scale
+    stdMassFull1 = np.std(np.vstack(massListFull1),0)\
+        /np.sqrt(len(sampleList))/scale
+    massArray1 = np.array([np.vstack(massList1[k]) \
+        for k in range(0,len(sampleList))])/scale
+    meanMass1 = np.mean(massArray1,0)
+    stdMass1 = np.std(massArray1,0)/np.sqrt(len(sampleList))
+    meanMassFull2 = np.mean(np.vstack(massListFull2),0)/scale
+    stdMassFull2 = np.std(np.vstack(massListFull2),0)\
+        /np.sqrt(len(sampleList))/scale
+    massArray2 = np.array([np.vstack(massList2[k]) \
+        for k in range(0,len(sampleList))])/scale
+    meanMass2 = np.mean(massArray2,0)
+    stdMass2 = np.std(massArray1,0)/np.sqrt(len(sampleList))
+    if extraMasses is not None:
+        meanExtraMass = np.mean(np.vstack(extraMasses),0)/scale
+        stdExtraMass = np.std(np.vstack(extraMasses),0)\
+            /np.sqrt(len(extraMasses))/scale
+    # Plot the masses:
+    fig, ax = plt.subplots(2,nCols,figsize=figsize)
+    handles = [[] for l in range(0,2*nCols)]
+    for l in range(0,nCols):
+        i = int(l/nCols)
+        j = l - nCols*i
+        iterator = 0
+        # GADGET masses:
+        if showGADGET:
+            handles[l].append(ax[0,l].errorbar(stepsListGADGET,\
+                    meanMass1[iterator:(iterator + len(stepsListGADGET)),l],\
+                    yerr=stdMass1[iterator:(iterator + len(stepsListGADGET)),l],\
+                    marker = markerGadget,linestyle='-',\
+                    label='GADGET2 ($128^3$ PM-grid)',color = colorGadget))
+            handles[l + nCols].append(ax[1,l].errorbar(stepsListGADGET,\
+                    meanMass2[iterator:(iterator + len(stepsListGADGET)),l],\
+                    yerr=stdMass2[iterator:(iterator + len(stepsListGADGET)),l],\
+                    marker = markerGadget,linestyle='-',\
+                    label='GADGET2 ($128^3$ PM-grid)',color = colorGadget))
+        iterator += len(stepsListGADGET)
+        # COLA masses:
+        if showCOLA:
+            handles[l].append(ax[0,l].errorbar(stepsList,\
+                    meanMass1[iterator:(iterator + len(stepsList)),l]\
+                    ,yerr=stdMass1[iterator:(iterator + len(stepsList)),l]\
+                    ,marker = markerCOLA,linestyle='--',\
+                    label='COLA (linear steps)',color=colorLinear))
+            handles[l + nCols].append(ax[1,l].errorbar(stepsList,\
+                    meanMass2[iterator:(iterator + len(stepsList)),l]\
+                    ,yerr=stdMass2[iterator:(iterator + len(stepsList)),l]\
+                    ,marker = markerCOLA,linestyle='--',\
+                    label='COLA (linear steps)', color=colorLinear))
+        iterator += len(stepsList)
+        # PM masses:
+        if showPM:
+            handles[l].append(ax[0,l].errorbar(stepsList,\
+                    meanMass1[iterator:(iterator + len(stepsList)),l],\
+                    yerr=stdMass1[iterator:(iterator + len(stepsList)),l],\
+                    marker = markerPM,linestyle=':',label='PM (linear steps)',\
+                    color=colorLinear))
+            handles[l+nCols].append(ax[1,l].errorbar(stepsList,\
+                    meanMass2[iterator:(iterator + len(stepsList)),l],\
+                    yerr=stdMass2[iterator:(iterator + len(stepsList)),l],\
+                    marker = markerPM,linestyle=':',label='PM (linear steps)',\
+                    color=colorLinear))
+        iterator += len(stepsList)
+        # Include some extra masses if provided, otherwise skip them:
+        if showGadget1024:
+            handles[l].append(ax[0,l].errorbar(stepsList1024,\
+                meanMass1[iterator:(iterator + len(stepsList1024)),l],\
+                yerr=stdMass1[iterator:(iterator + len(stepsList1024)),l],\
+                marker = None,linestyle='-.',\
+                label='GADGET2 ($1024^3$ PM-grid)',color=colorGadget))
+            handles[l+nCols].append(ax[0,l].errorbar(stepsList1024,\
+                meanMass2[iterator:(iterator + len(stepsList1024)),l],\
+                yerr=stdMass2[iterator:(iterator + len(stepsList1024)),l],\
+                marker = None,linestyle='-.',\
+                label='GADGET2 ($1024^3$ PM-grid)',color=colorGadget))
+        iterator += len(stepsList1024)
+        if showGadgetEps0p662:
+            handles[l].append(ax[0,l].errorbar(stepsListEPS_0p662,\
+                meanMass1[iterator:(iterator + len(stepsListEPS_0p662)),l],\
+                yerr=stdMass1[iterator:(iterator + len(stepsListEPS_0p662)),l],\
+                marker = markerGadget,linestyle='-.',\
+                label='GADGET2 ($\\epsilon = 0.662$)',color=colorGadget))
+            handles[l + nCols].append(ax[1,l].errorbar(stepsListEPS_0p662,\
+                meanMass2[iterator:(iterator + len(stepsListEPS_0p662)),l],\
+                yerr=stdMass2[iterator:(iterator + len(stepsListEPS_0p662)),l],\
+                marker = markerGadget,linestyle='-.',\
+                label='GADGET2 ($\\epsilon = 0.662$)',color=colorGadget))
+        iterator += len(stepsListEPS_0p662)
+        # Skip over resolution masses:
+        if showResMasses:
+            if showCOLA:
+                for m in resToShow:
+                    handles[l].append(ax[0,l].errorbar(resStepsList,\
+                        meanMass1[iterator:(iterator + len(resStepsList)),l],\
+                        yerr=stdMass1[iterator:(iterator + len(resStepsList)),l],\
+                        marker = markerRes,linestyle=':',\
+                        label='COLA ($' + str(resList[m]) + '$)',color=colorRes))
+                    handles[l + nCols].append(ax[1,l].errorbar(resStepsList,\
+                        meanMass2[iterator:(iterator + len(resStepsList)),l],\
+                        yerr=stdMass2[iterator:(iterator + len(resStepsList)),l],\
+                        marker = markerRes,linestyle=':',\
+                        label='COLA ($' + str(resList[m]) + '$)',color=colorRes))
+            iterator += len(resStepsList)*len(resList)
+            if showPM:
+                for m in resToShow:
+                    handles[l].append(ax[0,l].errorbar(resStepsList,\
+                        meanMass1[iterator:(iterator + len(resStepsList)),l],\
+                        yerr=stdMass1[iterator:(iterator + len(resStepsList)),l],\
+                        marker = markerGadget,linestyle='-.',\
+                        label='PM ($' + str(resList[m]) + '$)',color=colorGadget))
+                    handles[l + nCols].append(ax[1,l].errorbar(resStepsList,\
+                        meanMass2[iterator:(iterator + len(resStepsList)),l],\
+                        yerr=stdMass2[iterator:(iterator + len(resStepsList)),l],\
+                        marker = markerGadget,linestyle='-.',\
+                        label='PM ($' + str(resList[m]) + '$)',color=colorGadget))
+            iterator += len(resStepsList)*len(resList)
+        else:
+            iterator += 2*len(resStepsList)*len(resList)
+        # Log COLA masses:
+        if showCOLA:
+            handles[l].append(ax[0,l].errorbar(logstepsList,\
+                    meanMass1[iterator:(iterator + len(logstepsList)),l]\
+                    ,yerr=stdMass1[iterator:(iterator + len(logstepsList)),l]\
+                    ,marker = markerCOLA,linestyle='--',\
+                    label='COLA (log steps)',color=colorLog))
+            handles[l + nCols].append(ax[1,l].errorbar(logstepsList,\
+                    meanMass2[iterator:(iterator + len(logstepsList)),l]\
+                    ,yerr=stdMass2[iterator:(iterator + len(logstepsList)),l]\
+                    ,marker = markerCOLA,linestyle='--',\
+                    label='COLA (log steps)',color=colorLog))
+        iterator += len(logstepsList)
+        # Log PM masses:
+        if showPM:
+            handles[l].append(ax[0,l].errorbar(logstepsList,\
+                    meanMass1[iterator:(iterator + len(logstepsList)),l],\
+                    yerr=stdMass1[iterator:(iterator + len(logstepsList)),l],\
+                    marker = markerPM,linestyle=':',label='PM (log steps)',\
+                    color=colorLog))
+            handles[l + nCols].append(ax[1,l].errorbar(logstepsList,\
+                    meanMass2[iterator:(iterator + len(logstepsList)),l],\
+                    yerr=stdMass2[iterator:(iterator + len(logstepsList)),l],\
+                    marker = markerPM,linestyle=':',label='PM (log steps)',\
+                    color=colorLog))
+        iterator += len(logstepsList)
+        # Adaptive gadget masses:
+        if showGadgetAdaptive:
+            handles[l].append(ax[0,l].fill_between([0,256],\
+                [meanMassFull1[l] - stdMassFull1[l],meanMassFull1[l] - \
+                    stdMassFull1[l]],\
+                [meanMassFull1[l] + stdMassFull1[l],meanMassFull1[l] + \
+                    stdMassFull1[l]],\
+                color=colorAdaptive,alpha=alpha,\
+                label='Gadget, adaptive steps'))
+            handles[l + nCols].append(ax[1,l].fill_between([0,256],\
+                [meanMassFull2[l] - stdMassFull2[l],meanMassFull2[l] - \
+                    stdMassFull2[l]],\
+                [meanMassFull2[l] + stdMassFull2[l],meanMassFull2[l] + \
+                    stdMassFull2[l]],\
+                color=colorAdaptive,alpha=alpha,\
+                label='Gadget, adaptive steps'))
+        if extraMasses is not None:
+            handles[l].append(ax[0,l].fill_between([0,256],\
+                [meanExtraMass[l] - stdExtraMass[l],meanExtraMass[l] - \
+                    stdExtraMass[l]],\
+                [meanExtraMass[l] + stdExtraMass[l],meanExtraMass[l] + \
+                    stdExtraMass[l]],\
+                color='r',alpha=alpha,label=extraMassLabel))
+            handles[l + nCols].append(ax[0,l].fill_between([0,256],\
+                [meanExtraMass[l] - stdExtraMass[l],meanExtraMass[l] - \
+                    stdExtraMass[l]],\
+                [meanExtraMass[l] + stdExtraMass[l],meanExtraMass[l] + \
+                    stdExtraMass[l]],\
+                color='r',alpha=alpha,label=extraMassLabel))
+        # Axis formatting:
+        ax[0,l].set_title(clusterNames[l][0] + " (" + name1 + ")",\
+            fontsize=fontsize,fontfamily=fontfamily)
+        ax[1,l].set_title(clusterNames[l][0] + " (" + name2 + ")",\
+            fontsize=fontsize,fontfamily=fontfamily)
+        if l > 0:
+            ax[0,l].yaxis.label.set_visible(False)
+            ax[0,l].yaxis.set_major_formatter(NullFormatter())
+            ax[0,l].yaxis.set_minor_formatter(NullFormatter())
+            ax[1,l].yaxis.label.set_visible(False)
+            ax[1,l].yaxis.set_major_formatter(NullFormatter())
+            ax[1,l].yaxis.set_minor_formatter(NullFormatter())
+        else:
+            ax[0,l].set_ylabel(name1 + " [$10^{15}M_{\\odot}h^{-1}$]",\
+                fontsize=fontsize,fontfamily=fontfamily)
+            ax[1,l].set_ylabel(name2 + " [$10^{15}M_{\\odot}h^{-1}$]",\
+                fontsize=fontsize,fontfamily=fontfamily)
+        ax[0,l].xaxis.label.set_visible(False)
+        ax[0,l].xaxis.set_major_formatter(NullFormatter())
+        ax[0,l].xaxis.set_minor_formatter(NullFormatter())
+        ax[1,l].set_xlabel(xlabel,fontsize=fontsize,fontfamily=fontfamily)
+        ax[0,l].set_ylim(np.array(ylim1)/scale)
+        ax[1,l].set_ylim(np.array(ylim2)/scale)
+        ax[0,l].set_xscale('log')
+        ax[1,l].set_xscale('log')
+        ax[0,l].set_xlim(xlim)
+        ax[1,l].set_xlim(xlim)
+    plt.subplots_adjust(wspace=wspace,hspace=hspace,top=top,bottom=bottom,\
+        left=left,right=right)
+    # Legend:
+    if showLegend:
+        if len(handles[0]) < 4:
+            ax[0,0].legend(prop={"size":8,"family":"serif"},frameon=False)
+        else:    
+            ax[0,0].legend(handles = handles[2][0:3],\
+                prop={"size":8,"family":"serif"},frameon=False)
+            ax[0,1].legend(handles = handles[5][3:6],\
+                prop={"size":8,"family":"serif"},frameon=False)
+    plt.suptitle("Masses as a function of number of time-steps")
+    plt.tight_layout()
+    if show:
+        plt.show()
+    if save:
+        plt.savefig(savename)
+    if returnHandles:
+        return [fig, ax, handles]
+
+
 
 
 
