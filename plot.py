@@ -1939,21 +1939,20 @@ def plotPPTProfiles(expectedLine,realisedLine,title1 = "2M++ \nGalaxies",\
         intervalColour='grey',fontfamily='serif',fontsize=8,\
         ylabel = '$n_{\\mathrm{gal}}(<r)$ $[h^{3}\\mathrm{Mpc}^{-3}]$',\
         xlabel = '$r$ $[\\mathrm{Mpc}h^{-1}]$',ylim=[0.01,2],\
-        wspace=0,hspace=0.2,show=True,savename=None,\
-        title = "Simulation Density (Eulerian space) " + \
-        "vs 2M++ Galaxy number density",showLegend=True,\
+        show=True,savename=None,title = None,showLegend=True,\
         titleSize = 12,nRows=3,nCols=3,legPos = [1,2],ylabelRow = 1,\
         xlabelCol = 1,rBins=None,clusterNames=None,rescale=False,\
         returnHandles=False,error=None,text=None,textPos=[0.1,0.1],\
         splitLegend=True,legLoc=[0.3,0.7],color1='k',color2='k',\
-        top=0.845,bottom=0.110,left=0.125,right=0.900,ax=None,fig=None,\
-        density=True):
+        ax=None,fig=None,density=True,textwidth=7.1014,width=1,height=1,\
+        top=0.940,bottom=0.105,left=0.095,right=0.980,hspace=0.215,wspace=0.0):
     if rBins is None:
         rBins = np.linspace(0,20,21)
     if clusterNames is None:
         clusterNames = [str(k+1) for k in range(0,nRows*nCols)]
     if ax is None or fig is None:
-        fig, ax = plt.subplots(nRows,nCols)
+        fig, ax = plt.subplots(nRows,nCols,\
+            figsize=(width*textwidth,height*textwidth))
     for l in range(0,nCols*nRows):
         i = int(l/nCols)
         j = l - nCols*i
@@ -1975,13 +1974,16 @@ def plotPPTProfiles(expectedLine,realisedLine,title1 = "2M++ \nGalaxies",\
             fontfamily=fontfamily)
         formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim,\
             nCols = nCols)
+        axij.tick_params(axis='both', which='major', labelsize=fontsize)
+        axij.tick_params(axis='both', which='minor', labelsize=fontsize)
         if text is not None and textPos is not None:
             axij.text(textPos[0]*axij.get_xlim()[1],\
                 axij.get_ylim()[0]*10**(\
                 textPos[1]*np.log10(\
                 axij.get_ylim()[1]/axij.get_ylim()[0])),\
                 text[l],fontsize=fontsize,fontfamily=fontfamily)
-    plt.subplots_adjust(wspace=wspace,hspace=hspace)
+    plt.subplots_adjust(wspace=wspace,hspace=hspace,top=top,bottom=bottom,\
+        left=left,right=right)
     if showLegend:
         if splitLegend:
             handleList = [[] for k in range(0,nRows)]
@@ -2004,7 +2006,8 @@ def plotPPTProfiles(expectedLine,realisedLine,title1 = "2M++ \nGalaxies",\
                 axij = ax[legPos[0],legPos[1]]
             axij.legend(\
                 prop={"size":fontsize,"family":fontfamily},frameon=False)
-    fig.suptitle(title, fontsize=titleSize,fontfamily=fontfamily)
+    if title is not None:
+        fig.suptitle(title, fontsize=titleSize,fontfamily=fontfamily)
     plt.subplots_adjust(top=top,bottom=bottom,left=left,right=right)
     if savename is not None:
         plt.savefig(savename)
@@ -2736,10 +2739,10 @@ def plotVoidProfilesPaper(rBinStackCentres,nbarjMean,sigmaMean,nbar,\
 
 def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
         stepsListGADGET,stepsList,logstepsList,stepsList1024,\
-        stepsListEPS_0p662,clusterNames,name1 = "$M_{200\\mathrm{c}}$",\
-        name2 = "$M_{100\\mathrm{m}}$",\
-        show=False,save = True,colorLinear = seabornColors[0],\
-        colorLog=seabornColors[1],colorGadget='k',colorAdaptive='grey',\
+        stepsListEPS_0p662,resStepsList,clusterNames,\
+        name1 = "$M_{200\\mathrm{c}}$",name2 = "$M_{100\\mathrm{m}}$",\
+        show=False,save = True,colorLinear = seabornColormap[0],\
+        colorLog=seabornColormap[1],colorGadget='k',colorAdaptive='grey',\
         showGadgetAdaptive = True,showGadget1024=False,\
         showGadgetEps0p662=False,savename = "mass_convergence_comparison.pdf",\
         massName = "M",extraMasses = None,extraMassLabel = 'Extra mass scale',\
@@ -2747,27 +2750,28 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
         xlim=[0.9,256],returnHandles=False,showLegend=True,nCols=3,alpha=0.5,\
         markerGadget=None,markerCOLA=None,markerPM=None,markerOther=None,\
         wspace=0,hspace=0.2,top=0.9,bottom=0.1,left=0.1,right=0.95,scale=1e15,\
-        fontsize=8,fontfamily='serif',colorRes = seabornColors[2],\
+        fontsize=8,fontfamily='serif',colorRes = seabornColormap[2],\
         showGADGET=True,showPM=True,showCOLA=True,markerRes='x',\
         showResMasses = True,resList = [256,512,1024,2048],\
-        resToShow=None):
+        resToShow=None,figsize=None,title=None):
     if resToShow is None:
         resToShow = np.arange(0,len(resList))
+    nsamples = len(massList1)
     # Compute means over all samples:
     meanMassFull1 = np.mean(np.vstack(massListFull1),0)/scale
     stdMassFull1 = np.std(np.vstack(massListFull1),0)\
-        /np.sqrt(len(sampleList))/scale
+        /np.sqrt(nsamples)/scale
     massArray1 = np.array([np.vstack(massList1[k]) \
-        for k in range(0,len(sampleList))])/scale
+        for k in range(0,nsamples)])/scale
     meanMass1 = np.mean(massArray1,0)
-    stdMass1 = np.std(massArray1,0)/np.sqrt(len(sampleList))
+    stdMass1 = np.std(massArray1,0)/np.sqrt(nsamples)
     meanMassFull2 = np.mean(np.vstack(massListFull2),0)/scale
     stdMassFull2 = np.std(np.vstack(massListFull2),0)\
-        /np.sqrt(len(sampleList))/scale
+        /np.sqrt(nsamples)/scale
     massArray2 = np.array([np.vstack(massList2[k]) \
-        for k in range(0,len(sampleList))])/scale
+        for k in range(0,nsamples)])/scale
     meanMass2 = np.mean(massArray2,0)
-    stdMass2 = np.std(massArray1,0)/np.sqrt(len(sampleList))
+    stdMass2 = np.std(massArray1,0)/np.sqrt(nsamples)
     if extraMasses is not None:
         meanExtraMass = np.mean(np.vstack(extraMasses),0)/scale
         stdExtraMass = np.std(np.vstack(extraMasses),0)\
@@ -2797,12 +2801,12 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
             handles[l].append(ax[0,l].errorbar(stepsList,\
                     meanMass1[iterator:(iterator + len(stepsList)),l]\
                     ,yerr=stdMass1[iterator:(iterator + len(stepsList)),l]\
-                    ,marker = markerCOLA,linestyle='--',\
+                    ,marker = markerCOLA,linestyle='-',\
                     label='COLA (linear steps)',color=colorLinear))
             handles[l + nCols].append(ax[1,l].errorbar(stepsList,\
                     meanMass2[iterator:(iterator + len(stepsList)),l]\
                     ,yerr=stdMass2[iterator:(iterator + len(stepsList)),l]\
-                    ,marker = markerCOLA,linestyle='--',\
+                    ,marker = markerCOLA,linestyle='-',\
                     label='COLA (linear steps)', color=colorLinear))
         iterator += len(stepsList)
         # PM masses:
@@ -2878,12 +2882,12 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
             handles[l].append(ax[0,l].errorbar(logstepsList,\
                     meanMass1[iterator:(iterator + len(logstepsList)),l]\
                     ,yerr=stdMass1[iterator:(iterator + len(logstepsList)),l]\
-                    ,marker = markerCOLA,linestyle='--',\
+                    ,marker = markerCOLA,linestyle='-',\
                     label='COLA (log steps)',color=colorLog))
             handles[l + nCols].append(ax[1,l].errorbar(logstepsList,\
                     meanMass2[iterator:(iterator + len(logstepsList)),l]\
                     ,yerr=stdMass2[iterator:(iterator + len(logstepsList)),l]\
-                    ,marker = markerCOLA,linestyle='--',\
+                    ,marker = markerCOLA,linestyle='-',\
                     label='COLA (log steps)',color=colorLog))
         iterator += len(logstepsList)
         # Log PM masses:
@@ -2955,23 +2959,35 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
         ax[1,l].set_xscale('log')
         ax[0,l].set_xlim(xlim)
         ax[1,l].set_xlim(xlim)
+        ax[0,l].tick_params(axis='both', which='major', labelsize=fontsize)
+        ax[0,l].tick_params(axis='both', which='minor', labelsize=fontsize)
+        ax[1,l].tick_params(axis='both', which='major', labelsize=fontsize)
+        ax[1,l].tick_params(axis='both', which='minor', labelsize=fontsize)
     plt.subplots_adjust(wspace=wspace,hspace=hspace,top=top,bottom=bottom,\
         left=left,right=right)
     # Legend:
     if showLegend:
-        if len(handles[0]) < 4:
+        if len(handles[0]) < 3:
             ax[0,0].legend(prop={"size":8,"family":"serif"},frameon=False)
-        else:    
-            ax[0,0].legend(handles = handles[2][0:3],\
+        elif len(handles[0]) < 5:    
+            ax[0,0].legend(handles = handles[2][0:2],\
                 prop={"size":8,"family":"serif"},frameon=False)
-            ax[0,1].legend(handles = handles[5][3:6],\
+            ax[0,1].legend(handles = handles[5][2:],\
                 prop={"size":8,"family":"serif"},frameon=False)
-    plt.suptitle("Masses as a function of number of time-steps")
+        else:
+            ax[0,0].legend(handles = handles[2][0:2],\
+                prop={"size":8,"family":"serif"},frameon=False)
+            ax[0,1].legend(handles = handles[5][2:4],\
+                prop={"size":8,"family":"serif"},frameon=False)
+            ax[0,2].legend(handles = handles[5][4:],\
+                prop={"size":8,"family":"serif"},frameon=False)
+    if title is not None:
+        plt.suptitle()
     plt.tight_layout()
-    if show:
-        plt.show()
     if save:
         plt.savefig(savename)
+    if show:
+        plt.show()
     if returnHandles:
         return [fig, ax, handles]
 

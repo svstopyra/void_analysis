@@ -394,11 +394,10 @@ if doPPTs:
     plot.plotPPTProfiles(np.sum(galaxyNumberCountExp,2),\
         np.sum(galaxyNumberCountsRobust,2),\
         savename=figuresFolder + "ppt_Ngal_robust" + suffix + ".pdf",\
-        title="Posterior predicted galaxy counts " + \
-        " vs 2M++ galaxy counts",ylim=[1,1000],\
+        ylim=[1,1000],\
         show=True,rBins=rBins,clusterNames=clusterNames,rescale=False,\
         density=False,legLoc = [0.3,0.1],hspace=0.3,\
-        ylabel='Number of galaxies $ < r$')
+        ylabel='Number of galaxies $ < r$',height=0.7)
 
 #-------------------------------------------------------------------------------
 # HMF/AMF PLOT:
@@ -622,6 +621,147 @@ if doHMFs:
 #        profileErrorLabel = 'Profile \nvariation \n',\
 #        nbarjUnconstrainedStacks=nbarjSepStackUn,\
 #        sigmajUnconstrainedStacks = sigmaSepStackUn,showMean=True)
+
+
+#-------------------------------------------------------------------------------
+# BIAS FUNCTIONAL FORM
+
+
+biasDataRootDir="new_chain/sample"
+biasData = [h5py.File(biasDataRootDir + str(k) + "/mcmc_" + str(k) + \
+    ".h5",'r') for k in snapNumList]
+
+biasParam = [np.array([[sample['scalars']['galaxy_bias_' + str(k)][()] \
+    for k in range(0,16)]]) for sample in  biasData]
+
+def plotBiasForm(deltaRange,biasFormLowMean,biasFormHighMean,\
+        sigmaBiasFormLow,sigmaBiasFormHigh,colorLow='r',colorHigh='g',\
+        ax = None,savename=None,show=False,ylim=[1e-14,1],showLegend=True,\
+        returnHandles=False,ylabel = '$f(\\delta,b,\\rho,\\epsilon)$',\
+        xlabel='$\\rho = 1 + \\delta$',fontfamily='serif',fontsize=8,\
+        label1 = "$m \\leq 11.5$",label2 = "$11.5 < m \\leq 12.5$",\
+        showMean=True):
+    if ax is None:
+        fig, ax = plt.subplots()
+    if showMean:
+        h1 = ax.plot(deltaRange+1.0,biasFormLowMean,linestyle=':',\
+            color=colorLow,label=label1)
+    h2 = ax.fill_between(deltaRange+1.0,biasFormLowMean + sigmaBiasFormLow,\
+        biasFormLowMean - sigmaBiasFormLow,color=colorLow,alpha=0.5,\
+        label=label1)
+    if showMean:
+        h3 = ax.plot(deltaRange+1.0,biasFormHighMean,linestyle=':',\
+            color=colorHigh,label=label2)
+    h4 = ax.fill_between(deltaRange+1.0,\
+        biasFormHighMean + sigmaBiasFormHigh,\
+        biasFormHighMean - sigmaBiasFormHigh,color=colorHigh,alpha=0.5,\
+        label=label2)
+    ax.set_yscale('log')
+    ax.set_xscale('log')
+    ax.set_xlabel(xlabel,fontsize=fontsize,fontfamily=fontfamily)
+    ax.set_ylabel(ylabel,fontsize=fontsize,fontfamily=fontfamily)
+    ax.set_ylim(ylim)
+    if showLegend:
+        plt.legend()
+    if savename is not None:
+        plt.savefig(savename)
+    if show:
+        plt.show()
+    if returnHandles:
+        if showMean:
+            return [h1,h2,h3,h4]
+        else:
+            return [h2,h4]
+
+def biasFunctionalForm(delta,b,rho,eps,N=1,S=1,A=1,numericalOffset = 1e-6):
+    prefactor = S*N*A
+    logresult = np.log(prefactor) + \
+        b*np.log(1.0 + delta + numericalOffset) - \
+        ((1.0 + delta + numericalOffset)/rho)**(-eps)
+    return np.exp(logresult)
+
+
+nsamples = len(snapNumList)
+rhoMin = 1e-5
+rhoMax = 1000
+rhoBins = 101
+deltaRange = 10**np.linspace(np.log10(rhoMin),np.log10(rhoMax),rhoBins) - 1
+MbinToPlot = 7
+MabsList = np.linspace(-21,-25,9)
+
+biasFormLow = np.zeros((nsamples,len(deltaRange),8))
+biasFormHigh = np.zeros((nsamples,len(deltaRange),8))
+
+
+for m in range(0,8):
+    for k in range(0,nsamples):
+        biasFormLow[k,:,m] = biasFunctionalForm(deltaRange,\
+            biasParam[k][0,2*m,1],\
+            biasParam[k][0,2*m,3],\
+            biasParam[k][0,2*m,2])
+        biasFormHigh[k,:,m] = biasFunctionalForm(deltaRange,\
+            biasParam[k][0,2*m+1,1],\
+            biasParam[k][0,2*m+1,3],\
+            biasParam[k][0,2*m+1,2])
+
+# Mean and standard error:
+biasFormLowMean = np.mean(biasFormLow,0)
+sigmaBiasFormLow = np.std(biasFormLow,0)/np.sqrt(nsamples)
+biasFormHighMean = np.mean(biasFormHigh,0)
+sigmaBiasFormHigh = np.std(biasFormHigh,0)/np.sqrt(nsamples)
+
+
+
+nCols = 4
+nRows = 2
+ylabelRow = 1
+xlabelCol = 1
+ylabel = '$f(\\delta,b,\\rho,\\epsilon)$'
+xlabel='$\\rho = 1 + \\delta$'
+ylim = [1e-9,1e3]
+fontfamily='serif'
+fontsize=8
+titleSize=10
+useTitles = False
+title = "Functional form of bias functions for all magnitude bins."
+fig, ax = plt.subplots(2,4,figsize=(textwidth,0.5*textwidth))
+for m in range(0,8):
+    i = int(m/nCols)
+    j = m - nCols*i
+    [h2,h4] = plotBiasForm(deltaRange,biasFormLowMean[:,m],\
+        biasFormHighMean[:,m],sigmaBiasFormLow[:,m],\
+        sigmaBiasFormHigh[:,m],ax=ax[i,j],ylabel=ylabel,\
+        xlabel=xlabel,ylim=ylim,showLegend=False,returnHandles=True,\
+        colorLow=seabornColormap[0],colorHigh=seabornColormap[1],\
+        showMean=False,fontsize=fontsize)
+    ax[i,j].set_xlim([1e-2,1e2])
+    plot.formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim,\
+        fontsize=fontsize)
+    ax[i,j].set_xticks([1e-2,1,1e2],fontsize=fontsize)
+    ax[i,j].set_yticks([1e-9,1e-6,1e-3,1,1000],fontsize=fontsize)
+    ax[i,j].tick_params(axis='both', which='major', labelsize=fontsize)
+    ax[i,j].tick_params(axis='both', which='minor', labelsize=fontsize)
+    if i < nRows -1:
+        ax[i,j].get_yticklabels()[0].set_visible(False)
+        #plt.setp(ax[i,j].get_yticklabels()[-1], visible=False)
+    if j < nCols -1:
+        ax[i,j].get_xticklabels()[-1].set_visible(False)
+        #plt.setp(ax[i,j].get_xticklabels()[-1], visible=False)
+    if useTitles:
+        ax[i,j].set_title("$" + str(MabsList[m]) + " \\leq M < " + \
+            str(MabsList[m+1]) + "$",fontsize=fontsize,fontfamily=fontfamily)
+
+ax[1,3].legend(handles = [h2,h4],\
+    prop={"size":fontsize,"family":fontfamily},frameon=False,\
+    loc="upper left")
+#fig.suptitle(title, fontsize=titleSize,fontfamily=fontfamily)
+plt.subplots_adjust(top=0.970,bottom=0.155,left=0.1,right=0.97,\
+    hspace=0.0,wspace=0.0)
+plt.savefig(figuresFolder + "bias_functional_form.pdf")
+plt.show()
+
+
+
 
 #-------------------------------------------------------------------------------
 # ANTIHALO SKY PLOT:
@@ -883,12 +1023,12 @@ sampleList = ["sample7422","sample7500","sample8000",\
 
 # Comparison between two different types of mass:
 clusterFilter = np.array([2,4,6],dtype=int) # Coma, Shapley, Hercules A
-doCon=False
+doCon=True
 
 from void_analyis.plot import plotMassTypeComparison
 
 if doCon:
-    plotMassTypeComparison(np.array(massList200c)[:,:,clusterFilter],\
+    plot.plotMassTypeComparison(np.array(massList200c)[:,:,clusterFilter],\
         np.array(massListFull200c)[:,clusterFilter],\
         np.array(massList100m)[:,:,clusterFilter],\
         np.array(massListFull100m)[:,clusterFilter],\
@@ -897,13 +1037,12 @@ if doCon:
         name1 = "$M_{200\\mathrm{c}}$",name2 = "$M_{100\\mathrm{m}}$",\
         show=True,save = True,colorLinear = seabornColormap[0],\
         colorLog=seabornColormap[1],colorGadget='k',colorAdaptive='grey',\
-        showGadgetAdaptive = True,showResMasses = False,\
+        showGadgetAdaptive = True,\
         savename = figuresFolder + "mass_convergence_comparison.pdf",\
-        massName = "M",\
-        extraMasses = None,extraMassLabel = 'Extra mass scale',\
-        xlabel='Number of Steps',nsamples = len(sampleList),\
-        returnHandles=False,showLegend=True,nCols=3,resList=resList)
-
+        massName = "M",extraMasses = None,extraMassLabel = 'Extra mass scale',\
+        xlabel='Number of Steps',\
+        returnHandles=False,showLegend=True,nCols=3,showGADGET=False,\
+        figsize=(textwidth,0.7*textwidth),showResMasses=False)
 
 #-------------------------------------------------------------------------------
 # COMA PROFILES TEST
@@ -917,17 +1056,19 @@ def tick_function(X):
 
 def compareDensityProfile(radii,mProf,mProfError,mProfPost,mProfPostError,\
         constraintList=None,refList = None,radiiPost = None,\
-        textwidth=7.1014,textheight=9.0971,widthFactor = 0.87,\
+        textwidth=7.1014,textheight=9.0971,widthFactor = 0.87,heightFactor=1,\
         yscale = 1e16,color1='grey',alpha1=0.75,alpha2=0.25,ylim=[1e-2,3],\
         xlim=[0,30],showMean=True,savename = None,ax=None,show=True,\
         returnAx = False,meanColour='tab:blue',label='Gadget density',\
         label2 = 'Cola density',title=None,omegaM=0.3111,\
-        color2 = seabornColormap[3],fontsize=10,fontname='serif'):
+        color2 = seabornColormap[3],fontsize=10,fontname='serif',\
+        logy=True,logx=True,showVolAx = False,legend=True,\
+        meanLabel='Mean Universe Density'):
     if radiiPost is None:
         radiiPost = radii
     colorList = ['grey','y','tab:orange','k','c','r','b',seabornColormap[0],\
         seabornColormap[1],seabornColormap[4]]
-    fig, ax = plt.subplots(figsize=(textwidth,widthFactor*textwidth))
+    fig, ax = plt.subplots(figsize=(heightFactor*textwidth,widthFactor*textwidth))
     plt.fill_between(radii,(mProf - mProfError)/yscale,\
         (mProf + mProfError)/yscale,\
         color=color1,alpha=alpha1)
@@ -942,7 +1083,7 @@ def compareDensityProfile(radii,mProf,mProfError,mProfPost,mProfPostError,\
     if showMean:
         rhom = 2.7754e11*omegaM 
         plt.semilogy(radii,rhom*4*np.pi*radii**3/(3*yscale),\
-            label='Mean Universe Density',color=meanColour)
+            label=meanLabel,color=meanColour)
     # Add mass estimates to the plot:
     if constraintList is not None:
         if refList is None:
@@ -962,22 +1103,29 @@ def compareDensityProfile(radii,mProf,mProfError,mProfPost,mProfPostError,\
             plt.errorbar(X,Y,xerr = Xerr,yerr=Yerr,label=refList[k],\
                 marker='x',color=colorList[k],linestyle='')
     plt.ylim(ylim)
-    plt.yscale('log')
+    if logy:
+        plt.yscale('log')
+    if logx:
+        plt.xscale('log')
+    print(ax.get_xticks())
     plt.xlim(xlim)
     plt.xlabel('$R [\\mathrm{Mpc}h^{-1}]$',fontsize=fontsize,\
         fontfamily=fontname)
     plt.ylabel('$M(<r) [10^{16}M_{\\odot}h^{-1}]$',fontsize=fontsize,\
         fontfamily=fontname)
-    ax2 = ax.twiny()
-    ax2.set_xlabel('$V [10^4(\\mathrm{\\,Mpc}h^{-3})^3]$',fontsize=fontsize,\
-        fontfamily=fontname)
-    ax2.set_xlim(ax.get_xlim())
-    ax2.set_xticks(ax.get_xticks())
-    ax2.set_xticklabels(tick_function(ax.get_xticks()))
-    ax.legend(prop={"size":fontsize,"family":"serif"})
+    if showVolAx:
+        ax2 = ax.twiny()
+        ax2.set_xlabel('$V [10^4(\\mathrm{\\,Mpc}h^{-3})^3]$',\
+            fontsize=fontsize,fontfamily=fontname)
+        ax2.set_xlim(ax.get_xlim())
+        ax2.set_xticks(ax.get_xticks())
+        ax2.set_xticklabels(tick_function(ax.get_xticks()))
+    if legend:
+        ax.legend(prop={"size":fontsize,"family":"serif"})
     ax.grid()
     ax.tick_params(axis='both',labelsize=fontsize)
-    ax2.tick_params(axis='both',labelsize=fontsize)
+    if showVolAx:
+        ax2.tick_params(axis='both',labelsize=fontsize)
     if title is not None:
         plt.title(title)
     plt.tight_layout()
@@ -1084,16 +1232,35 @@ refList = ['Geller (1999)','Kubo (2007)','Hughes (1989)','The & White (1986)',\
     'Piffaretti (2011)','Okabe (2014)','Lokas (2014)']
 
 
+rhoc = 2.7754e11
+rhom = 0.307*rhoc
+deltaComaGad = 3*mProf/(4*np.pi*radii[1:]**3*rhoc)
+interpComaCritical = scipy.interpolate.interp1d(radii[1:],deltaComaGad)
+sol200c = scipy.optimize.brentq(lambda x: interpComaCritical(x) - 200,\
+    radii[1],radii[-1])
+sol100m = scipy.optimize.brentq(lambda x: interpComaCritical(x) - 100*0.307,\
+    radii[1],radii[-1])
 
 
+fontsize = 8
+ax = compareDensityProfile(radii[1:],mProf,mProfError,\
+    mProfPost2,mProfErrorPost2,\
+    constraintList=None,radiiPost=radii[1:],refList=refList,\
+    label = "GADGET",label2="10-step PM",\
+    savename=None,widthFactor=0.45,\
+    heightFactor=0.45/0.87,fontsize=fontsize,show=False,returnAx=True,\
+    meanLabel="Mean Universe \nDensity")
 
-
-
-compareDensityProfile(radii[1:],mProf,mProfError,mProfPost2,mProfErrorPost2,\
-    constraintList=constraintList,radiiPost=radii[1:],refList=refList,\
-    label = "GADGET",label2="BORG 10-step PM (particles)",\
-    savename=figuresFolder + "coma_density_plot.pdf")
-
+ax.axvline(sol200c,linestyle="--",color='grey',\
+    label='$M_{200c}$ radius\n$' + ("%.2g" % sol200c) + \
+    "\\,\\mathrm{Mpc}h^{-1}$")
+ax.axvline(sol100m,linestyle=":",color='grey',\
+    label='$M_{100m}$ radius\n$' + ("%.2g" % sol100m) + \
+    "\\,\\mathrm{Mpc}h^{-1}$")
+ax.legend(prop={"size":fontsize,"family":"serif"},loc="upper left",\
+    frameon=True,ncol=2)
+plt.savefig(figuresFolder + "coma_density_plot.pdf")
+plt.show()
 
 
 
