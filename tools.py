@@ -540,4 +540,15 @@ def savePickle(result,filename):
         pickle.dump(result,outfile)
 
 
+# Flatten a list of lists into a single list:
+def flatten(handles):
+    handlesOut = []
+    for h in handles:
+        if type(h) == list:
+            handlesOut += flatten(h)
+        else:
+            handlesOut.append(h)
+    return handlesOut
+
+
 

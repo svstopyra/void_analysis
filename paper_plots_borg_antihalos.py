@@ -281,6 +281,27 @@ chainFile="chain_properties.p"
 snrFilter = getSNRFilterFromChainFile(chainFile,snrThresh,snapNameList,boxsize)
 
 
+[mcmcArray,num,N,NCAT,no_bias_params,bias_matrix,mean_field,\
+        std_field,hmc_Elh,hmc_Eprior,hades_accept_count,\
+        hades_attempt_count] = pickle.load(open(chainFile,"rb"))
+Nden=256
+snrField = mean_field**2/std_field**2
+snrFieldLin = np.reshape(snrField,Nden**3)
+grid = snapedit.gridListPermutation(Nden,perm=(2,1,0))
+centroids = grid*boxsize/Nden + boxsize/(2*Nden)
+positions = snapedit.unwrap(centroids - np.array([boxsize/2]*3),boxsize)
+tree = scipy.spatial.cKDTree(snapedit.wrap(positions + boxsize/2,boxsize),\
+    boxsize=boxsize)
+nearestPointsList = [tree.query_ball_point(\
+        snapedit.wrap(antihaloCentres[k] + boxsize/2,boxsize),\
+        antihaloRadii[k],workers=-1) \
+        for k in range(0,len(antihaloCentres))]
+snrAllCatsList = [np.array([np.mean(snrFieldLin[points]) \
+        for points in nearestPointsList[k]]) for k in range(0,len(snapNumList))]
+snrFilter2 = [snr > snrThresh for snr in snrAllCatsList]
+
+[np.all(snrFilter[k]==snrFilter2[k]) for k in range(0,20)]
+
 allProps = [tools.loadPickle(snapname + ".AHproperties.p") \
     for snapname in snapNameList]
 antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
@@ -300,6 +321,7 @@ centralAntihaloMasses = [\
             for k in range(0,len(centralAntihalos))]
 sortedList = [np.flip(np.argsort(centralAntihaloMasses[k])) \
         for k in range(0,len(snapNumList))]
+
 
 ahCounts = np.array([len(cahs[0]) for cahs in centralAntihalos])
 max_index = np.max(ahCounts)
@@ -332,6 +354,46 @@ centralAntihalosAdditional = [tools.getAntiHalosInSphere(antihaloCentres[k],\
             (antihaloMasses[k] <= mMax) & additionalConditions[k]) \
             for k in range(0,len(snapNumList))]
 
+# Check to make sure skyplot centralAntihalos list is consistent:
+
+rRange = [5,30]
+massRange = [mMin,mMax]
+
+rRangeCond = [(antihaloRadii[k] > rRange[0]) & \
+    (antihaloRadii[k] <= rRange[1]) \
+    for k in range(0,len(snapNumList))]
+mRangeCond = [(antihaloMasses[k] > massRange[0]) & \
+    (antihaloMasses[k] <= massRange[1]) \
+    for k in range(0,len(snapNumList))]
+filterCond = [rRangeCond[k] & mRangeCond[k] \
+    for k in range(0,len(snapNumList))]
+filterCond = [filterCond[k] & snrFilter[k] \
+        for k in range(0,len(snapNumList))]
+centralAntihalosTest = [tools.getAntiHalosInSphere(antihaloCentres[k],\
+        rSphere,filterCondition = filterCond[k]) \
+        for k in range(0,len(snapNumList))]
+
+centralAntihalosRef = [tools.getAntiHalosInSphere(antihaloCentres[k],rSphere,\
+            filterCondition = (antihaloRadii[k] > rMin) & \
+            (antihaloRadii[k] <= rMax) & (antihaloMasses[k] > mMin) & \
+            (antihaloMasses[k] <= mMax) & snrFilter[k]) \
+            for k in range(0,len(snapNumList))]
+
+centralAntihalosTest2 = [tools.getAntiHalosInSphere(antihaloCentres[k],rSphere,\
+            filterCondition = (antihaloRadii[k] > rMin) & \
+            (antihaloRadii[k] <= rMax) & (antihaloMasses[k] > mMin) & \
+            (antihaloMasses[k] <= mMax) & snrFilter[k]) \
+            for k in range(0,len(snapNumList))]
+
+
+[len(centralAntihalosTest[ns][0]),len(centralAntihalos[ns][0])]
+
+[np.all(np.array(centralAntihalosTest[ns][0]) == \
+    np.array(centralAntihalos[ns][0])) for ns in range(0,len(snapNumList))]
+
+void9 = finalCatOpt[combinedFilter135][selection[8],:]
+void9Centres = np.array([centresListShort[ns][void9[ns]-1,:] \
+    for ns in range(0,len(snapNumList))])
 
 doSky = True
 if doSky:
@@ -422,89 +484,7 @@ if doHMFs:
 
 # Plots of individual mass functions:
 
-def singleMassFunctionPlot(masses,mlow,mupp,nMassBins,textwidth=7.1014,\
-        mLimLower=None,comparableHaloMasses=None,\
-        rSphere=135,density=False,poisson_interval=0.95,nmax=200,\
-        ns=0.9611,Om0=0.3,sigma8=0.8,Ob0=0.04825,h=0.7,\
-        mass_function='Tinker',delta_wrt='SOCritical',\
-        marker='x',linestyle='--',plotColour=seabornColormap[0],\
-        colorTheory = seabornColormap[1],\
-        legendLoc='lower left',label="PM10 constrained",transfer_model='EH',\
-        fname=None,xlabel="Mass [$M_{\odot}h^{-1}$]",ylabel="Number of halos",\
-        title=None,showLegend=True,tickRight=False,tickLeft=True,\
-        savename=None,compColour=seabornColormap[0],\
-        deltaListMean=-0.06,deltaListError=0.003,showTheory=True,ax=None,\
-        returnHandles=False,xticks=None,fontsize=11,legendFontsize=11):
-    volSim = 4*np.pi*rSphere**3/3
-    ylim=[1,nmax]
-    poisson_interval = 0.95
-    if density:
-        ylimHMF = np.array(ylim)/volSim
-        factor = 1.0/volSim
-    else:
-        ylimHMF = np.array(ylim)
-        factor = 1.0
-    if ax is None:
-        fig, ax = plt.subplots(1,1,figsize=(0.45*textwidth,0.45*textwidth))
-    handles = plotMassFunction(masses,volSim,ax=ax,\
-        Om0=referenceSnapOld.properties['omegaM0'],\
-        h=referenceSnapOld.properties['h'],ns=ns,\
-            Delta=200,sigma8=sigma8,fontsize=fontsize,\
-            legendFontsize=legendFontsize,font="serif",\
-            Ob0=Ob0,mass_function=mass_function,delta_wrt=delta_wrt,\
-            massLower=mlow,massUpper=mupp,figsize=(4,4),\
-            marker=marker,linestyle=linestyle,\
-            color=plotColour,colorTheory = colorTheory,\
-            nBins=nMassBins,poisson_interval = poisson_interval,\
-            legendLoc=legendLoc,\
-            label=label,transfer_model=transfer_model,fname=fname,\
-            xlabel=xlabel,ylabel=ylabel,\
-            ylim=ylim,title=title,showLegend=showLegend,\
-            tickRight=tickRight,tickLeft=tickLeft,savename=savename,\
-            showTheory=showTheory,returnHandles=True)
-    if mLimLower is None:
-        mLimLower = mlow
-    ax.set_xlim((mLimLower,mupp))
-    # Add in the comparison with the unconstrained data:
-    if comparableHaloMasses is not None:
-        nsamples = len(comparableHaloMasses)
-        hmfUnderdense = [plot.computeMeanHMF(hmasses,massLower = mlow,\
-                        massUpper = mupp,nBins = nMassBins) \
-                        for hmasses in comparableHaloMasses]
-        #hmfUnderdensePoisson = np.array(scipy.stats.poisson(\
-        #    np.sum(np.array([hmf[0] \
-        #    for hmf in hmfUnderdense]),0)).interval(poisson_interval))/\
-        #    nsamples
-        hmfUnderdenseMean = np.mean(np.array([hmf[0] \
-            for hmf in hmfUnderdense]),0)
-        hmfUnderdensePoisson = np.array(scipy.stats.poisson(\
-            np.mean(np.array([hmf[0] \
-            for hmf in hmfUnderdense]),0)).interval(poisson_interval))
-        massBins = 10**(np.linspace(np.log10(mlow),np.log10(mupp),\
-            nMassBins))
-        massBinCentres = plot.binCentres(massBins)
-        handles.append(ax.fill_between(massBinCentres,\
-            hmfUnderdensePoisson[0]*factor,\
-            hmfUnderdensePoisson[1]*factor,\
-            label = 'Unconstrained, \n' + \
-            '$' + ("%.2g" % (deltaListMean - deltaListError)) + \
-            ' \\leq \\delta < ' + \
-            ("%.2g" % (deltaListMean + deltaListError)) + \
-            '$',color=compColour,alpha=0.5))
-    plt.tight_layout()
-    if xticks is not None:
-        ax.get_xaxis().set_major_formatter(\
-            matplotlib.ticker.ScalarFormatter())
-        #ax.xaxis.get_major_formatter().set_scientific(True)
-        ax.set_xticks(xticks)
-        ax.xaxis.set_ticklabels([plot.scientificNotation(i,latex=True) \
-            for i in xticks])
-    if savename is not None:
-        plt.savefig(savename)
-    if returnHandles:
-        return handles
-
-singleMassFunctionPlot(constrainedHaloMasses512Old,5e13,2e15,11,\
+plot.singleMassFunctionPlot(constrainedHaloMasses512Old,5e13,2e15,11,\
     Om0=referenceSnapOld.properties['omegaM0'],\
     h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
     Ob0=0.04825,mLimLower=mLimLower,\
@@ -513,7 +493,7 @@ singleMassFunctionPlot(constrainedHaloMasses512Old,5e13,2e15,11,\
     savename=figuresFolder + "pm10_mass_function.pdf",showTheory=False)
 
 
-singleMassFunctionPlot(constrainedHaloMasses512New,5e13,2e15,11,\
+plot.singleMassFunctionPlot(constrainedHaloMasses512New,5e13,2e15,11,\
     Om0=referenceSnap.properties['omegaM0'],\
     h=referenceSnap.properties['h'],ns=0.9665,sigma8=0.8102,\
     Ob0=0.04897468161869667,mLimLower=mLimLower,\
@@ -523,20 +503,11 @@ singleMassFunctionPlot(constrainedHaloMasses512New,5e13,2e15,11,\
     label="COLA20 constrained",showTheory=False)
 
 
-def flatten(handles):
-    handlesOut = []
-    for h in handles:
-        if type(h) == list:
-            handlesOut += flatten(h)
-        else:
-            handlesOut.append(h)
-    return handlesOut
-
 # HMF/AMF comparison:
 textwidth=7.1014
 fontsize=8
 fig, ax = plt.subplots(1,2,figsize=(textwidth,0.5*textwidth))
-singleMassFunctionPlot(constrainedHaloMasses512Old,5e13,2e15,11,\
+plot.singleMassFunctionPlot(constrainedHaloMasses512Old,5e13,2e15,11,\
     Om0=referenceSnapOld.properties['omegaM0'],\
     h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
     Ob0=0.04825,mLimLower=mLimLower,\
@@ -546,8 +517,8 @@ singleMassFunctionPlot(constrainedHaloMasses512Old,5e13,2e15,11,\
     savename=None,showTheory=False,legendLoc='lower left',\
     ax=ax[0],ylabel='Number of halos',showLegend=False,\
     title="Halos",xticks=[2e14,5e14,1e15])
-handles = singleMassFunctionPlot(constrainedAntihaloMasses512Old,5e13,2e15,11,\
-    Om0=referenceSnapOld.properties['omegaM0'],\
+handles = plot.singleMassFunctionPlot(constrainedAntihaloMasses512Old,\
+    5e13,2e15,11,Om0=referenceSnapOld.properties['omegaM0'],\
     h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
     Ob0=0.04825,mLimLower=mLimLower,\
     fontsize=fontsize,legendFontsize=fontsize,\
@@ -557,8 +528,8 @@ handles = singleMassFunctionPlot(constrainedAntihaloMasses512Old,5e13,2e15,11,\
     ax=ax[1],ylabel='Number of antihalos',returnHandles=True,showLegend=False,\
     title="Antihalos",xticks=[2e14,5e14,1e15])
 plt.tight_layout()
-ax[1].legend(handles=handles,prop={"size":fontsize,"family":"serif"},
-            loc='upper right',frameon=False)
+ax[1].legend(handles=tools.flatten(handles),\
+    prop={"size":fontsize,"family":"serif"},loc='upper right',frameon=False)
 plt.savefig(figuresFolder + "pm10_amf_hmf.pdf")
 plt.show()
 
@@ -569,7 +540,7 @@ plt.show()
 textwidth=7.1014
 fontsize=8
 fig, ax = plt.subplots(1,2,figsize=(textwidth,0.5*textwidth))
-singleMassFunctionPlot(constrainedHaloMasses512New,5e13,2e15,11,\
+plot.singleMassFunctionPlot(constrainedHaloMasses512New,5e13,2e15,11,\
     Om0=referenceSnapOld.properties['omegaM0'],\
     h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
     Ob0=0.04825,mLimLower=mLimLower,\
@@ -579,8 +550,8 @@ singleMassFunctionPlot(constrainedHaloMasses512New,5e13,2e15,11,\
     fontsize=fontsize,legendFontsize=fontsize,\
     ax=ax[0],ylabel='Number of halos',showLegend=False,\
     title="Halos",label="COLA20 constrained",xticks=[2e14,5e14,1e15])
-handles = singleMassFunctionPlot(constrainedAntihaloMasses512New,5e13,2e15,11,\
-    Om0=referenceSnapOld.properties['omegaM0'],\
+handles = plot.singleMassFunctionPlot(constrainedAntihaloMasses512New,\
+    5e13,2e15,11,Om0=referenceSnapOld.properties['omegaM0'],\
     h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
     Ob0=0.04825,mLimLower=mLimLower,\
     comparableHaloMasses=comparableAntihaloMassesNew,\
@@ -589,8 +560,8 @@ handles = singleMassFunctionPlot(constrainedAntihaloMasses512New,5e13,2e15,11,\
     ax=ax[1],ylabel='Number of antihalos',returnHandles=True,showLegend=False,\
     title="Antihalos",label="COLA20 constrained",xticks=[2e14,5e14,1e15])
 plt.tight_layout()
-ax[1].legend(handles=flatten(handles),prop={"size":fontsize,"family":"serif"},
-            loc='upper right',frameon=False)
+ax[1].legend(handles=tools.flatten(handles),\
+    prop={"size":fontsize,"family":"serif"},loc='upper right',frameon=False)
 plt.savefig(figuresFolder + "cola20_amf_hmf.pdf")
 plt.show()
 
@@ -604,7 +575,7 @@ if doHMFs:
             constrainedHaloMasses512New,deltaListMeanNew,deltaListErrorNew,\
             comparableHaloMassesNew,constrainedAntihaloMasses512New,\
             comparableAntihaloMassesNew,centralHalosNew,centralAntihalosNew,\
-            centralHaloMassesNew,centralAntihaloMassesNew,\
+            centralHaloMassesNew,centralAntihaloMassesNew,showTheory=False,\
             savename = figuresFolder + "hmf_amf_underdense_comparison.pdf",\
             xlim = (mLimLower,3e15),nMassBins=11,mLower=1e14,mUpper=3e15)
 
@@ -773,6 +744,10 @@ tools.remapBORGSimulation(snapToShow,swapXZ=False,reverse=True)
 
 snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
         + "gadget_full_forward_512/snapshot_001") for snapNum in snapNumList]
+snapListRev =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
+        + "gadget_full_reverse_512/snapshot_001") for snapNum in snapNumList]
+
+hrList = [snap.halos() for snap in snapListRev]
 
 for snap in snapList:
     tools.remapBORGSimulation(snap,swapXZ=False,reverse=True)
@@ -885,6 +860,7 @@ colourListAll = []
 laListAll = []
 labelListAll = []
 
+
 if doSky:
     #
     #plot.plotLocalUniverseMollweide(rCut,snapToShow,\
@@ -908,13 +884,22 @@ if doSky:
         colourList = []
         laList = []
         labelList = []
+        fullList = np.array(centralAntihalos[ns][0])[sortedList[ns]]
         for k in range(0,np.min([nVoidsToShow,len(selection)])):
             if catToUse[selection[k],ns] > 0:
-                finder = np.where(largeAntihalos_all[ns] == np.where(\
-                    centralAntihalos[ns][1])[0][\
-                    finalCatOpt[combinedFilter135][selection[k],ns]-1])[0]
-                asList.append(alpha_shape_list_all[ns][1][finder[0]])
-                laList.append(largeAntihalos_all[ns][finder[0]])
+                listPosition = fullList[finalCatOpt[combinedFilter135][selection[k],ns]-1]
+                if listPosition >= len(largeAntihalos_all[ns]):
+                    print("Alpha shape not computed! " + \
+                        "Computing on the fly for anti-halo " + \
+                        str(finalCatOpt[combinedFilter135][selection[k],ns]-1))
+                    [ahMWPos,alpha_shapes] = tools.computeMollweideAlphaShapes(\
+                        snapList[ns],np.array([fullList[listPosition]]),\
+                        hrList[ns])
+                    asList.append(alpha_shapes[0])
+                    laList.append(fullList[listPosition])
+                else:
+                    asList.append(alpha_shape_list_all[ns][1][listPosition])
+                    laList.append(largeAntihalos_all[ns][listPosition])
                 colourList.append(seabornColormap[np.mod(k,len(seabornColormap))])
                 labelList.append(str(k+1))
         asListAll.append(asList)
@@ -1025,7 +1010,6 @@ sampleList = ["sample7422","sample7500","sample8000",\
 clusterFilter = np.array([2,4,6],dtype=int) # Coma, Shapley, Hercules A
 doCon=True
 
-from void_analyis.plot import plotMassTypeComparison
 
 if doCon:
     plot.plotMassTypeComparison(np.array(massList200c)[:,:,clusterFilter],\

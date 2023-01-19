@@ -25,6 +25,7 @@ from astropy import stats
 from descartes import PolygonPatch
 import seaborn as sns
 from matplotlib.ticker import NullFormatter
+import matplotlib
 # Use seaborn colours:
 seabornColormap = sns.color_palette("colorblind",as_cmap=True)
 
@@ -2993,6 +2994,204 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
 
 
 
+def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,\
+        Delta=200,sigma8=0.8,fontsize=12,legendFontsize=10,font="serif",\
+        Ob0=0.049,mass_function='Tinker',delta_wrt='SOCritical',massLower=5e13,\
+        massUpper=1e15,figsize=(4,4),marker='x',linestyle='--',\
+        color=None,colorTheory = None,\
+        nBins=21,poisson_interval = 0.95,legendLoc='lower left',\
+        label="Gadget Simulation",transfer_model='EH',fname=None,\
+        xlabel="Mass [$M_{\odot}h^{-1}$]",ylabel="Number of halos",\
+        ylim=[1e1,2e4],title="Gadget Simulation",showLegend=True,\
+        tickRight=False,tickLeft=True,savename=None,\
+        linking_length=0.2,showTheory=True,returnHandles=False):
+    [dndm,m] = cosmology.TMF_from_hmf(massLower,massUpper,\
+        h=h,Om0=Om0,Delta=Delta,delta_wrt=delta_wrt,\
+        mass_function=mass_function,sigma8=sigma8,Ob0 = Ob0,\
+        transfer_model=transfer_model,fname=fname,ns=ns,\
+        linking_length=linking_length)
+    massBins = 10**np.linspace(np.log10(massLower),np.log10(massUpper),nBins)
+    if showTheory:
+        n = cosmology.dndm_to_n(m,dndm,massBins)
+        bounds = np.array(scipy.stats.poisson(n*volSim).interval(\
+            poisson_interval))
+    alphaO2 = (1.0 - poisson_interval)/2.0
+    massBinCentres = plot_utilities.binCentres(massBins)
+    if type(masses) == list:
+        [noInBins,sigmaBins] = plot.computeMeanHMF(masses,\
+            massLower=massLower,massUpper=massUpper,nBins = nBins)
+    else:
+        noInBins = plot_utilities.binValues(masses,massBins)[1]
+        sigmaBins = np.abs(np.array([scipy.stats.chi2.ppf(\
+            alphaO2,2*noInBins)/2,\
+            scipy.stats.chi2.ppf(1.0 - alphaO2,2*(noInBins+1))/2]) - \
+            noInBins)
+    if ax is None:
+        fig, ax = plt.subplots(1,1,figsize=(8,4))
+    if color is None:
+        color = seabornColormap[0]
+    handles = []
+    handles.append(ax.errorbar(massBinCentres,noInBins,sigmaBins,marker=marker,\
+        linestyle=linestyle,label=label,color=color))
+    if showTheory:
+        if colorTheory is None:
+            colorTheory = colorTheory
+        handles.append(ax.plot(massBinCentres,n*volSim,":",\
+            label=mass_function + ' prediction',color=colorTheory))
+        handles.append(ax.fill_between(massBinCentres,
+                        bounds[0],bounds[1],
+                        facecolor=colorTheory,alpha=0.5,interpolate=True,\
+                        label='$' + str(100*poisson_interval) + \
+                        '\%$ Confidence \nInterval'))
+    if showLegend:
+        ax.legend(prop={"size":legendFontsize,"family":font},
+            loc=legendLoc,frameon=False)
+    ax.set_title(title,fontsize=fontsize,fontfamily=font)
+    ax.set_xlabel(xlabel,fontsize=fontsize,fontfamily=font)
+    ax.set_ylabel(ylabel,fontsize=fontsize,fontfamily=font)
+    ax.tick_params(axis='both',labelsize=fontsize,\
+        labelright=tickRight,right=tickRight)
+    ax.tick_params(axis='both',which='minor',bottom=True,labelsize=fontsize)
+    ax.tick_params(axis='y',which='minor')
+    ax.yaxis.grid(color='grey',linestyle=':',alpha=0.5)
+    ax.set_ylim(ylim)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    if savename is not None:
+        plt.tight_layout()
+        plt.savefig(savename)
+    if returnHandles:
+        return handles
+
+def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
+        Delta=200,sigma8=0.8,fontsize=12,legendFontsize=10,font="serif",\
+        Ob0=0.049,mass_function='Tinker',delta_wrt='SOCritical',massLower=5e13,\
+        massUpper=1e15,figsize=(8,4),marker='x',linestyle='--',ax=None,\
+        color=seabornColormap[0],colorTheory = seabornColormap[1],\
+        nBins=21,poisson_interval = 0.95,legendLoc='lower left',\
+        labelLeft = 'Gadget Simulation',labelRight='ML Simulation',\
+        xlabel="Mass [$M_{\odot}h^{-1}$]",ylabel="Number of halos",\
+        ylim=[1e1,2e4],savename=None,show=True,transfer_model='EH',fname=None,\
+        returnAx = False,ns=1.0,rows=1,cols=2,titleLeft = "Gadget Simulation",\
+        titleRight = "Gadget Simulation",saveLeft=None,saveRight=None,\
+        ylimRight=None,volSimRight=None):
+    if ax is None:
+        fig, ax = plt.subplots(rows,cols,figsize=(8,4))
+    if volSimRight is None:
+        volSimRight = volSim
+    if ylimRight is None:
+        ylimRight = ylim
+    plotMassFunction(massesLeft,volSim,ax=ax[0],Om0=Om0,h=h,ns=ns,\
+        Delta=Delta,sigma8=sigma8,fontsize=fontsize,\
+        legendFontsize=legendFontsize,font="serif",\
+        Ob0=Ob0,mass_function=mass_function,delta_wrt=delta_wrt,\
+        massLower=massLower,title=titleLeft,\
+        massUpper=massUpper,marker=marker,linestyle=linestyle,\
+        color=color,colorTheory = colorTheory,\
+        nBins=nBins,poisson_interval = poisson_interval,legendLoc=legendLoc,\
+        label=labelLeft,transfer_model=transfer_model,ylim=ylim,\
+        savename=saveLeft)
+    plotMassFunction(massesRight,volSimRight,ax=ax[1],Om0=Om0,h=h,ns=ns,\
+        Delta=Delta,sigma8=sigma8,fontsize=fontsize,\
+        legendFontsize=legendFontsize,font="serif",\
+        Ob0=Ob0,mass_function=mass_function,delta_wrt=delta_wrt,\
+        massLower=massLower,title = titleRight,\
+        massUpper=massUpper,marker=marker,linestyle=linestyle,\
+        color=color,colorTheory = colorTheory,\
+        nBins=nBins,poisson_interval = poisson_interval,legendLoc=legendLoc,\
+        label=labelRight,transfer_model=transfer_model,ylim=ylimRight,\
+        savename=saveRight)
+    plt.tight_layout()
+    if savename is not None:
+        plt.savefig(savename)
+    if show:
+        plt.show()
+    if returnAx:
+        return ax
+
+
+
+
+def singleMassFunctionPlot(masses,mlow,mupp,nMassBins,textwidth=7.1014,\
+        mLimLower=None,comparableHaloMasses=None,\
+        rSphere=135,density=False,poisson_interval=0.95,nmax=200,\
+        ns=0.9611,Om0=0.3,sigma8=0.8,Ob0=0.04825,h=0.7,\
+        mass_function='Tinker',delta_wrt='SOCritical',\
+        marker='x',linestyle='--',plotColour=seabornColormap[0],\
+        colorTheory = seabornColormap[1],\
+        legendLoc='lower left',label="PM10 constrained",transfer_model='EH',\
+        fname=None,xlabel="Mass [$M_{\odot}h^{-1}$]",ylabel="Number of halos",\
+        title=None,showLegend=True,tickRight=False,tickLeft=True,\
+        savename=None,compColour=seabornColormap[0],volSim=None,\
+        deltaListMean=-0.06,deltaListError=0.003,showTheory=True,ax=None,\
+        returnHandles=False,xticks=None,fontsize=11,legendFontsize=11):
+    if volSim is None:
+        volSim = 4*np.pi*rSphere**3/3
+    ylim=[1,nmax]
+    poisson_interval = 0.95
+    if density:
+        ylimHMF = np.array(ylim)/volSim
+        factor = 1.0/volSim
+    else:
+        ylimHMF = np.array(ylim)
+        factor = 1.0
+    if ax is None:
+        fig, ax = plt.subplots(1,1,figsize=(0.45*textwidth,0.45*textwidth))
+    handles = plotMassFunction(masses,volSim,ax=ax,\
+            Om0=Om0,h=h,ns=ns,Delta=200,sigma8=sigma8,fontsize=fontsize,\
+            legendFontsize=legendFontsize,font="serif",\
+            Ob0=Ob0,mass_function=mass_function,delta_wrt=delta_wrt,\
+            massLower=mlow,massUpper=mupp,figsize=(4,4),\
+            marker=marker,linestyle=linestyle,\
+            color=plotColour,colorTheory = colorTheory,\
+            nBins=nMassBins,poisson_interval = poisson_interval,\
+            legendLoc=legendLoc,\
+            label=label,transfer_model=transfer_model,fname=fname,\
+            xlabel=xlabel,ylabel=ylabel,\
+            ylim=ylim,title=title,showLegend=showLegend,\
+            tickRight=tickRight,tickLeft=tickLeft,savename=savename,\
+            showTheory=showTheory,returnHandles=True)
+    if mLimLower is None:
+        mLimLower = mlow
+    ax.set_xlim((mLimLower,mupp))
+    # Add in the comparison with the unconstrained data:
+    if comparableHaloMasses is not None:
+        nsamples = len(comparableHaloMasses)
+        hmfUnderdense = [computeMeanHMF(hmasses,massLower = mlow,\
+                        massUpper = mupp,nBins = nMassBins) \
+                        for hmasses in comparableHaloMasses]
+        #hmfUnderdensePoisson = np.array(scipy.stats.poisson(\
+        #    np.sum(np.array([hmf[0] \
+        #    for hmf in hmfUnderdense]),0)).interval(poisson_interval))/\
+        #    nsamples
+        hmfUnderdenseMean = np.mean(np.array([hmf[0] \
+            for hmf in hmfUnderdense]),0)
+        hmfUnderdensePoisson = np.array(scipy.stats.poisson(\
+            np.mean(np.array([hmf[0] \
+            for hmf in hmfUnderdense]),0)).interval(poisson_interval))
+        massBins = 10**(np.linspace(np.log10(mlow),np.log10(mupp),\
+            nMassBins))
+        massBinCentres = binCentres(massBins)
+        handles.append(ax.fill_between(massBinCentres,\
+            hmfUnderdensePoisson[0]*factor,\
+            hmfUnderdensePoisson[1]*factor,\
+            label = 'Unconstrained, \n' + \
+            '$' + ("%.2g" % (deltaListMean - deltaListError)) + \
+            ' \\leq \\delta < ' + \
+            ("%.2g" % (deltaListMean + deltaListError)) + \
+            '$',color=compColour,alpha=0.5))
+    plt.tight_layout()
+    if xticks is not None:
+        ax.get_xaxis().set_major_formatter(\
+            matplotlib.ticker.ScalarFormatter())
+        #ax.xaxis.get_major_formatter().set_scientific(True)
+        ax.set_xticks(xticks)
+        ax.xaxis.set_ticklabels([scientificNotation(i,latex=True) \
+            for i in xticks])
+    if savename is not None:
+        plt.savefig(savename)
+    if returnHandles:
+        return handles
 
 
 
