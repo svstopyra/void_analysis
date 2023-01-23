@@ -266,6 +266,15 @@ filename = "profiles_plot_data.p"
         fluxList5,fluxList10,\
         fluxListFull5,fluxListFull10] = pickle.load(open(filename,"rb"))
 
+filename2 = "profiles_plot_data_random.p"
+[clusterProfiles2,clusterProfilesFull2,densityListBORGPM2,\
+        densityListPM2,densityListCOLA2,densityList10242,densityListEPS_0p6622,\
+        densityListLogCOLA2, densityListLogPM2,\
+        massList100m2,massListFull100m2,\
+        massList200c2,massListFull200c2,\
+        fluxList52,fluxList102,\
+        fluxListFull52,fluxListFull102] = pickle.load(open(filename2,"rb"))
+
 # Antihalo sky plot data:
 if runTests:
     testComputation(testDataFolder + "skyplot_pipeline_test.p",\
@@ -887,21 +896,23 @@ if doSky:
         fullList = np.array(centralAntihalos[ns][0])[sortedList[ns]]
         for k in range(0,np.min([nVoidsToShow,len(selection)])):
             if catToUse[selection[k],ns] > 0:
-                listPosition = fullList[finalCatOpt[combinedFilter135][selection[k],ns]-1]
+                listPosition = finalCatOpt[combinedFilter135][selection[k],ns]-1
+                ahNumber = fullList[listPosition]
                 if listPosition >= len(largeAntihalos_all[ns]):
-                    print("Alpha shape not computed! " + \
-                        "Computing on the fly for anti-halo " + \
-                        str(finalCatOpt[combinedFilter135][selection[k],ns]-1))
+                    print("Alpha shape not computed for void " + str(k+1) + \
+                        "! " + "Computing on the fly for anti-halo " + \
+                        str(listPosition) + " (number " + str(ahNumber) + ")")
                     [ahMWPos,alpha_shapes] = tools.computeMollweideAlphaShapes(\
-                        snapList[ns],np.array([fullList[listPosition]]),\
+                        snapList[ns],np.array([ahNumber]),\
                         hrList[ns])
                     asList.append(alpha_shapes[0])
-                    laList.append(fullList[listPosition])
                 else:
                     asList.append(alpha_shape_list_all[ns][1][listPosition])
-                    laList.append(largeAntihalos_all[ns][listPosition])
+                laList.append(ahNumber)
                 colourList.append(seabornColormap[np.mod(k,len(seabornColormap))])
                 labelList.append(str(k+1))
+            print("Done for void " + str(k+1))
+        print("Done for sample " + str(ns+1))
         asListAll.append(asList)
         colourListAll.append(colourList)
         laListAll.append(laList)
@@ -910,7 +921,7 @@ if doSky:
     for ns in range(0,len(snapNumList)):
         plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
             alpha_shapes = asListAll[ns],\
-            largeAntihalos = laListAll[ns],hr=antihaloCatalogueList[ns],\
+            largeAntihalos = laListAll[ns],hr=hrList[ns],\
             coordAbell = coordCombinedAbellSphere,\
             abellListLocation = clusterIndMain,\
             nameListLargeClusters = [name[0] for name in clusterNames],\
@@ -1026,7 +1037,31 @@ if doCon:
         massName = "M",extraMasses = None,extraMassLabel = 'Extra mass scale',\
         xlabel='Number of Steps',\
         returnHandles=False,showLegend=True,nCols=3,showGADGET=False,\
-        figsize=(textwidth,0.7*textwidth),showResMasses=False)
+        figsize=(textwidth,0.7*textwidth),showResMasses=False,logy=True,\
+        ylim1=[1e13,1e16],ylim2=[1e13,1e16])
+
+
+
+if doCon:
+    clusterFilter2 = np.array([1,2,3],dtype=int)
+    plot.plotMassTypeComparison(np.array(massList200c2)[:,:,clusterFilter2],\
+        np.array(massListFull200c2)[:,clusterFilter2],\
+        np.array(massList100m2)[:,:,clusterFilter2],\
+        np.array(massListFull100m2)[:,clusterFilter2],\
+        stepsListGADGET,stepsList,logstepsList,stepsList1024,\
+        stepsListEPS_0p662,resStepsList,np.array([["Cluster " + str(k)] \
+        for k in clusterFilter2]),\
+        name1 = "$M_{200\\mathrm{c}}$",name2 = "$M_{100\\mathrm{m}}$",\
+        show=True,save = True,colorLinear = seabornColormap[0],\
+        colorLog=seabornColormap[1],colorGadget='k',colorAdaptive='grey',\
+        showGadgetAdaptive = True,\
+        savename = figuresFolder + "mass_convergence_comparison_random.pdf",\
+        massName = "M",extraMasses = None,extraMassLabel = 'Extra mass scale',\
+        xlabel='Number of Steps',\
+        returnHandles=False,showLegend=True,nCols=3,showGADGET=False,\
+        figsize=(textwidth,0.7*textwidth),showResMasses=False,\
+        ylim1=[1e13,1e16],ylim2=[1e13,1e16],logy=True)
+
 
 #-------------------------------------------------------------------------------
 # COMA PROFILES TEST

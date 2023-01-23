@@ -2754,7 +2754,7 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
         fontsize=8,fontfamily='serif',colorRes = seabornColormap[2],\
         showGADGET=True,showPM=True,showCOLA=True,markerRes='x',\
         showResMasses = True,resList = [256,512,1024,2048],\
-        resToShow=None,figsize=None,title=None):
+        resToShow=None,figsize=None,title=None,logy=False):
     if resToShow is None:
         resToShow = np.arange(0,len(resList))
     nsamples = len(massList1)
@@ -2964,6 +2964,9 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
         ax[0,l].tick_params(axis='both', which='minor', labelsize=fontsize)
         ax[1,l].tick_params(axis='both', which='major', labelsize=fontsize)
         ax[1,l].tick_params(axis='both', which='minor', labelsize=fontsize)
+        if logy:
+            ax[0,l].set_yscale('log')
+            ax[1,l].set_yscale('log')
     plt.subplots_adjust(wspace=wspace,hspace=hspace,top=top,bottom=bottom,\
         left=left,right=right)
     # Legend:
