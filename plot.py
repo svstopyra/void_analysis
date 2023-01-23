@@ -3018,7 +3018,7 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,\
     alphaO2 = (1.0 - poisson_interval)/2.0
     massBinCentres = plot_utilities.binCentres(massBins)
     if type(masses) == list:
-        [noInBins,sigmaBins] = plot.computeMeanHMF(masses,\
+        [noInBins,sigmaBins] = computeMeanHMF(masses,\
             massLower=massLower,massUpper=massUpper,nBins = nBins)
     else:
         noInBins = plot_utilities.binValues(masses,massBins)[1]
