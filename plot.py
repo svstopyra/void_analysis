@@ -562,8 +562,8 @@ def filterPolarPointsToAnnulus(lonlat,r,radius,thickness = 15):
 def plotMollweide(radius,snap,galaxyAngles=None,galaxyDistances=None,
 		centre=np.array([0,0,0]),thickness=15,vmin=1e-2,vmax=1e2,cmap='PuOr_r',
 		shrink=0.5,pad=0.05,nside=64,showGalaxies=True,ax=None,title=None,
-		fontname='serif',fontsize=7,fig=None,guideColor='grey',boundaryOff=False,
-		titleFontSize=7,margins = (0,0,0,0),figsize = (8,4),xsize=800):
+		fontname='serif',fontsize=8,fig=None,guideColor='grey',boundaryOff=False,
+		titleFontSize=8,margins = (0,0,0,0),figsize = (8,4),xsize=800):
 	rhobar = (np.sum(snap['mass'])/\
 		(snap.properties['boxsize']**3)).in_units("Msol h**2 Mpc**-3")
 	sm = cm.ScalarMappable(colors.LogNorm(vmin=vmin,vmax=vmax),cmap=cmap)
@@ -1314,14 +1314,14 @@ def plotLocalUniverseMollweide(rCut,snap,
 		alpha_shapes = None,coordAbell = None,abellListLocation=None,
 		vmin=1e-2,vmax=1e2,title=None,showGalaxies=False,boundaryOff=True,
 		haloColour = 'b',s=30,haloMarker='c',clusterMarker='x',
-		labelFontSize = 7,arrowstyle='->',connectionstyle = "arc3,rad=0.",
+		labelFontSize = 8,arrowstyle='->',connectionstyle = "arc3,rad=0.",
 		arrowcolour = 'k',shrinkArrowB = 5,shrinkArrow = 5,arrowpad = 1,
 		largeAntihalos = None,hr=None,haloCentres=None,snapsort=None,alphaVal=7,
 		cmap='hsv',voidAlpha = 0.2,includeZOA = True,nPointsZOA = 201,
 		galacticCentreZOA = [-30,30],bRangeCentre = [-10,10],bRange = [-5,5],
 		nPointsEdgeZOA = 21,bbox_to_anchor=(-0.1, -0.2),legLoc='lower left',
-		legendFontSize = 7,antihaloCentres = None,figOut = None,showFig=True,
-		titleFontSize = 7,fontname = 'serif',margins = (0,0,0,0),figsize = (8,4),
+		legendFontSize = 8,antihaloCentres = None,figOut = None,showFig=True,
+		titleFontSize = 8,fontname = 'serif',margins = (0,0,0,0),figsize = (8,4),
 		xsize = 800,extent = None,bbox_inches = None,voidColour = None,
 		antiHaloLabel = 'haloID'):
 	plotMollweide(rCut/2,snap,galaxyAngles,galaxyDistances,thickness=rCut,
@@ -1974,7 +1974,7 @@ def plotPPTProfiles(expectedLine,realisedLine,title1 = "2M++ \nGalaxies",\
         axij.set_title(clusterNames[l][0],fontsize=fontsize,\
             fontfamily=fontfamily)
         formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim,\
-            nCols = nCols)
+            nCols = nCols,fontsize=fontsize)
         axij.tick_params(axis='both', which='major', labelsize=fontsize)
         axij.tick_params(axis='both', which='minor', labelsize=fontsize)
         if text is not None and textPos is not None:
@@ -2169,7 +2169,7 @@ def plotAverageHMF(haloMasses,boxsize,h=0.6766,omegaM0 = 0.3111,\
         label='Halos',labelLine='TMF prediction',\
         poisson_interval=0.95,volSim=None,\
         fill_alpha = 0.5,showLegend=True,legendFontsize=10,font="serif",\
-        fontsize=15,labelRight=True,gridcolor='grey',\
+        fontsize=8,labelRight=True,gridcolor='grey',\
         gridstyle=':',gridalpha=0.5,show=True,returnAx=False,\
         xlabel="Mass bin centre [$M_{\odot}h^{-1}$]",\
         ylabel="Number of Halos",title="Halo Mass function",\
@@ -2258,7 +2258,7 @@ def plotHMFAMFComparison(constrainedHaloMasses512Old,deltaListMeanOld,\
         comparableHaloMassesNew,constrainedAntihaloMasses512New,\
         comparableAntihaloMassesNew,referenceSnap,referenceSnapOld,\
         savename = None,ylabelStartOld = 'Old reconstruction',\
-        ylabelStartNew = 'New reconstruction',fontsize=10,legendFontsize=8,\
+        ylabelStartNew = 'New reconstruction',fontsize=8,legendFontsize=8,\
         textwidth=7.1014,nMassBins = 11,mLower = 1e14,\
         mUpper = 3e15,mass_function = 'Tinker',showTheory=False,\
         xlim = (1.5e13,3e15),ylim = (1e-1,1e2),\
@@ -2484,7 +2484,7 @@ def plotHMFAMFUnderdenseComparison(\
         comparableHaloMasses,constrainedAntihaloMasses512,\
         comparableAntihaloMasses,centralHalos,centralAntihalos,\
         centralHaloMasses,centralAntihaloMasses,\
-        savename = None,fontsize=10,legendFontsize=8,\
+        savename = None,fontsize=8,legendFontsize=8,\
         textwidth=7.1014,nMassBins = 11,mLower = 1e14,\
         mUpper = 3e15,mass_function = 'Tinker',showTheory=False,\
         xlim = (1.5e13,3e15),ylim = (1e-1,1e2),\
@@ -2690,7 +2690,7 @@ def plotVoidProfilesPaper(rBinStackCentres,nbarjMean,sigmaMean,nbar,\
         errorAlpha=0.5,meanErrorLabel = 'Unconstrained \nMean',\
         profileErrorLabel = 'Profile \nvariation \n',colourRand = 'grey',
         title=None,showTitle=True,rMin=5,mMin=1e11,mMax=1e16,\
-        legendFontSize=12,fontname="serif",fontsize=12,frameon=False,\
+        legendFontSize=8,fontname="serif",fontsize=8,frameon=False,\
         legendLoc = 'upper right',bottom=0.125,left=0.125,includeLegend=True,\
         show = True,hideYLabels = False,ylim = [0,1.4],xlim=None,\
         guideColour = 'grey',guideStyle='--',savename=None,ax=None):
@@ -2998,7 +2998,7 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
 
 
 def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,\
-        Delta=200,sigma8=0.8,fontsize=12,legendFontsize=10,font="serif",\
+        Delta=200,sigma8=0.8,fontsize=8,legendFontsize=8,font="serif",\
         Ob0=0.049,mass_function='Tinker',delta_wrt='SOCritical',massLower=5e13,\
         massUpper=1e15,figsize=(4,4),marker='x',linestyle='--',\
         color=None,colorTheory = None,\
@@ -3067,7 +3067,7 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,\
         return handles
 
 def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
-        Delta=200,sigma8=0.8,fontsize=12,legendFontsize=10,font="serif",\
+        Delta=200,sigma8=0.8,fontsize=8,legendFontsize=8,font="serif",\
         Ob0=0.049,mass_function='Tinker',delta_wrt='SOCritical',massLower=5e13,\
         massUpper=1e15,figsize=(8,4),marker='x',linestyle='--',ax=None,\
         color=seabornColormap[0],colorTheory = seabornColormap[1],\
@@ -3127,7 +3127,7 @@ def singleMassFunctionPlot(masses,mlow,mupp,nMassBins,textwidth=7.1014,\
         title=None,showLegend=True,tickRight=False,tickLeft=True,\
         savename=None,compColour=seabornColormap[0],volSim=None,\
         deltaListMean=-0.06,deltaListError=0.003,showTheory=True,ax=None,\
-        returnHandles=False,xticks=None,fontsize=11,legendFontsize=11):
+        returnHandles=False,xticks=None,fontsize=8,legendFontsize=11):
     if volSim is None:
         volSim = 4*np.pi*rSphere**3/3
     ylim=[1,nmax]

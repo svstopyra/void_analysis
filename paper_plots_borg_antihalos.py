@@ -468,7 +468,7 @@ if doPPTs:
         ylim=[1,1000],\
         show=True,rBins=rBins,clusterNames=clusterNames,rescale=False,\
         density=False,legLoc = [0.3,0.1],hspace=0.3,\
-        ylabel='Number of galaxies $ < r$',height=0.7)
+        ylabel='Number of galaxies $ < r$',height=0.7,fontsize=8)
 
 #-------------------------------------------------------------------------------
 # HMF/AMF PLOT:
@@ -640,6 +640,7 @@ def plotBiasForm(deltaRange,biasFormLowMean,biasFormHighMean,\
     ax.set_xscale('log')
     ax.set_xlabel(xlabel,fontsize=fontsize,fontfamily=fontfamily)
     ax.set_ylabel(ylabel,fontsize=fontsize,fontfamily=fontfamily)
+    ax.tick_params(axis='both',labelsize=fontsize)
     ax.set_ylim(ylim)
     if showLegend:
         plt.legend()
@@ -972,7 +973,7 @@ if doCat:
         ylabel="Number of antihalos",savename=figuresFolder + \
         "mass_function_combined_300vs135.pdf",massLower=mLower,\
         ylim=[1,1000],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,\
-        fontsize=10,massUpper = mUpper,\
+        fontsize=8,massUpper = mUpper,\
         titleLeft = "Combined catalogue, $<135\\mathrm{Mpc}h^{-1}$",\
         titleRight = "Combined catalogue, $<300\\mathrm{Mpc}h^{-1}$",\
         volSimRight = volSphere,ylimRight=[1,1000],legendLoc="upper right")
@@ -985,8 +986,8 @@ if doCat:
 doProfiles = False
 if doCat and doProfiles:
     textwidth=7.1014
-    fontsize = 12
-    legendFontsize=10
+    fontsize = 8
+    legendFontsize=8
     fig, ax = plt.subplots(1,1,figsize=(0.5*textwidth,0.5*textwidth))
     plot.plotVoidProfilesPaper(rBinStackCentres,nbarMean,sigmaMean,nbar,\
         stacking.weightedMean(nbarjUnSameRadii,1.0/sigmaUnSameRadii**2,axis=0),\
@@ -994,7 +995,7 @@ if doCat and doProfiles:
         1.0/sigmaUnSameRadii**2,axis=0)/nbarjUnSameRadii.shape[0]),\
         np.sqrt(stacking.weightedVariance(nbarjUnSameRadii,\
         1.0/sigmaUnSameRadii**2,axis=0)),ax=ax,show=False,\
-        title="Combined BORG Catalogue",legendFontSize=10,\
+        title="Combined BORG Catalogue",legendFontSize=legendFontsize,\
         legendLoc='lower right',xlim=[0,3])
     #ax[0].axhline(0.95,color='grey',linestyle=':')
     #ax[1].axhline(0.95,color='grey',linestyle=':')
