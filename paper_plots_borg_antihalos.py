@@ -966,7 +966,7 @@ if doCat:
     # Check mass functions:
     volSphere135 = 4*np.pi*rSphereInner**3/3
     volSphere = 4*np.pi*rSphere**3/3
-    massFunctionComparison(massListMean[combinedFilter135],\
+    plot.massFunctionComparison(massListMean[combinedFilter135],\
         massListMean[combinedFilter],volSphere135,nBins=nBins,\
         labelLeft = "Combined catalogue",\
         labelRight  ="Combined catalogue",\
@@ -1056,7 +1056,7 @@ if doCon:
         show=True,save = True,colorLinear = seabornColormap[0],\
         colorLog=seabornColormap[1],colorGadget='k',colorAdaptive='grey',\
         showGadgetAdaptive = True,\
-        savename = figuresFolder + "mass_convergence_comparison_random.pdf",\
+        savename = figuresFolder + "mass_convergence_comparison_other.pdf",\
         massName = "M",extraMasses = None,extraMassLabel = 'Extra mass scale',\
         xlabel='Number of Steps',\
         returnHandles=False,showLegend=True,nCols=3,showGADGET=False,\
