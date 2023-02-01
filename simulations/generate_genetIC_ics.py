@@ -106,7 +106,6 @@ if args.transfer_file is None:
     krange = np.exp(np.linspace(np.log(args.kmin),np.log(args.kmax),\
         args.ksteps))
     psBORGCalc = borg.cosmo.CosmoPower(cosmo_par).power(krange)
-    #psBORGCalc = borg.cosmo.CosmoPower(cosmo_par,z=args.zin).power(krange)
     transferBORG = np.sqrt(psBORGCalc/(krange**args.ns))
     transferBORG /= transferBORG[0] # Normalise
     # Write to file:

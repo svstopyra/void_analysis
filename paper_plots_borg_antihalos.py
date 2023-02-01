@@ -851,6 +851,112 @@ if doClusterMasses:
                     getBORGClusterMassEstimates,snapNameList,clusterLoc,\
                     equatorialXYZ,_recomputeData=recomputeData)
 
+
+diff = clusterCentres - meanCentres
+dist = np.sqrt(np.sum(diff**2,2))
+meanDist = np.mean(dist,0)
+stdDist = np.std(dist,0)
+
+
+# Plots showing the distribution of masses:
+from matplotlib.ticker import NullFormatter
+
+nCols = 3
+nRows = 3
+logMlow = 13
+logMhigh = 15.2
+nBins = 11
+fontsize=8
+textwidth=7.1014
+ylim=[0,10]
+fig, ax = plt.subplots(3,3,figsize=(textwidth,textwidth))
+plt.subplots_adjust(hspace=0.16,wspace=0.0)
+for l in range(0,nRows*nCols):
+    i = int(l/nCols)
+    j = l - nCols*i
+    localHigh = np.log10(np.max(clusterMasses[:,l]))
+    localLow = np.log10(np.min(clusterMasses[:,l]))
+    ax[i,j].hist(clusterMasses[:,l],\
+        bins=10**(np.linspace(logMlow,logMhigh,nBins)),alpha=0.5,\
+        color=seabornColormap[0])
+    plot.formatPlotGrid(ax,i,j,1,"Number of samples",1,\
+        "Mass [$M_{\\odot}h^{-1}$]",nRows,ylim,nCols = nCols,\
+        fontsize=fontsize,xlim=[10**logMlow,10**logMhigh])
+    ax[i,j].axvline(meanMasses[l],linestyle='--',color='grey',\
+        label="Mean: $" + \
+        ("%.2g" % (meanMasses[l]/1e15)) + "\\times10^{15}M_{\\odot}h^{-1}$" + \
+        "\nSt. dev.: $" + \
+        ("%.2g" % (stdMasses[l]/1e15)) + "\\times10^{15}M_{\\odot}h^{-1}$")
+    ax[i,j].set_xscale('log')
+    ax[i,j].set_title(clusterNames[l][0],fontsize=fontsize)
+    ax[i,j].set_xlim([10**logMlow,10**logMhigh])
+    ax[i,j].set_xticks([1e13,1e14,1e15])
+    if i < nRows - 1:
+        ax[i,j].xaxis.label.set_visible(False)
+        ax[i,j].xaxis.set_major_formatter(NullFormatter())
+        ax[i,j].xaxis.set_minor_formatter(NullFormatter())
+    if i < nRows -1:
+        ax[i,j].get_yticklabels()[0].set_visible(False)
+    if j < nCols -1:
+        ax[i,j].get_xticklabels()[-1].set_visible(False)
+    ax[i,j].legend(prop={"size":fontsize,"family":"serif"},frameon=False,\
+        loc="upper right")
+
+plt.suptitle("Mass distribution across 20 MCMC resimulations")
+plt.savefig(figuresFolder + "mass_distribution_plot.pdf")
+plt.show()
+
+
+# Distance distribution:
+nCols = 3
+nRows = 3
+distLow = 0
+distHigh = 15
+nBins = 7
+fontsize=8
+textwidth=7.1014
+ylim=[0,20]
+fig, ax = plt.subplots(3,3,figsize=(textwidth,textwidth))
+for l in range(0,nRows*nCols):
+    i = int(l/nCols)
+    j = l - nCols*i
+    localHigh = np.max(dist[:,l])
+    localLow = np.min(dist[:,l])
+    ax[i,j].hist(dist[:,l],\
+        bins=np.linspace(distLow,distHigh,nBins),alpha=0.5,\
+        color=seabornColormap[0])
+    plot.formatPlotGrid(ax,i,j,1,"Number of samples",1,\
+        "Distance from mean centre [$\\mathrm{Mpc}h^{-1}$]",nRows,ylim,\
+        nCols = nCols,fontsize=fontsize,xlim=[distLow,distHigh])
+    ax[i,j].axvline(meanDist[l],linestyle='--',color='grey',\
+        label="Mean: $" + ("%.2g" % meanDist[l]) + \
+        "\\mathrm{Mpc}h^{-1}$\nSt. dev.: $" + ("%.2g" % stdDist[l]) + \
+        "\\mathrm{Mpc}h^{-1}$")
+    ax[i,j].set_title(clusterNames[l][0],fontsize=fontsize)
+    if i < nRows - 1:
+        ax[i,j].xaxis.label.set_visible(False)
+        ax[i,j].xaxis.set_major_formatter(NullFormatter())
+        ax[i,j].xaxis.set_minor_formatter(NullFormatter())
+    if i < nRows -1:
+        ax[i,j].get_yticklabels()[0].set_visible(False)
+    if j < nCols -1:
+        ax[i,j].get_xticklabels()[-1].set_visible(False)
+    ax[i,j].legend(prop={"size":fontsize,"family":"serif"},frameon=False,\
+        loc="upper right")
+
+plt.subplots_adjust(hspace=0.16,wspace=0.0)
+plt.suptitle("Displacement from mean centre across 20 MCMC resimulations")
+
+plt.savefig(figuresFolder + "displacement_distribution_plot.pdf")
+plt.show()
+
+
+
+
+
+
+
+
 sortedRadiiOpt = np.flip(np.argsort(catData['radii'][combinedFilter135]))
 catToUse = finalCatOpt[combinedFilter135]
 haveVoids = [np.where(catToUse[:,ns] > 0)[0] \

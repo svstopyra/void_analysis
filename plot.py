@@ -1909,6 +1909,8 @@ def formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim=None,\
             axij = ax
     else:
         axij = ax[i,j]
+    axij.set_ylim(ylim)
+    axij.set_xlim(xlim)
     if j > 0:
         axij.yaxis.label.set_visible(False)
         axij.yaxis.set_major_formatter(NullFormatter())
@@ -1927,8 +1929,6 @@ def formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim=None,\
     else:
         if (j == xlabelCol) and (i == nRows-1):
             axij.set_xlabel(xlabel,fontsize=fontsize,fontfamily=fontfamily)
-    axij.set_ylim(ylim)
-    axij.set_xlim(xlim)
 
 
 # Plot the Posterior Predictive Test for a set of clusters. That is, we compare
