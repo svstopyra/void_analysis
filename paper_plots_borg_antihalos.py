@@ -461,6 +461,14 @@ suffix = ''
 #rBins = np.logspace(np.log10(0.1),np.log10(20),31)
 rBins = np.linspace(0.1,20,nBinsPPT+1)
 
+binAbs = 0
+binApp = 0
+nCat = 2*binAbs + binApp
+
+mAbs = np.linspace(-21,-25,9)
+mApp = ["m<11.5","12.5 \\leq m < 12.5"]
+mAppName = ["Bright catalogue", "Dim Catalogue"]
+
 if doPPTs:
     plot.plotPPTProfiles(np.sum(galaxyNumberCountExp,2),\
         np.sum(galaxyNumberCountsRobust,2),\
@@ -469,6 +477,16 @@ if doPPTs:
         show=True,rBins=rBins,clusterNames=clusterNames,rescale=False,\
         density=False,legLoc = [0.3,0.1],hspace=0.3,\
         ylabel='Number of galaxies $ < r$',height=0.7,fontsize=8)
+    nCat = 2*binAbs + binApp
+    plot.plotPPTProfiles(galaxyNumberCountExp[:,:,nCat],\
+        galaxyNumberCountsRobust[:,:,nCat],\
+        savename=figuresFolder + "ppt_Ngal_robust_" + str(nCat) + suffix + \
+        ".pdf",ylim=[1,1000],\
+        show=True,rBins=rBins,clusterNames=clusterNames,rescale=False,\
+        density=False,legLoc = [0.3,0.1],hspace=0.3,\
+        ylabel='Number of galaxies $ < r$',height=0.7,fontsize=8,\
+        title="$" + str(mAbs[binAbs]) + " \\leq M < " + \
+        str(mAbs[binAbs+1]) + "$, " + mAppName[binApp],top=0.88)
 
 #-------------------------------------------------------------------------------
 # HMF/AMF PLOT:
@@ -858,6 +876,19 @@ meanDist = np.mean(dist,0)
 stdDist = np.std(dist,0)
 
 
+# Posterior centres:
+posteriorCentres = []
+for ns in range(0,len(snapNumList)):
+    posteriorCentres.append(tools.loadPickle(snapNameList[ns] + ".clusters1"))
+
+allCentresPost = snapedit.unwrap(np.array(posteriorCentres) + boxsize/2,boxsize)
+meanCentresPost = np.mean(allCentresPost,0)
+diffPost = allCentres - meanCentresPost
+distPost = np.sqrt(np.sum(diffPost**2,2))
+meanDistPost = np.mean(distPost,0)
+stdDistPost = np.std(distPost,0)
+
+
 # Plots showing the distribution of masses:
 from matplotlib.ticker import NullFormatter
 
@@ -1108,6 +1139,85 @@ if doCat and doProfiles:
     plt.tight_layout()
     plt.savefig(figuresFolder + "profiles_plot_vs_underdense.pdf")
     plt.show()
+
+#-------------------------------------------------------------------------------
+# DENSITY SLICE PLOT
+
+from void_analysis.plot import plotDensitySlice, plotDensityComparison
+
+import glob
+from PIL import Image
+
+
+cl = 0 # Cluster to plot
+sm = 0 # sample to plot
+
+densitiesHR = [np.fromfile("new_chain/sample" + str(snap) + \
+    "/gadget_full_forward_512/snapshot_001.a_den",\
+    dtype=np.float32) for snap in snapNumList]
+densities256 = [np.reshape(density,(256,256,256),order='C') \
+    for density in densitiesHR]
+densities256F = [np.reshape(density,(256,256,256),order='F') \
+    for density in densitiesHR]
+
+
+# Load data from MCMC chains:
+N = 256
+newChain = [h5py.File("new_chain/sample" + str(k) + "/mcmc_" + str(k) + \
+    ".h5",'r') for k in snapNumList]
+mcmcDen = [1.0 + sample['scalars']['BORG_final_density'][()] \
+    for sample in newChain]
+mcmcDenLin = [np.reshape(den,N**3) for den in mcmcDen]
+mcmcDen_r = [np.reshape(den,(256,256,256),order='F') for den in mcmcDenLin]
+mcmcDenLin_r = [np.reshape(den,256**3) for den in mcmcDen_r]
+
+biasMCMC = [np.array([[sample['scalars']['galaxy_bias_' + str(k)][()] \
+    for k in range(0,16)]]) for sample in  newChain]
+
+nmeansMCMC = [np.array([[sample['scalars']['galaxy_nmean_' + str(k)][()] \
+    for k in range(0,16)]]) for sample in newChain]
+
+
+
+
+# Density slice comparison:
+for cl in range(0,9):
+    for ns in range(0,len(snapNumList)):
+        plt.clf()
+        ax = plotDensityComparison(np.flip(densities256[ns]),mcmcDen_r[ns],N=256,\
+            centre1=clusterLoc[cl,:],\
+            centre2=clusterLoc[cl,:],width = 50,thickness=20,\
+            textLeft = "Resimulation Density (real space)",\
+            textRight="Posterior Density (z-space)",\
+            title="Sample " + str(ns+1) + ", Density Field around " + clusterNames[cl][0],vmax = 1000,\
+            vmin=1/1000,\
+            markCentre=True,losAxis=1,showGalaxies=False,flipCentreLeft=False,\
+            flipCentreRight=False,flipLeft=True,flipRight=False,\
+            invertAxisLeft=False,invertAxisRight=False,\
+            flipudLeft=False,flipudRight=False,fliplrLeft=False,fliplrRight=False,\
+            swapXZLeft=True,swapXZRight=False,\
+            gal_position=equatorialXYZ,returnAx=True,show=False)
+        ax[0].scatter(clusterCentres[ns][cl,0],clusterCentres[ns][cl,2],marker='x',color='k')
+        ax[1].scatter(allCentresPost[ns][cl,0],allCentresPost[ns][cl,2],marker='x',color='k')
+        plt.savefig(figuresFolder + "cluster_" + str(cl) + "_sample_" + str(ns) + ".png")
+    frames = []
+    #imgs = glob.glob(figuresFolder + "cluster_" + str(cl) + "*.png")
+    imgs = [figuresFolder + "cluster_" + str(cl) + "_sample_" + str(ns) + ".png" \
+        for ns in range(0,len(snapNumList))]
+    for i in imgs:
+        new_frame = Image.open(i)
+        frames.append(new_frame)
+    # Save into a GIF file that loops forever
+    frames[0].save(figuresFolder + 'clusters_plot_' + str(cl) + '.gif', format='GIF',
+                   append_images=frames[1:],
+                   save_all=True,
+                   duration=1000, loop=0)
+
+
+
+
+
+
 
 
 #-------------------------------------------------------------------------------
