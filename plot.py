@@ -2019,6 +2019,8 @@ def plotPPTProfiles(expectedLine,realisedLine,title1 = "2M++ \nGalaxies",\
                 h4 = axij.fill_between(binCentres(rBins)[nz3],bounds[0][nz3],\
                     bounds[1][nz3],facecolor=intervalColour2,\
                     alpha = 0.5,label = "Samples variation")
+            else:
+                h4 = None
         axij.set_title(clusterNames[l][0],fontsize=fontsize,\
             fontfamily=fontfamily)
         formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim,\

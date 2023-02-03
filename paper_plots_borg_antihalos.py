@@ -500,7 +500,7 @@ if doPPTs:
         show=True,rBins=rBins,clusterNames=clusterNames,rescale=False,\
         density=False,legLoc = [0.3,0.1],hspace=0.3,\
         ylabel='Number of galaxies $ < r$',height=0.7,fontsize=8,\
-        showPoissonRange=False,color2='grey')
+        showPoissonRange=False,color2='grey',showVariance=False)
     plot.plotPPTProfiles(np.sum(galaxyNumberCountExp,2),\
         np.sum(galaxyNumberCountsRobustAll,3),\
         savename=figuresFolder + "ppt_Ngal_poisson" + suffix + ".pdf",\
