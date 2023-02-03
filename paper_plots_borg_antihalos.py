@@ -500,7 +500,15 @@ if doPPTs:
         show=True,rBins=rBins,clusterNames=clusterNames,rescale=False,\
         density=False,legLoc = [0.3,0.1],hspace=0.3,\
         ylabel='Number of galaxies $ < r$',height=0.7,fontsize=8,\
-        showPoissonRange=False)
+        showPoissonRange=False,color2='grey')
+    plot.plotPPTProfiles(np.sum(galaxyNumberCountExp,2),\
+        np.sum(galaxyNumberCountsRobustAll,3),\
+        savename=figuresFolder + "ppt_Ngal_poisson" + suffix + ".pdf",\
+        ylim=[1,1000],\
+        show=True,rBins=rBins,clusterNames=clusterNames,rescale=False,\
+        density=False,legLoc = [0.3,0.1],hspace=0.3,\
+        ylabel='Number of galaxies $ < r$',height=0.7,fontsize=8,\
+        showPoissonRange=True,color2='grey')
 
 # Density profiles around each cluster:
 nRows = 3
@@ -509,6 +517,8 @@ rBinCentres = plot.binCentres(rBins)
 Om0 = 0.3111
 rhoM = Om0*2.7754e11
 binVolumes = 4*np.pi*rBins[1:]**3/3
+textwidth=7.1014
+fontfamily = 'serif'
 fig, ax = plt.subplots(nRows,nCols,figsize=(textwidth,0.7*textwidth))
 for l in range(0,nRows*nCols):
     i = int(l/nCols)
@@ -530,7 +540,7 @@ for l in range(0,nRows*nCols):
         alpha=0.5,color='grey',label='Standard deviation')
     axij.set_xlabel('$r [\\mathrm{Mpc}h^{-1}]$')
     axij.set_ylabel('$\\rho/\\bar{\\rho}$')
-    formatPlotGrid(ax,i,j,1,'$\\rho/\\bar{\\rho}$',1,\
+    plot.formatPlotGrid(ax,i,j,1,'$\\rho/\\bar{\\rho}$',1,\
         '$r [\\mathrm{Mpc}h^{-1}]$',nRows,[0,50],nCols = nCols,fontsize=8,\
         xlim=[0,20])
     axij.tick_params(axis='both', which='major', labelsize=fontsize)
@@ -841,7 +851,7 @@ rBinCentres = plot.binCentres(rBins)
 Om0 = 0.3111
 rhoM = Om0*2.7754e11
 binVolumes = 4*np.pi*rBins[1:]**3/3
-nMagBbins = 16
+nMagBins = 16
 mAbs = 3
 mApp = 0
 for mAbs in range(0,8):
@@ -864,20 +874,24 @@ for mAbs in range(0,8):
                 biasForm[ns,:,m] = biasFunctionalForm(meanProfile - 1.0,\
                     biasParam[ns][0,m,1],biasParam[ns][0,m,3],\
                     biasParam[ns][0,m,2])
-        biasFormMean = np.mean(biasForm,0)
-        biasFormStd = np.std(biasForm,0)
+        logbiasFormMean = np.mean(np.log(biasForm),0)
+        logbiasFormStd = np.std(np.log(biasForm),0)
         h1 = axij.fill_between(rBinCentres,\
-            biasFormMean[:,2*mAbs] - biasFormStd[:,2*mAbs],\
-            biasFormMean[:,2*mAbs] + biasFormStd[:,2*mAbs],\
+            np.exp(logbiasFormMean[:,2*mAbs] - logbiasFormStd[:,2*mAbs]),\
+            np.exp(logbiasFormMean[:,2*mAbs] + logbiasFormStd[:,2*mAbs]),\
             color=seabornColormap[0],alpha=0.5,label='$m \\leq 11.5$')
+        h11 = axij.plot(rBinCentres,biasForm[:,:,2*mAbs].T,linestyle=':',\
+            color=seabornColormap[0],label="Individual \nSamples (Bright)")
         h2 = axij.fill_between(rBinCentres,\
-            biasFormMean[:,2*mAbs+1] - biasFormStd[:,2*mAbs+1],\
-            biasFormMean[:,2*mAbs+1] + biasFormStd[:,2*mAbs+1],\
+            np.exp(logbiasFormMean[:,2*mAbs+1] - logbiasFormStd[:,2*mAbs+1]),\
+            np.exp(logbiasFormMean[:,2*mAbs+1] + logbiasFormStd[:,2*mAbs+1]),\
             color=seabornColormap[1],alpha=0.5,label='$11.5 < m \\leq 12.5$')
+        h21 = axij.plot(rBinCentres,biasForm[:,:,2*mAbs+1].T,linestyle=':',\
+            color=seabornColormap[1],label="Individual \nSamples (Dim)")
         axij.set_xlabel('$r [\\mathrm{Mpc}h^{-1}]$')
         axij.set_ylabel('Bias functional form')
         axij.set_yscale('log')
-        formatPlotGrid(ax,i,j,1,'Bias functional form',1,\
+        plot.formatPlotGrid(ax,i,j,1,'Bias functional form',1,\
             '$r [\\mathrm{Mpc}h^{-1}]$',nRows,[1e-5,1],nCols = nCols,\
             fontsize=8,xlim=[0,20])
         axij.tick_params(axis='both', which='major', labelsize=fontsize)
@@ -900,10 +914,10 @@ for mAbs in range(0,8):
             ("%.2g" % (100*galaxyFractions[l,2*mAbs+1])) + "%",fontsize=8)
     plt.suptitle("Cluster Bias functional forms ($" + str(MabsList[mAbs]) + \
         " < M < " + str(MabsList[mAbs+1]) + "$)",fontsize=12)
-    ax[2,1].legend(handles=[h1],\
+    ax[2,1].legend(handles=[h1,h11[0]],\
         prop={"size":fontsize,"family":fontfamily},frameon=False,\
         loc="lower right")
-    ax[2,2].legend(handles=[h2],\
+    ax[2,2].legend(handles=[h2,h21[0]],\
         prop={"size":fontsize,"family":fontfamily},frameon=False,\
         loc="lower right")
     plt.subplots_adjust(wspace=0.0)

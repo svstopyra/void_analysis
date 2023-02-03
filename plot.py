@@ -1947,7 +1947,8 @@ def plotPPTProfiles(expectedLine,realisedLine,title1 = "2M++ \nGalaxies",\
         splitLegend=True,legLoc=[0.3,0.7],color1='k',color2='k',\
         ax=None,fig=None,density=True,textwidth=7.1014,width=1,height=1,\
         top=0.940,bottom=0.105,left=0.095,right=0.980,hspace=0.215,wspace=0.0,\
-        intervalColour2='k',showPoissonRange=True,sigmaFactor=2):
+        intervalColour2='k',showPoissonRange=True,sigmaFactor=2,\
+        showVariance=True):
     if rBins is None:
         rBins = np.linspace(0,20,21)
     if clusterNames is None:
@@ -2014,9 +2015,10 @@ def plotPPTProfiles(expectedLine,realisedLine,title1 = "2M++ \nGalaxies",\
                     alpha = 0.5,label = intervalLabel)
             else:
                 h3 = None
-            h4 = axij.fill_between(binCentres(rBins)[nz3],bounds[0][nz3],\
-                bounds[1][nz3],facecolor=intervalColour2,\
-                alpha = 0.5,label = "Samples variation")
+            if showVariance:
+                h4 = axij.fill_between(binCentres(rBins)[nz3],bounds[0][nz3],\
+                    bounds[1][nz3],facecolor=intervalColour2,\
+                    alpha = 0.5,label = "Samples variation")
         axij.set_title(clusterNames[l][0],fontsize=fontsize,\
             fontfamily=fontfamily)
         formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim,\
