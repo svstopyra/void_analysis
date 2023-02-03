@@ -1966,7 +1966,7 @@ def plotPPTProfiles(expectedLine,realisedLine,title1 = "2M++ \nGalaxies",\
             axij = ax
         else:
             axij = ax[i,j]
-        if len(realisedLine[:,l]) == 1:
+        if len(realisedLine[:,l].shape) == 1:
             [h1,h2,h3] = computeAndPlotPPTProfile(axij,expectedLine[:,l],\
                 realisedLine[:,l],rBins,rescale=rescale,style1 = style1,\
                 style2 = style2,title1 = title1,title2 = title2,\
