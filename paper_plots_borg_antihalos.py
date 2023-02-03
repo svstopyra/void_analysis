@@ -508,7 +508,7 @@ if doPPTs:
         show=True,rBins=rBins,clusterNames=clusterNames,rescale=False,\
         density=False,legLoc = [0.3,0.1],hspace=0.3,\
         ylabel='Number of galaxies $ < r$',height=0.7,fontsize=8,\
-        showPoissonRange=True,color2='grey')
+        showPoissonRange=True,color2='grey',showVariance=False)
 
 # Density profiles around each cluster:
 nRows = 3

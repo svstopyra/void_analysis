@@ -1988,9 +1988,6 @@ def plotPPTProfiles(expectedLine,realisedLine,title1 = "2M++ \nGalaxies",\
                 factorReal = 1
             nz1 = np.where(expectedLine[:,l] > 0)[0]
             nz2 = np.where(realisedLine[:,l] > 0)
-            h1 = axij.semilogy(binCentres(rBins)[nz1],expectedLine[:,l][nz1]\
-                /factorExp,linestyle=style1,color=color1,\
-                label=title1)
             h2 = axij.semilogy(binCentres(rBins)[:,None],\
                 realisedLine[:,l]/factorReal,\
                 linestyle=style2,color=color2,label = title2)
@@ -2021,6 +2018,9 @@ def plotPPTProfiles(expectedLine,realisedLine,title1 = "2M++ \nGalaxies",\
                     alpha = 0.5,label = "Samples variation")
             else:
                 h4 = None
+            h1 = axij.semilogy(binCentres(rBins)[nz1],expectedLine[:,l][nz1]\
+                /factorExp,linestyle=style1,color=color1,\
+                label=title1)
         axij.set_title(clusterNames[l][0],fontsize=fontsize,\
             fontfamily=fontfamily)
         formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim,\
