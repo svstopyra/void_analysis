@@ -570,11 +570,75 @@ plt.subplots_adjust(wspace=0.0)
 plt.savefig(figuresFolder + "cluster_density_plots.pdf")
 plt.show()
 
+
+
+
+# Mass profiles around each cluster:
+nRows = 3
+nCols = 3
+rBinCentres = plot.binCentres(rBins)
+Om0 = 0.3111
+rhoM = Om0*2.7754e11
+binVolumes = 4*np.pi*rBins[1:]**3/3
+textwidth=7.1014
+fontfamily = 'serif'
+fig, ax = plt.subplots(nRows,nCols,figsize=(textwidth,0.7*textwidth))
+for l in range(0,nRows*nCols):
+    i = int(l/nCols)
+    j = l - nCols*i
+    if nCols == 1 and nRows == 1:
+        axij = ax
+    else:
+        axij = ax[i,j]
+    meanProfile = np.mean(posteriorMassAll[:,l,:],1)
+    stdProfile = np.std(posteriorMassAll[:,l,:],1)
+    h1 = axij.plot(rBinCentres,\
+        posteriorMassAll[:,l,:],\
+        linestyle=':',color='grey',label='Individual sample density')
+    h2 = axij.plot(rBinCentres,\
+        np.mean(posteriorMassAll[:,l,:],1),\
+        linestyle='-',color='k',label='Mean mass')
+    h3 = axij.fill_between(rBinCentres,\
+        meanProfile - stdProfile,meanProfile + stdProfile,\
+        alpha=0.5,color='grey',label='Standard deviation')
+    axij.set_yscale('log')
+    plot.formatPlotGrid(ax,i,j,1,'Cumulative Mass [$M_{\\odot}h^{-1}$]',1,\
+        '$r [\\mathrm{Mpc}h^{-1}]$',nRows,[1e13,1e16],nCols = nCols,fontsize=8,\
+        xlim=[0,20])
+    axij.tick_params(axis='both', which='major', labelsize=fontsize)
+    axij.tick_params(axis='both', which='minor', labelsize=fontsize)
+    if i < nRows - 1:
+        ax[i,j].xaxis.label.set_visible(False)
+        ax[i,j].xaxis.set_major_formatter(NullFormatter())
+        ax[i,j].xaxis.set_minor_formatter(NullFormatter())
+    if i < nRows -1:
+        ax[i,j].get_yticklabels()[0].set_visible(False)
+    if j < nCols -1:
+        ax[i,j].get_xticklabels()[-1].set_visible(False)
+    axij.set_title(clusterNames[l][0],fontsize=8)
+
+plt.suptitle("Cluster Mass profiles (redshift space posterior)",\
+    fontsize=12)
+ax[2,0].legend(handles=[h1[0]],\
+    prop={"size":fontsize,"family":fontfamily},frameon=False)
+ax[2,1].legend(handles=[h2[0]],\
+    prop={"size":fontsize,"family":fontfamily},frameon=False)
+ax[2,2].legend(handles=[h3],\
+    prop={"size":fontsize,"family":fontfamily},frameon=False)
+plt.subplots_adjust(wspace=0.0)
+plt.savefig(figuresFolder + "cluster_mass_plots.pdf")
+plt.show()
+
+
+
 # Density scatter plot (need to load relevant data):
-for cl in range(0,9):
+ns = 0
+for cl in [2]:
     plt.scatter(mcmcDenLin_r[ns][indicesGad[ns][cl]],\
         np.sum(ngMCMC[ns,:],0)[indicesGad[ns][cl]],marker='.',\
         color=seabornColormap[cl],label=clusterNames[cl][0])
+    plt.ylim([0,150])
+    plt.xlim([0,60])
 
 plt.xlabel('$\\rho/\\bar{\\rho} = 1+\\delta$')
 plt.ylabel('$N_{\\mathrm{gal}}$')
@@ -584,8 +648,8 @@ plt.show()
 
 # Density scatter vs actual 2M++ galaxies:
 for cl in range(0,9):
-    plt.scatter(mcmcDenLin_r[ns][indicesGad[ns][cl]],\
-        np.sum(ng2MPP[:],0)[indicesGad[ns][cl]],marker='.',\
+    plt.scatter(mcmcDenLin_r[ns][indices[cl]],\
+        np.sum(ng2MPP[:],0)[indices[cl]],marker='.',\
         color=seabornColormap[cl],label=clusterNames[cl][0])
 
 plt.xlabel('$\\rho/\\bar{\\rho} = 1+\\delta$')
