@@ -6,6 +6,7 @@ from void_analysis.real_clusters import getClusterSkyPositions
 from void_analysis import massconstraintsplot
 from matplotlib import transforms
 import matplotlib.ticker
+from matplotlib.ticker import NullFormatter
 import pickle
 import numpy as np
 import seaborn as sns
@@ -17,8 +18,8 @@ import scipy
 import os
 import sys
 
-figuresFolder = "borg-antihalos_paper_figures/all_samples/"
-#figuresFolder = "borg-antihalos_paper_figures/batch5-2/"
+#figuresFolder = "borg-antihalos_paper_figures/all_samples/"
+figuresFolder = "borg-antihalos_paper_figures/batch5-2/"
 
 recomputeData = False
 testDataFolder = figuresFolder + "tests_data/"
@@ -42,6 +43,15 @@ legendFontsize = 8
 #-------------------------------------------------------------------------------
 # DATA FOR PLOTS
 
+clusterNames = np.array([['Perseus-Pisces (A426)'],
+       ['Hercules B (A2147)'],
+       ['Coma (A1656)'],
+       ['Norma (A3627)'],
+       ['Shapley (A3571)'],
+       ['A548'],
+       ['Hercules A (A2199)'],
+       ['Hercules C (A2063)'],
+       ['Leo (A1367)']], dtype='<U21')
 
 
 # HMF plots data:
@@ -89,8 +99,11 @@ nBinsPPT = 30
 print("Doing ppts")
 doPPTs = True
 if doPPTs:
-    [galaxyNumberCountExp,galaxyNumberCountsRobust] = tools.loadOrRecompute(\
-        figuresFolder + "ppt_plots_data.p",getPPTPlotData,\
+    [galaxyNumberCountExp,galaxyNumberCountsRobust,\
+        galaxyNumberCountsRobustAll,galaxyCountSquaredAll,\
+        posteriorMassAll] = \
+        tools.loadOrRecompute(\
+            figuresFolder + "ppt_plots_data.p",getPPTPlotData,\
             _recomputeData = recomputeData,nBins = nBinsPPT,nClust=9,\
             nMagBins = 16,N=256,\
             restartFile = 'new_chain_restart/merged_restart.h5',\
@@ -445,15 +458,6 @@ antihaloCatalogueList = [snap.halos() for snap in snapListRev]
 #-------------------------------------------------------------------------------
 # PPTs PLOT:
 # Names of the clusters of interest for PPT plots:
-clusterNames = np.array([['Perseus-Pisces (A426)'],
-       ['Hercules B (A2147)'],
-       ['Coma (A1656)'],
-       ['Norma (A3627)'],
-       ['Shapley (A3571)'],
-       ['A548'],
-       ['Hercules A (A2199)'],
-       ['Hercules C (A2063)'],
-       ['Leo (A1367)']], dtype='<U21')
 
 # PPTs:
 # Options:
@@ -487,6 +491,70 @@ if doPPTs:
         ylabel='Number of galaxies $ < r$',height=0.7,fontsize=8,\
         title="$" + str(mAbs[binAbs]) + " \\leq M < " + \
         str(mAbs[binAbs+1]) + "$, " + mAppName[binApp],top=0.88)
+    plot.plotPPTProfiles(np.sum(galaxyNumberCountExp,2),\
+        np.sum(galaxyNumberCountsRobustAll,3),\
+        savename=figuresFolder + "ppt_Ngal_variance" + suffix + ".pdf",\
+        ylim=[1,1000],\
+        show=True,rBins=rBins,clusterNames=clusterNames,rescale=False,\
+        density=False,legLoc = [0.3,0.1],hspace=0.3,\
+        ylabel='Number of galaxies $ < r$',height=0.7,fontsize=8,\
+        showPoissonRange=False)
+
+# Density profiles around each cluster:
+nRows = 3
+nCols = 3
+rBinCentres = plot.binCentres(rBins)
+Om0 = 0.3111
+rhoM = Om0*2.7754e11
+binVolumes = 4*np.pi*rBins[1:]**3/3
+fig, ax = plt.subplots(nRows,nCols,figsize=(textwidth,0.7*textwidth))
+for l in range(0,nRows*nCols):
+    i = int(l/nCols)
+    j = l - nCols*i
+    if nCols == 1 and nRows == 1:
+        axij = ax
+    else:
+        axij = ax[i,j]
+    meanProfile = np.mean(posteriorMassAll[:,l,:]/(binVolumes[:,None]*rhoM),1)
+    stdProfile = np.std(posteriorMassAll[:,l,:]/(binVolumes[:,None]*rhoM),1)
+    h1 = axij.plot(rBinCentres,\
+        posteriorMassAll[:,l,:]/(binVolumes[:,None]*rhoM),\
+        linestyle=':',color='grey',label='Individual sample density')
+    h2 = axij.plot(rBinCentres,\
+        np.mean(posteriorMassAll[:,l,:]/(binVolumes[:,None]*rhoM),1),\
+        linestyle='-',color='k',label='Mean density')
+    h3 = axij.fill_between(rBinCentres,\
+        meanProfile - stdProfile,meanProfile + stdProfile,\
+        alpha=0.5,color='grey',label='Standard deviation')
+    axij.set_xlabel('$r [\\mathrm{Mpc}h^{-1}]$')
+    axij.set_ylabel('$\\rho/\\bar{\\rho}$')
+    formatPlotGrid(ax,i,j,1,'$\\rho/\\bar{\\rho}$',1,\
+        '$r [\\mathrm{Mpc}h^{-1}]$',nRows,[0,50],nCols = nCols,fontsize=8,\
+        xlim=[0,20])
+    axij.tick_params(axis='both', which='major', labelsize=fontsize)
+    axij.tick_params(axis='both', which='minor', labelsize=fontsize)
+    if i < nRows - 1:
+        ax[i,j].xaxis.label.set_visible(False)
+        ax[i,j].xaxis.set_major_formatter(NullFormatter())
+        ax[i,j].xaxis.set_minor_formatter(NullFormatter())
+    if i < nRows -1:
+        ax[i,j].get_yticklabels()[0].set_visible(False)
+    if j < nCols -1:
+        ax[i,j].get_xticklabels()[-1].set_visible(False)
+    axij.set_title(clusterNames[l][0],fontsize=8)
+
+plt.suptitle("Cluster Density profiles (redshift space posterior)",\
+    fontsize=12)
+ax[2,0].legend(handles=[h1[0]],\
+    prop={"size":fontsize,"family":fontfamily},frameon=False)
+ax[2,1].legend(handles=[h2[0]],\
+    prop={"size":fontsize,"family":fontfamily},frameon=False)
+ax[2,2].legend(handles=[h3],\
+    prop={"size":fontsize,"family":fontfamily},frameon=False)
+plt.subplots_adjust(wspace=0.0)
+plt.savefig(figuresFolder + "cluster_density_plots.pdf")
+plt.show()
+
 
 #-------------------------------------------------------------------------------
 # HMF/AMF PLOT:
@@ -890,7 +958,7 @@ stdDistPost = np.std(distPost,0)
 
 
 # Plots showing the distribution of masses:
-from matplotlib.ticker import NullFormatter
+
 
 nCols = 3
 nRows = 3
@@ -1184,34 +1252,38 @@ nmeansMCMC = [np.array([[sample['scalars']['galaxy_nmean_' + str(k)][()] \
 for cl in range(0,9):
     for ns in range(0,len(snapNumList)):
         plt.clf()
-        ax = plotDensityComparison(np.flip(densities256[ns]),mcmcDen_r[ns],N=256,\
-            centre1=clusterLoc[cl,:],\
-            centre2=clusterLoc[cl,:],width = 50,thickness=20,\
+        ax = plotDensityComparison(np.flip(densities256[ns]),mcmcDen_r[ns],\
+            N=256,centre1=clusterLoc[cl,:],centre2=clusterLoc[cl,:],\
+            width = 50,thickness=20,\
             textLeft = "Resimulation Density (real space)",\
             textRight="Posterior Density (z-space)",\
-            title="Sample " + str(ns+1) + ", Density Field around " + clusterNames[cl][0],vmax = 1000,\
-            vmin=1/1000,\
+            title="Sample " + str(ns+1) + ", Density Field around " + \
+            clusterNames[cl][0],vmax = 1000,vmin=1/1000,\
             markCentre=True,losAxis=1,showGalaxies=False,flipCentreLeft=False,\
             flipCentreRight=False,flipLeft=True,flipRight=False,\
             invertAxisLeft=False,invertAxisRight=False,\
-            flipudLeft=False,flipudRight=False,fliplrLeft=False,fliplrRight=False,\
-            swapXZLeft=True,swapXZRight=False,\
+            flipudLeft=False,flipudRight=False,fliplrLeft=False,\
+            fliplrRight=False,swapXZLeft=True,swapXZRight=False,\
             gal_position=equatorialXYZ,returnAx=True,show=False)
-        ax[0].scatter(clusterCentres[ns][cl,0],clusterCentres[ns][cl,2],marker='x',color='k')
-        ax[1].scatter(allCentresPost[ns][cl,0],allCentresPost[ns][cl,2],marker='x',color='k')
-        plt.savefig(figuresFolder + "cluster_" + str(cl) + "_sample_" + str(ns) + ".png")
+        ax[0].scatter(clusterCentres[ns][cl,0],clusterCentres[ns][cl,2],\
+            marker='x',color='k')
+        ax[1].scatter(allCentresPost[ns][cl,0],allCentresPost[ns][cl,2],\
+            marker='x',color='k')
+        plt.savefig(figuresFolder + "cluster_" + str(cl) + "_sample_" + \
+            str(ns) + ".png")
     frames = []
     #imgs = glob.glob(figuresFolder + "cluster_" + str(cl) + "*.png")
-    imgs = [figuresFolder + "cluster_" + str(cl) + "_sample_" + str(ns) + ".png" \
-        for ns in range(0,len(snapNumList))]
+    imgs = [figuresFolder + "cluster_" + str(cl) + "_sample_" + str(ns) + \
+        ".png" for ns in range(0,len(snapNumList))]
     for i in imgs:
         new_frame = Image.open(i)
         frames.append(new_frame)
     # Save into a GIF file that loops forever
-    frames[0].save(figuresFolder + 'clusters_plot_' + str(cl) + '.gif', format='GIF',
-                   append_images=frames[1:],
-                   save_all=True,
-                   duration=1000, loop=0)
+    frames[0].save(figuresFolder + 'clusters_plot_' + str(cl) + '.gif', \
+        format='GIF', append_images=frames[1:],save_all=True,duration=1000,\
+        loop=0)
+
+
 
 
 

@@ -1946,7 +1946,8 @@ def plotPPTProfiles(expectedLine,realisedLine,title1 = "2M++ \nGalaxies",\
         returnHandles=False,error=None,text=None,textPos=[0.1,0.1],\
         splitLegend=True,legLoc=[0.3,0.7],color1='k',color2='k',\
         ax=None,fig=None,density=True,textwidth=7.1014,width=1,height=1,\
-        top=0.940,bottom=0.105,left=0.095,right=0.980,hspace=0.215,wspace=0.0):
+        top=0.940,bottom=0.105,left=0.095,right=0.980,hspace=0.215,wspace=0.0,\
+        intervalColour2='k',showPoissonRange=True,sigmaFactor=2):
     if rBins is None:
         rBins = np.linspace(0,20,21)
     if clusterNames is None:
@@ -1965,12 +1966,57 @@ def plotPPTProfiles(expectedLine,realisedLine,title1 = "2M++ \nGalaxies",\
             axij = ax
         else:
             axij = ax[i,j]
-        [h1,h2,h3] = computeAndPlotPPTProfile(axij,expectedLine[:,l],\
-            realisedLine[:,l],rBins,rescale=rescale,style1 = style1,\
-            style2 = style2,title1 = title1,title2 = title2,\
-            error=errorToPass,intervalColour=intervalColour,\
-            intervalLabel = intervalLabel,color1=color1,color2=color2,\
-            density=density)
+        if len(realisedLine[:,l]) == 1:
+            [h1,h2,h3] = computeAndPlotPPTProfile(axij,expectedLine[:,l],\
+                realisedLine[:,l],rBins,rescale=rescale,style1 = style1,\
+                style2 = style2,title1 = title1,title2 = title2,\
+                error=errorToPass,intervalColour=intervalColour,\
+                intervalLabel = intervalLabel,color1=color1,color2=color2,\
+                density=density)
+            h4 = None
+        else:
+            # Have multiple lines to plot. We handle this by plotting all
+            # of them, or an average
+            if rescale:
+                factorExp = expectedLine[-1]
+                factorReal = realisedLine[-1]
+                ylabel = "$n_{\\mathrm{gal}}(<r)/" + \
+                    "n_{\\mathrm{gal}}(<20\\mathrm{Mpc}h^{-1})$"
+            else:
+                factorExp = 1
+                factorReal = 1
+            nz1 = np.where(expectedLine[:,l] > 0)[0]
+            nz2 = np.where(realisedLine[:,l] > 0)
+            h1 = axij.semilogy(binCentres(rBins)[nz1],expectedLine[:,l][nz1]\
+                /factorExp,linestyle=style1,color=color1,\
+                label=title1)
+            h2 = axij.semilogy(binCentres(rBins)[:,None],\
+                realisedLine[:,l]/factorReal,\
+                linestyle=style2,color=color2,label = title2)
+            std = np.std(realisedLine[:,l]/factorReal,1)
+            mean = np.mean(realisedLine[:,l]/factorReal,1)
+            bounds = [mean + sigmaFactor*std,mean - sigmaFactor*std]
+            nz3 = np.where(mean > 0)[0]
+            if error is None:
+                if density:
+                    bounds2 = (scipy.stats.poisson(mean[nz3]*\
+                        (4*np.pi*rBins[1:][nz3]**3/3)).interval(0.95)/\
+                        (4*np.pi*rBins[1:][nz3]**3/3))/factorReal
+                else:
+                    bounds2 = scipy.stats.poisson(mean[nz3]).interval(0.95)
+            else:
+                # Standard deviation of the mean:
+                bounds2 = [(mean[nz3] - error[nz3])/factorReal,\
+                    (mean[nz3] + error[nz3])/factorReal]
+            if showPoissonRange:
+                h3 = axij.fill_between(binCentres(rBins)[nz3],bounds2[0],\
+                    bounds2[1],facecolor=intervalColour,\
+                    alpha = 0.5,label = intervalLabel)
+            else:
+                h3 = None
+            h4 = axij.fill_between(binCentres(rBins)[nz3],bounds[0][nz3],\
+                bounds[1][nz3],facecolor=intervalColour2,\
+                alpha = 0.5,label = "Samples variation")
         axij.set_title(clusterNames[l][0],fontsize=fontsize,\
             fontfamily=fontfamily)
         formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim,\
@@ -1990,7 +2036,10 @@ def plotPPTProfiles(expectedLine,realisedLine,title1 = "2M++ \nGalaxies",\
             handleList = [[] for k in range(0,nRows)]
             handleList[np.mod(0,nRows)].append(h1[0])
             handleList[np.mod(1,nRows)].append(h2[0])
-            handleList[np.mod(2,nRows)].append(h3)
+            if h3 is not None:
+                handleList[np.mod(2,nRows)].append(h3)
+            if h4 is not None:
+                handleList[np.mod(2,nRows)].append(h4)
             for k in range(0,nRows):
                 if len(handleList[k]) > 0:
                     if nCols == 1 and nRows == 1:

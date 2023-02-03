@@ -138,8 +138,11 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
         _recomputeData=recomputeData)
     # Obtain galaxy counts:
     nsamples = len(snapNumList)
-    galaxyCountExp = np.zeros((nBins,nClust,nMagBins))
-    galaxyCountsRobustAll = np.zeros((nBins,nClust,nsamples,nMagBins))
+    galaxyDensityExp = np.zeros((nBins,nClust,nMagBins))
+    galaxyDensityRobustAll = np.zeros((nBins,nClust,nsamples,nMagBins))
+    galaxyCountSquaredAll = np.zeros((nBins,nClust,nMagBins))
+    posteriorMassAll = np.zeros((nBins,nClust,nsamples))
+    mUnit = Om0*2.7754e11*(boxsize/N)**3
     # Obtain properties:
     rBins = np.linspace(rBinMin,rBinMax,nBins+1)
     wrappedPos = snapedit.wrap(clusterLoc + boxsize/2,boxsize)
@@ -204,8 +207,10 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
             iterations=iterations))
     if verbose:
         print("Computing radial galaxy counts...")
+    doVariance = False
     # Loop over all bins:
     for k in range(0,nBins):
+        print("Bin " + str(k) + " of " + str(nBins))
         indices = tree.query_ball_point(wrappedPos,rBins[k+1])
         if centreMethod == "snapshot":
             indicesGad = [tree.query_ball_point(\
@@ -215,25 +220,58 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
             indicesGad = [tree.query_ball_point(\
                 snapedit.wrap(centres,boxsize),rBins[k+1]) \
                 for centres in clusterCentresSim]
+        elif centreMethod == "fixed":
+            indicesGad = [indices for centres in clusterCentresSim]
         if np.any(np.array(indices,dtype=bool)):
             for l in range(0,nClust):
+                print("Cluster " + str(l) + " of " + str(nClust))
                 for m in range(0,nMagBins):
-                    galaxyCountExp[k,l,m] = np.sum(ng2MPP[m][indices[l]])/\
+                    print("MagBin " + str(m) + " of " + str(nMagBins))
+                    galaxyDensityExp[k,l,m] = np.sum(ng2MPP[m][indices[l]])/\
                         (4*np.pi*rBins[k+1]**3/3)
                     for n in range(0,nsamples):
-                        galaxyCountsRobustAll[k,l,n,m] += np.sum(\
+                        print("Samples " + str(n) + " of " + str(nsamples))
+                        galaxyDensityRobustAll[k,l,n,m] += np.sum(\
                             Aalpha[n,m,hpIndicesLinear[indicesGad[n][l]]]*\
                             ngMCMC[n,m][indicesGad[n][l]])/\
                             (4*np.pi*rBins[k+1]**3/3)
-    galaxyCountsRobust = np.mean(galaxyCountsRobustAll,2)
+                        posteriorMassAll[k,l,n] = np.sum(\
+                            mcmcDenLin_r[n][indicesGad[n][l]]*mUnit)
+                    if doVariance:
+                        # Somewhat complicated, due to the convolution with
+                        # the posterior distribution. We have to sum over 
+                        # all voxels in a strange way
+                        # First, compute A_{\alpha}\lambda in each sample, 
+                        # for each voxel:
+                        # Now, get the cross term for the sum:
+                        crossTerm = 0
+                        amps = Aalpha[:,m,hpIndicesLinear[indices[l]]]
+                        lambdas = ngMCMC[:,m][:,indices[l]]
+                        ampLambda = amps*lambdas
+                        for i1 in range(0,len(indices[l])):
+                            for i2 in range(0,i1):
+                                for S1 in range(0,nsamples):
+                                    for S2 in range(0,nsamples):
+                                        crossTerm += \
+                                            ampLambda[S1,i1]*ampLambda[S2,i2]*\
+                                            (2/nsamples**2)
+                        # Comibine with other terms to get the expected 
+                        # square of the galaxy counts:
+                        galaxyCountSquaredAll[k,l,m] += np.sum(amps*lambdas)/\
+                            nsamples + np.sum(amps**2*lambdas**2)/nsamples + \
+                            crossTerm
+    galaxyDensityRobust = np.mean(galaxyDensityRobustAll,2)
     # Convert density to galaxy counts:
     galaxyNumberCountsRobust = (4*np.pi*rBins[1:,None,None]**3/3)*\
-        galaxyCountsRobust
+        galaxyDensityRobust
+    galaxyNumberCountsRobustAll = (4*np.pi*rBins[1:,None,None,None]**3/3)*\
+        galaxyDensityRobustAll
     galaxyNumberCountExp = np.array((4*np.pi*rBins[1:,None,None]**3/3)*\
-        galaxyCountExp,dtype=int)
+        galaxyDensityExp,dtype=int)
     if verbose:
         print("Done.")
-    return [galaxyNumberCountExp,galaxyNumberCountsRobust]
+    return [galaxyNumberCountExp,galaxyNumberCountsRobust,\
+        galaxyNumberCountsRobustAll,galaxyCountSquaredAll,posteriorMassAll]
 
 
 def getPPTForPoints(points,nBins = 31,nClust=9,nMagBins = 16,N=256,\
