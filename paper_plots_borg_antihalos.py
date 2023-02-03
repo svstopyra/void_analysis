@@ -18,8 +18,8 @@ import scipy
 import os
 import sys
 
-#figuresFolder = "borg-antihalos_paper_figures/all_samples/"
-figuresFolder = "borg-antihalos_paper_figures/batch5-2/"
+figuresFolder = "borg-antihalos_paper_figures/all_samples/"
+#figuresFolder = "borg-antihalos_paper_figures/batch5-2/"
 
 recomputeData = False
 testDataFolder = figuresFolder + "tests_data/"
@@ -510,6 +510,8 @@ if doPPTs:
         ylabel='Number of galaxies $ < r$',height=0.7,fontsize=8,\
         showPoissonRange=True,color2='grey',showVariance=False)
 
+dist np.sqrt(np.sum(clusterLoc**2,1))
+
 # Density profiles around each cluster:
 nRows = 3
 nCols = 3
@@ -540,8 +542,9 @@ for l in range(0,nRows*nCols):
         alpha=0.5,color='grey',label='Standard deviation')
     axij.set_xlabel('$r [\\mathrm{Mpc}h^{-1}]$')
     axij.set_ylabel('$\\rho/\\bar{\\rho}$')
+    axij.set_yscale('log')
     plot.formatPlotGrid(ax,i,j,1,'$\\rho/\\bar{\\rho}$',1,\
-        '$r [\\mathrm{Mpc}h^{-1}]$',nRows,[0,50],nCols = nCols,fontsize=8,\
+        '$r [\\mathrm{Mpc}h^{-1}]$',nRows,[1,1e2],nCols = nCols,fontsize=8,\
         xlim=[0,20])
     axij.tick_params(axis='both', which='major', labelsize=fontsize)
     axij.tick_params(axis='both', which='minor', labelsize=fontsize)
@@ -565,6 +568,30 @@ ax[2,2].legend(handles=[h3],\
     prop={"size":fontsize,"family":fontfamily},frameon=False)
 plt.subplots_adjust(wspace=0.0)
 plt.savefig(figuresFolder + "cluster_density_plots.pdf")
+plt.show()
+
+# Density scatter plot (need to load relevant data):
+for cl in range(0,9):
+    plt.scatter(mcmcDenLin_r[ns][indicesGad[ns][cl]],\
+        np.sum(ngMCMC[ns,:],0)[indicesGad[ns][cl]],marker='.',\
+        color=seabornColormap[cl],label=clusterNames[cl][0])
+
+plt.xlabel('$\\rho/\\bar{\\rho} = 1+\\delta$')
+plt.ylabel('$N_{\\mathrm{gal}}$')
+plt.legend()
+#plt.savefig(figuresFolder + "voxel_scatter.png")
+plt.show()
+
+# Density scatter vs actual 2M++ galaxies:
+for cl in range(0,9):
+    plt.scatter(mcmcDenLin_r[ns][indicesGad[ns][cl]],\
+        np.sum(ng2MPP[:],0)[indicesGad[ns][cl]],marker='.',\
+        color=seabornColormap[cl],label=clusterNames[cl][0])
+
+plt.xlabel('$\\rho/\\bar{\\rho} = 1+\\delta$')
+plt.ylabel('$N_{\\mathrm{gal}}$')
+plt.legend()
+#plt.savefig(figuresFolder + "voxel_scatter.png")
 plt.show()
 
 
@@ -1172,6 +1199,8 @@ colourListAll = []
 laListAll = []
 labelListAll = []
 
+#plotFormat='.png'
+plotFormat='.pdf'
 
 if doSky:
     #
@@ -1234,7 +1263,7 @@ if doSky:
             vmin=1e-2,vmax=1e2,legLoc = 'lower left',bbox_to_anchor = (-0.1,-0.2),\
             snapsort = snapsortList_all[ns],antihaloCentres = None,\
             figOut = figuresFolder + "/ah_match_sample_" + \
-            str(ns) + ".png",\
+            str(ns) + plotFormat,\
             showFig=False,figsize = (scale*textwidth,scale*0.55*textwidth),\
             voidColour = colourListAll[ns],antiHaloLabel=labelListAll[ns],\
             bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
@@ -1242,6 +1271,29 @@ if doSky:
             voidAlpha = 0.6)
     plt.show()
 
+
+# Simple plot of the galaxy distribution overlaid:
+ns = 0
+plot.plotLocalUniverseMollweide(100,snapList[ns],\
+            alpha_shapes = None,\
+            largeAntihalos = None,hr=None,\
+            coordAbell = coordCombinedAbellSphere,\
+            abellListLocation = clusterIndMain,\
+            nameListLargeClusters = [name[0] for name in clusterNames],\
+            ha = ha,va= va, annotationPos = annotationPos,\
+            title = 'Local super-volume: large voids (antihalos) within $' + \
+            str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",\
+            vmin=1e-2,vmax=1e2,legLoc = 'lower left',bbox_to_anchor = (-0.1,-0.2),\
+            snapsort = snapsortList_all[ns],antihaloCentres = None,\
+            figOut = figuresFolder + "/mollweide_galaxies_" + \
+            str(ns) + plotFormat,\
+            showFig=False,figsize = (scale*textwidth,scale*0.55*textwidth),\
+            voidColour = colourListAll[ns],antiHaloLabel=labelListAll[ns],\
+            bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
+            galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=True,\
+            voidAlpha = 0.6)
+
+plt.show()
 
 #-------------------------------------------------------------------------------
 # CLUSTER MASS PLOT
