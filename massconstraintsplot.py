@@ -8,7 +8,7 @@ from void_analysis import plot
 import pynbody.plot.sph as sph
 import matplotlib.pylab as plt
 import matplotlib
-matplotlib.rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"]
+matplotlib.rcParams['text.latex.preamble']=r"\usepackage{amsmath}"
 import pickle
 import os
 import astropy
