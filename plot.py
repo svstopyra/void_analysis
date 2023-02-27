@@ -1358,6 +1358,7 @@ def plotZoA(ax=None,galacticCentreZOA = [-30,30],nPointsZOA=201,\
     polygon = patches.Polygon(polyXY,fc=fc,ec=ec,alpha=alpha,
         label=label)
     ax.add_patch(polygon)
+    return polygon
 
 # Plot Mollweide-view of the local universe, showing large halos, large antihalos, or both.
 def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
@@ -1455,7 +1456,7 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
                 fontsize = labelFontSize,boxsize=boxsize,h=snap.properties['h'],
                 centreMW = centreMW)
     if includeZOA:
-        plotZoA(ax=ax,galacticCentreZOA = galacticCentreZOA,\
+        polygon = plotZoA(ax=ax,galacticCentreZOA = galacticCentreZOA,\
             nPointsZOA=nPointsZOA,bRangeCentre = bRangeCentre,bRange = bRange,\
             nPointsEdgeZOA = nPointsEdgeZOA,\
             fc='grey',ec=None,alpha=0.5,label='Zone of Avoidance')
