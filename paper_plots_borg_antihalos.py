@@ -694,26 +694,24 @@ guideColor='grey'
 amps = Aalpha[ns,nc,ampSlice*nHPPix:(ampSlice+1)*nHPPix]
 ampsMean = np.mean(amps)
 hpxMap = amps/ampsMean
-fig, ax = plt.subplots(1,1,figsize = (8,4),dpi=dpi)
-healpy.mollview(hpxMap,cmap='Blues',cbar=True,norm='log',
-    min=1e-2,max=100,hold=True,fig=fig,margins = (0,0,0,0),xsize=800,sub=0)
-ax.set_autoscale_on(True)
-healpy.graticule(color=guideColor)
-ax = plt.gca()
-boundaryOff=False
-# Hacky solution to make the boundary grey, since healpy hardcodes this:
-lines = ax.get_lines()
-for l in lines:
-	if l.get_color() != guideColor:
-		l.set_color(guideColor)
-if boundaryOff:
-	# Very hacky, and liable to break if healpy changes, 
-	# but not clear how else we would identify which line is the boundary...
-	for l in range(20,len(lines)):
-		lines[l].set_linestyle('None')
+plotFormat='.pdf'
+plot.plotLocalUniverseMollweide(135,snapList[ns],hpxMap=hpxMap,nside=nside,\
+            alpha_shapes = None,largeAntihalos = None,hr=None,\
+            coordAbell = coordCombinedAbellSphere,\
+            abellListLocation = clusterIndMain,\
+            nameListLargeClusters = [name[0] for name in clusterNames],\
+            ha = ha,va= va, annotationPos = annotationPos,\
+            vmin=1e-2,vmax=1e2,legLoc = 'lower left',bbox_to_anchor = (-0.1,-0.2),\
+            snapsort = None,antihaloCentres = None,\
+            figOut = figuresFolder + "voxel_healpix_distribution_cat_" + \
+            str(nc) + "_slice_" + str(ampSlice) + ".pdf",\
+            showFig=False,figsize = (scale*textwidth,scale*0.55*textwidth),\
+            voidColour = None,antiHaloLabel=None,\
+            bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
+            galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=True,\
+            voidAlpha = 0.6,labelFontSize=12,legendFontSize=8,title="",dpi=600)
 
-plt.savefig(figuresFolder + "voxel_healpix_distribution_cat_" + str(nc) + \
-    "_slice_" + str(ampSlice) + ".pdf")
+plt.savefig()
 plt.show()
 
 #-------------------------------------------------------------------------------

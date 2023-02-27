@@ -1362,7 +1362,7 @@ def plotZoA(ax=None,galacticCentreZOA = [-30,30],nPointsZOA=201,\
 # Plot Mollweide-view of the local universe, showing large halos, large antihalos, or both.
 def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         ha=None,va=None,annotationPos=None,nameListLargeClusters=None,
-        galaxyAngles = None,galaxyDistances = None,
+        galaxyAngles = None,galaxyDistances = None,nside=64,
         alpha_shapes = None,coordAbell = None,abellListLocation=None,
         vmin=1e-2,vmax=1e2,title=None,showGalaxies=False,boundaryOff=True,
         haloColour = 'b',s=30,haloMarker='c',clusterMarker='x',
@@ -1379,8 +1379,9 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
     if hpxMap is None:
         rhobar = (np.sum(snap['mass'])/\
             (snap.properties['boxsize']**3)).in_units("Msol h**2 Mpc**-3")
-        hpxMap = sphericalSlice(snap,radius,thickness=thickness,
-            fillZeros=vmin*rhobar,centre=centre,nside=nside)/rhobar
+        hpxMap = sphericalSlice(snap,rCut/2,thickness=rCut,
+            fillZeros=vmin*rhobar,centre=centre=np.array([0,0,0]),\
+            nside=nside)/rhobar
     fig, ax = plotMollweide(hpxMap,galaxyAngles,galaxyDistances,\
         thickness=rCut,radius=rCut/2,nside=nside,\
         vmin=vmin,vmax=vmax,showGalaxies=showGalaxies,
