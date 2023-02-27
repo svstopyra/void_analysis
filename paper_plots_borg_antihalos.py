@@ -687,14 +687,14 @@ plt.show()
 # Mollweide plot of the amplitudes:
 ampSlice = 0
 nside=4
-nc = 9
+nc = 14
 nHPPix = 12*nside**2
 dpi=300
 guideColor='grey'
 amps = Aalpha[ns,nc,ampSlice*nHPPix:(ampSlice+1)*nHPPix]
 ampsMean = np.mean(amps)
 hpxMap = amps/ampsMean
-plotFormat='.pdf'
+plotFormat='.png'
 plot.plotLocalUniverseMollweide(135,snapList[ns],hpxMap=hpxMap,nside=nside,\
             alpha_shapes = None,largeAntihalos = None,hr=None,\
             coordAbell = coordCombinedAbellSphere,\
@@ -704,11 +704,11 @@ plot.plotLocalUniverseMollweide(135,snapList[ns],hpxMap=hpxMap,nside=nside,\
             vmin=1e-2,vmax=1e2,legLoc = 'lower left',bbox_to_anchor = (-0.1,-0.2),\
             snapsort = None,antihaloCentres = None,\
             figOut = figuresFolder + "voxel_healpix_distribution_cat_" + \
-            str(nc) + "_slice_" + str(ampSlice) + ".pdf",\
+            str(nc) + "_slice_" + str(ampSlice) + plotFormat,\
             showFig=False,figsize = (scale*textwidth,scale*0.55*textwidth),\
             voidColour = None,antiHaloLabel=None,\
             bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
-            galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=True,\
+            galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
             voidAlpha = 0.6,labelFontSize=12,legendFontSize=8,title="",dpi=600)
 
 plt.show()

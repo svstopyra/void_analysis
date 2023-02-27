@@ -496,12 +496,14 @@ def positionsToHealpix(positions,nside=4,\
     coords = SkyCoord(x = positions[:,0]*u.Mpc,y=positions[:,1]*u.Mpc,\
         z = positions[:,2]*u.Mpc,frame=inputCoord,\
         representation_type="cartesian")
+    spherical = coords.represent_as(\
+        astropy.coordinates.representation.SphericalRepresentation)
     if outputCoord == "galactic":
         l = coords.galactic.l
         b = coords.galactic.b
     else:
-        l = coords.icrs.ra
-        b = coords.icrs.dec
+        l = spherical.lon*180.0/np.pi
+        b = spherical.lat*180.0/np.pi
     theta = np.pi/2 - np.pi*np.array(b)/180.0
     phi = np.pi*np.array(l)/180.0
     pix = healpy.ang2pix(nside,theta,phi)
