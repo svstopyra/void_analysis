@@ -1933,7 +1933,8 @@ def computeAndPlotPPTProfile(ax,expectedLine,realisedLine,rBins,rescale=False,\
 
 # Adjusts the formatting of a grid of plots:
 def formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim=None,\
-        fontsize=8,fontfamily='serif',nCols = 3,xlim=None):
+        fontsize=8,fontfamily='serif',nCols = 3,xlim=None,\
+        logx=False,logy=False):
     if nRows < 2:
         if nCols > 1:
             axij = ax[j]
@@ -1943,6 +1944,10 @@ def formatPlotGrid(ax,i,j,ylabelRow,ylabel,xlabelCol,xlabel,nRows,ylim=None,\
         axij = ax[i,j]
     axij.set_ylim(ylim)
     axij.set_xlim(xlim)
+    if logx:
+        axij.set_xscale('log')
+    if logy:
+        axij.set_yscale('log')
     if j > 0:
         axij.yaxis.label.set_visible(False)
         axij.yaxis.set_major_formatter(NullFormatter())

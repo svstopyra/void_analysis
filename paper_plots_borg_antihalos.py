@@ -713,6 +713,67 @@ plot.plotLocalUniverseMollweide(135,snapList[ns],hpxMap=hpxMap,nside=nside,\
 
 plt.show()
 
+# Histograms of A by bin:
+
+# Cluster A values:
+indices = tree.query_ball_point(wrappedPos,5)
+clusterAmpsInds = [np.unique(hpIndicesLinear[ind]) for ind in indices]
+
+nc = 2
+nCols = 4
+nRows = 2
+logMlow = 13
+logMhigh = 15.2
+nBins = 11
+fontsize=8
+textwidth=7.1014
+ylim=[0,10]
+
+plt.clf()
+fig, ax = plt.subplots(nRows,nCols,figsize=(textwidth,textwidth))
+plt.subplots_adjust(hspace=0.16,wspace=0.0)
+MabsList = np.linspace(-21,-25,9)
+amps = np.mean(Aalpha,0)
+for l in range(0,8):
+    i = int(l/nCols)
+    j = l - nCols*i
+    ax[i,j].hist(amps[2*l,:],\
+        bins=np.logspace(-4,4,nBins),alpha=0.5,\
+        color=seabornColormap[0],label='Bright catalogue',density=True)
+    ax[i,j].hist(amps[2*l+1,:],\
+        bins=np.logspace(-4,4,nBins),alpha=0.5,\
+        color=seabornColormap[1],label='Dim catalogue',density=True)
+    for k in clusterAmpsInds[nc]:
+        ax[i,j].axvline(np.mean(amps[2*l,k]),linestyle='--',\
+            color=seabornColormap[0])
+        ax[i,j].axvline(np.mean(amps[2*l+1,k]),linestyle='--',\
+            color=seabornColormap[1])
+    plot.formatPlotGrid(ax,i,j,1,'Density',1,\
+        '$A_{\\alpha}$',nRows,[1e-4,1e4],nCols = nCols,fontsize=8,\
+        xlim=[1e-4,1e4])
+    ax[i,j].set_xscale('log')
+    ax[i,j].set_yscale('log')
+    ax[i,j].set_title("$" + str(MabsList[l]) + " < M \\leq" + \
+        str(MabsList[l+1]) + "$",fontsize=fontsize)
+    if i < nRows - 1:
+        ax[i,j].xaxis.label.set_visible(False)
+        ax[i,j].xaxis.set_major_formatter(NullFormatter())
+        ax[i,j].xaxis.set_minor_formatter(NullFormatter())
+    if i < nRows -1:
+        ax[i,j].get_yticklabels()[0].set_visible(False)
+    if j < nCols -1:
+        ax[i,j].get_xticklabels()[-1].set_visible(False)
+    ax[i,j].legend(prop={"size":fontsize,"family":"serif"},frameon=False,\
+        loc="upper right")
+
+plt.suptitle("Amplitude across 20 MCMC resimulations")
+plt.savefig(figuresFolder + "voxel_amp_distribution.pdf")
+plt.show()
+
+
+
+
+
 #-------------------------------------------------------------------------------
 # HMF/AMF PLOT:
 
