@@ -1042,9 +1042,9 @@ ha = ['right','left','left','left','left','center','right',\
         'right','right']
 va = ['center','bottom','bottom','bottom','top',\
         'top','center','center','center']
-annotationPos = [[-1.2,0.9],\
-        [1.3,0.8],[1.8,0.5],[1.5,-1.2],[1.7,-0.7],[-1,0.2],[0.8,0.6],\
-        [1.0,0.1],[-1.8,0.5]]
+annotationPos = [[-1.1,0.9],\
+        [1.1,1.0],[1.5,0.6],[1.3,-1.2],[1.3,-0.7],[-1,0.2],[0.8,0.6],\
+        [1.0,0.1],[-1.7,0.5]]
 nameList = [name[0] for name in clusterNames]
 textwidth=7.1014
 textheight=9.0971
@@ -1263,8 +1263,8 @@ colourListAll = []
 laListAll = []
 labelListAll = []
 
-#plotFormat='.png'
 plotFormat='.pdf'
+#plotFormat='.pdf'
 
 if doSky:
     #
@@ -1345,8 +1345,6 @@ plot.plotLocalUniverseMollweide(100,snapList[ns],\
             abellListLocation = clusterIndMain,\
             nameListLargeClusters = [name[0] for name in clusterNames],\
             ha = ha,va= va, annotationPos = annotationPos,\
-            title = 'Local super-volume: large voids (antihalos) within $' + \
-            str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",\
             vmin=1e-2,vmax=1e2,legLoc = 'lower left',bbox_to_anchor = (-0.1,-0.2),\
             snapsort = snapsortList_all[ns],antihaloCentres = None,\
             figOut = figuresFolder + "/mollweide_galaxies_" + \
@@ -1355,7 +1353,7 @@ plot.plotLocalUniverseMollweide(100,snapList[ns],\
             voidColour = colourListAll[ns],antiHaloLabel=labelListAll[ns],\
             bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
             galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=True,\
-            voidAlpha = 0.6)
+            voidAlpha = 0.6,labelFontSize=12,legendFontSize=8,title="",dpi=600)
 
 plt.show()
 
