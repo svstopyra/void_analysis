@@ -711,7 +711,6 @@ plot.plotLocalUniverseMollweide(135,snapList[ns],hpxMap=hpxMap,nside=nside,\
             galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=True,\
             voidAlpha = 0.6,labelFontSize=12,legendFontSize=8,title="",dpi=600)
 
-plt.savefig()
 plt.show()
 
 #-------------------------------------------------------------------------------
