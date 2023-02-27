@@ -1380,7 +1380,7 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         rhobar = (np.sum(snap['mass'])/\
             (snap.properties['boxsize']**3)).in_units("Msol h**2 Mpc**-3")
         hpxMap = sphericalSlice(snap,rCut/2,thickness=rCut,
-            fillZeros=vmin*rhobar,centre=centre=np.array([0,0,0]),\
+            fillZeros=vmin*rhobar,centre=np.array([0,0,0]),\
             nside=nside)/rhobar
     fig, ax = plotMollweide(hpxMap,galaxyAngles,galaxyDistances,\
         thickness=rCut,radius=rCut/2,nside=nside,\
