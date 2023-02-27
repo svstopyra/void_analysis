@@ -1387,9 +1387,6 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         title=title,boundaryOff=boundaryOff,margins=margins,
         fontname=fontname,titleFontSize=titleFontSize,figsize=figsize,\
         xsize=xsize,dpi=dpi,returnAx=True,doColorbar=False)
-    else:
-        # Just create a new axis for the healpix map:
-        
     if haloCentres is not None:
         haloAngles = context.equatorialXYZToSkyCoord(haloCentres)
         anglesToPlotHalos = np.vstack((haloAngles.icrs.ra.value,
