@@ -12,6 +12,7 @@ import traceback, logging
 import h5py
 from astropy.coordinates import SkyCoord
 import astropy.units as u
+import astropy
 import healpy
 
 # Fetch all points that lie within a given radius of a specified centres, accounting for wrapping,
