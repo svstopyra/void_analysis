@@ -632,21 +632,47 @@ plt.show()
 
 
 # Density scatter plot (need to load relevant data):
+plt.clf()
 ns = 0
 for cl in [2]:
+    #predicted = np.sum(ngMCMC[ns,:],0)
+    predicted = ngMCMC[ns,9]
     plt.scatter(mcmcDenLin_r[ns][indicesGad[ns][cl]],\
-        np.sum(ngMCMC[ns,:],0)[indicesGad[ns][cl]],marker='.',\
+        predicted[indicesGad[ns][cl]],marker='.',\
         color=seabornColormap[cl],label=clusterNames[cl][0])
     plt.ylim([0,150])
     plt.xlim([0,60])
 
 plt.xlabel('$\\rho/\\bar{\\rho} = 1+\\delta$')
 plt.ylabel('$N_{\\mathrm{gal}}$')
+plt.yscale('log')
+plt.ylim([1e-3,200])
 plt.legend()
-#plt.savefig(figuresFolder + "voxel_scatter.png")
+plt.savefig(figuresFolder + "voxel_scatter.png")
 plt.show()
 
+
+# Predicted vs actual:
+plt.clf()
+for cl in [2]:
+    ngPredAll = Aalpha[:,:,hpIndicesLinear[indices[cl]]]*\
+        ngMCMC[:,:,indices[cl]]
+    ngPred = np.mean(ngPredAll,0)
+    plt.scatter(np.sum(ng2MPP,0)[indices[cl]],\
+        np.sum(ngPred,0),marker='.',\
+        color=seabornColormap[cl],label=clusterNames[cl][0])
+    plt.xlim([0,20])
+    plt.ylim([0,20])
+
+plt.xlabel('2M++ galaxies')
+plt.ylabel('Predicted galaxies')
+plt.legend()
+plt.savefig(figuresFolder + "voxel_scatter_predicted_vs_actual.png")
+plt.show()
+
+
 # Density scatter vs actual 2M++ galaxies:
+plt.clf()
 for cl in range(0,9):
     plt.scatter(mcmcDenLin_r[ns][indices[cl]],\
         np.sum(ng2MPP[:],0)[indices[cl]],marker='.',\
@@ -655,9 +681,40 @@ for cl in range(0,9):
 plt.xlabel('$\\rho/\\bar{\\rho} = 1+\\delta$')
 plt.ylabel('$N_{\\mathrm{gal}}$')
 plt.legend()
-#plt.savefig(figuresFolder + "voxel_scatter.png")
+plt.savefig(figuresFolder + "voxel_scatter2.png")
 plt.show()
 
+# Mollweide plot of the amplitudes:
+ampSlice = 0
+nside=4
+nc = 9
+nHPPix = 12*nside**2
+dpi=300
+guideColor='grey'
+amps = Aalpha[ns,nc,ampSlice*nHPPix:(ampSlice+1)*nHPPix]
+ampsMean = np.mean(amps)
+hpxMap = amps/ampsMean
+fig, ax = plt.subplots(1,1,figsize = (8,4),dpi=dpi)
+healpy.mollview(hpxMap,cmap='Blues',cbar=True,norm='log',
+    min=1e-2,max=100,hold=True,fig=fig,margins = (0,0,0,0),xsize=800,sub=0)
+ax.set_autoscale_on(True)
+healpy.graticule(color=guideColor)
+ax = plt.gca()
+boundaryOff=False
+# Hacky solution to make the boundary grey, since healpy hardcodes this:
+lines = ax.get_lines()
+for l in lines:
+	if l.get_color() != guideColor:
+		l.set_color(guideColor)
+if boundaryOff:
+	# Very hacky, and liable to break if healpy changes, 
+	# but not clear how else we would identify which line is the boundary...
+	for l in range(20,len(lines)):
+		lines[l].set_linestyle('None')
+
+plt.savefig(figuresFolder + "voxel_healpix_distribution_cat_" + str(nc) + \
+    "_slice_" + str(ampSlice) + ".pdf")
+plt.show()
 
 #-------------------------------------------------------------------------------
 # HMF/AMF PLOT:
