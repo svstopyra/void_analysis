@@ -314,15 +314,7 @@ centroids = grid*boxsize/Nden + boxsize/(2*Nden)
 positions = snapedit.unwrap(centroids - np.array([boxsize/2]*3),boxsize)
 tree = scipy.spatial.cKDTree(snapedit.wrap(positions + boxsize/2,boxsize),\
     boxsize=boxsize)
-nearestPointsList = [tree.query_ball_point(\
-        snapedit.wrap(antihaloCentres[k] + boxsize/2,boxsize),\
-        antihaloRadii[k],workers=-1) \
-        for k in range(0,len(antihaloCentres))]
-snrAllCatsList = [np.array([np.mean(snrFieldLin[points]) \
-        for points in nearestPointsList[k]]) for k in range(0,len(snapNumList))]
-snrFilter2 = [snr > snrThresh for snr in snrAllCatsList]
 
-[np.all(snrFilter[k]==snrFilter2[k]) for k in range(0,20)]
 
 allProps = [tools.loadPickle(snapname + ".AHproperties.p") \
     for snapname in snapNameList]
@@ -331,6 +323,16 @@ antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
 antihaloCentresUnmapped = [props[5] for props in allProps]
 antihaloMasses = [props[3] for props in allProps]
 antihaloRadii = [props[7] for props in allProps]
+
+
+
+nearestPointsList = [tree.query_ball_point(\
+        snapedit.wrap(antihaloCentres[k] + boxsize/2,boxsize),\
+        antihaloRadii[k],workers=-1) \
+        for k in range(0,len(antihaloCentres))]
+snrAllCatsList = [np.array([np.mean(snrFieldLin[points]) \
+        for points in nearestPointsList[k]]) for k in range(0,len(snapNumList))]
+snrFilter2 = [snr > snrThresh for snr in snrAllCatsList]
 
 
 centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],rSphere,\
@@ -408,15 +410,6 @@ centralAntihalosTest2 = [tools.getAntiHalosInSphere(antihaloCentres[k],rSphere,\
             for k in range(0,len(snapNumList))]
 
 
-[len(centralAntihalosTest[ns][0]),len(centralAntihalos[ns][0])]
-
-[np.all(np.array(centralAntihalosTest[ns][0]) == \
-    np.array(centralAntihalos[ns][0])) for ns in range(0,len(snapNumList))]
-
-void9 = finalCatOpt[combinedFilter135][selection[8],:]
-void9Centres = np.array([centresListShort[ns][void9[ns]-1,:] \
-    for ns in range(0,len(snapNumList))])
-
 doSky = True
 if doSky:
     #[alpha_shape_list,largeAntihalos,\
@@ -439,17 +432,6 @@ if doSky:
             rRange = [5,30],reCentreSnaps = True,\
             additionalFilters=snrFilter,rSphere=rSphere,\
             centralAntihalos=centralAntihalos)
-
-
-# Can't really un-pickle the halo catalogues without loading the snapshots, so
-# we will have to load these, unfortunately. We should change this, as it 
-# probably isn't very scalable...
-samplesFolder = "new_chain/"
-snapListRev =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
-        + "gadget_full_reverse_512/snapshot_001") for snapNum in snapNumList]
-snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
-        + "gadget_full_forward_512/snapshot_001") for snapNum in snapNumList]
-antihaloCatalogueList = [snap.halos() for snap in snapListRev]
 
 #-------------------------------------------------------------------------------
 # Reproduce the plots for the borg-antihalos paper
