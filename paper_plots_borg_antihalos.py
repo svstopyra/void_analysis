@@ -492,7 +492,7 @@ if doPPTs:
         ylabel='Number of galaxies $ < r$',height=0.7,fontsize=8,\
         showPoissonRange=True,color2='grey',showVariance=False)
 
-dist np.sqrt(np.sum(clusterLoc**2,1))
+dist = np.sqrt(np.sum(clusterLoc**2,1))
 
 # Density profiles around each cluster:
 nRows = 3
@@ -669,21 +669,28 @@ plt.show()
 # Mollweide plot of the amplitudes:
 ampSlice = 0
 nside=4
-nc = 14
-nHPPix = 12*nside**2
-dpi=300
-guideColor='grey'
-amps = Aalpha[ns,nc,ampSlice*nHPPix:(ampSlice+1)*nHPPix]
-ampsMean = np.mean(amps)
-hpxMap = amps/ampsMean
-plotFormat='.png'
-plot.plotLocalUniverseMollweide(135,snapList[ns],hpxMap=hpxMap,nside=nside,\
+MabsList = np.linspace(-21,-25,9)
+catNames = ['Bright','Dim']
+for m in range(0,8):
+    for l in range(0,2):
+        nc = 2*m + l
+        title = catNames[l] + " catalogue, ($" + str(MabsList[m]) + " < M < " \
+            + str(MabsList[m+1]) + "$, $" + str(60.0*ampSlice) + \
+            " < D/\\mathrm{Mpc}h^{-1} < " + str(60.0*(ampSlice + 1)) + "$)"
+        nHPPix = 12*nside**2
+        dpi=300
+        guideColor='grey'
+        amps = Aalpha[ns,nc,ampSlice*nHPPix:(ampSlice+1)*nHPPix]
+        ampsMean = np.mean(amps)
+        hpxMap = amps/ampsMean
+        plotFormat='.pdf'
+        plot.plotLocalUniverseMollweide(135,snapList[ns],hpxMap=hpxMap,nside=nside,\
             alpha_shapes = None,largeAntihalos = None,hr=None,\
             coordAbell = coordCombinedAbellSphere,\
             abellListLocation = clusterIndMain,\
             nameListLargeClusters = [name[0] for name in clusterNames],\
             ha = ha,va= va, annotationPos = annotationPos,\
-            vmin=1e-2,vmax=1e2,legLoc = 'lower left',bbox_to_anchor = (-0.1,-0.2),\
+            vmin=1e-1,vmax=1e1,legLoc = 'lower left',bbox_to_anchor = (-0.1,-0.2),\
             snapsort = None,antihaloCentres = None,\
             figOut = figuresFolder + "voxel_healpix_distribution_cat_" + \
             str(nc) + "_slice_" + str(ampSlice) + plotFormat,\
@@ -691,7 +698,8 @@ plot.plotLocalUniverseMollweide(135,snapList[ns],hpxMap=hpxMap,nside=nside,\
             voidColour = None,antiHaloLabel=None,\
             bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
             galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
-            voidAlpha = 0.6,labelFontSize=12,legendFontSize=8,title="",dpi=600)
+            voidAlpha = 0.6,labelFontSize=8,legendFontSize=8,title=title,\
+            dpi=dpi,cbarLabel="$A_{\\alpha}/\\bar{A_{\\alpha}}$")
 
 plt.show()
 
@@ -700,8 +708,10 @@ plt.show()
 # Cluster A values:
 indices = tree.query_ball_point(wrappedPos,5)
 clusterAmpsInds = [np.unique(hpIndicesLinear[ind]) for ind in indices]
+nGalsList = np.array([[np.sum(ng2MPP[m][indices[l]]) \
+    for m in range(0,16)] for l in range(0,9)])
 
-nc = 2
+nc = 0
 nCols = 4
 nRows = 2
 logMlow = 13
@@ -711,7 +721,7 @@ fontsize=8
 textwidth=7.1014
 ylim=[0,10]
 
-plt.clf()
+#plt.clf()
 fig, ax = plt.subplots(nRows,nCols,figsize=(textwidth,textwidth))
 plt.subplots_adjust(hspace=0.16,wspace=0.0)
 MabsList = np.linspace(-21,-25,9)
@@ -736,20 +746,29 @@ for l in range(0,8):
     ax[i,j].set_xscale('log')
     ax[i,j].set_yscale('log')
     ax[i,j].set_title("$" + str(MabsList[l]) + " < M \\leq" + \
-        str(MabsList[l+1]) + "$",fontsize=fontsize)
+        str(MabsList[l+1]) + "$\nBright/Dim = " + \
+        str(int(nGalsList[nc][2*l])) + "/" + str(int(nGalsList[nc][2*l+1])),\
+        fontsize=fontsize)
+    if j > 0:
+        ax[i,j].yaxis.set_ticklabels([])
+    if i < nRows - 1:
+        ax[i,j].xaxis.set_ticklabels([])
     if i < nRows - 1:
         ax[i,j].xaxis.label.set_visible(False)
         ax[i,j].xaxis.set_major_formatter(NullFormatter())
         ax[i,j].xaxis.set_minor_formatter(NullFormatter())
     if i < nRows -1:
         ax[i,j].get_yticklabels()[0].set_visible(False)
-    if j < nCols -1:
+    if j > nCols -1:
         ax[i,j].get_xticklabels()[-1].set_visible(False)
-    ax[i,j].legend(prop={"size":fontsize,"family":"serif"},frameon=False,\
-        loc="upper right")
 
-plt.suptitle("Amplitude across 20 MCMC resimulations")
-plt.savefig(figuresFolder + "voxel_amp_distribution.pdf")
+ax[0,0].legend(prop={"size":fontsize,"family":"serif"},frameon=False,\
+    loc="upper right")
+
+plt.suptitle("All Amplitudes across 5 MCMC resimulations vs " + \
+    clusterNames[nc][0] + " amplitudes")
+plt.savefig(figuresFolder + "voxel_amp_distribution_" + clusterNames[nc][0] + \
+    ".pdf")
 plt.show()
 
 

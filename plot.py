@@ -564,7 +564,8 @@ def plotMollweide(hpxMap,radius=None,galaxyAngles=None,galaxyDistances=None,
         shrink=0.5,pad=0.05,nside=64,showGalaxies=True,ax=None,title=None,
         fontname='serif',fontsize=8,fig=None,guideColor='grey',boundaryOff=False,
         titleFontSize=8,margins = (0,0,0,0),figsize = (8,4),xsize=800,dpi=300,\
-        cbarSize=[4.0,0.5],returnAx=False,doColorbar=True):
+        cbarSize=[4.0,0.5],returnAx=False,doColorbar=True,\
+        cbarLabel='$\\rho/\\bar{\\rho}$'):
     if galaxyAngles is not None:
         if radius is None:
             radius = 135/2.0
@@ -599,15 +600,16 @@ def plotMollweide(hpxMap,radius=None,galaxyAngles=None,galaxyDistances=None,
             fontfamily=fontname,fontsize=titleFontSize)
     else:
         plt.title(title,fontfamily=fontname,fontsize=titleFontSize)
-    #plt.colorbar(sm,location='bottom',label='$\\rho/\\bar{\\rho}$',shrink=shrink,pad=pad)
+    sm = cm.ScalarMappable(colors.LogNorm(vmin=vmin,vmax=vmax),cmap=cmap)
+    plt.colorbar(sm,location='bottom',label=cbarLabel,\
+        shrink=shrink,pad=pad)
     if doColorbar:
-        sm = cm.ScalarMappable(colors.LogNorm(vmin=vmin,vmax=vmax),cmap=cmap)
         cbax = fig.add_axes([figsize[0]/4,0.05,figsize[0]/2,figsize[0]/16])
         cbar = plt.colorbar(sm, orientation="horizontal",
-            pad=pad,label='$\\rho/\\bar{\\rho}$',shrink=shrink,\
+            pad=pad,label=cbarLabel,shrink=shrink,\
             aspect=cbarSize[0]/cbarSize[1],cax=cbax)
         cbar.ax.tick_params(axis='both',labelsize=fontsize)
-        cbar.set_label(label = '$\\rho/\\bar{\\rho}$',fontsize = fontsize,\
+        cbar.set_label(label = cbarLabel,fontsize = fontsize,\
             fontfamily = fontname)
     if returnAx:
         return fig, ax
@@ -1376,7 +1378,8 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         legendFontSize = 8,antihaloCentres = None,figOut = None,showFig=True,
         titleFontSize = 8,fontname = 'serif',margins = (0,0,0,0),figsize = (8,4),
         xsize = 800,extent = None,bbox_inches = None,voidColour = None,
-        antiHaloLabel = 'haloID',dpi=300,shrink=0.5,pad=0.05):
+        antiHaloLabel = 'haloID',dpi=300,shrink=0.5,pad=0.05,\
+        cbarLabel='$\\rho/\\bar{\\rho}$'):
     if hpxMap is None:
         rhobar = (np.sum(snap['mass'])/\
             (snap.properties['boxsize']**3)).in_units("Msol h**2 Mpc**-3")
@@ -1389,7 +1392,7 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         vmin=vmin,vmax=vmax,showGalaxies=showGalaxies,
         title=title,boundaryOff=boundaryOff,margins=margins,
         fontname=fontname,titleFontSize=titleFontSize,figsize=figsize,\
-        xsize=xsize,dpi=dpi,returnAx=True,doColorbar=False)
+        xsize=xsize,dpi=dpi,returnAx=True,doColorbar=False,cbarLabel=cbarLabel)
     if haloCentres is not None:
         haloAngles = context.equatorialXYZToSkyCoord(haloCentres)
         anglesToPlotHalos = np.vstack((haloAngles.icrs.ra.value,
@@ -1486,14 +1489,14 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         prop={"size":legendFontSize,"family":"serif"},
         loc=legLoc,bbox_to_anchor=bbox_to_anchor)
     # As the last step,add a colorbar:
-    sm = cm.ScalarMappable(colors.LogNorm(vmin=vmin,vmax=vmax),cmap=cmap)
-    cbax = fig.add_axes([figsize[0]/4,0.05,figsize[0]/2,figsize[0]/16])
-    cbar = plt.colorbar(sm, orientation="horizontal",
-        pad=pad,label='$\\rho/\\bar{\\rho}$',shrink=shrink,\
-        cax=cbax)
-    cbar.ax.tick_params(axis='both',labelsize=legendFontSize)
-    cbar.set_label(label = '$\\rho/\\bar{\\rho}$',fontsize = legendFontSize,\
-        fontfamily = fontname)
+    #sm = cm.ScalarMappable(colors.LogNorm(vmin=vmin,vmax=vmax),cmap=cmap)
+    #cbax = fig.add_axes([figsize[0]/4,0.05,figsize[0]/2,figsize[0]/16])
+    #cbar = plt.colorbar(sm, orientation="horizontal",
+    #    pad=pad,label='$\\rho/\\bar{\\rho}$',shrink=shrink,\
+    #    cax=cbax)
+    #cbar.ax.tick_params(axis='both',labelsize=legendFontSize)
+    #cbar.set_label(label = '$\\rho/\\bar{\\rho}$',fontsize = legendFontSize,\
+    #    fontfamily = fontname)
     if figOut is not None:
         plt.savefig(figOut,bbox_inches=bbox_inches,dpi=dpi)
     if showFig:
