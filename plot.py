@@ -2877,14 +2877,20 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
         i = int(l/nCols)
         j = l - nCols*i
         iterator = 0
+        if nCols > 1:
+            ax0 = ax[0,l]
+            ax1 = ax[1,l]
+        else:
+            ax0 = ax[0]
+            ax1 = ax[1]
         # GADGET masses:
         if showGADGET:
-            handles[l].append(ax[0,l].errorbar(stepsListGADGET,\
+            handles[l].append(ax0.errorbar(stepsListGADGET,\
                     meanMass1[iterator:(iterator + len(stepsListGADGET)),l],\
                     yerr=stdMass1[iterator:(iterator + len(stepsListGADGET)),l],\
                     marker = markerGadget,linestyle='-',\
                     label='GADGET2 ($128^3$ PM-grid)',color = colorGadget))
-            handles[l + nCols].append(ax[1,l].errorbar(stepsListGADGET,\
+            handles[l + nCols].append(ax1.errorbar(stepsListGADGET,\
                     meanMass2[iterator:(iterator + len(stepsListGADGET)),l],\
                     yerr=stdMass2[iterator:(iterator + len(stepsListGADGET)),l],\
                     marker = markerGadget,linestyle='-',\
@@ -2892,12 +2898,12 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
         iterator += len(stepsListGADGET)
         # COLA masses:
         if showCOLA:
-            handles[l].append(ax[0,l].errorbar(stepsList,\
+            handles[l].append(ax0.errorbar(stepsList,\
                     meanMass1[iterator:(iterator + len(stepsList)),l]\
                     ,yerr=stdMass1[iterator:(iterator + len(stepsList)),l]\
                     ,marker = markerCOLA,linestyle='-',\
                     label='COLA (linear steps)',color=colorLinear))
-            handles[l + nCols].append(ax[1,l].errorbar(stepsList,\
+            handles[l + nCols].append(ax1.errorbar(stepsList,\
                     meanMass2[iterator:(iterator + len(stepsList)),l]\
                     ,yerr=stdMass2[iterator:(iterator + len(stepsList)),l]\
                     ,marker = markerCOLA,linestyle='-',\
@@ -2905,12 +2911,12 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
         iterator += len(stepsList)
         # PM masses:
         if showPM:
-            handles[l].append(ax[0,l].errorbar(stepsList,\
+            handles[l].append(ax0.errorbar(stepsList,\
                     meanMass1[iterator:(iterator + len(stepsList)),l],\
                     yerr=stdMass1[iterator:(iterator + len(stepsList)),l],\
                     marker = markerPM,linestyle=':',label='PM (linear steps)',\
                     color=colorLinear))
-            handles[l+nCols].append(ax[1,l].errorbar(stepsList,\
+            handles[l+nCols].append(ax1.errorbar(stepsList,\
                     meanMass2[iterator:(iterator + len(stepsList)),l],\
                     yerr=stdMass2[iterator:(iterator + len(stepsList)),l],\
                     marker = markerPM,linestyle=':',label='PM (linear steps)',\
@@ -2918,24 +2924,24 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
         iterator += len(stepsList)
         # Include some extra masses if provided, otherwise skip them:
         if showGadget1024:
-            handles[l].append(ax[0,l].errorbar(stepsList1024,\
+            handles[l].append(ax0.errorbar(stepsList1024,\
                 meanMass1[iterator:(iterator + len(stepsList1024)),l],\
                 yerr=stdMass1[iterator:(iterator + len(stepsList1024)),l],\
                 marker = None,linestyle='-.',\
                 label='GADGET2 ($1024^3$ PM-grid)',color=colorGadget))
-            handles[l+nCols].append(ax[0,l].errorbar(stepsList1024,\
+            handles[l+nCols].append(ax0.errorbar(stepsList1024,\
                 meanMass2[iterator:(iterator + len(stepsList1024)),l],\
                 yerr=stdMass2[iterator:(iterator + len(stepsList1024)),l],\
                 marker = None,linestyle='-.',\
                 label='GADGET2 ($1024^3$ PM-grid)',color=colorGadget))
         iterator += len(stepsList1024)
         if showGadgetEps0p662:
-            handles[l].append(ax[0,l].errorbar(stepsListEPS_0p662,\
+            handles[l].append(ax0.errorbar(stepsListEPS_0p662,\
                 meanMass1[iterator:(iterator + len(stepsListEPS_0p662)),l],\
                 yerr=stdMass1[iterator:(iterator + len(stepsListEPS_0p662)),l],\
                 marker = markerGadget,linestyle='-.',\
                 label='GADGET2 ($\\epsilon = 0.662$)',color=colorGadget))
-            handles[l + nCols].append(ax[1,l].errorbar(stepsListEPS_0p662,\
+            handles[l + nCols].append(ax1.errorbar(stepsListEPS_0p662,\
                 meanMass2[iterator:(iterator + len(stepsListEPS_0p662)),l],\
                 yerr=stdMass2[iterator:(iterator + len(stepsListEPS_0p662)),l],\
                 marker = markerGadget,linestyle='-.',\
@@ -2945,12 +2951,12 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
         if showResMasses:
             if showCOLA:
                 for m in resToShow:
-                    handles[l].append(ax[0,l].errorbar(resStepsList,\
+                    handles[l].append(ax0.errorbar(resStepsList,\
                         meanMass1[iterator:(iterator + len(resStepsList)),l],\
                         yerr=stdMass1[iterator:(iterator + len(resStepsList)),l],\
                         marker = markerRes,linestyle=':',\
                         label='COLA ($' + str(resList[m]) + '$)',color=colorRes))
-                    handles[l + nCols].append(ax[1,l].errorbar(resStepsList,\
+                    handles[l + nCols].append(ax1.errorbar(resStepsList,\
                         meanMass2[iterator:(iterator + len(resStepsList)),l],\
                         yerr=stdMass2[iterator:(iterator + len(resStepsList)),l],\
                         marker = markerRes,linestyle=':',\
@@ -2958,12 +2964,12 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
             iterator += len(resStepsList)*len(resList)
             if showPM:
                 for m in resToShow:
-                    handles[l].append(ax[0,l].errorbar(resStepsList,\
+                    handles[l].append(ax0.errorbar(resStepsList,\
                         meanMass1[iterator:(iterator + len(resStepsList)),l],\
                         yerr=stdMass1[iterator:(iterator + len(resStepsList)),l],\
                         marker = markerGadget,linestyle='-.',\
                         label='PM ($' + str(resList[m]) + '$)',color=colorGadget))
-                    handles[l + nCols].append(ax[1,l].errorbar(resStepsList,\
+                    handles[l + nCols].append(ax1.errorbar(resStepsList,\
                         meanMass2[iterator:(iterator + len(resStepsList)),l],\
                         yerr=stdMass2[iterator:(iterator + len(resStepsList)),l],\
                         marker = markerGadget,linestyle='-.',\
@@ -2973,12 +2979,12 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
             iterator += 2*len(resStepsList)*len(resList)
         # Log COLA masses:
         if showCOLA:
-            handles[l].append(ax[0,l].errorbar(logstepsList,\
+            handles[l].append(ax0.errorbar(logstepsList,\
                     meanMass1[iterator:(iterator + len(logstepsList)),l]\
                     ,yerr=stdMass1[iterator:(iterator + len(logstepsList)),l]\
                     ,marker = markerCOLA,linestyle='-',\
                     label='COLA (log steps)',color=colorLog))
-            handles[l + nCols].append(ax[1,l].errorbar(logstepsList,\
+            handles[l + nCols].append(ax1.errorbar(logstepsList,\
                     meanMass2[iterator:(iterator + len(logstepsList)),l]\
                     ,yerr=stdMass2[iterator:(iterator + len(logstepsList)),l]\
                     ,marker = markerCOLA,linestyle='-',\
@@ -2986,12 +2992,12 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
         iterator += len(logstepsList)
         # Log PM masses:
         if showPM:
-            handles[l].append(ax[0,l].errorbar(logstepsList,\
+            handles[l].append(ax0.errorbar(logstepsList,\
                     meanMass1[iterator:(iterator + len(logstepsList)),l],\
                     yerr=stdMass1[iterator:(iterator + len(logstepsList)),l],\
                     marker = markerPM,linestyle=':',label='PM (log steps)',\
                     color=colorLog))
-            handles[l + nCols].append(ax[1,l].errorbar(logstepsList,\
+            handles[l + nCols].append(ax1.errorbar(logstepsList,\
                     meanMass2[iterator:(iterator + len(logstepsList)),l],\
                     yerr=stdMass2[iterator:(iterator + len(logstepsList)),l],\
                     marker = markerPM,linestyle=':',label='PM (log steps)',\
@@ -2999,14 +3005,14 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
         iterator += len(logstepsList)
         # Adaptive gadget masses:
         if showGadgetAdaptive:
-            handles[l].append(ax[0,l].fill_between([0,256],\
+            handles[l].append(ax0.fill_between([0,256],\
                 [meanMassFull1[l] - stdMassFull1[l],meanMassFull1[l] - \
                     stdMassFull1[l]],\
                 [meanMassFull1[l] + stdMassFull1[l],meanMassFull1[l] + \
                     stdMassFull1[l]],\
                 color=colorAdaptive,alpha=alpha,\
                 label='Gadget, adaptive steps'))
-            handles[l + nCols].append(ax[1,l].fill_between([0,256],\
+            handles[l + nCols].append(ax1.fill_between([0,256],\
                 [meanMassFull2[l] - stdMassFull2[l],meanMassFull2[l] - \
                     stdMassFull2[l]],\
                 [meanMassFull2[l] + stdMassFull2[l],meanMassFull2[l] + \
@@ -3014,73 +3020,85 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
                 color=colorAdaptive,alpha=alpha,\
                 label='Gadget, adaptive steps'))
         if extraMasses is not None:
-            handles[l].append(ax[0,l].fill_between([0,256],\
+            handles[l].append(ax0.fill_between([0,256],\
                 [meanExtraMass[l] - stdExtraMass[l],meanExtraMass[l] - \
                     stdExtraMass[l]],\
                 [meanExtraMass[l] + stdExtraMass[l],meanExtraMass[l] + \
                     stdExtraMass[l]],\
                 color='r',alpha=alpha,label=extraMassLabel))
-            handles[l + nCols].append(ax[0,l].fill_between([0,256],\
+            handles[l + nCols].append(ax0.fill_between([0,256],\
                 [meanExtraMass[l] - stdExtraMass[l],meanExtraMass[l] - \
                     stdExtraMass[l]],\
                 [meanExtraMass[l] + stdExtraMass[l],meanExtraMass[l] + \
                     stdExtraMass[l]],\
                 color='r',alpha=alpha,label=extraMassLabel))
         # Axis formatting:
-        ax[0,l].set_title(clusterNames[l][0] + " (" + name1 + ")",\
+        ax0.set_title(clusterNames[l][0] + " (" + name1 + ")",\
             fontsize=fontsize,fontfamily=fontfamily)
-        ax[1,l].set_title(clusterNames[l][0] + " (" + name2 + ")",\
+        ax1.set_title(clusterNames[l][0] + " (" + name2 + ")",\
             fontsize=fontsize,fontfamily=fontfamily)
-        if l > 0:
-            ax[0,l].yaxis.label.set_visible(False)
-            ax[0,l].yaxis.set_major_formatter(NullFormatter())
-            ax[0,l].yaxis.set_minor_formatter(NullFormatter())
-            ax[1,l].yaxis.label.set_visible(False)
-            ax[1,l].yaxis.set_major_formatter(NullFormatter())
-            ax[1,l].yaxis.set_minor_formatter(NullFormatter())
-        else:
-            ax[0,l].set_ylabel(name1 + " [$10^{15}M_{\\odot}h^{-1}$]",\
-                fontsize=fontsize,fontfamily=fontfamily)
-            ax[1,l].set_ylabel(name2 + " [$10^{15}M_{\\odot}h^{-1}$]",\
-                fontsize=fontsize,fontfamily=fontfamily)
-        ax[0,l].xaxis.label.set_visible(False)
-        ax[0,l].xaxis.set_major_formatter(NullFormatter())
-        ax[0,l].xaxis.set_minor_formatter(NullFormatter())
-        ax[1,l].set_xlabel(xlabel,fontsize=fontsize,fontfamily=fontfamily)
-        ax[0,l].set_ylim(np.array(ylim1)/scale)
-        ax[1,l].set_ylim(np.array(ylim2)/scale)
-        ax[0,l].set_xscale('log')
-        ax[1,l].set_xscale('log')
-        ax[0,l].set_xlim(xlim)
-        ax[1,l].set_xlim(xlim)
-        ax[0,l].tick_params(axis='both', which='major', labelsize=fontsize)
-        ax[0,l].tick_params(axis='both', which='minor', labelsize=fontsize)
-        ax[1,l].tick_params(axis='both', which='major', labelsize=fontsize)
-        ax[1,l].tick_params(axis='both', which='minor', labelsize=fontsize)
+        ax0.xaxis.label.set_visible(False)
+        ax0.xaxis.set_major_formatter(NullFormatter())
+        ax0.xaxis.set_minor_formatter(NullFormatter())
+        ax1.set_xlabel(xlabel,fontsize=fontsize,fontfamily=fontfamily)
+        ax0.set_ylim(np.array(ylim1)/scale)
+        ax1.set_ylim(np.array(ylim2)/scale)
+        ax0.set_xscale('log')
+        ax1.set_xscale('log')
+        ax0.set_xlim(xlim)
+        ax1.set_xlim(xlim)
+        ax0.tick_params(axis='both', which='major', labelsize=fontsize)
+        ax0.tick_params(axis='both', which='minor', labelsize=fontsize)
+        ax1.tick_params(axis='both', which='major', labelsize=fontsize)
+        ax1.tick_params(axis='both', which='minor', labelsize=fontsize)
         if logy:
-            ax[0,l].set_yscale('log')
-            ax[1,l].set_yscale('log')
+            ax0.set_yscale('log')
+            ax1.set_yscale('log')
+        if l > 0:
+            ax0.yaxis.set_ticklabels([])
+            ax1.yaxis.set_ticklabels([])
+            ax0.yaxis.label.set_visible(False)
+            ax0.yaxis.set_major_formatter(NullFormatter())
+            ax0.yaxis.set_minor_formatter(NullFormatter())
+            ax1.yaxis.label.set_visible(False)
+            ax1.yaxis.set_major_formatter(NullFormatter())
+            ax1.yaxis.set_minor_formatter(NullFormatter())
+        else:
+            ax0.set_ylabel(name1 + " [$10^{15}M_{\\odot}h^{-1}$]",\
+                fontsize=fontsize,fontfamily=fontfamily)
+            ax1.set_ylabel(name2 + " [$10^{15}M_{\\odot}h^{-1}$]",\
+                fontsize=fontsize,fontfamily=fontfamily)
     plt.subplots_adjust(wspace=wspace,hspace=hspace,top=top,bottom=bottom,\
         left=left,right=right)
     # Legend:
     if showLegend:
-        if len(handles[0]) < 3:
-            ax[0,0].legend(prop={"size":8,"family":"serif"},frameon=False)
-        elif len(handles[0]) < 5:    
-            ax[0,0].legend(handles = handles[2][0:2],\
-                prop={"size":8,"family":"serif"},frameon=False)
-            ax[0,1].legend(handles = handles[5][2:],\
-                prop={"size":8,"family":"serif"},frameon=False)
+        if nCols > 1:
+            if len(handles[0]) < 3:
+                ax[0,0].legend(prop={"size":8,"family":"serif"},frameon=False)
+            elif len(handles[0]) < 5:    
+                ax[0,0].legend(handles = handles[2][0:2],\
+                    prop={"size":8,"family":"serif"},frameon=False)
+                ax[0,1].legend(handles = handles[5][2:],\
+                    prop={"size":8,"family":"serif"},frameon=False)
+            else:
+                ax[0,0].legend(handles = handles[2][0:2],\
+                    prop={"size":8,"family":"serif"},frameon=False)
+                ax[0,1].legend(handles = handles[5][2:4],\
+                    prop={"size":8,"family":"serif"},frameon=False)
+                ax[0,2].legend(handles = handles[5][4:],\
+                    prop={"size":8,"family":"serif"},frameon=False)
         else:
-            ax[0,0].legend(handles = handles[2][0:2],\
-                prop={"size":8,"family":"serif"},frameon=False)
-            ax[0,1].legend(handles = handles[5][2:4],\
-                prop={"size":8,"family":"serif"},frameon=False)
-            ax[0,2].legend(handles = handles[5][4:],\
-                prop={"size":8,"family":"serif"},frameon=False)
+            # Single column version.
+            if len(handles[0]) < 4:
+                ax[0].legend(prop={"size":8,"family":"serif"},frameon=False)
+            else:    
+                ax[0].legend(handles = handles[0][0:3],\
+                    prop={"size":8,"family":"serif"},frameon=False)
+                ax[1].legend(handles = handles[1][3:],\
+                    prop={"size":8,"family":"serif"},frameon=False)
     if title is not None:
         plt.suptitle()
-    plt.tight_layout()
+    #plt.tight_layout()
     if save:
         plt.savefig(savename)
     if show:

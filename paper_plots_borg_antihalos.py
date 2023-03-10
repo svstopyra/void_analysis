@@ -494,6 +494,158 @@ if doPPTs:
 
 dist = np.sqrt(np.sum(clusterLoc**2,1))
 
+# Variance of a distribution which is an integrated Poisson distribution:
+def smoothedPoissonVariance(galCounts):
+    expectedCounts = np.mean(galCounts,2)
+    varCounts = np.var(galCounts,2)
+    return expectedCounts + varCounts
+
+variancesRobust = np.mean(galaxyNumberCountsRobustAll,2) + \
+    np.var(galaxyNumberCountsRobustAll,2)
+
+errorType = "quadrature"
+
+# PPTs just comparing Coma and PP, in each of the magnitude bins:
+nRows = 4
+nCols = 2
+rBinCentres = plot.binCentres(rBins)
+ncList = [0,2]
+ylim = [1,1000]
+xlim = [0,20]
+fig, ax = plt.subplots(4,4,figsize=(textwidth,0.7*textwidth))
+for m in range(0,8):
+    i = int(m/nCols)
+    j = m - nCols*i
+    magTitle="$" + str(mAbs[m]) + " \\leq M < " + str(mAbs[m+1]) + "$"
+    # Cluster 1:
+    bright = galaxyNumberCountsRobust[:,ncList[0],2*m]
+    nz1 = np.where(bright > 0)[0]
+    dim = galaxyNumberCountsRobust[:,ncList[0],2*m+1]
+    nz2 = np.where(dim > 0)[0]
+    bright2Mpp = galaxyNumberCountExp[:,ncList[0],2*m]
+    dim2Mpp = galaxyNumberCountExp[:,ncList[0],2*m+1]
+    nz12Mpp = np.where(bright2Mpp)[0]
+    nz22Mpp = np.where(dim2Mpp)[0]
+    # Bright catalogue, cluster 1:
+    ax[i,j].plot(rBinCentres[nz1],bright[nz1],\
+        color=seabornColormap[0],label="Posterior (bright)",linestyle=':')
+    ax[i,j].plot(rBinCentres[nz12Mpp],bright2Mpp[nz12Mpp],\
+        color=seabornColormap[0],label="2M++ (bright)",linestyle='-')
+    if errorType == "poisson":
+        bounds = scipy.stats.poisson(bright[nz1]).interval(0.95)
+    elif errorType == "quadrature":
+        stdRobust = np.sqrt(variancesRobust[:,ncList[0],2*m])
+        bounds = (bright[nz1] - 2*stdRobust[nz1],bright[nz1] + 2*stdRobust[nz1])
+    else:
+        raise Exception("Invalid errorType!")
+    ax[i,j].fill_between(rBinCentres[nz1],bounds[0],bounds[1],\
+        color=seabornColormap[0],alpha=0.5)
+    # Dim Catalogue, cluster 1:
+    ax[i,j].plot(rBinCentres[nz2],dim[nz2],\
+        color=seabornColormap[1],label="Posterior (dim)",linestyle=':')
+    ax[i,j].plot(rBinCentres[nz22Mpp],dim2Mpp[nz22Mpp],\
+        color=seabornColormap[1],label="2M++ (dim)",linestyle='-')
+    if errorType == "poisson":
+        bounds = scipy.stats.poisson(dim[nz2]).interval(0.95)
+    elif errorType == "quadrature":
+        stdRobust = np.sqrt(variancesRobust[:,ncList[0],2*m+1])
+        bounds = (dim[nz2] - 2*stdRobust[nz2],dim[nz2] + 2*stdRobust[nz2])
+    else:
+        raise Exception("Invalid errorType!")
+    ax[i,j].fill_between(rBinCentres[nz2],bounds[0],bounds[1],\
+        color=seabornColormap[1],alpha=0.5)
+    ax[i,j].set_title(magTitle,fontsize=fontsize,fontfamily=fontfamily)
+    ax[i,j].set_yscale('log')
+    ax[i,j].set_ylim(ylim)
+    ax[i,j].set_xlim(xlim)
+    # Cluster 2:
+    bright = galaxyNumberCountsRobust[:,ncList[1],2*m]
+    nz1 = np.where(bright > 0)[0]
+    dim = galaxyNumberCountsRobust[:,ncList[1],2*m+1]
+    nz2 = np.where(dim > 0)[0]
+    bright2Mpp = galaxyNumberCountExp[:,ncList[1],2*m]
+    dim2Mpp = galaxyNumberCountExp[:,ncList[1],2*m+1]
+    nz12Mpp = np.where(bright2Mpp)[0]
+    nz22Mpp = np.where(dim2Mpp)[0]
+    # Bright catalogue, cluster 2:
+    ax[i,j+2].plot(rBinCentres[nz1],bright[nz1],\
+        color=seabornColormap[0],label="Posterior (bright)",linestyle=':')
+    ax[i,j+2].plot(rBinCentres[nz12Mpp],bright2Mpp[nz12Mpp],\
+        color=seabornColormap[0],label="2M++ (bright)",linestyle='-')
+    if errorType == "poisson":
+        bounds = scipy.stats.poisson(bright[nz1]).interval(0.95)
+    elif errorType == "quadrature":
+        stdRobust = np.sqrt(variancesRobust[:,ncList[1],2*m])
+        bounds = (bright[nz1] - 2*stdRobust[nz1],bright[nz1] + 2*stdRobust[nz1])
+    else:
+        raise Exception("Invalid errorType!")
+    ax[i,j+2].fill_between(rBinCentres[nz1],bounds[0],bounds[1],\
+        color=seabornColormap[0],alpha=0.5)
+    # Dim Catalogue, cluster 2:
+    ax[i,j+2].plot(rBinCentres[nz2],dim[nz2],\
+        color=seabornColormap[1],label="Posterior (dim)",linestyle=':')
+    ax[i,j+2].plot(rBinCentres[nz22Mpp],dim2Mpp[nz22Mpp],\
+        color=seabornColormap[1],label="2M++ (dim)",linestyle='-')
+    if errorType == "poisson":
+        bounds = scipy.stats.poisson(dim[nz2]).interval(0.95)
+    elif errorType == "quadrature":
+        stdRobust = np.sqrt(variancesRobust[:,ncList[1],2*m+1])
+        bounds = (dim[nz2] - 2*stdRobust[nz2],dim[nz2] + 2*stdRobust[nz2])
+    else:
+        raise Exception("Invalid errorType!")
+    ax[i,j+2].fill_between(rBinCentres[nz2],bounds[0],bounds[1],\
+        color=seabornColormap[1],alpha=0.5)
+    ax[i,j+2].set_title(magTitle,fontsize=fontsize,fontfamily=fontfamily)
+    ax[i,j+2].set_yscale('log')
+    ax[i,j+2].set_ylim(ylim)
+    ax[i,j+2].set_xlim(xlim)
+
+# Formatting the axis:
+nCols = 4
+nRows = 4
+xticks = np.array([0,5,10,15,20])
+for i in range(0,nRows):
+    for j in range(0,nCols):
+        ax[i,j].tick_params(axis='both', which='major', labelsize=fontsize)
+        ax[i,j].tick_params(axis='both', which='minor', labelsize=fontsize)
+        if j != 0:
+            # Remove the y labels:
+            ax[i,j].yaxis.set_ticklabels([])
+        if i != nRows - 1:
+            # Remove x labels:
+            ax[i,j].xaxis.set_ticklabels([])
+        else:
+            # Remove the last tick, from all but the last:
+            if j < nCols - 1:
+                ax[i,j].set_xticks(xticks[0:-1])
+            else:
+                ax[i,j].set_xticks(xticks)
+
+ax[0,0].legend(prop={"size":fontsize,"family":fontfamily},frameon=False)
+left = 0.095
+bottom = 0.105
+top = 0.92
+right = 0.980
+plt.subplots_adjust(top=top,bottom=bottom,left=left,right=right,\
+    hspace=0.285,wspace=0.0)
+
+# Common axis labels:
+fig.text((right+left)/2.0, 0.03,'$r\\,[\\mathrm{Mpc}h^{-1}]$',ha='center',\
+    fontsize=fontsize,fontfamily=fontfamily)
+fig.text(0.03,(top+bottom)/2.0,'Number of galaxies',va='center',\
+    rotation='vertical',fontsize=fontsize,fontfamily=fontfamily)
+
+# Cluster names:
+fig.text(left + (right - left)*0.25,0.97,clusterNames[ncList[0]][0],\
+    fontsize=fontsize,fontfamily=fontfamily,ha='center')
+fig.text(left + (right - left)*0.75,0.97,clusterNames[ncList[1]][0],\
+    fontsize=fontsize,fontfamily=fontfamily,ha='center')
+
+plt.show()
+
+
+
+
 # Density profiles around each cluster:
 nRows = 3
 nCols = 3
@@ -667,7 +819,7 @@ plt.savefig(figuresFolder + "voxel_scatter2.png")
 plt.show()
 
 # Mollweide plot of the amplitudes:
-ampSlice = 0
+ampSlice = 1
 nside=4
 MabsList = np.linspace(-21,-25,9)
 catNames = ['Bright','Dim']
@@ -711,12 +863,12 @@ clusterAmpsInds = [np.unique(hpIndicesLinear[ind]) for ind in indices]
 nGalsList = np.array([[np.sum(ng2MPP[m][indices[l]]) \
     for m in range(0,16)] for l in range(0,9)])
 
-nc = 0
+nc = 2
 nCols = 4
 nRows = 2
 logMlow = 13
 logMhigh = 15.2
-nBins = 11
+nBins = 31
 fontsize=8
 textwidth=7.1014
 ylim=[0,10]
@@ -733,22 +885,25 @@ for l in range(0,8):
         bins=np.logspace(-4,4,nBins),alpha=0.5,\
         color=seabornColormap[0],label='Bright catalogue',density=True)
     ax[i,j].hist(amps[2*l+1,:],\
-        bins=np.logspace(-4,4,nBins),alpha=0.5,\
+        bins=np.logspace(-3,3,nBins),alpha=0.5,\
         color=seabornColormap[1],label='Dim catalogue',density=True)
     for k in clusterAmpsInds[nc]:
         ax[i,j].axvline(np.mean(amps[2*l,k]),linestyle='--',\
             color=seabornColormap[0])
         ax[i,j].axvline(np.mean(amps[2*l+1,k]),linestyle='--',\
             color=seabornColormap[1])
-    plot.formatPlotGrid(ax,i,j,1,'Density',1,\
-        '$A_{\\alpha}$',nRows,[1e-4,1e4],nCols = nCols,fontsize=8,\
-        xlim=[1e-4,1e4])
+    #plot.formatPlotGrid(ax,i,j,1,'Density',1,\
+    #    '$A_{\\alpha}$',nRows,[1e-4,1e4],nCols = nCols,fontsize=8,\
+    #    xlim=[1e-4,1e4])
     ax[i,j].set_xscale('log')
     ax[i,j].set_yscale('log')
+    ax[i,j].set_xlim([1e-3,1e3])
+    ax[i,j].set_ylim([1e-4,1e4])
     ax[i,j].set_title("$" + str(MabsList[l]) + " < M \\leq" + \
         str(MabsList[l+1]) + "$\nBright/Dim = " + \
         str(int(nGalsList[nc][2*l])) + "/" + str(int(nGalsList[nc][2*l+1])),\
         fontsize=fontsize)
+    ax[i,j].set_xticks([1e-3,1e-1,1e1,1e3])
     if j > 0:
         ax[i,j].yaxis.set_ticklabels([])
     if i < nRows - 1:
@@ -759,16 +914,117 @@ for l in range(0,8):
         ax[i,j].xaxis.set_minor_formatter(NullFormatter())
     if i < nRows -1:
         ax[i,j].get_yticklabels()[0].set_visible(False)
-    if j > nCols -1:
+    if j < nCols -1:
         ax[i,j].get_xticklabels()[-1].set_visible(False)
 
 ax[0,0].legend(prop={"size":fontsize,"family":"serif"},frameon=False,\
     loc="upper right")
 
+top=0.88
+bottom=0.11
+left=0.125
+right=0.9
+hspace=0.16
+wspace=0.0
+plt.subplots_adjust(top=top,bottom=bottom,left=left,right=right,hspace=hspace,\
+    wspace=wspace)
+
+# Common axis labels:
+fig.text((right+left)/2.0, 0.03,'$A_{\\alpha}$',ha='center',\
+    fontsize=fontsize,fontfamily=fontfamily)
+fig.text(0.03,(top+bottom)/2.0,'Density',va='center',\
+    rotation='vertical',fontsize=fontsize,fontfamily=fontfamily)
+
+
 plt.suptitle("All Amplitudes across 5 MCMC resimulations vs " + \
     clusterNames[nc][0] + " amplitudes")
 plt.savefig(figuresFolder + "voxel_amp_distribution_" + clusterNames[nc][0] + \
     ".pdf")
+plt.show()
+
+# A different plot, showing two clusters compared:
+
+
+#plt.clf()
+nRows = 2
+nCols = 5
+fig, ax = plt.subplots(nRows,nCols,figsize=(textwidth,textwidth))
+plt.subplots_adjust(hspace=0.16,wspace=0.0)
+MabsList = np.linspace(-21,-25,9)
+amps = np.mean(Aalpha,0)
+ncList = [0,2]
+for i in range(0,2):
+    nc = ncList[i]
+    for l in range(3,8):
+        j = l - 3
+        h1 = ax[i,j].hist(amps[2*l,:],\
+            bins=np.logspace(-4,4,nBins),alpha=0.5,\
+            color=seabornColormap[0],label='Bright\n (all\namps.)',density=True)
+        h2 = ax[i,j].hist(amps[2*l+1,:],\
+            bins=np.logspace(-3,3,nBins),alpha=0.5,\
+            color=seabornColormap[1],label='Dim\n (all\namps.)',density=True)
+        for k in clusterAmpsInds[nc]:
+            h3 = ax[i,j].axvline(np.mean(amps[2*l,k]),linestyle='--',\
+                color=seabornColormap[0],label='Bright\n(cluster\namps.)')
+            h4 = ax[i,j].axvline(np.mean(amps[2*l+1,k]),linestyle='--',\
+                color=seabornColormap[1],label='Dim\n(cluster\namps.)')
+        #plot.formatPlotGrid(ax,i,j,1,'Density',1,\
+        #    '$A_{\\alpha}$',nRows,[1e-4,1e4],nCols = nCols,fontsize=8,\
+        #    xlim=[1e-4,1e4])
+        ax[i,j].set_xscale('log')
+        ax[i,j].set_yscale('log')
+        ax[i,j].set_xlim([1e-3,1e3])
+        ax[i,j].set_ylim([1e-4,1e4])
+        ax[i,j].set_title("$" + str(MabsList[l]) + " < M \\leq" + \
+            str(MabsList[l+1]) + "$\nBright: " + \
+            ("%.2g" % (100*nGalsList[nc][2*l]/np.sum(nGalsList[nc]))) + "%"\
+            "(" + ("%.2g" % (nGalsList[nc][2*l])) + ")" + \
+            "\n Dim: " + \
+            ("%.2g" % (100*nGalsList[nc][2*l+1]/np.sum(nGalsList[nc]))) + \
+            "%" + "(" + ("%.2g" % (nGalsList[nc][2*l+1])) + ")",\
+            fontsize=fontsize)
+        ax[i,j].set_xticks([1e-3,1e-1,1e1,1e3])
+        if j > 0:
+            ax[i,j].yaxis.set_ticklabels([])
+            print("Removing labels for (" + str(i) + "," + str(j) + ")")
+        if i < nRows - 1:
+            ax[i,j].xaxis.set_ticklabels([])
+            ax[i,j].xaxis.label.set_visible(False)
+            ax[i,j].xaxis.set_major_formatter(NullFormatter())
+            ax[i,j].xaxis.set_minor_formatter(NullFormatter())
+        if i < nRows -1:
+            ax[i,j].get_yticklabels()[0].set_visible(False)
+        if j < nCols -1:
+            ax[i,j].get_xticklabels()[-1].set_visible(False)
+
+ax[0,3].legend(handles = [h1[2][0],h2[2][0],h3,h4],\
+    prop={"size":fontsize,"family":"serif"},frameon=False,\
+    loc="upper right")
+
+top=0.88
+bottom=0.09
+left=0.105
+right=0.95
+hspace=0.16
+wspace=0.0
+plt.subplots_adjust(top=top,bottom=bottom,left=left,right=right,hspace=hspace,\
+    wspace=wspace)
+
+# Common axis labels:
+fig.text((right+left)/2.0, 0.03,'$A_{\\alpha}$',ha='center',\
+    fontsize=fontsize,fontfamily=fontfamily)
+fig.text(0.03,(top+bottom)/2.0,'Density',va='center',\
+    rotation='vertical',fontsize=fontsize,fontfamily=fontfamily)
+
+# Cluster names:
+fig.text(0.97,bottom + 0.75*(top-bottom),clusterNames[ncList[0]][0],\
+    va='center',rotation='vertical',fontsize=fontsize,fontfamily=fontfamily)
+fig.text(0.97,bottom + 0.25*(top-bottom),clusterNames[ncList[1]][0],\
+    va='center',rotation='vertical',fontsize=fontsize,fontfamily=fontfamily)
+
+plt.suptitle("All amplitudes compared to " + clusterNames[ncList[0]][0] + \
+    " and " + clusterNames[ncList[1]][0])
+plt.savefig(figuresFolder + "voxel_amp_distribution_compared.pdf")
 plt.show()
 
 
@@ -1654,12 +1910,14 @@ if doCon:
         xlabel='Number of Steps',\
         returnHandles=False,showLegend=True,nCols=3,showGADGET=False,\
         figsize=(textwidth,0.7*textwidth),showResMasses=False,logy=True,\
-        ylim1=[1e13,1e16],ylim2=[1e13,1e16])
+        ylim1=[5e14,5e15],ylim2=[5e14,5e15],top=0.931,bottom=0.114,left=0.13,\
+        right=0.979,hspace=0.351,wspace=0.0)
 
 
 
 if doCon:
-    clusterFilter2 = np.array([1,2,3],dtype=int)
+    #clusterFilter2 = np.array([1,2,3],dtype=int)
+    clusterFilter2 = np.array([1],dtype=int)
     plot.plotMassTypeComparison(np.array(massList200c2)[:,:,clusterFilter2],\
         np.array(massListFull200c2)[:,clusterFilter2],\
         np.array(massList100m2)[:,:,clusterFilter2],\
@@ -1674,9 +1932,10 @@ if doCon:
         savename = figuresFolder + "mass_convergence_comparison_other.pdf",\
         massName = "M",extraMasses = None,extraMassLabel = 'Extra mass scale',\
         xlabel='Number of Steps',\
-        returnHandles=False,showLegend=True,nCols=3,showGADGET=False,\
-        figsize=(textwidth,0.7*textwidth),showResMasses=False,\
-        ylim1=[1e13,1e16],ylim2=[1e13,1e16],logy=True)
+        returnHandles=False,showLegend=True,nCols=1,showGADGET=False,\
+        figsize=(0.45*textwidth,0.7*textwidth),showResMasses=False,\
+        ylim1=[3e13,8e14],ylim2=[3e13,8e14],logy=True,\
+        top=0.931,bottom=0.099,left=0.213,right=0.953,hspace=0.35,wspace=0.0)
 
 
 #-------------------------------------------------------------------------------
