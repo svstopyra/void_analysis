@@ -565,22 +565,26 @@ def plotMollweide(hpxMap,radius=None,galaxyAngles=None,galaxyDistances=None,
         fontname='serif',fontsize=8,fig=None,guideColor='grey',boundaryOff=False,
         titleFontSize=8,margins = (0,0,0,0),figsize = (8,4),xsize=800,dpi=300,\
         cbarSize=[4.0,0.5],returnAx=False,doColorbar=True,\
-        cbarLabel='$\\rho/\\bar{\\rho}$'):
+        cbarLabel='$\\rho/\\bar{\\rho}$',sub=None,reuse_axes=False):
     if galaxyAngles is not None:
         if radius is None:
             radius = 135/2.0
         pointsToScatter = filterPolarPointsToAnnulus(galaxyAngles,\
             galaxyDistances,radius,thickness=thickness)
+    if fig is None:
+        #fig = plt.figure(figsize = figsize)
+        #fig, ax = plt.subplots(1,1,figsize = figsize,dpi=dpi)
+        fig = plt.gcf()
     if ax is not None:
         plt.axes(ax)
-    if fig is None:
-        #fig = plt.figure(figsize = figsize)		
-        fig, ax = plt.subplots(1,1,figsize = figsize,dpi=dpi)
+    else:
+        ax = plt.gca()
     healpy.mollview(hpxMap,cmap=cmap,cbar=False,norm='log',
-        min=vmin,max=vmax,hold=True,fig=fig,margins=margins,xsize=xsize,sub=0)
+        min=vmin,max=vmax,hold=True,fig=fig,margins=margins,xsize=xsize,\
+        sub=sub,reuse_axes=reuse_axes)
+    ax = plt.gca()
     ax.set_autoscale_on(True)
     healpy.graticule(color=guideColor)
-    ax = plt.gca()
     # Hacky solution to make the boundary grey, since healpy hardcodes this:
     lines = ax.get_lines()
     for l in lines:
@@ -600,17 +604,17 @@ def plotMollweide(hpxMap,radius=None,galaxyAngles=None,galaxyDistances=None,
             fontfamily=fontname,fontsize=titleFontSize)
     else:
         plt.title(title,fontfamily=fontname,fontsize=titleFontSize)
-    sm = cm.ScalarMappable(colors.LogNorm(vmin=vmin,vmax=vmax),cmap=cmap)
-    plt.colorbar(sm,location='bottom',label=cbarLabel,\
-        shrink=shrink,pad=pad)
     if doColorbar:
-        cbax = fig.add_axes([figsize[0]/4,0.05,figsize[0]/2,figsize[0]/16])
-        cbar = plt.colorbar(sm, orientation="horizontal",
-            pad=pad,label=cbarLabel,shrink=shrink,\
-            aspect=cbarSize[0]/cbarSize[1],cax=cbax)
-        cbar.ax.tick_params(axis='both',labelsize=fontsize)
-        cbar.set_label(label = cbarLabel,fontsize = fontsize,\
-            fontfamily = fontname)
+        sm = cm.ScalarMappable(colors.LogNorm(vmin=vmin,vmax=vmax),cmap=cmap)
+        plt.colorbar(sm,location='bottom',label=cbarLabel,\
+            shrink=shrink,pad=pad)
+        #cbax = fig.add_axes([figsize[0]/4,0.05,figsize[0]/2,figsize[0]/16])
+        #cbar = plt.colorbar(sm, orientation="horizontal",
+        #    pad=pad,label=cbarLabel,shrink=shrink,\
+        #    aspect=cbarSize[0]/cbarSize[1],cax=cbax)
+        #cbar.ax.tick_params(axis='both',labelsize=fontsize)
+        #cbar.set_label(label = cbarLabel,fontsize = fontsize,\
+        #    fontfamily = fontname)
     if returnAx:
         return fig, ax
 
@@ -1379,7 +1383,8 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         titleFontSize = 8,fontname = 'serif',margins = (0,0,0,0),figsize = (8,4),
         xsize = 800,extent = None,bbox_inches = None,voidColour = None,
         antiHaloLabel = 'haloID',dpi=300,shrink=0.5,pad=0.05,\
-        cbarLabel='$\\rho/\\bar{\\rho}$'):
+        cbarLabel='$\\rho/\\bar{\\rho}$',ax=None,arrowAnnotations=True,\
+        doColorbar=True,sub=None,showLegend=True,reuse_axes=False):
     if hpxMap is None:
         rhobar = (np.sum(snap['mass'])/\
             (snap.properties['boxsize']**3)).in_units("Msol h**2 Mpc**-3")
@@ -1387,12 +1392,13 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
             fillZeros=vmin*rhobar,centre=np.array([0,0,0]),\
             nside=nside)/rhobar
     fig, ax = plotMollweide(hpxMap,galaxyAngles=galaxyAngles,\
-        galaxyDistances=galaxyDistances,\
+        galaxyDistances=galaxyDistances,ax=ax,\
         thickness=rCut,radius=rCut/2,nside=nside,\
         vmin=vmin,vmax=vmax,showGalaxies=showGalaxies,
         title=title,boundaryOff=boundaryOff,margins=margins,
         fontname=fontname,titleFontSize=titleFontSize,figsize=figsize,\
-        xsize=xsize,dpi=dpi,returnAx=True,doColorbar=False,cbarLabel=cbarLabel)
+        xsize=xsize,dpi=dpi,returnAx=True,doColorbar=doColorbar,\
+        cbarLabel=cbarLabel,sub=sub,reuse_axes=reuse_axes)
     if haloCentres is not None:
         haloAngles = context.equatorialXYZToSkyCoord(haloCentres)
         anglesToPlotHalos = np.vstack((haloAngles.icrs.ra.value,
@@ -1400,14 +1406,20 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
     if coordAbell is not None:
         anglesToPlotClusters = np.vstack((coordAbell.icrs.ra.value,
             coordAbell.icrs.dec.value)).T
-        mollweideScatter(anglesToPlotClusters[abellListLocation,:],color=haloColour,s=s,
-            marker=haloMarker,
+        if arrowAnnotations:
+            textPos = annotationPos
+            arrowprops=dict(arrowstyle = arrowstyle,shrinkA=shrinkArrow,
+                    color=arrowcolour,shrinkB = shrinkArrowB,
+                    connectionstyle=connectionstyle)
+        else:
+            textPos = None
+            arrowprops = None
+        mollweideScatter(anglesToPlotClusters[abellListLocation,:],\
+            color=haloColour,s=s,marker=haloMarker,
             text=nameListLargeClusters,fontsize=labelFontSize,
             horizontalalignment=ha,
-            verticalalignment=va,ax=ax,textPos=annotationPos,
-            arrowprops= dict(arrowstyle = arrowstyle,shrinkA=shrinkArrow,
-                color=arrowcolour,shrinkB = shrinkArrowB,
-                connectionstyle=connectionstyle),
+            verticalalignment=va,ax=ax,textPos=textPos,
+            arrowprops= arrowprops,
             arrowpad = arrowpad)
     if haloCentres is not None:
         mollweideScatter(anglesToPlotHalos,color=haloColour,s=s,marker=clusterMarker,
@@ -1485,9 +1497,10 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
                 fc=voidColour,ec='None',alpha=0.5,
                 label='Large anti-halos')
         handles.append(fakeVoid)
-    ax.legend(handles=handles,frameon=False,
-        prop={"size":legendFontSize,"family":"serif"},
-        loc=legLoc,bbox_to_anchor=bbox_to_anchor)
+    if showLegend:
+        ax.legend(handles=handles,frameon=False,
+            prop={"size":legendFontSize,"family":"serif"},
+            loc=legLoc,bbox_to_anchor=bbox_to_anchor)
     # As the last step,add a colorbar:
     #sm = cm.ScalarMappable(colors.LogNorm(vmin=vmin,vmax=vmax),cmap=cmap)
     #cbax = fig.add_axes([figsize[0]/4,0.05,figsize[0]/2,figsize[0]/16])

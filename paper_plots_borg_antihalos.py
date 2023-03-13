@@ -7,6 +7,10 @@ from void_analysis import massconstraintsplot
 from matplotlib import transforms
 import matplotlib.ticker
 from matplotlib.ticker import NullFormatter
+from matplotlib import cm
+from matplotlib import patches
+import matplotlib.lines as mlines
+import matplotlib.colors as colors
 import pickle
 import numpy as np
 import seaborn as sns
@@ -819,13 +823,125 @@ plt.savefig(figuresFolder + "voxel_scatter2.png")
 plt.show()
 
 # Mollweide plot of the amplitudes:
+nCols = 4
+nRows = 4
+fig, ax = plt.subplots(nRows,nCols,figsize=(2*textwidth,0.8*2*textwidth))
+top = 0.95
+bottom = 0.0
+left = 0.05
+right = 0.95
+wspace=0.2
+hspace=0.2
+plt.subplots_adjust(bottom=bottom,top = top,left=left,right=right,\
+    wspace=wspace,hspace=hspace)
+ampSlice = 0
+nside=4
+MabsList = np.linspace(-21,-25,9)
+catNames = ['Bright','Dim']
+cbarLabel = "$A_{\\alpha}/\\bar{A_{\\alpha}}$"
+filterDist = np.where((dist >= ampSlice*60.0) & \
+    (dist <= (ampSlice + 1)*60.0))[0]
+for m in range(0,8):
+    for l in range(0,2):
+        nc = 2*m + l
+        ncInd = 8*l + m # Index for referencing the axes (different order to 
+        # the index for referencing the bins):
+        i = int(ncInd/nCols)
+        j = ncInd - nCols*i
+        #title = catNames[l] + " catalogue, ($" + str(MabsList[m]) + " < M < " \
+        #    + str(MabsList[m+1]) + "$, $" + str(60.0*ampSlice) + \
+        #    " < D/\\mathrm{Mpc}h^{-1} < " + str(60.0*(ampSlice + 1)) + "$)"
+        title = "$" + str(MabsList[m]) + " < M < " \
+            + str(MabsList[m+1]) + "$"
+        nHPPix = 12*nside**2
+        dpi=300
+        guideColor='grey'
+        amps = Aalpha[ns,nc,ampSlice*nHPPix:(ampSlice+1)*nHPPix]
+        ampsMean = np.mean(amps)
+        hpxMap = amps/ampsMean
+        #namesList = [name[0] for name in clusterNames]
+        namesList = [str(k+1) for k in range(0,len(clusterNames))]
+        plotFormat='.pdf'
+        plot.plotLocalUniverseMollweide(135,snapList[ns],hpxMap=hpxMap,\
+            nside=nside,alpha_shapes = None,largeAntihalos = None,hr=None,\
+            coordAbell = coordCombinedAbellSphere,\
+            abellListLocation = [clusterIndMain[k] for k in filterDist],\
+            arrowAnnotations=False,\
+            nameListLargeClusters = [namesList[k] for k in filterDist],\
+            ha = [ha[k] for k in filterDist],va= [va[k] for k in filterDist],\
+            annotationPos = [annotationPos[k] for k in filterDist],\
+            vmin=1e-1,vmax=1e1,legLoc = 'lower left',\
+            bbox_to_anchor = (-0.1,-0.2),snapsort = None,\
+            antihaloCentres = None,boundaryOff=False,\
+            showFig=False,figsize = (scale*textwidth,scale*0.55*textwidth),\
+            voidColour = None,antiHaloLabel=None,\
+            bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
+            galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
+            voidAlpha = 0.6,labelFontSize=8,legendFontSize=8,title=title,\
+            dpi=dpi,cbarLabel=cbarLabel,ax=ax[i,j],\
+            doColorbar=False,sub=(nRows,nCols,ncInd),\
+            showLegend=False,reuse_axes=False,margins=(0.2,0.2,0.8,0.8),\
+            haloMarker='x')
+        axij = plt.gca()
+
+#plt.colorbar(sm,location='bottom',label=cbarLabel,\
+#    shrink=0.5,pad=0.05)
+#cbax = fig.add_axes([textwidth/4,0.05,textwidth/2,textwidth/16])
+#cbar = plt.colorbar(sm, orientation="horizontal",
+#    pad=0.05,label=cbarLabel,shrink=0.5,\
+#    cax=cbax)
+#cbar.ax.tick_params(axis='both',labelsize=legendFontsize)
+#cbar.set_label(label = cbarLabel,fontsize = legendFontsize,\
+#    fontfamily = "serif")
+
+plt.figure(fig)
+#plt.sca(fig.axes)
+#fig.subplots_adjust(bottom = 0.2)
+im = fig.axes[0].get_images()[0]
+sm = cm.ScalarMappable(colors.LogNorm(vmin=1e-1,vmax=1e1),cmap='PuOr_r')
+plt.colorbar(sm,ax=fig.axes,location='bottom',label=cbarLabel,\
+    shrink=0.5,pad=0.05)
+fig.text(0.97,bottom + 0.80*(top-bottom),"Bright catalogue",\
+    va='center',rotation='vertical',fontsize=fontsize,fontfamily=fontfamily)
+fig.text(0.97,bottom + 0.4*(top-bottom),"Dim catalogue",\
+    va='center',rotation='vertical',fontsize=fontsize,fontfamily=fontfamily)
+plt.suptitle("Healpix Amplitudes, $" + str(60.0*ampSlice) + \
+    " < D/\\mathrm{Mpc}h^{-1} < " + str(60.0*(ampSlice + 1)) + "$")
+plt.savefig(figuresFolder + "voxel_amplitude_distribution_all_cats_slice_" + \
+    str(ampSlice) + ".pdf",bbox_inches = 'tight')
+plt.show()
+
+
+
+# Mollweide plot of the amplitudes (individual):
+top = 0.95
+bottom = 0.0
+left = 0.05
+right = 0.95
+wspace=0.2
+hspace=0.2
+nCols = 4
+nRows = 4
+top = 0.95
+bottom = 0.0
+left = 0.05
+right = 0.95
+wspace=0.2
+hspace=0.2
 ampSlice = 1
 nside=4
 MabsList = np.linspace(-21,-25,9)
 catNames = ['Bright','Dim']
+cbarLabel = "$A_{\\alpha}/\\bar{A_{\\alpha}}$"
+filterDist = np.where((dist >= ampSlice*60.0) & \
+    (dist <= (ampSlice + 1)*60.0))[0]
 for m in range(0,8):
     for l in range(0,2):
         nc = 2*m + l
+        ncInd = 8*l + m # Index for referencing the axes (different order to 
+        # the index for referencing the bins):
+        i = int(ncInd/nCols)
+        j = ncInd - nCols*i
         title = catNames[l] + " catalogue, ($" + str(MabsList[m]) + " < M < " \
             + str(MabsList[m+1]) + "$, $" + str(60.0*ampSlice) + \
             " < D/\\mathrm{Mpc}h^{-1} < " + str(60.0*(ampSlice + 1)) + "$)"
@@ -835,25 +951,49 @@ for m in range(0,8):
         amps = Aalpha[ns,nc,ampSlice*nHPPix:(ampSlice+1)*nHPPix]
         ampsMean = np.mean(amps)
         hpxMap = amps/ampsMean
+        namesList = [name[0] for name in clusterNames]
+        #namesList = [str(k+1) for k in range(0,len(clusterNames))]
         plotFormat='.pdf'
-        plot.plotLocalUniverseMollweide(135,snapList[ns],hpxMap=hpxMap,nside=nside,\
-            alpha_shapes = None,largeAntihalos = None,hr=None,\
+        fig, ax = plt.subplots(figsize=(textwidth,0.55*textwidth))
+        plt.subplots_adjust(bottom=bottom,top = top,left=left,right=right,\
+            wspace=wspace,hspace=hspace)
+        plot.plotLocalUniverseMollweide(135,snapList[ns],hpxMap=hpxMap,\
+            nside=nside,alpha_shapes = None,largeAntihalos = None,hr=None,\
             coordAbell = coordCombinedAbellSphere,\
-            abellListLocation = clusterIndMain,\
-            nameListLargeClusters = [name[0] for name in clusterNames],\
-            ha = ha,va= va, annotationPos = annotationPos,\
-            vmin=1e-1,vmax=1e1,legLoc = 'lower left',bbox_to_anchor = (-0.1,-0.2),\
-            snapsort = None,antihaloCentres = None,\
+            abellListLocation = [clusterIndMain[k] for k in filterDist],\
+            arrowAnnotations=True,\
             figOut = figuresFolder + "voxel_healpix_distribution_cat_" + \
-            str(nc) + "_slice_" + str(ampSlice) + plotFormat,\
+            str(nc) + "_slice_" + str(ampSlice) + ".pdf",\
+            nameListLargeClusters = [namesList[k] for k in filterDist],\
+            ha = [ha[k] for k in filterDist],va= [va[k] for k in filterDist],\
+            annotationPos = [annotationPos[k] for k in filterDist],\
+            vmin=1e-1,vmax=1e1,legLoc = 'lower left',\
+            bbox_to_anchor = (-0.1,-0.2),snapsort = None,\
+            antihaloCentres = None,boundaryOff=False,\
             showFig=False,figsize = (scale*textwidth,scale*0.55*textwidth),\
             voidColour = None,antiHaloLabel=None,\
-            bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
+            bbox_inches = 'tight',galaxyAngles=equatorialRThetaPhi[:,1:],\
             galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
             voidAlpha = 0.6,labelFontSize=8,legendFontSize=8,title=title,\
-            dpi=dpi,cbarLabel="$A_{\\alpha}/\\bar{A_{\\alpha}}$")
+            dpi=dpi,cbarLabel=cbarLabel,ax=None,\
+            doColorbar=True,sub=(nRows,nCols,ncInd),\
+            showLegend=True,reuse_axes=False,margins=(0.2,0.2,0.8,0.8))
 
 plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Histograms of A by bin:
 
@@ -1135,6 +1275,59 @@ ax[1].legend(handles=tools.flatten(handles),\
 plt.savefig(figuresFolder + "cola20_amf_hmf.pdf")
 plt.show()
 
+# Combined on one plot:
+
+# HMF/AMF comparison:
+textwidth=7.1014
+fontsize=8
+fig, ax = plt.subplots(1,2,figsize=(textwidth,0.5*textwidth))
+plot.singleMassFunctionPlot(constrainedHaloMasses512Old,5e13,2e15,11,\
+    Om0=referenceSnapOld.properties['omegaM0'],\
+    h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
+    Ob0=0.04825,mLimLower=mLimLower,\
+    fontsize=fontsize,legendFontsize=fontsize,\
+    comparableHaloMasses=None,\
+    deltaListMean=deltaListMeanOld,deltaListError=deltaListErrorOld,\
+    savename=None,showTheory=False,legendLoc='lower left',\
+    ax=ax[0],ylabel='Number of halos',showLegend=False,\
+    title="Halos",xticks=[2e14,5e14,1e15],plotColour=seabornColormap[1])
+handles1 = plot.singleMassFunctionPlot(constrainedAntihaloMasses512Old,\
+    5e13,2e15,11,Om0=referenceSnapOld.properties['omegaM0'],\
+    h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
+    Ob0=0.04825,mLimLower=mLimLower,\
+    fontsize=fontsize,legendFontsize=fontsize,\
+    comparableHaloMasses=None,\
+    deltaListMean=deltaListMeanOld,deltaListError=deltaListErrorOld,\
+    savename=None,showTheory=False,\
+    ax=ax[1],ylabel='Number of antihalos',returnHandles=True,showLegend=False,\
+    title="Antihalos",xticks=[2e14,5e14,1e15],plotColour=seabornColormap[1])
+plot.singleMassFunctionPlot(constrainedHaloMasses512New,5e13,2e15,11,\
+    Om0=referenceSnapOld.properties['omegaM0'],\
+    h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
+    Ob0=0.04825,mLimLower=mLimLower,\
+    comparableHaloMasses=comparableHaloMassesNew,\
+    deltaListMean=deltaListMeanNew,deltaListError=deltaListErrorNew,\
+    savename=None,showTheory=False,legendLoc='lower left',\
+    fontsize=fontsize,legendFontsize=fontsize,\
+    ax=ax[0],ylabel='Number of halos',showLegend=False,\
+    title="Halos",label="COLA20 constrained",xticks=[2e14,5e14,1e15],\
+    plotColour=seabornColormap[0])
+handles2 = plot.singleMassFunctionPlot(constrainedAntihaloMasses512New,\
+    5e13,2e15,11,Om0=referenceSnapOld.properties['omegaM0'],\
+    h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
+    Ob0=0.04825,mLimLower=mLimLower,\
+    comparableHaloMasses=comparableAntihaloMassesNew,\
+    deltaListMean=deltaListMeanNew,deltaListError=deltaListErrorNew,\
+    savename=None,showTheory=False,fontsize=fontsize,legendFontsize=fontsize,\
+    ax=ax[1],ylabel='Number of antihalos',returnHandles=True,showLegend=False,\
+    title="Antihalos",label="COLA20 constrained",xticks=[2e14,5e14,1e15],\
+    plotColour=seabornColormap[0])
+handles = handles1 + handles2
+plt.tight_layout()
+ax[1].legend(handles=tools.flatten(handles),\
+    prop={"size":fontsize,"family":"serif"},loc='upper right',frameon=False)
+plt.savefig(figuresFolder + "pm10_vs_cola20_amf_hmf.pdf")
+plt.show()
 
 
 
