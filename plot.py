@@ -2856,11 +2856,12 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
         xlabel='Number of Steps',ylim1=[0,2.5e15],ylim2=[0,3.5e15],\
         xlim=[0.9,256],returnHandles=False,showLegend=True,nCols=3,alpha=0.5,\
         markerGadget=None,markerCOLA=None,markerPM=None,markerOther=None,\
-        wspace=0,hspace=0.2,top=0.9,bottom=0.1,left=0.1,right=0.95,scale=1e15,\
+        wspace=0,hspace=0.0,top=0.9,bottom=0.1,left=0.1,right=0.93,scale=1e15,\
         fontsize=8,fontfamily='serif',colorRes = seabornColormap[2],\
         showGADGET=True,showPM=True,showCOLA=True,markerRes='x',\
         showResMasses = True,resList = [256,512,1024,2048],\
-        resToShow=None,figsize=None,title=None,logy=False):
+        resToShow=None,figsize=None,title=None,logy=False,\
+        xticks=None,yticks1=None,yticks2=None):
     if resToShow is None:
         resToShow = np.arange(0,len(resList))
     nsamples = len(massList1)
@@ -3046,10 +3047,14 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
                     stdExtraMass[l]],\
                 color='r',alpha=alpha,label=extraMassLabel))
         # Axis formatting:
-        ax0.set_title(clusterNames[l][0] + " (" + name1 + ")",\
-            fontsize=fontsize,fontfamily=fontfamily)
-        ax1.set_title(clusterNames[l][0] + " (" + name2 + ")",\
-            fontsize=fontsize,fontfamily=fontfamily)
+        if clusterNames is not None:
+            ax0.set_title(clusterNames[l][0],\
+                fontsize=fontsize,fontfamily=fontfamily)
+        #ax1.set_title(clusterNames[l][0] + " (" + name2 + ")",\
+        #    fontsize=fontsize,fontfamily=fontfamily)
+        if logy:
+            ax0.set_yscale('log')
+            ax1.set_yscale('log')
         ax0.xaxis.label.set_visible(False)
         ax0.xaxis.set_major_formatter(NullFormatter())
         ax0.xaxis.set_minor_formatter(NullFormatter())
@@ -3064,9 +3069,22 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
         ax0.tick_params(axis='both', which='minor', labelsize=fontsize)
         ax1.tick_params(axis='both', which='major', labelsize=fontsize)
         ax1.tick_params(axis='both', which='minor', labelsize=fontsize)
-        if logy:
-            ax0.set_yscale('log')
-            ax1.set_yscale('log')
+        if xticks is not None:
+            ax1.set_xticks(xticks)
+        if yticks1 is not None:
+            rescaledTicks = np.array(yticks1)/scale
+            ax0.set_yticks(rescaledTicks)
+            ylabels = [scientificNotation(tick) for tick in rescaledTicks]
+            #print(ylabels)
+            ax0.yaxis.set_ticklabels(ylabels)
+            ax0.yaxis.set_minor_formatter(NullFormatter())
+        if yticks2 is not None:
+            rescaledTicks = np.array(yticks2)/scale 
+            ax1.set_yticks(rescaledTicks)
+            ylabels = [scientificNotation(tick) for tick in rescaledTicks]
+            #print(ylabels)
+            ax1.yaxis.set_ticklabels(ylabels)
+            ax1.yaxis.set_minor_formatter(NullFormatter())
         if l > 0:
             ax0.yaxis.set_ticklabels([])
             ax1.yaxis.set_ticklabels([])
@@ -3081,8 +3099,16 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
                 fontsize=fontsize,fontfamily=fontfamily)
             ax1.set_ylabel(name2 + " [$10^{15}M_{\\odot}h^{-1}$]",\
                 fontsize=fontsize,fontfamily=fontfamily)
+        ax0.set_xticks([])
     plt.subplots_adjust(wspace=wspace,hspace=hspace,top=top,bottom=bottom,\
         left=left,right=right)
+    # Mass labels:
+    fig.text(0.95,bottom + 0.75*(top-bottom),name1,\
+        va='center',rotation='vertical',fontsize=fontsize,\
+        fontfamily=fontfamily)
+    fig.text(0.95,bottom + 0.25*(top-bottom),name2,\
+        va='center',rotation='vertical',fontsize=fontsize,\
+        fontfamily=fontfamily)
     # Legend:
     if showLegend:
         if nCols > 1:

@@ -271,7 +271,8 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
     if verbose:
         print("Done.")
     return [galaxyNumberCountExp,galaxyNumberCountsRobust,\
-        galaxyNumberCountsRobustAll,galaxyCountSquaredAll,posteriorMassAll]
+        galaxyNumberCountsRobustAll,galaxyCountSquaredAll,posteriorMassAll,\
+        Aalpha]
 
 
 def getPPTForPoints(points,nBins = 31,nClust=9,nMagBins = 16,N=256,\

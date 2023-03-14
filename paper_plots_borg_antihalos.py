@@ -4,6 +4,7 @@ from void_analysis import plot, tools, snapedit
 from void_analysis.paper_plots_borg_antihalos_generate_data import *
 from void_analysis.real_clusters import getClusterSkyPositions
 from void_analysis import massconstraintsplot
+from void_analysis.simulation_tools import ngPerLBin
 from matplotlib import transforms
 import matplotlib.ticker
 from matplotlib.ticker import NullFormatter
@@ -41,7 +42,7 @@ snapnameOldRev = "reverse_output/snapshot_006"
 
 data_folder = figuresFolder
 
-fontsize = 10
+fontsize = 8
 legendFontsize = 8
 
 #-------------------------------------------------------------------------------
@@ -105,7 +106,7 @@ doPPTs = True
 if doPPTs:
     [galaxyNumberCountExp,galaxyNumberCountsRobust,\
         galaxyNumberCountsRobustAll,galaxyCountSquaredAll,\
-        posteriorMassAll] = \
+        posteriorMassAll,Aalpha] = \
         tools.loadOrRecompute(\
             figuresFolder + "ppt_plots_data.p",getPPTPlotData,\
             _recomputeData = recomputeData,nBins = nBinsPPT,nClust=9,\
@@ -438,7 +439,93 @@ if doSky:
             centralAntihalos=centralAntihalos)
 
 #-------------------------------------------------------------------------------
-# Reproduce the plots for the borg-antihalos paper
+# CATALOGUE DATA:
+
+ns = 0
+snapToShow = pynbody.load(samplesFolder + "sample" + str(snapNumList[ns]) + \
+    "/gadget_full_forward_512/snapshot_001")
+tools.remapBORGSimulation(snapToShow,swapXZ=False,reverse=True)
+
+rCut = 135
+ha = ['right','left','left','left','left','center','right',\
+        'right','right']
+va = ['center','bottom','bottom','bottom','top',\
+        'top','center','center','center']
+annotationPos = [[-1.1,0.9],\
+        [1.1,1.0],[1.5,0.6],[1.3,-1.2],[1.3,-0.7],[-1,0.2],[0.8,0.6],\
+        [1.0,0.1],[-1.7,0.5]]
+nameList = [name[0] for name in clusterNames]
+textwidth=7.1014
+textheight=9.0971
+scale = 1.26
+width = textwidth
+height = 0.55*textwidth
+cropPoint = ((scale -1)/2)*np.array([width,height]) + np.array([0,0.09])
+bound_box = transforms.Bbox([[cropPoint[0], cropPoint[1]],
+    [cropPoint[0] + width, cropPoint[1] + height]])
+
+# Cluster locations:
+# Galaxy positions:
+if doSky:
+    [combinedAbellN,combinedAbellPos,abell_nums] = \
+        real_clusters.getCombinedAbellCatalogue()
+    abell_nums = [426,2147,1656,3627,3571,548,2197,2052,1367]
+    [abell_l,abell_b,abell_n,abell_z,\
+            abell_d,p_abell,coordAbell] = getClusterSkyPositions("./")
+    clusterInd = [np.where(combinedAbellN == n)[0] for n in abell_nums]
+    clusterIndMain = [ind[0] for ind in clusterInd]
+    coordCombinedAbellCart = SkyCoord(x=combinedAbellPos[:,0]*u.Mpc,\
+            y = combinedAbellPos[:,1]*u.Mpc,z = combinedAbellPos[:,2]*u.Mpc,\
+            frame='icrs',representation_type='cartesian')
+    equatorialRThetaPhi = np.vstack(\
+        [coordCombinedAbellCart.icrs.spherical.distance.value,\
+        coordCombinedAbellCart.icrs.spherical.lat.value*np.pi/180.0,\
+        coordCombinedAbellCart.icrs.spherical.lon.value*np.pi/180]).transpose()
+    coordCombinedAbellSphere = SkyCoord(distance=\
+        coordCombinedAbellCart.icrs.spherical.distance.value*u.Mpc,\
+        ra = coordCombinedAbellCart.icrs.spherical.lon.value*u.deg,\
+        dec = coordCombinedAbellCart.icrs.spherical.lat.value*u.deg,\
+        frame='icrs')
+
+clusterLoc = np.array([np.array([\
+    coordCombinedAbellCart[ind].x.value,\
+    coordCombinedAbellCart[ind].y.value,\
+    coordCombinedAbellCart[ind].z.value]) for ind in clusterIndMain])
+
+referenceSnap = snapToShow
+Om0 = referenceSnap.properties['omegaM0']
+Ode0 = referenceSnap.properties['omegaL0']
+H0 = referenceSnap.properties['h']*100
+h = referenceSnap.properties['h']
+boxsize = referenceSnap.properties['boxsize'].ratio("Mpc a h**-1")
+cosmo = astropy.cosmology.LambdaCDM(H0,Om0,Ode0)
+
+
+# 2M++ Data:
+catFile = "./2mpp_data/2m++.txt"
+catalogue = np.loadtxt(catFile,delimiter='|',skiprows=31,
+    usecols=(1,2,3,4,5,6,7,8,10,11,12,13,14,15,16))
+# Filter useable galaxies:
+useGalaxy = (catalogue[:,10] == 0.0) & (catalogue[:,5] > 0)
+c = 299792.458 # Speed of light in km/s
+z = catalogue[:,5]/c # Redshift
+# Cosmological parameters:
+
+# Comoving distance to all galaxies, in Mpc/h:
+dcz = cosmo.comoving_distance(z[useGalaxy]).value*cosmo.h
+# Co-ordinates of the galaxies (in Mpc/h):
+coord = astropy.coordinates.SkyCoord(\
+    ra = catalogue[useGalaxy,0]*astropy.units.degree,\
+    dec=catalogue[useGalaxy,1]*astropy.units.degree,\
+    distance=dcz*astropy.units.Mpc)
+# Cartesian positions of galaxies in equatorial, comoving co-ordinates (Mpc/h):
+equatorialXYZ = np.vstack((coord.cartesian.x.value,\
+    coord.cartesian.y.value,coord.cartesian.z.value)).T
+
+equatorialRThetaPhi = np.vstack((coord.icrs.spherical.distance.value,\
+    coord.icrs.spherical.lon.value,\
+    coord.icrs.spherical.lat.value)).T
+
 
 
 #-------------------------------------------------------------------------------
@@ -458,6 +545,38 @@ nCat = 2*binAbs + binApp
 mAbs = np.linspace(-21,-25,9)
 mApp = ["m<11.5","12.5 \\leq m < 12.5"]
 mAppName = ["Bright catalogue", "Dim Catalogue"]
+
+# Load amplitudes data:
+N = 256
+nMagBins = 16
+restartFile = 'new_chain_restart/merged_restart.h5'
+restart = h5py.File(restartFile)
+hpIndices = restart['scalars']['colormap3d'][()]
+hpIndicesLinear = hpIndices.reshape(N**3)
+nside = 4
+nsamples = len(snapNumList)
+
+ng2MPP = np.reshape(tools.loadOrRecompute(data_folder + "mg2mppK3.p",\
+    survey.griddedGalCountFromCatalogue,\
+    cosmo,tmppFile="2mpp_data/2MPP.txt",Kcorrection = True,N=N,\
+    _recomputeData=recomputeData),(nMagBins,N**3))
+#ngHP = tools.loadOrRecompute(data_folder + "ngHP3.p",\
+#    tools.getCountsInHealpixSlices,\
+#    ng2MPP,hpIndices,nside=nside,nres=N,_recomputeData=recomputeData)
+
+grid = snapedit.gridListPermutation(N,perm=(2,1,0))
+centroids = grid*boxsize/N + boxsize/(2*N)
+positions = snapedit.unwrap(centroids - np.array([boxsize/2]*3),boxsize)
+tree = scipy.spatial.cKDTree(snapedit.wrap(positions + boxsize/2,boxsize),\
+    boxsize=boxsize)
+
+
+wrappedPos = snapedit.wrap(clusterLoc + boxsize/2,boxsize)
+indices = tree.query_ball_point(wrappedPos,10)
+clusterAmpsInds = [np.unique(hpIndicesLinear[ind]) for ind in indices]
+nGalsList = np.array([[np.sum(ng2MPP[m][indices[l]]) \
+    for m in range(0,16)] for l in range(0,9)])
+
 
 if doPPTs:
     plot.plotPPTProfiles(np.sum(galaxyNumberCountExp,2),\
@@ -510,16 +629,18 @@ variancesRobust = np.mean(galaxyNumberCountsRobustAll,2) + \
 errorType = "quadrature"
 
 # PPTs just comparing Coma and PP, in each of the magnitude bins:
-nRows = 4
+nRows = 3
 nCols = 2
+fontfamily='serif'
+fontsize = 8
 rBinCentres = plot.binCentres(rBins)
 ncList = [0,2]
 ylim = [1,1000]
 xlim = [0,20]
-fig, ax = plt.subplots(4,4,figsize=(textwidth,0.7*textwidth))
-for m in range(0,8):
-    i = int(m/nCols)
-    j = m - nCols*i
+fig, ax = plt.subplots(nRows,4,figsize=(textwidth,0.7*textwidth))
+for m in range(2,8):
+    i = int((m-2)/nCols)
+    j = m - 2 - nCols*i
     magTitle="$" + str(mAbs[m]) + " \\leq M < " + str(mAbs[m+1]) + "$"
     # Cluster 1:
     bright = galaxyNumberCountsRobust[:,ncList[0],2*m]
@@ -532,9 +653,9 @@ for m in range(0,8):
     nz22Mpp = np.where(dim2Mpp)[0]
     # Bright catalogue, cluster 1:
     ax[i,j].plot(rBinCentres[nz1],bright[nz1],\
-        color=seabornColormap[0],label="Posterior (bright)",linestyle=':')
+        color=seabornColormap[1],label="Posterior (bright)",linestyle=':')
     ax[i,j].plot(rBinCentres[nz12Mpp],bright2Mpp[nz12Mpp],\
-        color=seabornColormap[0],label="2M++ (bright)",linestyle='-')
+        color=seabornColormap[1],label="2M++ (bright)",linestyle='-')
     if errorType == "poisson":
         bounds = scipy.stats.poisson(bright[nz1]).interval(0.95)
     elif errorType == "quadrature":
@@ -543,12 +664,12 @@ for m in range(0,8):
     else:
         raise Exception("Invalid errorType!")
     ax[i,j].fill_between(rBinCentres[nz1],bounds[0],bounds[1],\
-        color=seabornColormap[0],alpha=0.5)
+        color=seabornColormap[1],alpha=0.5)
     # Dim Catalogue, cluster 1:
     ax[i,j].plot(rBinCentres[nz2],dim[nz2],\
-        color=seabornColormap[1],label="Posterior (dim)",linestyle=':')
+        color=seabornColormap[0],label="Posterior (dim)",linestyle=':')
     ax[i,j].plot(rBinCentres[nz22Mpp],dim2Mpp[nz22Mpp],\
-        color=seabornColormap[1],label="2M++ (dim)",linestyle='-')
+        color=seabornColormap[0],label="2M++ (dim)",linestyle='-')
     if errorType == "poisson":
         bounds = scipy.stats.poisson(dim[nz2]).interval(0.95)
     elif errorType == "quadrature":
@@ -557,11 +678,14 @@ for m in range(0,8):
     else:
         raise Exception("Invalid errorType!")
     ax[i,j].fill_between(rBinCentres[nz2],bounds[0],bounds[1],\
-        color=seabornColormap[1],alpha=0.5)
-    ax[i,j].set_title(magTitle,fontsize=fontsize,fontfamily=fontfamily)
-    ax[i,j].set_yscale('log')
+        color=seabornColormap[0],alpha=0.5)
     ax[i,j].set_ylim(ylim)
     ax[i,j].set_xlim(xlim)
+    #ax[i,j].set_title(magTitle,fontsize=fontsize,fontfamily=fontfamily)
+    ax[i,j].text(0.5*(xlim[1] + xlim[0]),\
+        ylim[0] + 0.5*(ylim[1] - ylim[0]),magTitle,ha='center',\
+        fontfamily=fontfamily,fontsize=fontsize)
+    ax[i,j].set_yscale('log')
     # Cluster 2:
     bright = galaxyNumberCountsRobust[:,ncList[1],2*m]
     nz1 = np.where(bright > 0)[0]
@@ -573,9 +697,9 @@ for m in range(0,8):
     nz22Mpp = np.where(dim2Mpp)[0]
     # Bright catalogue, cluster 2:
     ax[i,j+2].plot(rBinCentres[nz1],bright[nz1],\
-        color=seabornColormap[0],label="Posterior (bright)",linestyle=':')
+        color=seabornColormap[1],label="Posterior (bright)",linestyle=':')
     ax[i,j+2].plot(rBinCentres[nz12Mpp],bright2Mpp[nz12Mpp],\
-        color=seabornColormap[0],label="2M++ (bright)",linestyle='-')
+        color=seabornColormap[1],label="2M++ (bright)",linestyle='-')
     if errorType == "poisson":
         bounds = scipy.stats.poisson(bright[nz1]).interval(0.95)
     elif errorType == "quadrature":
@@ -584,12 +708,12 @@ for m in range(0,8):
     else:
         raise Exception("Invalid errorType!")
     ax[i,j+2].fill_between(rBinCentres[nz1],bounds[0],bounds[1],\
-        color=seabornColormap[0],alpha=0.5)
+        color=seabornColormap[1],alpha=0.5)
     # Dim Catalogue, cluster 2:
     ax[i,j+2].plot(rBinCentres[nz2],dim[nz2],\
-        color=seabornColormap[1],label="Posterior (dim)",linestyle=':')
+        color=seabornColormap[0],label="Posterior (dim)",linestyle=':')
     ax[i,j+2].plot(rBinCentres[nz22Mpp],dim2Mpp[nz22Mpp],\
-        color=seabornColormap[1],label="2M++ (dim)",linestyle='-')
+        color=seabornColormap[0],label="2M++ (dim)",linestyle='-')
     if errorType == "poisson":
         bounds = scipy.stats.poisson(dim[nz2]).interval(0.95)
     elif errorType == "quadrature":
@@ -598,16 +722,20 @@ for m in range(0,8):
     else:
         raise Exception("Invalid errorType!")
     ax[i,j+2].fill_between(rBinCentres[nz2],bounds[0],bounds[1],\
-        color=seabornColormap[1],alpha=0.5)
-    ax[i,j+2].set_title(magTitle,fontsize=fontsize,fontfamily=fontfamily)
-    ax[i,j+2].set_yscale('log')
+        color=seabornColormap[0],alpha=0.5)
+    #ax[i,j+2].set_title(magTitle,fontsize=fontsize,fontfamily=fontfamily)
     ax[i,j+2].set_ylim(ylim)
     ax[i,j+2].set_xlim(xlim)
+    ax[i,j+2].text(0.5*(xlim[1] + xlim[0]),\
+        ylim[0] + 0.5*(ylim[1] - ylim[0]),magTitle,ha='center',\
+        fontfamily=fontfamily,fontsize=fontsize)
+    ax[i,j+2].set_yscale('log')
 
 # Formatting the axis:
 nCols = 4
-nRows = 4
+nRows = 3
 xticks = np.array([0,5,10,15,20])
+yticks = np.array([1,10,100,1000])
 for i in range(0,nRows):
     for j in range(0,nCols):
         ax[i,j].tick_params(axis='both', which='major', labelsize=fontsize)
@@ -615,6 +743,8 @@ for i in range(0,nRows):
         if j != 0:
             # Remove the y labels:
             ax[i,j].yaxis.set_ticklabels([])
+        if i != 0:
+            ax[i,j].set_yticks(yticks[0:-1])
         if i != nRows - 1:
             # Remove x labels:
             ax[i,j].xaxis.set_ticklabels([])
@@ -625,13 +755,14 @@ for i in range(0,nRows):
             else:
                 ax[i,j].set_xticks(xticks)
 
-ax[0,0].legend(prop={"size":fontsize,"family":fontfamily},frameon=False)
+ax[0,0].legend(prop={"size":fontsize,"family":fontfamily},frameon=False,\
+    loc=(0.1,0.3))
 left = 0.095
 bottom = 0.105
 top = 0.92
 right = 0.980
 plt.subplots_adjust(top=top,bottom=bottom,left=left,right=right,\
-    hspace=0.285,wspace=0.0)
+    hspace=0.0,wspace=0.0)
 
 # Common axis labels:
 fig.text((right+left)/2.0, 0.03,'$r\\,[\\mathrm{Mpc}h^{-1}]$',ha='center',\
@@ -768,59 +899,59 @@ plt.savefig(figuresFolder + "cluster_mass_plots.pdf")
 plt.show()
 
 
-
-# Density scatter plot (need to load relevant data):
-plt.clf()
-ns = 0
-for cl in [2]:
-    #predicted = np.sum(ngMCMC[ns,:],0)
-    predicted = ngMCMC[ns,9]
-    plt.scatter(mcmcDenLin_r[ns][indicesGad[ns][cl]],\
-        predicted[indicesGad[ns][cl]],marker='.',\
-        color=seabornColormap[cl],label=clusterNames[cl][0])
-    plt.ylim([0,150])
-    plt.xlim([0,60])
-
-plt.xlabel('$\\rho/\\bar{\\rho} = 1+\\delta$')
-plt.ylabel('$N_{\\mathrm{gal}}$')
-plt.yscale('log')
-plt.ylim([1e-3,200])
-plt.legend()
-plt.savefig(figuresFolder + "voxel_scatter.png")
-plt.show()
+doDenScatter = False
+if doDenScatter:
+    # Density scatter plot (need to load relevant data):
+    plt.clf()
+    ns = 0
+    for cl in [2]:
+        #predicted = np.sum(ngMCMC[ns,:],0)
+        predicted = ngMCMC[ns,9]
+        plt.scatter(mcmcDenLin_r[ns][indicesGad[ns][cl]],\
+            predicted[indicesGad[ns][cl]],marker='.',\
+            color=seabornColormap[cl],label=clusterNames[cl][0])
+        plt.ylim([0,150])
+        plt.xlim([0,60])
+    plt.xlabel('$\\rho/\\bar{\\rho} = 1+\\delta$')
+    plt.ylabel('$N_{\\mathrm{gal}}$')
+    plt.yscale('log')
+    plt.ylim([1e-3,200])
+    plt.legend()
+    plt.savefig(figuresFolder + "voxel_scatter.png")
+    plt.show()
 
 
 # Predicted vs actual:
-plt.clf()
-for cl in [2]:
-    ngPredAll = Aalpha[:,:,hpIndicesLinear[indices[cl]]]*\
-        ngMCMC[:,:,indices[cl]]
-    ngPred = np.mean(ngPredAll,0)
-    plt.scatter(np.sum(ng2MPP,0)[indices[cl]],\
-        np.sum(ngPred,0),marker='.',\
-        color=seabornColormap[cl],label=clusterNames[cl][0])
-    plt.xlim([0,20])
-    plt.ylim([0,20])
-
-plt.xlabel('2M++ galaxies')
-plt.ylabel('Predicted galaxies')
-plt.legend()
-plt.savefig(figuresFolder + "voxel_scatter_predicted_vs_actual.png")
-plt.show()
+if doDenScatter:
+    plt.clf()
+    for cl in [2]:
+        ngPredAll = Aalpha[:,:,hpIndicesLinear[indices[cl]]]*\
+            ngMCMC[:,:,indices[cl]]
+        ngPred = np.mean(ngPredAll,0)
+        plt.scatter(np.sum(ng2MPP,0)[indices[cl]],\
+            np.sum(ngPred,0),marker='.',\
+            color=seabornColormap[cl],label=clusterNames[cl][0])
+        plt.xlim([0,20])
+        plt.ylim([0,20])
+    plt.xlabel('2M++ galaxies')
+    plt.ylabel('Predicted galaxies')
+    plt.legend()
+    plt.savefig(figuresFolder + "voxel_scatter_predicted_vs_actual.png")
+    plt.show()
 
 
 # Density scatter vs actual 2M++ galaxies:
-plt.clf()
-for cl in range(0,9):
-    plt.scatter(mcmcDenLin_r[ns][indices[cl]],\
-        np.sum(ng2MPP[:],0)[indices[cl]],marker='.',\
-        color=seabornColormap[cl],label=clusterNames[cl][0])
-
-plt.xlabel('$\\rho/\\bar{\\rho} = 1+\\delta$')
-plt.ylabel('$N_{\\mathrm{gal}}$')
-plt.legend()
-plt.savefig(figuresFolder + "voxel_scatter2.png")
-plt.show()
+if doDenScatter:
+    plt.clf()
+    for cl in range(0,9):
+        plt.scatter(mcmcDenLin_r[ns][indices[cl]],\
+            np.sum(ng2MPP[:],0)[indices[cl]],marker='.',\
+            color=seabornColormap[cl],label=clusterNames[cl][0])
+    plt.xlabel('$\\rho/\\bar{\\rho} = 1+\\delta$')
+    plt.ylabel('$N_{\\mathrm{gal}}$')
+    plt.legend()
+    plt.savefig(figuresFolder + "voxel_scatter2.png")
+    plt.show()
 
 # Mollweide plot of the amplitudes:
 nCols = 4
@@ -982,33 +1113,15 @@ for m in range(0,8):
 plt.show()
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 # Histograms of A by bin:
 
 # Cluster A values:
-indices = tree.query_ball_point(wrappedPos,5)
-clusterAmpsInds = [np.unique(hpIndicesLinear[ind]) for ind in indices]
-nGalsList = np.array([[np.sum(ng2MPP[m][indices[l]]) \
-    for m in range(0,16)] for l in range(0,9)])
-
 nc = 2
 nCols = 4
 nRows = 2
 logMlow = 13
 logMhigh = 15.2
-nBins = 31
+nBins = 25
 fontsize=8
 textwidth=7.1014
 ylim=[0,10]
@@ -1093,66 +1206,113 @@ plt.subplots_adjust(hspace=0.16,wspace=0.0)
 MabsList = np.linspace(-21,-25,9)
 amps = np.mean(Aalpha,0)
 ncList = [0,2]
+bins = np.logspace(-3,2,nBins)
+logBins = np.linspace(-3,2,nBins)
 for i in range(0,2):
     nc = ncList[i]
     for l in range(3,8):
         j = l - 3
-        h1 = ax[i,j].hist(amps[2*l,:],\
-            bins=np.logspace(-4,4,nBins),alpha=0.5,\
-            color=seabornColormap[0],label='Bright\n (all\namps.)',density=True)
-        h2 = ax[i,j].hist(amps[2*l+1,:],\
-            bins=np.logspace(-3,3,nBins),alpha=0.5,\
-            color=seabornColormap[1],label='Dim\n (all\namps.)',density=True)
+        if nGalsList[nc][2*l] > 0:
+            bars1 = ax[i,j].hist(np.log10(amps[2*l,amps[2*l,:] > 0]),\
+                bins=logBins,alpha=0.5,\
+                color=seabornColormap[1],label='Bright\n (all\namps.)',\
+                density=True)
+        if nGalsList[nc][2*l+1] > 0:
+            bars2 = ax[i,j].hist(np.log10(amps[2*l+1,amps[2*l+1,:] > 0]),\
+                bins=logBins,alpha=0.5,\
+                color=seabornColormap[0],label='Dim\n (all\namps.)',\
+                density=True)
         for k in clusterAmpsInds[nc]:
-            h3 = ax[i,j].axvline(np.mean(amps[2*l,k]),linestyle='--',\
-                color=seabornColormap[0],label='Bright\n(cluster\namps.)')
-            h4 = ax[i,j].axvline(np.mean(amps[2*l+1,k]),linestyle='--',\
-                color=seabornColormap[1],label='Dim\n(cluster\namps.)')
+            #h3 = ax[i,j].axvline(np.mean(amps[2*l,k]),linestyle='--',\
+            #    color=seabornColormap[0],label='Bright\n(cluster\namps.)')
+            #h4 = ax[i,j].axvline(np.mean(amps[2*l+1,k]),linestyle='--',\
+            #    color=seabornColormap[1],label='Dim\n(cluster\namps.)')
+            if nGalsList[nc][2*l] > 0 and (amps[2*l,k] > 0):
+                xPos = np.log10(np.mean(amps[2*l,k]))
+                # Get the bin this would lie in:
+                inBin = np.where((logBins[0:-1] < xPos) & \
+                    (logBins[1:] >= xPos))[0][0]
+                yPos = bars1[0][inBin]
+                #arrow1 = ax[i,j].scatter([xPos],[yPos],\
+                #    color=seabornColormap[1],label='Bright\n(cluster\namps.)',\
+                #    linestyle='None',marker='$\\downarrow$',s=100)
+                arrow2 = ax[i,j].annotate("",xy=(xPos,yPos),\
+                    xytext=(xPos,yPos+0.15),\
+                    arrowprops=dict(arrowstyle='->',color=seabornColormap[1]))
+            if nGalsList[nc][2*l+1] > 0 and (amps[2*l+1,k] > 0):
+                xPos = np.log10(np.mean(amps[2*l+1,k]))
+                # Get the bin this would lie in:
+                inBin = np.where((logBins[0:-1] < xPos) & \
+                    (logBins[1:] >= xPos))[0][0]
+                yPos = bars2[0][inBin]
+                #arrow2 = ax[i,j].scatter([xPos],[yPos],\
+                #    color=seabornColormap[0],label='Dim\n(cluster\namps.)',\
+                #    linestyle='None',marker='$\\downarrow$',s=100)
+                arrow2 = ax[i,j].annotate("",xy=(xPos,yPos),\
+                    xytext=(xPos,yPos+0.15),\
+                    arrowprops=dict(arrowstyle='->',color=seabornColormap[0]))
         #plot.formatPlotGrid(ax,i,j,1,'Density',1,\
         #    '$A_{\\alpha}$',nRows,[1e-4,1e4],nCols = nCols,fontsize=8,\
         #    xlim=[1e-4,1e4])
-        ax[i,j].set_xscale('log')
-        ax[i,j].set_yscale('log')
-        ax[i,j].set_xlim([1e-3,1e3])
-        ax[i,j].set_ylim([1e-4,1e4])
-        ax[i,j].set_title("$" + str(MabsList[l]) + " < M \\leq" + \
+        #ax[i,j].set_xscale('log')
+        #ax[i,j].set_yscale('log')
+        ax[i,j].set_xlim([-3,3])
+        ax[i,j].set_ylim([0,2])
+        ax[i,j].text(0,1.75,"$" + str(MabsList[l]) + " < M \\leq" + \
             str(MabsList[l+1]) + "$\nBright: " + \
             ("%.2g" % (100*nGalsList[nc][2*l]/np.sum(nGalsList[nc]))) + "%"\
             "(" + ("%.2g" % (nGalsList[nc][2*l])) + ")" + \
             "\n Dim: " + \
             ("%.2g" % (100*nGalsList[nc][2*l+1]/np.sum(nGalsList[nc]))) + \
             "%" + "(" + ("%.2g" % (nGalsList[nc][2*l+1])) + ")",\
-            fontsize=fontsize)
-        ax[i,j].set_xticks([1e-3,1e-1,1e1,1e3])
+            fontsize=fontsize,ha='center')
+        #ax[i,j].set_xticks([1e-3,1e-1,1e1,1e3])
+        ax[i,j].set_xticks([-3,-2,-1,0,1,2])
         if j > 0:
             ax[i,j].yaxis.set_ticklabels([])
             print("Removing labels for (" + str(i) + "," + str(j) + ")")
         if i < nRows - 1:
             ax[i,j].xaxis.set_ticklabels([])
             ax[i,j].xaxis.label.set_visible(False)
-            ax[i,j].xaxis.set_major_formatter(NullFormatter())
-            ax[i,j].xaxis.set_minor_formatter(NullFormatter())
+            #ax[i,j].xaxis.set_major_formatter(NullFormatter())
+            #ax[i,j].xaxis.set_minor_formatter(NullFormatter())
         if i < nRows -1:
             ax[i,j].get_yticklabels()[0].set_visible(False)
-        if j < nCols -1:
-            ax[i,j].get_xticklabels()[-1].set_visible(False)
+        #if j < nCols -1:
+            #ax[i,j].get_xticklabels()[-1].set_visible(False)
 
-ax[0,3].legend(handles = [h1[2][0],h2[2][0],h3,h4],\
+
+# Fake legend entries:
+h1 = matplotlib.patches.Patch(color=seabornColormap[1],alpha=0.5,\
+    label='Bright\n amplitudes')
+h2 = matplotlib.patches.Patch(color=seabornColormap[0],alpha=0.5,\
+    label='Dim\n amplitudes')
+h3 = matplotlib.lines.Line2D([0],[0],color=seabornColormap[1],\
+    label='Bright\n amplitudes\n at cluster',linestyle='None',\
+    marker='$\\downarrow$',markersize=10)
+h4 = matplotlib.lines.Line2D([0],[0],color=seabornColormap[0],\
+    label='Dim\n amplitudes\n at cluster',linestyle='None',\
+    marker='$\\downarrow$',markersize=10)
+
+ax[0,2].legend(handles = [h1,h2],\
     prop={"size":fontsize,"family":"serif"},frameon=False,\
-    loc="upper right")
+    loc=(0.1,0.67))
+ax[0,3].legend(handles = [h3,h4],\
+    prop={"size":fontsize,"family":"serif"},frameon=False,\
+    loc=(0.1,0.6))
 
-top=0.88
+top=0.94
 bottom=0.09
 left=0.105
 right=0.95
-hspace=0.16
+hspace=0.0
 wspace=0.0
 plt.subplots_adjust(top=top,bottom=bottom,left=left,right=right,hspace=hspace,\
     wspace=wspace)
 
 # Common axis labels:
-fig.text((right+left)/2.0, 0.03,'$A_{\\alpha}$',ha='center',\
-    fontsize=fontsize,fontfamily=fontfamily)
+fig.text((right+left)/2.0, 0.03,'$\\mathrm{log}_{\\mathrm{10}}(A_{\\alpha})$',\
+    ha='center',fontsize=fontsize,fontfamily=fontfamily)
 fig.text(0.03,(top+bottom)/2.0,'Density',va='center',\
     rotation='vertical',fontsize=fontsize,fontfamily=fontfamily)
 
@@ -1290,7 +1450,8 @@ plot.singleMassFunctionPlot(constrainedHaloMasses512Old,5e13,2e15,11,\
     deltaListMean=deltaListMeanOld,deltaListError=deltaListErrorOld,\
     savename=None,showTheory=False,legendLoc='lower left',\
     ax=ax[0],ylabel='Number of halos',showLegend=False,\
-    title="Halos",xticks=[2e14,5e14,1e15],plotColour=seabornColormap[1])
+    title="Halos",xticks=[2e14,5e14,1e15],plotColour=seabornColormap[1],\
+    compColour = 'grey')
 handles1 = plot.singleMassFunctionPlot(constrainedAntihaloMasses512Old,\
     5e13,2e15,11,Om0=referenceSnapOld.properties['omegaM0'],\
     h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
@@ -1300,7 +1461,8 @@ handles1 = plot.singleMassFunctionPlot(constrainedAntihaloMasses512Old,\
     deltaListMean=deltaListMeanOld,deltaListError=deltaListErrorOld,\
     savename=None,showTheory=False,\
     ax=ax[1],ylabel='Number of antihalos',returnHandles=True,showLegend=False,\
-    title="Antihalos",xticks=[2e14,5e14,1e15],plotColour=seabornColormap[1])
+    title="Antihalos",xticks=[2e14,5e14,1e15],plotColour=seabornColormap[1],\
+    compColour = 'grey')
 plot.singleMassFunctionPlot(constrainedHaloMasses512New,5e13,2e15,11,\
     Om0=referenceSnapOld.properties['omegaM0'],\
     h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
@@ -1311,7 +1473,7 @@ plot.singleMassFunctionPlot(constrainedHaloMasses512New,5e13,2e15,11,\
     fontsize=fontsize,legendFontsize=fontsize,\
     ax=ax[0],ylabel='Number of halos',showLegend=False,\
     title="Halos",label="COLA20 constrained",xticks=[2e14,5e14,1e15],\
-    plotColour=seabornColormap[0])
+    plotColour=seabornColormap[0],compColour = 'grey')
 handles2 = plot.singleMassFunctionPlot(constrainedAntihaloMasses512New,\
     5e13,2e15,11,Om0=referenceSnapOld.properties['omegaM0'],\
     h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
@@ -1321,7 +1483,7 @@ handles2 = plot.singleMassFunctionPlot(constrainedAntihaloMasses512New,\
     savename=None,showTheory=False,fontsize=fontsize,legendFontsize=fontsize,\
     ax=ax[1],ylabel='Number of antihalos',returnHandles=True,showLegend=False,\
     title="Antihalos",label="COLA20 constrained",xticks=[2e14,5e14,1e15],\
-    plotColour=seabornColormap[0])
+    plotColour=seabornColormap[0],compColour = 'grey')
 handles = handles1 + handles2
 plt.tight_layout()
 ax[1].legend(handles=tools.flatten(handles),\
@@ -1586,10 +1748,7 @@ for mAbs in range(0,8):
 #-------------------------------------------------------------------------------
 # ANTIHALO SKY PLOT:
 
-ns = 0
-snapToShow = pynbody.load(samplesFolder + "sample" + str(snapNumList[ns]) + \
-    "/gadget_full_forward_512/snapshot_001")
-tools.remapBORGSimulation(snapToShow,swapXZ=False,reverse=True)
+
 
 snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
         + "gadget_full_forward_512/snapshot_001") for snapNum in snapNumList]
@@ -1601,86 +1760,6 @@ hrList = [snap.halos() for snap in snapListRev]
 for snap in snapList:
     tools.remapBORGSimulation(snap,swapXZ=False,reverse=True)
 
-
-rCut = 135
-ha = ['right','left','left','left','left','center','right',\
-        'right','right']
-va = ['center','bottom','bottom','bottom','top',\
-        'top','center','center','center']
-annotationPos = [[-1.1,0.9],\
-        [1.1,1.0],[1.5,0.6],[1.3,-1.2],[1.3,-0.7],[-1,0.2],[0.8,0.6],\
-        [1.0,0.1],[-1.7,0.5]]
-nameList = [name[0] for name in clusterNames]
-textwidth=7.1014
-textheight=9.0971
-scale = 1.26
-width = textwidth
-height = 0.55*textwidth
-cropPoint = ((scale -1)/2)*np.array([width,height]) + np.array([0,0.09])
-bound_box = transforms.Bbox([[cropPoint[0], cropPoint[1]],
-    [cropPoint[0] + width, cropPoint[1] + height]])
-
-# Cluster locations:
-# Galaxy positions:
-if doSky:
-    [combinedAbellN,combinedAbellPos,abell_nums] = \
-        real_clusters.getCombinedAbellCatalogue()
-    abell_nums = [426,2147,1656,3627,3571,548,2197,2052,1367]
-    [abell_l,abell_b,abell_n,abell_z,\
-            abell_d,p_abell,coordAbell] = getClusterSkyPositions("./")
-    clusterInd = [np.where(combinedAbellN == n)[0] for n in abell_nums]
-    clusterIndMain = [ind[0] for ind in clusterInd]
-    coordCombinedAbellCart = SkyCoord(x=combinedAbellPos[:,0]*u.Mpc,\
-            y = combinedAbellPos[:,1]*u.Mpc,z = combinedAbellPos[:,2]*u.Mpc,\
-            frame='icrs',representation_type='cartesian')
-    equatorialRThetaPhi = np.vstack(\
-        [coordCombinedAbellCart.icrs.spherical.distance.value,\
-        coordCombinedAbellCart.icrs.spherical.lat.value*np.pi/180.0,\
-        coordCombinedAbellCart.icrs.spherical.lon.value*np.pi/180]).transpose()
-    coordCombinedAbellSphere = SkyCoord(distance=\
-        coordCombinedAbellCart.icrs.spherical.distance.value*u.Mpc,\
-        ra = coordCombinedAbellCart.icrs.spherical.lon.value*u.deg,\
-        dec = coordCombinedAbellCart.icrs.spherical.lat.value*u.deg,\
-        frame='icrs')
-
-clusterLoc = np.array([np.array([\
-    coordCombinedAbellCart[ind].x.value,\
-    coordCombinedAbellCart[ind].y.value,\
-    coordCombinedAbellCart[ind].z.value]) for ind in clusterIndMain])
-
-referenceSnap = snapToShow
-Om0 = referenceSnap.properties['omegaM0']
-Ode0 = referenceSnap.properties['omegaL0']
-H0 = referenceSnap.properties['h']*100
-h = referenceSnap.properties['h']
-boxsize = referenceSnap.properties['boxsize'].ratio("Mpc a h**-1")
-cosmo = astropy.cosmology.LambdaCDM(H0,Om0,Ode0)
-
-
-# 2M++ Data:
-catFile = "./2mpp_data/2m++.txt"
-catalogue = np.loadtxt(catFile,delimiter='|',skiprows=31,
-    usecols=(1,2,3,4,5,6,7,8,10,11,12,13,14,15,16))
-# Filter useable galaxies:
-useGalaxy = (catalogue[:,10] == 0.0) & (catalogue[:,5] > 0)
-c = 299792.458 # Speed of light in km/s
-z = catalogue[:,5]/c # Redshift
-# Cosmological parameters:
-
-# Comoving distance to all galaxies, in Mpc/h:
-dcz = cosmo.comoving_distance(z[useGalaxy]).value*cosmo.h
-# Co-ordinates of the galaxies (in Mpc/h):
-coord = astropy.coordinates.SkyCoord(\
-    ra = catalogue[useGalaxy,0]*astropy.units.degree,\
-    dec=catalogue[useGalaxy,1]*astropy.units.degree,\
-    distance=dcz*astropy.units.Mpc)
-# Cartesian positions of galaxies in equatorial, comoving co-ordinates (Mpc/h):
-equatorialXYZ = np.vstack((coord.cartesian.x.value,\
-    coord.cartesian.y.value,coord.cartesian.z.value)).T
-
-equatorialRThetaPhi = np.vstack((coord.icrs.spherical.distance.value,\
-    coord.icrs.spherical.lon.value,\
-    coord.icrs.spherical.lat.value)).T
 
 doClusterMasses = True
 if doClusterMasses:
@@ -2102,9 +2181,10 @@ if doCon:
         massName = "M",extraMasses = None,extraMassLabel = 'Extra mass scale',\
         xlabel='Number of Steps',\
         returnHandles=False,showLegend=True,nCols=3,showGADGET=False,\
-        figsize=(textwidth,0.7*textwidth),showResMasses=False,logy=True,\
-        ylim1=[5e14,5e15],ylim2=[5e14,5e15],top=0.931,bottom=0.114,left=0.13,\
-        right=0.979,hspace=0.351,wspace=0.0)
+        figsize=(textwidth,0.7*textwidth),showResMasses=False,logy=False,\
+        ylim1=[5e14,2e15],ylim2=[1e15,3.2e15],top=0.931,bottom=0.114,left=0.13,\
+        right=0.93,hspace=0.0,wspace=0.0,yticks1=[5e14,1e15,1.5e15,2e15],\
+        yticks2=[1e15,2e15,3e15])
 
 
 
@@ -2116,8 +2196,7 @@ if doCon:
         np.array(massList100m2)[:,:,clusterFilter2],\
         np.array(massListFull100m2)[:,clusterFilter2],\
         stepsListGADGET,stepsList,logstepsList,stepsList1024,\
-        stepsListEPS_0p662,resStepsList,np.array([["Cluster " + str(k)] \
-        for k in clusterFilter2]),\
+        stepsListEPS_0p662,resStepsList,None,\
         name1 = "$M_{200\\mathrm{c}}$",name2 = "$M_{100\\mathrm{m}}$",\
         show=True,save = True,colorLinear = seabornColormap[0],\
         colorLog=seabornColormap[1],colorGadget='k',colorAdaptive='grey',\
@@ -2127,8 +2206,9 @@ if doCon:
         xlabel='Number of Steps',\
         returnHandles=False,showLegend=True,nCols=1,showGADGET=False,\
         figsize=(0.45*textwidth,0.7*textwidth),showResMasses=False,\
-        ylim1=[3e13,8e14],ylim2=[3e13,8e14],logy=True,\
-        top=0.931,bottom=0.099,left=0.213,right=0.953,hspace=0.35,wspace=0.0)
+        ylim1=[2e13,2e14],ylim2=[1e14,5e14],logy=False,\
+        yticks1 = [5e13,1e14,1.5e14,2e14],yticks2 = [1e14,2e14,3e14,4e14],\
+        top=0.97,bottom=0.099,left=0.213,right=0.93,hspace=0.0,wspace=0.0)
 
 
 #-------------------------------------------------------------------------------
