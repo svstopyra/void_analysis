@@ -117,7 +117,7 @@ def pointsInBoundedPlaneWithWrap(positions,xlim,ylim,boxsize=None):
 def getGriddedGalCount(pos,N,boxsize):
     H, edges = np.histogramdd(pos,bins = N,\
         range = ((-boxsize/2,boxsize/2),(-boxsize/2,boxsize/2),\
-            (-boxsize/2,boxsize/2)),normed=False)
+            (-boxsize/2,boxsize/2)),density=False)
     # Deal with an ordering issue:
     H = np.reshape(np.reshape(H,N**3),(N,N,N),order='F')
     return H
