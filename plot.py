@@ -2861,7 +2861,7 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
         showGADGET=True,showPM=True,showCOLA=True,markerRes='x',\
         showResMasses = True,resList = [256,512,1024,2048],\
         resToShow=None,figsize=None,title=None,logy=False,\
-        xticks=None,yticks1=None,yticks2=None):
+        xticks=None,yticks1=None,yticks2=None,massLabelPos=0.98):
     if resToShow is None:
         resToShow = np.arange(0,len(resList))
     nsamples = len(massList1)
@@ -3103,10 +3103,10 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
     plt.subplots_adjust(wspace=wspace,hspace=hspace,top=top,bottom=bottom,\
         left=left,right=right)
     # Mass labels:
-    fig.text(0.95,bottom + 0.75*(top-bottom),name1,\
+    fig.text(massLabelPos,bottom + 0.75*(top-bottom),name1,\
         va='center',rotation='vertical',fontsize=fontsize,\
         fontfamily=fontfamily)
-    fig.text(0.95,bottom + 0.25*(top-bottom),name2,\
+    fig.text(massLabelPos,bottom + 0.25*(top-bottom),name2,\
         va='center',rotation='vertical',fontsize=fontsize,\
         fontfamily=fontfamily)
     # Legend:

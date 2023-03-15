@@ -776,6 +776,8 @@ fig.text(left + (right - left)*0.25,0.97,clusterNames[ncList[0]][0],\
 fig.text(left + (right - left)*0.75,0.97,clusterNames[ncList[1]][0],\
     fontsize=fontsize,fontfamily=fontfamily,ha='center')
 
+plt.savefig(figuresFolder + "ppts_compared_" + clusterNames[ncList[0]][0] + \
+    "_vs_" + clusterNames[ncList[1]][0] + ".pdf")
 plt.show()
 
 
@@ -1152,10 +1154,12 @@ for l in range(0,8):
     ax[i,j].set_yscale('log')
     ax[i,j].set_xlim([1e-3,1e3])
     ax[i,j].set_ylim([1e-4,1e4])
-    ax[i,j].set_title("$" + str(MabsList[l]) + " < M \\leq" + \
-        str(MabsList[l+1]) + "$\nBright/Dim = " + \
-        str(int(nGalsList[nc][2*l])) + "/" + str(int(nGalsList[nc][2*l+1])),\
-        fontsize=fontsize)
+    #title = "$" + str(MabsList[l]) + " < M \\leq" + \
+    #    str(MabsList[l+1]) + "$\nBright/Dim = " + \
+    #    str(int(nGalsList[nc][2*l])) + "/" + str(int(nGalsList[nc][2*l+1]))
+    title = "$" + str(MabsList[l]) + " < M \\leq" + \
+        str(MabsList[l+1]) + "$"
+    ax[i,j].set_title(title,fontsize=fontsize)
     ax[i,j].set_xticks([1e-3,1e-1,1e1,1e3])
     if j > 0:
         ax[i,j].yaxis.set_ticklabels([])
@@ -1201,85 +1205,155 @@ plt.show()
 #plt.clf()
 nRows = 2
 nCols = 5
-fig, ax = plt.subplots(nRows,nCols,figsize=(textwidth,textwidth))
+nBins = 21
+fig, ax = plt.subplots(nRows,nCols,figsize=(textwidth,0.45*textwidth))
 plt.subplots_adjust(hspace=0.16,wspace=0.0)
 MabsList = np.linspace(-21,-25,9)
 amps = np.mean(Aalpha,0)
 ncList = [0,2]
-bins = np.logspace(-3,2,nBins)
-logBins = np.linspace(-3,2,nBins)
+binsDefault = np.logspace(-3,2,nBins)
+#bins = np.linspace(0,100,nBins)
+logBinsDefault = np.linspace(-3,2,nBins)
+
+# Variable bins?
+variableBins = [\
+    np.linspace(0,100,nBins),\
+    np.linspace(0,10,nBins),\
+    np.linspace(0,10,nBins),\
+    np.linspace(0,0.1,nBins),\
+    np.linspace(0,2,nBins)]
+variableLogBins = [\
+    np.linspace(-2,3,nBins),\
+    np.linspace(-2,1,nBins),\
+    np.linspace(-2,1,nBins),\
+    np.linspace(-3,-1,nBins),\
+    np.linspace(-2,1,nBins)]
+
+variableXlims = [[0,100],[0,10],[0,10],[0,0.1],[0,1]]
+variableLogXlims = [[-2.2,3.2],[-2.2,1.2],[-2.2,1.2],[-3.2,-0.8],[-2.2,0.2]]
+variableLogXTicks = [[-2,-1,0,1,2],[-2,-1,0,1],[-2,-1,0,1],[-3,-2,-1],[-2,-1,0]]
+
+useLogBins = True
+useVariableBins = True
 for i in range(0,2):
     nc = ncList[i]
     for l in range(3,8):
         j = l - 3
+        if useVariableBins:
+            logBins = variableLogBins[l-3]
+            bins = variableBins[l-3]
+            xLimits = variableXlims[l-3]
+            xLogLimits = variableLogXlims[l-3]
+            xLogTicks = variableLogXTicks[l-3]
+        else:
+            logBins = logBinsDefault
+            bins = binsDefault
+            xLimits = [0,100]
+            xLogLimits = [-3,3]
+            xLogTicks = [-3,-2,-1,0,1,2,3]
+        xMid = np.mean(xLimits)
+        xLogMid = np.mean(xLogLimits)
         if nGalsList[nc][2*l] > 0:
-            bars1 = ax[i,j].hist(np.log10(amps[2*l,amps[2*l,:] > 0]),\
-                bins=logBins,alpha=0.5,\
-                color=seabornColormap[1],label='Bright\n (all\namps.)',\
-                density=True)
+            if useLogBins:
+                bars1 = ax[i,j].hist(np.log10(amps[2*l,amps[2*l,:] > 0]),\
+                    bins=logBins,alpha=0.5,\
+                    color=seabornColormap[1],label='Bright\n (all\namps.)',\
+                    density=True)
+            else:
+                bars1 = ax[i,j].hist(amps[2*l,amps[2*l,:] > 0],\
+                    bins=bins,alpha=0.5,\
+                    color=seabornColormap[1],label='Bright\n (all\namps.)',\
+                    density=True)
         if nGalsList[nc][2*l+1] > 0:
-            bars2 = ax[i,j].hist(np.log10(amps[2*l+1,amps[2*l+1,:] > 0]),\
-                bins=logBins,alpha=0.5,\
-                color=seabornColormap[0],label='Dim\n (all\namps.)',\
-                density=True)
+            if useLogBins:
+                bars2 = ax[i,j].hist(np.log10(amps[2*l+1,amps[2*l+1,:] > 0]),\
+                    bins=logBins,alpha=0.5,\
+                    color=seabornColormap[0],label='Dim\n (all\namps.)',\
+                    density=True)
+            else:
+                bars2 = ax[i,j].hist(amps[2*l+1,amps[2*l+1,:] > 0],\
+                    bins=bins,alpha=0.5,\
+                    color=seabornColormap[0],label='Dim\n (all\namps.)',\
+                    density=True)
         for k in clusterAmpsInds[nc]:
             #h3 = ax[i,j].axvline(np.mean(amps[2*l,k]),linestyle='--',\
             #    color=seabornColormap[0],label='Bright\n(cluster\namps.)')
             #h4 = ax[i,j].axvline(np.mean(amps[2*l+1,k]),linestyle='--',\
             #    color=seabornColormap[1],label='Dim\n(cluster\namps.)')
             if nGalsList[nc][2*l] > 0 and (amps[2*l,k] > 0):
-                xPos = np.log10(np.mean(amps[2*l,k]))
-                # Get the bin this would lie in:
-                inBin = np.where((logBins[0:-1] < xPos) & \
-                    (logBins[1:] >= xPos))[0][0]
+                if useLogBins:
+                    xPos = np.log10(np.mean(amps[2*l,k]))
+                    inBin = np.where((logBins[0:-1] < xPos) & \
+                        (logBins[1:] >= xPos))[0][0]
+                else:
+                    xPos = np.mean(amps[2*l,k])
+                    inBin = np.where((bins[0:-1] < xPos) & \
+                        (bins[1:] >= xPos))[0][0]
                 yPos = bars1[0][inBin]
                 #arrow1 = ax[i,j].scatter([xPos],[yPos],\
                 #    color=seabornColormap[1],label='Bright\n(cluster\namps.)',\
                 #    linestyle='None',marker='$\\downarrow$',s=100)
                 arrow2 = ax[i,j].annotate("",xy=(xPos,yPos),\
-                    xytext=(xPos,yPos+0.15),\
+                    xytext=(xPos,yPos+0.3),\
                     arrowprops=dict(arrowstyle='->',color=seabornColormap[1]))
             if nGalsList[nc][2*l+1] > 0 and (amps[2*l+1,k] > 0):
-                xPos = np.log10(np.mean(amps[2*l+1,k]))
-                # Get the bin this would lie in:
-                inBin = np.where((logBins[0:-1] < xPos) & \
-                    (logBins[1:] >= xPos))[0][0]
+                if useLogBins:
+                    xPos = np.log10(np.mean(amps[2*l+1,k]))
+                    inBin = np.where((logBins[0:-1] < xPos) & \
+                        (logBins[1:] >= xPos))[0][0]
+                else:
+                    xPos = np.mean(amps[2*l+1,k])
+                    inBin = np.where((bins[0:-1] < xPos) & \
+                        (bins[1:] >= xPos))[0][0]
                 yPos = bars2[0][inBin]
                 #arrow2 = ax[i,j].scatter([xPos],[yPos],\
                 #    color=seabornColormap[0],label='Dim\n(cluster\namps.)',\
                 #    linestyle='None',marker='$\\downarrow$',s=100)
                 arrow2 = ax[i,j].annotate("",xy=(xPos,yPos),\
-                    xytext=(xPos,yPos+0.15),\
+                    xytext=(xPos,yPos+0.3),\
                     arrowprops=dict(arrowstyle='->',color=seabornColormap[0]))
         #plot.formatPlotGrid(ax,i,j,1,'Density',1,\
         #    '$A_{\\alpha}$',nRows,[1e-4,1e4],nCols = nCols,fontsize=8,\
         #    xlim=[1e-4,1e4])
         #ax[i,j].set_xscale('log')
         #ax[i,j].set_yscale('log')
-        ax[i,j].set_xlim([-3,3])
-        ax[i,j].set_ylim([0,2])
-        ax[i,j].text(0,1.75,"$" + str(MabsList[l]) + " < M \\leq" + \
-            str(MabsList[l+1]) + "$\nBright: " + \
-            ("%.2g" % (100*nGalsList[nc][2*l]/np.sum(nGalsList[nc]))) + "%"\
-            "(" + ("%.2g" % (nGalsList[nc][2*l])) + ")" + \
-            "\n Dim: " + \
-            ("%.2g" % (100*nGalsList[nc][2*l+1]/np.sum(nGalsList[nc]))) + \
-            "%" + "(" + ("%.2g" % (nGalsList[nc][2*l+1])) + ")",\
-            fontsize=fontsize,ha='center')
-        #ax[i,j].set_xticks([1e-3,1e-1,1e1,1e3])
-        ax[i,j].set_xticks([-3,-2,-1,0,1,2])
+        if useLogBins:
+            ax[i,j].set_xlim(xLogLimits)
+            ax[i,j].set_ylim([0,2.4])
+        else:
+            ax[i,j].set_xlim(xLimits)
+            #ax[i,j].set_ylim([1e-1,100])
+            ax[i,j].set_ylim([0,100])
+            #ax[i,j].set_yscale('log')
+        #title = "$" + str(MabsList[l]) + " < M \\leq" + \
+        #    str(MabsList[l+1]) + "$\nBright: " + \
+        #    ("%.2g" % (100*nGalsList[nc][2*l]/np.sum(nGalsList[nc]))) + "%"\
+        #    "(" + ("%.2g" % (nGalsList[nc][2*l])) + ")" + \
+        #    "\n Dim: " + \
+        #    ("%.2g" % (100*nGalsList[nc][2*l+1]/np.sum(nGalsList[nc]))) + \
+        #    "%" + "(" + ("%.2g" % (nGalsList[nc][2*l+1])) + ")"
+        title = "$" + str(MabsList[l]) + " < M \\leq" + \
+            str(MabsList[l+1]) + "$"
+        if useLogBins:
+            ax[i,j].text(xLogMid,2.2,title,fontsize=fontsize,ha='center')
+            ax[i,j].set_xticks(xLogTicks)
+        else:
+            ax[i,j].text(xMid,1.2,title,fontsize=fontsize,ha='center')
+        #ax[i,j].set_xticks([-3,-2,-1,0,1,2])
+        #ax[i,j].set_xticks([-3,-2,-1,0,1,2])
         if j > 0:
             ax[i,j].yaxis.set_ticklabels([])
             print("Removing labels for (" + str(i) + "," + str(j) + ")")
         if i < nRows - 1:
             ax[i,j].xaxis.set_ticklabels([])
-            ax[i,j].xaxis.label.set_visible(False)
+            #ax[i,j].xaxis.label.set_visible(False)
             #ax[i,j].xaxis.set_major_formatter(NullFormatter())
             #ax[i,j].xaxis.set_minor_formatter(NullFormatter())
         if i < nRows -1:
             ax[i,j].get_yticklabels()[0].set_visible(False)
-        #if j < nCols -1:
-            #ax[i,j].get_xticklabels()[-1].set_visible(False)
+        if j < nCols -1:
+            if not useLogBins:
+                ax[i,j].get_xticklabels()[-1].set_visible(False)
 
 
 # Fake legend entries:
@@ -1294,36 +1368,50 @@ h4 = matplotlib.lines.Line2D([0],[0],color=seabornColormap[0],\
     label='Dim\n amplitudes\n at cluster',linestyle='None',\
     marker='$\\downarrow$',markersize=10)
 
-ax[0,2].legend(handles = [h1,h2],\
-    prop={"size":fontsize,"family":"serif"},frameon=False,\
-    loc=(0.1,0.67))
-ax[0,3].legend(handles = [h3,h4],\
-    prop={"size":fontsize,"family":"serif"},frameon=False,\
-    loc=(0.1,0.6))
+showLegend = False:
+if showLegend:
+    ax[0,0].legend(handles = [h1],\
+        prop={"size":fontsize,"family":"serif"},frameon=False,\
+        loc=(0.1,0.6))
+    ax[0,1].legend(handles = [h2],\
+        prop={"size":fontsize,"family":"serif"},frameon=False,\
+        loc=(0.1,0.6))
+    ax[0,2].legend(handles = [h3],\
+        prop={"size":fontsize,"family":"serif"},frameon=False,\
+        loc=(0.1,0.65))
+    ax[0,3].legend(handles = [h4],\
+        prop={"size":fontsize,"family":"serif"},frameon=False,\
+        loc=(0.1,0.65))
 
-top=0.94
-bottom=0.09
-left=0.105
-right=0.95
+top=0.975
+bottom=0.12
+left=0.055
+right=0.97
 hspace=0.0
 wspace=0.0
 plt.subplots_adjust(top=top,bottom=bottom,left=left,right=right,hspace=hspace,\
     wspace=wspace)
 
 # Common axis labels:
-fig.text((right+left)/2.0, 0.03,'$\\mathrm{log}_{\\mathrm{10}}(A_{\\alpha})$',\
-    ha='center',fontsize=fontsize,fontfamily=fontfamily)
-fig.text(0.03,(top+bottom)/2.0,'Density',va='center',\
+if useLogBins:
+    fig.text((right+left)/2.0, 0.01,\
+        '$\\mathrm{log}_{\\mathrm{10}}(A_{\\alpha})$',\
+        ha='center',fontsize=fontsize,fontfamily=fontfamily)
+else:
+    fig.text((right+left)/2.0, 0.01,'$A_{\\alpha}$',\
+        ha='center',fontsize=fontsize,fontfamily=fontfamily)
+
+fig.text(0.01,(top+bottom)/2.0,'Density',va='center',\
     rotation='vertical',fontsize=fontsize,fontfamily=fontfamily)
 
 # Cluster names:
-fig.text(0.97,bottom + 0.75*(top-bottom),clusterNames[ncList[0]][0],\
+fig.text(0.98,bottom + 0.75*(top-bottom),clusterNames[ncList[0]][0],\
     va='center',rotation='vertical',fontsize=fontsize,fontfamily=fontfamily)
-fig.text(0.97,bottom + 0.25*(top-bottom),clusterNames[ncList[1]][0],\
+fig.text(0.98,bottom + 0.25*(top-bottom),clusterNames[ncList[1]][0],\
     va='center',rotation='vertical',fontsize=fontsize,fontfamily=fontfamily)
 
-plt.suptitle("All amplitudes compared to " + clusterNames[ncList[0]][0] + \
-    " and " + clusterNames[ncList[1]][0])
+#plt.suptitle("All amplitudes compared to " + clusterNames[ncList[0]][0] + \
+#    " and " + clusterNames[ncList[1]][0])
 plt.savefig(figuresFolder + "voxel_amp_distribution_compared.pdf")
 plt.show()
 
@@ -1450,7 +1538,7 @@ plot.singleMassFunctionPlot(constrainedHaloMasses512Old,5e13,2e15,11,\
     deltaListMean=deltaListMeanOld,deltaListError=deltaListErrorOld,\
     savename=None,showTheory=False,legendLoc='lower left',\
     ax=ax[0],ylabel='Number of halos',showLegend=False,\
-    title="Halos",xticks=[2e14,5e14,1e15],plotColour=seabornColormap[1],\
+    title="Halos",xticks=[2e14,5e14,1e15],plotColour=seabornColormap[2],\
     compColour = 'grey')
 handles1 = plot.singleMassFunctionPlot(constrainedAntihaloMasses512Old,\
     5e13,2e15,11,Om0=referenceSnapOld.properties['omegaM0'],\
@@ -1461,7 +1549,7 @@ handles1 = plot.singleMassFunctionPlot(constrainedAntihaloMasses512Old,\
     deltaListMean=deltaListMeanOld,deltaListError=deltaListErrorOld,\
     savename=None,showTheory=False,\
     ax=ax[1],ylabel='Number of antihalos',returnHandles=True,showLegend=False,\
-    title="Antihalos",xticks=[2e14,5e14,1e15],plotColour=seabornColormap[1],\
+    title="Antihalos",xticks=[2e14,5e14,1e15],plotColour=seabornColormap[2],\
     compColour = 'grey')
 plot.singleMassFunctionPlot(constrainedHaloMasses512New,5e13,2e15,11,\
     Om0=referenceSnapOld.properties['omegaM0'],\
@@ -1473,7 +1561,7 @@ plot.singleMassFunctionPlot(constrainedHaloMasses512New,5e13,2e15,11,\
     fontsize=fontsize,legendFontsize=fontsize,\
     ax=ax[0],ylabel='Number of halos',showLegend=False,\
     title="Halos",label="COLA20 constrained",xticks=[2e14,5e14,1e15],\
-    plotColour=seabornColormap[0],compColour = 'grey')
+    plotColour=seabornColormap[3],compColour = 'grey')
 handles2 = plot.singleMassFunctionPlot(constrainedAntihaloMasses512New,\
     5e13,2e15,11,Om0=referenceSnapOld.properties['omegaM0'],\
     h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
@@ -1483,7 +1571,7 @@ handles2 = plot.singleMassFunctionPlot(constrainedAntihaloMasses512New,\
     savename=None,showTheory=False,fontsize=fontsize,legendFontsize=fontsize,\
     ax=ax[1],ylabel='Number of antihalos',returnHandles=True,showLegend=False,\
     title="Antihalos",label="COLA20 constrained",xticks=[2e14,5e14,1e15],\
-    plotColour=seabornColormap[0],compColour = 'grey')
+    plotColour=seabornColormap[3],compColour = 'grey')
 handles = handles1 + handles2
 plt.tight_layout()
 ax[1].legend(handles=tools.flatten(handles),\
@@ -2174,17 +2262,17 @@ if doCon:
         stepsListGADGET,stepsList,logstepsList,stepsList1024,\
         stepsListEPS_0p662,resStepsList,clusterNames[clusterFilter,:],\
         name1 = "$M_{200\\mathrm{c}}$",name2 = "$M_{100\\mathrm{m}}$",\
-        show=True,save = True,colorLinear = seabornColormap[0],\
-        colorLog=seabornColormap[1],colorGadget='k',colorAdaptive='grey',\
+        show=True,save = True,colorLinear = seabornColormap[4],\
+        colorLog=seabornColormap[5],colorGadget='k',colorAdaptive='grey',\
         showGadgetAdaptive = True,\
         savename = figuresFolder + "mass_convergence_comparison.pdf",\
         massName = "M",extraMasses = None,extraMassLabel = 'Extra mass scale',\
         xlabel='Number of Steps',\
         returnHandles=False,showLegend=True,nCols=3,showGADGET=False,\
-        figsize=(textwidth,0.7*textwidth),showResMasses=False,logy=False,\
-        ylim1=[5e14,2e15],ylim2=[1e15,3.2e15],top=0.931,bottom=0.114,left=0.13,\
-        right=0.93,hspace=0.0,wspace=0.0,yticks1=[5e14,1e15,1.5e15,2e15],\
-        yticks2=[1e15,2e15,3e15])
+        figsize=(textwidth,0.55*textwidth),showResMasses=False,logy=False,\
+        ylim1=[5e14,2e15],ylim2=[1e15,3.2e15],top=0.931,bottom=0.114,left=0.08,\
+        right=0.96,hspace=0.0,wspace=0.0,yticks1=[5e14,1e15,1.5e15,2e15],\
+        yticks2=[1e15,2e15,3e15],massLabelPos=0.97)
 
 
 
@@ -2198,17 +2286,18 @@ if doCon:
         stepsListGADGET,stepsList,logstepsList,stepsList1024,\
         stepsListEPS_0p662,resStepsList,None,\
         name1 = "$M_{200\\mathrm{c}}$",name2 = "$M_{100\\mathrm{m}}$",\
-        show=True,save = True,colorLinear = seabornColormap[0],\
-        colorLog=seabornColormap[1],colorGadget='k',colorAdaptive='grey',\
+        show=True,save = True,colorLinear = seabornColormap[4],\
+        colorLog=seabornColormap[5],colorGadget='k',colorAdaptive='grey',\
         showGadgetAdaptive = True,\
         savename = figuresFolder + "mass_convergence_comparison_other.pdf",\
         massName = "M",extraMasses = None,extraMassLabel = 'Extra mass scale',\
         xlabel='Number of Steps',\
         returnHandles=False,showLegend=True,nCols=1,showGADGET=False,\
-        figsize=(0.45*textwidth,0.7*textwidth),showResMasses=False,\
+        figsize=(0.45*textwidth,0.55*textwidth),showResMasses=False,\
         ylim1=[2e13,2e14],ylim2=[1e14,5e14],logy=False,\
         yticks1 = [5e13,1e14,1.5e14,2e14],yticks2 = [1e14,2e14,3e14,4e14],\
-        top=0.97,bottom=0.099,left=0.213,right=0.93,hspace=0.0,wspace=0.0)
+        top=0.97,bottom=0.11,left=0.19,right=0.93,hspace=0.0,wspace=0.0,\
+        massLabelPos=0.96)
 
 
 #-------------------------------------------------------------------------------
