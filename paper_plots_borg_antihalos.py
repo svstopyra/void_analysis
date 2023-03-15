@@ -731,6 +731,7 @@ for m in range(2,8):
         fontfamily=fontfamily,fontsize=fontsize)
     ax[i,j+2].set_yscale('log')
 
+
 # Formatting the axis:
 nCols = 4
 nRows = 3
@@ -745,6 +746,11 @@ for i in range(0,nRows):
             ax[i,j].yaxis.set_ticklabels([])
         if i != 0:
             ax[i,j].set_yticks(yticks[0:-1])
+            # Change tick label fonts:
+            if j == 0:
+                ylabels = ["$" + plot.scientificNotation(tick) + "$" \
+                    for tick in yticks[0:-1]]
+                ax[i,j].yaxis.set_ticklabels(ylabels)
         if i != nRows - 1:
             # Remove x labels:
             ax[i,j].xaxis.set_ticklabels([])
@@ -752,8 +758,14 @@ for i in range(0,nRows):
             # Remove the last tick, from all but the last:
             if j < nCols - 1:
                 ax[i,j].set_xticks(xticks[0:-1])
+                xlabels = ["$" + ("%.2g" % tick) + "$" \
+                    for tick in xticks[0:-1]]
+                ax[i,j].xaxis.set_ticklabels(xlabels)
             else:
                 ax[i,j].set_xticks(xticks)
+                xlabels = ["$" + ("%.2g" % tick) + "$" \
+                    for tick in xticks]
+                ax[i,j].xaxis.set_ticklabels(xlabels)
 
 ax[0,0].legend(prop={"size":fontsize,"family":fontfamily},frameon=False,\
     loc=(0.1,0.3))
@@ -1360,14 +1372,19 @@ for i in range(0,2):
         #    ("%.2g" % (100*nGalsList[nc][2*l+1]/np.sum(nGalsList[nc]))) + \
         #    "%" + "(" + ("%.2g" % (nGalsList[nc][2*l+1])) + ")"
         title = "$" + str(MabsList[l]) + " < M \\leq" + \
-            str(MabsList[l+1]) + "$\n" + ("%.2g" % (nGalsList[nc][2*l] + \
-            nGalsList[nc][2*l+1])) + " galaxies."
+            str(MabsList[l+1]) + "$\n$" + ("%.2g" % (nGalsList[nc][2*l] + \
+            nGalsList[nc][2*l+1])) + "$ galaxies."
         if useLogBins:
             ax[i,j].text(xLogMid,0.82*yLimLog[1],title,fontsize=fontsize,\
                 ha='center')
             ax[i,j].set_xticks(xLogTicks)
+            xLabels = ["$" + ("%.2g" % tick) + "$" for tick in xLogTicks]
+            ax[i,j].xaxis.set_ticklabels(xLabels)
         else:
             ax[i,j].text(xMid,0.82*yLim[1],title,fontsize=fontsize,ha='center')
+            xLabels = ["$" + ("%.2g" % tick) + "$" \
+                for tick in ax[i,j].get_xticks()]
+            ax[i,j].xaxis.set_ticklabels(xLabels)
         #ax[i,j].set_xticks([-3,-2,-1,0,1,2])
         #ax[i,j].set_xticks([-3,-2,-1,0,1,2])
         if j > 0:
