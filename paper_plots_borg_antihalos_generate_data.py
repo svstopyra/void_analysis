@@ -48,7 +48,7 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
         reductions = 4,iterations = 20,verbose=True,hpIndices=None,\
         centreMethod="density",catFolder="",\
         snapname="/gadget_full_forward_512/snapshot_001",\
-        data_folder = './'):
+        data_folder = './',invVarWeighting=False):
     # Parameters:
         # nBins - Number of radial bins for galaxy counts in PPT
         # nClust - Number of clusters to do PPTs for.
@@ -138,9 +138,9 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
         _recomputeData=recomputeData)
     # Obtain galaxy counts:
     nsamples = len(snapNumList)
-    galaxyDensityExp = np.zeros((nBins,nClust,nMagBins))
-    galaxyDensityRobustAll = np.zeros((nBins,nClust,nsamples,nMagBins))
-    galaxyCountSquaredAll = np.zeros((nBins,nClust,nMagBins))
+    galaxyNumberCountExp = np.zeros((nBins,nClust,nMagBins))
+    galaxyNumberCountsRobustAll = np.zeros((nBins,nClust,nsamples,nMagBins))
+    varianceAL = np.zeros((nBins,nClust,nMagBins))
     posteriorMassAll = np.zeros((nBins,nClust,nsamples))
     mUnit = Om0*2.7754e11*(boxsize/N)**3
     # Obtain properties:
@@ -188,9 +188,22 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
         print("Computing bias patch amplitudes...")
     npixels = 12*(nside**2)
     Aalpha = np.zeros((nsamples,nMagBins,npixels*nRadialSlices))
+    inverseLambdaTot = np.zeros((nsamples,nMagBins,npixels*nRadialSlices))
+    # Sum the mask of the voxels in each healpix patch. Only where this sums to
+    # zero is lambda_bar_tot actually zero:
+    healpixMask = tools.getCountsInHealpixSlices(mask,hpIndices,nside=nside,\
+        nres=N)
+    nz = np.where(healpixMask > 1e-300)
     for k in range(0,nsamples):
-        nz = np.where(ngHPMCMC[k] != 0.0)
-        Aalpha[k][nz] = ngHP[nz]/ngHPMCMC[k][nz]
+        #nz = np.where(ngHPMCMC[k] != 0.0)
+        # Formally, it's probably better to remove these pixels using the mask
+        # instead, in case there are any errors that make lambda zero:
+        # NB - rounding errors in the mask calculation sometimes give 
+        # tiny values of the mask instead of zero. These should also be 
+        # formally removed, so we should cut to some small value rather than
+        # doing a floating point comparison with zero which can be error prone.
+        inverseLambdaTot[k][nz] = 1.0/ngHPMCMC[k][nz]
+    Aalpha = inverseLambdaTot*Aalpha
     # Get centres of clusters in each MCMC sample:
     if verbose:
         print("Computing cluster centres in each sample...")
@@ -207,72 +220,95 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
             iterations=iterations))
     if verbose:
         print("Computing radial galaxy counts...")
-    doVariance = False
-    # Loop over all bins:
+    # Loop over all bins and give spatial averages of the voxels:
     for k in range(0,nBins):
-        print("Bin " + str(k) + " of " + str(nBins))
-        indices = tree.query_ball_point(wrappedPos,rBins[k+1])
+        # Indices within radius r:
+        indices = np.array(tree.query_ball_point(wrappedPos,rBins[k+1]))
+        # This was used for summing about individual centres if they fluctuated
+        # between samples, but I don't really think that makes sense any more
+        # if we're looking at the variance of the sum of samples:
         if centreMethod == "snapshot":
-            indicesGad = [tree.query_ball_point(\
+            indicesSample = [np.array(tree.query_ball_point(\
                 -np.fliplr(snapedit.wrap(centres,boxsize)),\
-                rBins[k+1]) for centres in clusterCentresSim]
+                rBins[k+1])) for centres in clusterCentresSim]
         elif centreMethod == "density":
-            indicesGad = [tree.query_ball_point(\
-                snapedit.wrap(centres,boxsize),rBins[k+1]) \
+            indicesSample = [np.array(tree.query_ball_point(\
+                snapedit.wrap(centres,boxsize),rBins[k+1])) \
                 for centres in clusterCentresSim]
         elif centreMethod == "fixed":
-            indicesGad = [indices for centres in clusterCentresSim]
+            indicesSample = [indices for centres in clusterCentresSim]
         if np.any(np.array(indices,dtype=bool)):
             for l in range(0,nClust):
-                print("Cluster " + str(l) + " of " + str(nClust))
+                voxels = np.array(indices[l],dtype=int)
+                if len(voxels == 0):
+                    continue
+                # First, compute the average of A\bar{\lambda}: over samples:
+                # Healpix indices associated with these voxels:
+                hpInd = hpIndicesLinear[voxels]
+                # Expectation value of A\bar{\lambda}_i:
+                expAL = np.mean(Aalpha[:,:,hpInd]*ngMCMC[:,:,voxels],0)
+                # Variance of \bar{\lambda}_i:
+                varAL = ngHP[:,hpInd]*(ngHP[:,hpInd] + 1.0)*np.mean(\
+                    (inverseLambdaTot[:,:,hpInd]*ngMCMC[:,:,voxels])**2,0)+\
+                    - expAL**2
+                # Spatial average:
+                if(invVarWeighting):
+                    # NB - exclude regions where the mask is 0:
+                    maskedRegions = np.where(healpixMask[:,hpInd] > 1e-300)
+                    expALSum = np.zeros(nMagBins)
+                    expALSum[maskedRegions] = np.sum(expAL/varAL,1)/len(voxels)
+                    # Unfinished - need to figure out what to do with 0-variance
+                    # voxels. Usually these are just empty, but that implies
+                    # we should exclude them using the mask?
+                else:
+                    # Straight sum (no weights):
+                    expALSum = np.sum(expAL,1)
+                    #varALSum = np.sum(varAL,1)
+                    # Variance of the sum is actually complicated
+                    # by the fact that voxels in the same patch are correlated.
+                    # For these, we need to actually spatially sum everything
+                    # in the same patch:
+                    allPatches = np.unique(hpInd) # Contributing patches
+                    allPatchIndices = [np.where(hpInd == patch)[0] \
+                        for patch in allPatches] # Voxels in these patches
+                    spatialSum = np.array([np.sum(\
+                        inverseLambdaTot[:,:,allPatchIndices[p]]*\
+                        ngMCMC[:,:,voxels[allPatchIndices[p]]],2) \
+                        for p in range(0,len(allPatches))]) # Sum over voxels
+                        # in the same patch
+                    # Mean of (spatialSum)^2 for each patch:
+                    meanSquaredSpatial = np.array([np.mean(spSum**2,0) \
+                        for spSum in spatialSum])
+                    # (Mean of spatialSum)^2 for each patch:
+                    meanSpatialSquared = np.array([np.mean(spSum,0)**2 \
+                        for spSum in spatialSum])
+                    # add variances of sums in different patches, since
+                    # these all have zero covariances with respect to each 
+                    # other:
+                    NtotAlpha = ngHP[:,allPatches].T #Ntot for each patch
+                    varALSum = np.sum(\
+                        NtotAlpha*(NtotAlpha+1.0)*meanSquaredSpatial - \
+                        NtotAlpha**2*meanSpatialSquared,0)
+                    # Store the result:
+                    galaxyNumberCountsRobust[k,l,:] = expALSum
+                    varianceAL[k,l,:] = varALSum
+                # Note - we are sometimes interested in looking at the counts
+                # in individual samples, so we compute these as well.
                 for m in range(0,nMagBins):
                     print("MagBin " + str(m) + " of " + str(nMagBins))
-                    galaxyDensityExp[k,l,m] = np.sum(ng2MPP[m][indices[l]])/\
-                        (4*np.pi*rBins[k+1]**3/3)
+                    galaxyNumberCountExp[k,l,m] = np.sum(ng2MPP[m][indices[l]])
                     for n in range(0,nsamples):
-                        print("Samples " + str(n) + " of " + str(nsamples))
-                        galaxyDensityRobustAll[k,l,n,m] += np.sum(\
-                            Aalpha[n,m,hpIndicesLinear[indicesGad[n][l]]]*\
-                            ngMCMC[n,m][indicesGad[n][l]])/\
-                            (4*np.pi*rBins[k+1]**3/3)
+                        # Counts in a specific sample:
+                        galaxyNumberCountsRobustAll[k,l,n,m] += np.sum(\
+                            Aalpha[n,m,hpIndicesLinear[indices[l]]]*\
+                            ngMCMC[n,m][indices[l]])
                         posteriorMassAll[k,l,n] = np.sum(\
-                            mcmcDenLin_r[n][indicesGad[n][l]]*mUnit)
-                    if doVariance:
-                        # Somewhat complicated, due to the convolution with
-                        # the posterior distribution. We have to sum over 
-                        # all voxels in a strange way
-                        # First, compute A_{\alpha}\lambda in each sample, 
-                        # for each voxel:
-                        # Now, get the cross term for the sum:
-                        crossTerm = 0
-                        amps = Aalpha[:,m,hpIndicesLinear[indices[l]]]
-                        lambdas = ngMCMC[:,m][:,indices[l]]
-                        ampLambda = amps*lambdas
-                        for i1 in range(0,len(indices[l])):
-                            for i2 in range(0,i1):
-                                for S1 in range(0,nsamples):
-                                    for S2 in range(0,nsamples):
-                                        crossTerm += \
-                                            ampLambda[S1,i1]*ampLambda[S2,i2]*\
-                                            (2/nsamples**2)
-                        # Comibine with other terms to get the expected 
-                        # square of the galaxy counts:
-                        galaxyCountSquaredAll[k,l,m] += np.sum(amps*lambdas)/\
-                            nsamples + np.sum(amps**2*lambdas**2)/nsamples + \
-                            crossTerm
-    galaxyDensityRobust = np.mean(galaxyDensityRobustAll,2)
-    # Convert density to galaxy counts:
-    galaxyNumberCountsRobust = (4*np.pi*rBins[1:,None,None]**3/3)*\
-        galaxyDensityRobust
-    galaxyNumberCountsRobustAll = (4*np.pi*rBins[1:,None,None,None]**3/3)*\
-        galaxyDensityRobustAll
-    galaxyNumberCountExp = np.array((4*np.pi*rBins[1:,None,None]**3/3)*\
-        galaxyDensityExp,dtype=int)
+                            mcmcDenLin_r[n][indices[l]]*mUnit)
     if verbose:
         print("Done.")
     return [galaxyNumberCountExp,galaxyNumberCountsRobust,\
         galaxyNumberCountsRobustAll,galaxyCountSquaredAll,posteriorMassAll,\
-        Aalpha]
+        Aalpha,varianceAL]
 
 
 def getPPTForPoints(points,nBins = 31,nClust=9,nMagBins = 16,N=256,\
@@ -356,8 +392,19 @@ def getPPTForPoints(points,nBins = 31,nClust=9,nMagBins = 16,N=256,\
     # Aalpha:
     npixels = 12*(nside**2)
     Aalpha = np.zeros((nsamples,nMagBins,npixels*nRadialSlices))
+    # Sum the mask of the voxels in each healpix patch. Only where this sums to
+    # zero is lambda_bar_tot actually zero:
+    healpixMask = tools.getCountsInHealpixSlices(mask,hpIndices,nside=nside,\
+        nres=N)
     for k in range(0,nsamples):
-        nz = np.where(ngHPMCMC[k] != 0.0)
+        #nz = np.where(ngHPMCMC[k] != 0.0)
+        # Formally, it's probably better to remove these pixels using the mask
+        # instead, in case there are any errors that make lambda zero:
+        nz = np.where(healpixMask > 1e-300)
+        # NB - rounding errors in the mask calculation sometimes give 
+        # tiny values of the mask instead of zero. These should also be 
+        # formally removed, so we should cut to some small value rather than
+        # doing a floating point comparison with zero which can be error prone.
         Aalpha[k][nz] = ngHP[nz]/ngHPMCMC[k][nz]
     # Perform the PPT:
     galaxyCountExp = np.zeros((nBins,nClust,nMagBins))
