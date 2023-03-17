@@ -106,7 +106,7 @@ doPPTs = True
 if doPPTs:
     [galaxyNumberCountExp,galaxyNumberCountsRobust,\
         galaxyNumberCountsRobustAll,galaxyCountSquaredAll,\
-        posteriorMassAll,Aalpha] = \
+        posteriorMassAll,Aalpha,varianceAL] = \
         tools.loadOrRecompute(\
             figuresFolder + "ppt_plots_data.p",getPPTPlotData,\
             _recomputeData = recomputeData,nBins = nBinsPPT,nClust=9,\
