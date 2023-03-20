@@ -48,7 +48,7 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
         reductions = 4,iterations = 20,verbose=True,hpIndices=None,\
         centreMethod="density",catFolder="",\
         snapname="/gadget_full_forward_512/snapshot_001",\
-        data_folder = './',invVarWeighting=False):
+        data_folder = './',invVarWeighting=False,error="bootstrap"):
     # Parameters:
         # nBins - Number of radial bins for galaxy counts in PPT
         # nClust - Number of clusters to do PPTs for.
@@ -140,7 +140,12 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
     nsamples = len(snapNumList)
     galaxyNumberCountExp = np.zeros((nBins,nClust,nMagBins))
     galaxyNumberCountsRobustAll = np.zeros((nBins,nClust,nsamples,nMagBins))
-    varianceAL = np.zeros((nBins,nClust,nMagBins))
+    galaxyNumberCountsRobust = np.zeros((nBins,nClust,nMagBins))
+    if error == "bootstrap":
+        # Need space for a lower and upper limit:
+        varianceAL = np.zeros((nBins,nClust,2,nMagBins))
+    else:
+        varianceAL = np.zeros((nBins,nClust,nMagBins))
     posteriorMassAll = np.zeros((nBins,nClust,nsamples))
     mUnit = Om0*2.7754e11*(boxsize/N)**3
     # Obtain properties:
@@ -203,7 +208,7 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
         # formally removed, so we should cut to some small value rather than
         # doing a floating point comparison with zero which can be error prone.
         inverseLambdaTot[k][nz] = 1.0/ngHPMCMC[k][nz]
-    Aalpha = inverseLambdaTot*Aalpha
+    Aalpha = inverseLambdaTot*ngHP
     # Get centres of clusters in each MCMC sample:
     if verbose:
         print("Computing cluster centres in each sample...")
@@ -222,6 +227,7 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
         print("Computing radial galaxy counts...")
     # Loop over all bins and give spatial averages of the voxels:
     for k in range(0,nBins):
+        print("Doing bin " + str(k+1) + " of " + str(nBins))
         # Indices within radius r:
         indices = np.array(tree.query_ball_point(wrappedPos,rBins[k+1]))
         # This was used for summing about individual centres if they fluctuated
@@ -240,62 +246,51 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
         if np.any(np.array(indices,dtype=bool)):
             for l in range(0,nClust):
                 voxels = np.array(indices[l],dtype=int)
-                if len(voxels == 0):
-                    continue
-                # First, compute the average of A\bar{\lambda}: over samples:
-                # Healpix indices associated with these voxels:
-                hpInd = hpIndicesLinear[voxels]
-                # Expectation value of A\bar{\lambda}_i:
-                expAL = np.mean(Aalpha[:,:,hpInd]*ngMCMC[:,:,voxels],0)
-                # Variance of \bar{\lambda}_i:
-                varAL = ngHP[:,hpInd]*(ngHP[:,hpInd] + 1.0)*np.mean(\
-                    (inverseLambdaTot[:,:,hpInd]*ngMCMC[:,:,voxels])**2,0)+\
-                    - expAL**2
-                # Spatial average:
-                if(invVarWeighting):
-                    # NB - exclude regions where the mask is 0:
-                    maskedRegions = np.where(healpixMask[:,hpInd] > 1e-300)
-                    expALSum = np.zeros(nMagBins)
-                    expALSum[maskedRegions] = np.sum(expAL/varAL,1)/len(voxels)
-                    # Unfinished - need to figure out what to do with 0-variance
-                    # voxels. Usually these are just empty, but that implies
-                    # we should exclude them using the mask?
-                else:
+                if len(voxels != 0):
+                    # First, compute the average of A\bar{\lambda} over samples:
+                    # Healpix indices associated with these voxels:
+                    hpInd = hpIndicesLinear[voxels]
+                    # Expectation value of A\bar{\lambda}_i:
+                    expAL = np.mean(Aalpha[:,:,hpInd]*ngMCMC[:,:,voxels],0)
+                    # Spatial average:
                     # Straight sum (no weights):
                     expALSum = np.sum(expAL,1)
-                    #varALSum = np.sum(varAL,1)
-                    # Variance of the sum is actually complicated
-                    # by the fact that voxels in the same patch are correlated.
-                    # For these, we need to actually spatially sum everything
-                    # in the same patch:
-                    allPatches = np.unique(hpInd) # Contributing patches
-                    allPatchIndices = [np.where(hpInd == patch)[0] \
-                        for patch in allPatches] # Voxels in these patches
-                    spatialSum = np.array([np.sum(\
-                        inverseLambdaTot[:,:,allPatchIndices[p]]*\
-                        ngMCMC[:,:,voxels[allPatchIndices[p]]],2) \
-                        for p in range(0,len(allPatches))]) # Sum over voxels
-                        # in the same patch
-                    # Mean of (spatialSum)^2 for each patch:
-                    meanSquaredSpatial = np.array([np.mean(spSum**2,0) \
-                        for spSum in spatialSum])
-                    # (Mean of spatialSum)^2 for each patch:
-                    meanSpatialSquared = np.array([np.mean(spSum,0)**2 \
-                        for spSum in spatialSum])
-                    # add variances of sums in different patches, since
-                    # these all have zero covariances with respect to each 
-                    # other:
-                    NtotAlpha = ngHP[:,allPatches].T #Ntot for each patch
-                    varALSum = np.sum(\
-                        NtotAlpha*(NtotAlpha+1.0)*meanSquaredSpatial - \
-                        NtotAlpha**2*meanSpatialSquared,0)
-                    # Store the result:
+                    if error == "variance":
+                        # Boot strap variance 
+                        varAL = np.var(Aalpha[:,:,hpInd]*ngMCMC[:,:,voxels],0,\
+                            ddof=1)
+                    elif error == "bootstrap":
+                        # We want to sample the possible sums in this set:
+                        num_samples=10000
+                        bootstrap_samples = np.zeros((num_samples, nsamples,\
+                             nMagBins,len(voxels)))
+                        # TODO: We could probably optimise the following code 
+                        # a bit better:
+                        for i in range(num_samples):
+                            means = Aalpha[:,:,hpInd]*ngMCMC[:,:,voxels]
+                            bootstrap_indices = np.random.choice(nsamples,\
+                                size=nsamples,replace=True)
+                            bootstrap_samples[i,:,:,:] = \
+                                means[bootstrap_indices,:,:]
+                        # Spatial sum over voxels for all samples:
+                        bootstrapSums = np.sum(bootstrap_samples,3)
+                        bootstrap_means = np.mean(bootstrapSums,1)
+                        bootstrap_stds = np.std(bootstrapSums,1,ddof=1)
+                        # Confidence interval for the means:
+                        varAL = np.percentile(bootstrap_means, [2.5, 97.5],\
+                            axis = 0)
+                        varianceAL[k,l,:,:] = varAL.reshape((2,nMagBins))
+                    else:
+                        varAL = ngHP[:,hpInd]*(ngHP[:,hpInd] + 1.0)*\
+                            np.mean(\
+                            (inverseLambdaTot[:,:,hpInd]*\
+                            ngMCMC[:,:,voxels])**2,0)+ - expAL**2
                     galaxyNumberCountsRobust[k,l,:] = expALSum
-                    varianceAL[k,l,:] = varALSum
+                    if error != "bootstrap":
+                        varianceAL[k,l,:] = varAL.reshape(nMagBins)
                 # Note - we are sometimes interested in looking at the counts
                 # in individual samples, so we compute these as well.
                 for m in range(0,nMagBins):
-                    print("MagBin " + str(m) + " of " + str(nMagBins))
                     galaxyNumberCountExp[k,l,m] = np.sum(ng2MPP[m][indices[l]])
                     for n in range(0,nsamples):
                         # Counts in a specific sample:
@@ -304,8 +299,6 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
                             ngMCMC[n,m][indices[l]])
                         posteriorMassAll[k,l,n] = np.sum(\
                             mcmcDenLin_r[n][indices[l]]*mUnit)
-    if verbose:
-        print("Done.")
     return [galaxyNumberCountExp,galaxyNumberCountsRobust,\
         galaxyNumberCountsRobustAll,galaxyCountSquaredAll,posteriorMassAll,\
         Aalpha,varianceAL]

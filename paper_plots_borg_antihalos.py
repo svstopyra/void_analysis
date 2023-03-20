@@ -996,8 +996,8 @@ for m in range(0,8):
         #title = catNames[l] + " catalogue, ($" + str(MabsList[m]) + " < M < " \
         #    + str(MabsList[m+1]) + "$, $" + str(60.0*ampSlice) + \
         #    " < D/\\mathrm{Mpc}h^{-1} < " + str(60.0*(ampSlice + 1)) + "$)"
-        title = "$" + str(MabsList[m]) + " < M < " \
-            + str(MabsList[m+1]) + "$"
+        title = "$" + str(MabsList[m+1]) + " < M_K < " \
+            + str(MabsList[m]) + "$"
         nHPPix = 12*nside**2
         dpi=300
         guideColor='grey'
@@ -1087,8 +1087,8 @@ for m in range(0,8):
         # the index for referencing the bins):
         i = int(ncInd/nCols)
         j = ncInd - nCols*i
-        title = catNames[l] + " catalogue, ($" + str(MabsList[m]) + " < M < " \
-            + str(MabsList[m+1]) + "$, $" + str(60.0*ampSlice) + \
+        title = catNames[l] + " catalogue, ($" + str(MabsList[m+1]) + " < M_K < " \
+            + str(MabsList[m]) + "$, $" + str(60.0*ampSlice) + \
             " < D/\\mathrm{Mpc}h^{-1} < " + str(60.0*(ampSlice + 1)) + "$)"
         nHPPix = 12*nside**2
         dpi=300
@@ -1169,8 +1169,8 @@ for l in range(0,8):
     #title = "$" + str(MabsList[l]) + " < M \\leq" + \
     #    str(MabsList[l+1]) + "$\nBright/Dim = " + \
     #    str(int(nGalsList[nc][2*l])) + "/" + str(int(nGalsList[nc][2*l+1]))
-    title = "$" + str(MabsList[l]) + " < M \\leq" + \
-        str(MabsList[l+1]) + "$"
+    title = "$" + str(MabsList[l+1]) + " < M_K \\leq" + \
+        str(MabsList[l]) + "$"
     ax[i,j].set_title(title,fontsize=fontsize)
     ax[i,j].set_xticks([1e-3,1e-1,1e1,1e3])
     if j > 0:
@@ -1371,8 +1371,8 @@ for i in range(0,2):
         #    "\n Dim: " + \
         #    ("%.2g" % (100*nGalsList[nc][2*l+1]/np.sum(nGalsList[nc]))) + \
         #    "%" + "(" + ("%.2g" % (nGalsList[nc][2*l+1])) + ")"
-        title = "$" + str(MabsList[l]) + " < M \\leq" + \
-            str(MabsList[l+1]) + "$\n$" + ("%.2g" % (nGalsList[nc][2*l] + \
+        title = "$" + str(MabsList[l+1]) + " < M_K \\leq" + \
+            str(MabsList[l]) + "$\n$" + ("%.2g" % (nGalsList[nc][2*l] + \
             nGalsList[nc][2*l+1])) + "$ galaxies."
         if useLogBins:
             ax[i,j].text(xLogMid,0.82*yLimLog[1],title,fontsize=fontsize,\
@@ -1871,7 +1871,7 @@ for mAbs in range(0,8):
         axij.text(10,0.07,"Dim: " + \
             ("%.2g" % (100*galaxyFractions[l,2*mAbs+1])) + "%",fontsize=8)
     plt.suptitle("Cluster Bias functional forms ($" + str(MabsList[mAbs]) + \
-        " < M < " + str(MabsList[mAbs+1]) + "$)",fontsize=12)
+        " < M_K < " + str(MabsList[mAbs+1]) + "$)",fontsize=12)
     ax[2,1].legend(handles=[h1,h11[0]],\
         prop={"size":fontsize,"family":fontfamily},frameon=False,\
         loc="lower right")
