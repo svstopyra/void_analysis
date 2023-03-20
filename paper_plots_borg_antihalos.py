@@ -626,7 +626,7 @@ def smoothedPoissonVariance(galCounts):
 variancesRobust = np.mean(galaxyNumberCountsRobustAll,2) + \
     np.var(galaxyNumberCountsRobustAll,2)
 
-errorType = "quadrature"
+errorType = "bootstrap"
 
 # PPTs just comparing Coma and PP, in each of the magnitude bins:
 nRows = 3
@@ -641,7 +641,7 @@ fig, ax = plt.subplots(nRows,4,figsize=(textwidth,0.7*textwidth))
 for m in range(2,8):
     i = int((m-2)/nCols)
     j = m - 2 - nCols*i
-    magTitle="$" + str(mAbs[m]) + " \\leq M < " + str(mAbs[m+1]) + "$"
+    magTitle="$" + str(mAbs[m+1]) + " \\leq M < " + str(mAbs[m]) + "$"
     # Cluster 1:
     bright = galaxyNumberCountsRobust[:,ncList[0],2*m]
     nz1 = np.where(bright > 0)[0]
@@ -653,28 +653,45 @@ for m in range(2,8):
     nz22Mpp = np.where(dim2Mpp)[0]
     # Bright catalogue, cluster 1:
     ax[i,j].plot(rBinCentres[nz1],bright[nz1],\
-        color=seabornColormap[1],label="Posterior (bright)",linestyle=':')
+        color=seabornColormap[1],label="Posterior ($m < 11.5$)",linestyle=':')
     ax[i,j].plot(rBinCentres[nz12Mpp],bright2Mpp[nz12Mpp],\
-        color=seabornColormap[1],label="2M++ (bright)",linestyle='-')
+        color=seabornColormap[1],label="2M++ ($m < 11.5$)",linestyle='-')
     if errorType == "poisson":
         bounds = scipy.stats.poisson(bright[nz1]).interval(0.95)
     elif errorType == "quadrature":
         stdRobust = np.sqrt(variancesRobust[:,ncList[0],2*m])
         bounds = (bright[nz1] - 2*stdRobust[nz1],bright[nz1] + 2*stdRobust[nz1])
+    elif errorType == "bootstrap":
+        bounds = (varianceAL[nz1,ncList[0],0,2*m],\
+            varianceAL[nz1,ncList[0],1,2*m])
+    elif errorType == "variance":
+        stdDeviation = np.std(galaxyNumberCountsRobustAll,2)[:,ncList[0],2*m]/\
+            np.sqrt(nsamples)
+        bounds = (bright[nz1] - 2*stdDeviation[nz1],\
+            bright[nz1] + 2*stdDeviation[nz1])
     else:
         raise Exception("Invalid errorType!")
     ax[i,j].fill_between(rBinCentres[nz1],bounds[0],bounds[1],\
         color=seabornColormap[1],alpha=0.5)
     # Dim Catalogue, cluster 1:
     ax[i,j].plot(rBinCentres[nz2],dim[nz2],\
-        color=seabornColormap[0],label="Posterior (dim)",linestyle=':')
+        color=seabornColormap[0],label="Posterior ($m > 11.5$)",linestyle=':')
     ax[i,j].plot(rBinCentres[nz22Mpp],dim2Mpp[nz22Mpp],\
-        color=seabornColormap[0],label="2M++ (dim)",linestyle='-')
+        color=seabornColormap[0],label="2M++ ($m > 11.5$)",linestyle='-')
     if errorType == "poisson":
         bounds = scipy.stats.poisson(dim[nz2]).interval(0.95)
     elif errorType == "quadrature":
         stdRobust = np.sqrt(variancesRobust[:,ncList[0],2*m+1])
         bounds = (dim[nz2] - 2*stdRobust[nz2],dim[nz2] + 2*stdRobust[nz2])
+    elif errorType == "bootstrap":
+        bounds = (varianceAL[nz2,ncList[0],0,2*m+1],\
+            varianceAL[nz2,ncList[0],1,2*m+1])
+    elif errorType == "variance":
+        stdDeviation = \
+            np.std(galaxyNumberCountsRobustAll,2)[:,ncList[0],2*m+1]/\
+            np.sqrt(nsamples)
+        bounds = (dim[nz2] - 2*stdDeviation[nz2],\
+            dim[nz2] + 2*stdDeviation[nz2])
     else:
         raise Exception("Invalid errorType!")
     ax[i,j].fill_between(rBinCentres[nz2],bounds[0],bounds[1],\
@@ -697,28 +714,45 @@ for m in range(2,8):
     nz22Mpp = np.where(dim2Mpp)[0]
     # Bright catalogue, cluster 2:
     ax[i,j+2].plot(rBinCentres[nz1],bright[nz1],\
-        color=seabornColormap[1],label="Posterior (bright)",linestyle=':')
+        color=seabornColormap[1],label="Posterior ($m < 11.5$)",linestyle=':')
     ax[i,j+2].plot(rBinCentres[nz12Mpp],bright2Mpp[nz12Mpp],\
-        color=seabornColormap[1],label="2M++ (bright)",linestyle='-')
+        color=seabornColormap[1],label="2M++ ($m < 11.5$)",linestyle='-')
     if errorType == "poisson":
         bounds = scipy.stats.poisson(bright[nz1]).interval(0.95)
     elif errorType == "quadrature":
         stdRobust = np.sqrt(variancesRobust[:,ncList[1],2*m])
         bounds = (bright[nz1] - 2*stdRobust[nz1],bright[nz1] + 2*stdRobust[nz1])
+    elif errorType == "bootstrap":
+        bounds = (varianceAL[nz1,ncList[1],0,2*m],\
+            varianceAL[nz1,ncList[1],1,2*m])
+    elif errorType == "variance":
+        stdDeviation = np.std(galaxyNumberCountsRobustAll,2)[:,ncList[1],2*m]/\
+            np.sqrt(nsamples)
+        bounds = (bright[nz1] - 2*stdDeviation[nz1],\
+            bright[nz1] + 2*stdDeviation[nz1])
     else:
         raise Exception("Invalid errorType!")
     ax[i,j+2].fill_between(rBinCentres[nz1],bounds[0],bounds[1],\
         color=seabornColormap[1],alpha=0.5)
     # Dim Catalogue, cluster 2:
     ax[i,j+2].plot(rBinCentres[nz2],dim[nz2],\
-        color=seabornColormap[0],label="Posterior (dim)",linestyle=':')
+        color=seabornColormap[0],label="Posterior ($m > 11.5$)",linestyle=':')
     ax[i,j+2].plot(rBinCentres[nz22Mpp],dim2Mpp[nz22Mpp],\
-        color=seabornColormap[0],label="2M++ (dim)",linestyle='-')
+        color=seabornColormap[0],label="2M++ ($m > 11.5$)",linestyle='-')
     if errorType == "poisson":
         bounds = scipy.stats.poisson(dim[nz2]).interval(0.95)
     elif errorType == "quadrature":
         stdRobust = np.sqrt(variancesRobust[:,ncList[1],2*m+1])
         bounds = (dim[nz2] - 2*stdRobust[nz2],dim[nz2] + 2*stdRobust[nz2])
+    elif errorType == "bootstrap":
+        bounds = (varianceAL[nz2,ncList[1],0,2*m+1],\
+            varianceAL[nz2,ncList[1],1,2*m+1])
+    elif errorType == "variance":
+        stdDeviation = \
+            np.std(galaxyNumberCountsRobustAll,2)[:,ncList[1],2*m+1]/\
+            np.sqrt(nsamples)
+        bounds = (dim[nz2] - 2*stdDeviation[nz2],\
+            dim[nz2] + 2*stdDeviation[nz2])
     else:
         raise Exception("Invalid errorType!")
     ax[i,j+2].fill_between(rBinCentres[nz2],bounds[0],bounds[1],\
@@ -768,7 +802,7 @@ for i in range(0,nRows):
                 ax[i,j].xaxis.set_ticklabels(xlabels)
 
 ax[0,0].legend(prop={"size":fontsize,"family":fontfamily},frameon=False,\
-    loc=(0.1,0.3))
+    loc=(0.02,0.3))
 left = 0.095
 bottom = 0.105
 top = 0.92
