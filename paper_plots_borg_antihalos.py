@@ -105,7 +105,7 @@ print("Doing ppts")
 doPPTs = True
 if doPPTs:
     [galaxyNumberCountExp,galaxyNumberCountsRobust,\
-        galaxyNumberCountsRobustAll,galaxyCountSquaredAll,\
+        galaxyNumberCountsRobustAll,\
         posteriorMassAll,Aalpha,varianceAL] = \
         tools.loadOrRecompute(\
             figuresFolder + "ppt_plots_data.p",getPPTPlotData,\
@@ -628,6 +628,10 @@ variancesRobust = np.mean(galaxyNumberCountsRobustAll,2) + \
 
 errorType = "bootstrap"
 
+
+mcmcCounts = galaxyNumberCountsRobustShells
+mcmcCountsAll = galaxyNumberCountsRobustAllShells
+errorCounts = varianceALShell
 # PPTs just comparing Coma and PP, in each of the magnitude bins:
 nRows = 3
 nCols = 2
@@ -643,9 +647,9 @@ for m in range(2,8):
     j = m - 2 - nCols*i
     magTitle="$" + str(mAbs[m+1]) + " \\leq M < " + str(mAbs[m]) + "$"
     # Cluster 1:
-    bright = galaxyNumberCountsRobust[:,ncList[0],2*m]
+    bright = mcmcCounts[:,ncList[0],2*m]
     nz1 = np.where(bright > 0)[0]
-    dim = galaxyNumberCountsRobust[:,ncList[0],2*m+1]
+    dim = mcmcCounts[:,ncList[0],2*m+1]
     nz2 = np.where(dim > 0)[0]
     bright2Mpp = galaxyNumberCountExp[:,ncList[0],2*m]
     dim2Mpp = galaxyNumberCountExp[:,ncList[0],2*m+1]
@@ -662,10 +666,10 @@ for m in range(2,8):
         stdRobust = np.sqrt(variancesRobust[:,ncList[0],2*m])
         bounds = (bright[nz1] - 2*stdRobust[nz1],bright[nz1] + 2*stdRobust[nz1])
     elif errorType == "bootstrap":
-        bounds = (varianceAL[nz1,ncList[0],0,2*m],\
-            varianceAL[nz1,ncList[0],1,2*m])
+        bounds = (errorCounts[nz1,ncList[0],0,2*m],\
+            errorCounts[nz1,ncList[0],1,2*m])
     elif errorType == "variance":
-        stdDeviation = np.std(galaxyNumberCountsRobustAll,2)[:,ncList[0],2*m]/\
+        stdDeviation = np.std(mcmcCountsAll,2)[:,ncList[0],2*m]/\
             np.sqrt(nsamples)
         bounds = (bright[nz1] - 2*stdDeviation[nz1],\
             bright[nz1] + 2*stdDeviation[nz1])
@@ -684,11 +688,11 @@ for m in range(2,8):
         stdRobust = np.sqrt(variancesRobust[:,ncList[0],2*m+1])
         bounds = (dim[nz2] - 2*stdRobust[nz2],dim[nz2] + 2*stdRobust[nz2])
     elif errorType == "bootstrap":
-        bounds = (varianceAL[nz2,ncList[0],0,2*m+1],\
-            varianceAL[nz2,ncList[0],1,2*m+1])
+        bounds = (errorCounts[nz2,ncList[0],0,2*m+1],\
+            errorCounts[nz2,ncList[0],1,2*m+1])
     elif errorType == "variance":
         stdDeviation = \
-            np.std(galaxyNumberCountsRobustAll,2)[:,ncList[0],2*m+1]/\
+            np.std(mcmcCountsAll,2)[:,ncList[0],2*m+1]/\
             np.sqrt(nsamples)
         bounds = (dim[nz2] - 2*stdDeviation[nz2],\
             dim[nz2] + 2*stdDeviation[nz2])
@@ -704,9 +708,9 @@ for m in range(2,8):
         fontfamily=fontfamily,fontsize=fontsize)
     ax[i,j].set_yscale('log')
     # Cluster 2:
-    bright = galaxyNumberCountsRobust[:,ncList[1],2*m]
+    bright = mcmcCounts[:,ncList[1],2*m]
     nz1 = np.where(bright > 0)[0]
-    dim = galaxyNumberCountsRobust[:,ncList[1],2*m+1]
+    dim = mcmcCounts[:,ncList[1],2*m+1]
     nz2 = np.where(dim > 0)[0]
     bright2Mpp = galaxyNumberCountExp[:,ncList[1],2*m]
     dim2Mpp = galaxyNumberCountExp[:,ncList[1],2*m+1]
@@ -723,10 +727,10 @@ for m in range(2,8):
         stdRobust = np.sqrt(variancesRobust[:,ncList[1],2*m])
         bounds = (bright[nz1] - 2*stdRobust[nz1],bright[nz1] + 2*stdRobust[nz1])
     elif errorType == "bootstrap":
-        bounds = (varianceAL[nz1,ncList[1],0,2*m],\
-            varianceAL[nz1,ncList[1],1,2*m])
+        bounds = (errorCounts[nz1,ncList[1],0,2*m],\
+            errorCounts[nz1,ncList[1],1,2*m])
     elif errorType == "variance":
-        stdDeviation = np.std(galaxyNumberCountsRobustAll,2)[:,ncList[1],2*m]/\
+        stdDeviation = np.std(mcmcCountsAll,2)[:,ncList[1],2*m]/\
             np.sqrt(nsamples)
         bounds = (bright[nz1] - 2*stdDeviation[nz1],\
             bright[nz1] + 2*stdDeviation[nz1])
@@ -745,11 +749,11 @@ for m in range(2,8):
         stdRobust = np.sqrt(variancesRobust[:,ncList[1],2*m+1])
         bounds = (dim[nz2] - 2*stdRobust[nz2],dim[nz2] + 2*stdRobust[nz2])
     elif errorType == "bootstrap":
-        bounds = (varianceAL[nz2,ncList[1],0,2*m+1],\
-            varianceAL[nz2,ncList[1],1,2*m+1])
+        bounds = (errorCounts[nz2,ncList[1],0,2*m+1],\
+            errorCounts[nz2,ncList[1],1,2*m+1])
     elif errorType == "variance":
         stdDeviation = \
-            np.std(galaxyNumberCountsRobustAll,2)[:,ncList[1],2*m+1]/\
+            np.std(mcmcCountsAll,2)[:,ncList[1],2*m+1]/\
             np.sqrt(nsamples)
         bounds = (dim[nz2] - 2*stdDeviation[nz2],\
             dim[nz2] + 2*stdDeviation[nz2])

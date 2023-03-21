@@ -3140,6 +3140,8 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
                         prop={"size":8,"family":"serif"},frameon=False)
                     ax[0,2].legend(handles = handles[5][4:],\
                         prop={"size":8,"family":"serif"},frameon=False)
+            elif legendMethod == "grid":
+                # Implemented a gridded legeng
             else:
                 # Single column version.
                 if len(handles[0]) < 4:
