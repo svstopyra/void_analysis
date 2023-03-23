@@ -52,7 +52,7 @@ def scientificNotation(x,latex=False,s=3,powerRange = 0):
     log10x = np.log10(np.abs(x))
     z = np.floor(log10x).astype(int)
     y = 10.0**(log10x - z)
-    if z > powerRange:
+    if np.abs(z) > powerRange:
         resultString = "10^{" + "{0:0d}".format(z) + "}"
         if y != 1.0:
             resultString = ("{0:." + str(s) + "g}").format(y) + \
@@ -2863,7 +2863,11 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
         resToShow=None,figsize=None,title=None,logy=False,\
         xticks=None,yticks1=None,yticks2=None,massLabelPos=0.98,\
         colaColour=seabornColormap[0],pmColour=seabornColormap[1],\
-        logStyle=':',linStyle='-',legendMethod="auto"):
+        logStyle=':',linStyle='-',legendMethod="auto",\
+        linText=[0.3,0.7],logText=[0.3,0.6],colaText=[0.4,0.8],\
+        pmText=[0.6,0.8],legLoc=[0.3,0.8],secondYAxis=False,\
+        massLabelsOnRight=False,selectModels=True,selectCOLA=4,\
+        selectPM = 2,selectSize=5,selectMarker='o'):
     if resToShow is None:
         resToShow = np.arange(0,len(resList))
     nsamples = len(massList1)
@@ -2881,7 +2885,7 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
     massArray2 = np.array([np.vstack(massList2[k]) \
         for k in range(0,nsamples)])/scale
     meanMass2 = np.mean(massArray2,0)
-    stdMass2 = np.std(massArray1,0)/np.sqrt(nsamples)
+    stdMass2 = np.std(massArray2,0)/np.sqrt(nsamples)
     if extraMasses is not None:
         meanExtraMass = np.mean(np.vstack(extraMasses),0)/scale
         stdExtraMass = np.std(np.vstack(extraMasses),0)\
@@ -2903,13 +2907,15 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
         if showGADGET:
             handles[l].append(ax0.errorbar(stepsListGADGET,\
                     meanMass1[iterator:(iterator + len(stepsListGADGET)),l],\
-                    yerr=stdMass1[iterator:(iterator + len(stepsListGADGET)),l],\
-                    marker = markerGadget,linestyle='-',\
+                    yerr=stdMass1[iterator:(iterator + \
+                    len(stepsListGADGET)),l],\
+                    marker = markerGadget,linestyle=linStyle,\
                     label='GADGET2 ($128^3$ PM-grid)',color = colorGadget))
             handles[l + nCols].append(ax1.errorbar(stepsListGADGET,\
                     meanMass2[iterator:(iterator + len(stepsListGADGET)),l],\
-                    yerr=stdMass2[iterator:(iterator + len(stepsListGADGET)),l],\
-                    marker = markerGadget,linestyle='-',\
+                    yerr=stdMass2[iterator:(iterator + \
+                    len(stepsListGADGET)),l],\
+                    marker = markerGadget,linestyle=linStyle,\
                     label='GADGET2 ($128^3$ PM-grid)',color = colorGadget))
         iterator += len(stepsListGADGET)
         # COLA masses:
@@ -2917,26 +2923,33 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
             handles[l].append(ax0.errorbar(stepsList,\
                     meanMass1[iterator:(iterator + len(stepsList)),l]\
                     ,yerr=stdMass1[iterator:(iterator + len(stepsList)),l]\
-                    ,marker = markerCOLA,linestyle='-',\
+                    ,marker = markerCOLA,linestyle=linStyle,\
                     label='COLA (linear steps)',color=colaColour))
             handles[l + nCols].append(ax1.errorbar(stepsList,\
                     meanMass2[iterator:(iterator + len(stepsList)),l]\
                     ,yerr=stdMass2[iterator:(iterator + len(stepsList)),l]\
-                    ,marker = markerCOLA,linestyle='-',\
+                    ,marker = markerCOLA,linestyle=linStyle,\
                     label='COLA (linear steps)', color=colaColour))
+            if selectModels:
+                ax0.scatter(stepsList[selectCOLA],\
+                    meanMass1[iterator + selectCOLA,l],marker=selectMarker,\
+                    s=selectSize,edgecolors=colaColour,facecolors='none')
+                ax1.scatter(stepsList[selectCOLA],\
+                    meanMass2[iterator + selectCOLA,l],marker=selectMarker,\
+                    s=selectSize,edgecolors=colaColour,facecolors='none')
         iterator += len(stepsList)
         # PM masses:
         if showPM:
             handles[l].append(ax0.errorbar(stepsList,\
                     meanMass1[iterator:(iterator + len(stepsList)),l],\
                     yerr=stdMass1[iterator:(iterator + len(stepsList)),l],\
-                    marker = markerPM,linestyle=':',label='PM (linear steps)',\
-                    color=pmColour))
+                    marker = markerPM,linestyle=linStyle,\
+                    label='PM (linear steps)',color=pmColour))
             handles[l+nCols].append(ax1.errorbar(stepsList,\
                     meanMass2[iterator:(iterator + len(stepsList)),l],\
                     yerr=stdMass2[iterator:(iterator + len(stepsList)),l],\
-                    marker = markerPM,linestyle=':',label='PM (linear steps)',\
-                    color=pmColour))
+                    marker = markerPM,linestyle=linStyle,\
+                    label='PM (linear steps)',color=pmColour))
         iterator += len(stepsList)
         # Include some extra masses if provided, otherwise skip them:
         if showGadget1024:
@@ -2970,12 +2983,12 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
                     handles[l].append(ax0.errorbar(resStepsList,\
                         meanMass1[iterator:(iterator + len(resStepsList)),l],\
                         yerr=stdMass1[iterator:(iterator + len(resStepsList)),l],\
-                        marker = markerRes,linestyle=':',\
+                        marker = markerRes,linestyle='-',\
                         label='COLA ($' + str(resList[m]) + '$)',color=colorRes))
                     handles[l + nCols].append(ax1.errorbar(resStepsList,\
                         meanMass2[iterator:(iterator + len(resStepsList)),l],\
                         yerr=stdMass2[iterator:(iterator + len(resStepsList)),l],\
-                        marker = markerRes,linestyle=':',\
+                        marker = markerRes,linestyle='-',\
                         label='COLA ($' + str(resList[m]) + '$)',color=colorRes))
             iterator += len(resStepsList)*len(resList)
             if showPM:
@@ -3011,13 +3024,20 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
             handles[l].append(ax0.errorbar(logstepsList,\
                     meanMass1[iterator:(iterator + len(logstepsList)),l],\
                     yerr=stdMass1[iterator:(iterator + len(logstepsList)),l],\
-                    marker = markerPM,linestyle=linStyle,\
+                    marker = markerPM,linestyle=logStyle,\
                     label='PM (log steps)',color=pmColour))
             handles[l + nCols].append(ax1.errorbar(logstepsList,\
                     meanMass2[iterator:(iterator + len(logstepsList)),l],\
                     yerr=stdMass2[iterator:(iterator + len(logstepsList)),l],\
-                    marker = markerPM,linestyle=linStyle,\
+                    marker = markerPM,linestyle=logStyle,\
                     label='PM (log steps)',color=pmColour))
+            if selectModels:
+                ax0.scatter(logstepsList[selectPM],\
+                    meanMass1[iterator + selectPM,l],marker=selectMarker,\
+                    s=selectSize,edgecolors=pmColour,facecolors='none')
+                ax1.scatter(logstepsList[selectPM],\
+                    meanMass2[iterator + selectPM,l],marker=selectMarker,\
+                    s=selectSize,edgecolors=pmColour,facecolors='none')
         iterator += len(logstepsList)
         # Adaptive gadget masses:
         if showGadgetAdaptive:
@@ -3073,17 +3093,17 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
         ax1.tick_params(axis='both', which='minor', labelsize=fontsize)
         if xticks is not None:
             ax1.set_xticks(xticks)
-            xlabels = ["$" + scientificNotation(tick) + "$"\
+            xlabels = ["$" + scientificNotation(tick,powerRange=2) + "$"\
                 for tick in xticks]
             ax1.xaxis.set_ticklabels(xlabels,fontsize=fontsize)
         else:
-            xlabels = ["$" + scientificNotation(tick) + "$"\
+            xlabels = ["$" + scientificNotation(tick,powerRange=2) + "$"\
                 for tick in ax1.get_xticks()]
             ax1.xaxis.set_ticklabels(xlabels,fontsize=fontsize)
         if yticks1 is not None:
             rescaledTicks = np.array(yticks1)/scale
             ax0.set_yticks(rescaledTicks)
-            ylabels = ["$" + scientificNotation(tick) + "$"\
+            ylabels = ["$" + scientificNotation(tick,powerRange=2) + "$"\
                 for tick in rescaledTicks]
             #print(ylabels)
             ax0.yaxis.set_ticklabels(ylabels,fontsize=fontsize)
@@ -3091,7 +3111,7 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
         if yticks2 is not None:
             rescaledTicks = np.array(yticks2)/scale 
             ax1.set_yticks(rescaledTicks)
-            ylabels = ["$" + scientificNotation(tick) + "$"\
+            ylabels = ["$" + scientificNotation(tick,powerRange=2) + "$"\
                 for tick in rescaledTicks]
             #print(ylabels)
             ax1.yaxis.set_ticklabels(ylabels,fontsize=fontsize)
@@ -3114,12 +3134,43 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
     plt.subplots_adjust(wspace=wspace,hspace=hspace,top=top,bottom=bottom,\
         left=left,right=right)
     # Mass labels:
-    fig.text(massLabelPos,bottom + 0.75*(top-bottom),name1,\
-        va='center',rotation='vertical',fontsize=fontsize,\
-        fontfamily=fontfamily)
-    fig.text(massLabelPos,bottom + 0.25*(top-bottom),name2,\
-        va='center',rotation='vertical',fontsize=fontsize,\
-        fontfamily=fontfamily)
+    if massLabelsOnRight:
+        fig.text(massLabelPos,bottom + 0.75*(top-bottom),name1,\
+            va='center',rotation='vertical',fontsize=fontsize,\
+            fontfamily=fontfamily)
+        fig.text(massLabelPos,bottom + 0.25*(top-bottom),name2,\
+            va='center',rotation='vertical',fontsize=fontsize,\
+            fontfamily=fontfamily)
+    # Add a second y axis:
+    if secondYAxis:
+        if nCols > 1:
+            twinAx0 = ax[0,nCols-1].twinx()
+            twinAx1 = ax[1,nCols-1].twinx()
+        else:
+            twinAx0 = ax[0].twinx()
+            twinAx1 = ax[1].twinx()
+        twinAx0.set_ylim(np.array(ylim1)/scale)
+        twinAx1.set_ylim(np.array(ylim2)/scale)
+        # Set ticks:
+        rescaledTicks = np.array(yticks1)/scale
+        twinAx0.set_yticks(rescaledTicks)
+        ylabels = ["$" + scientificNotation(tick,powerRange=2) + "$"\
+            for tick in rescaledTicks]
+        #print(ylabels)
+        twinAx0.yaxis.set_ticklabels(ylabels,fontsize=fontsize)
+        twinAx0.yaxis.set_minor_formatter(NullFormatter())
+        rescaledTicks = np.array(yticks2)/scale 
+        twinAx1.set_yticks(rescaledTicks)
+        ylabels = ["$" + scientificNotation(tick,powerRange=2) + "$"\
+            for tick in rescaledTicks]
+        #print(ylabels)
+        twinAx1.yaxis.set_ticklabels(ylabels,fontsize=fontsize)
+        twinAx1.yaxis.set_minor_formatter(NullFormatter())
+        # Axis labels:
+        twinAx0.set_ylabel(name1 + " [$10^{15}M_{\\odot}h^{-1}$]",\
+                fontsize=fontsize,fontfamily=fontfamily)
+        twinAx1.set_ylabel(name2 + " [$10^{15}M_{\\odot}h^{-1}$]",\
+            fontsize=fontsize,fontfamily=fontfamily)
     # Legend:
     if showLegend:
         if legendMethod == "auto":
@@ -3140,9 +3191,6 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
                         prop={"size":8,"family":"serif"},frameon=False)
                     ax[0,2].legend(handles = handles[5][4:],\
                         prop={"size":8,"family":"serif"},frameon=False)
-            elif legendMethod == "grid":
-                # Implemented a gridded legeng
-                print("Not yet implemented")
             else:
                 # Single column version.
                 if len(handles[0]) < 4:
@@ -3153,6 +3201,39 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
                         prop={"size":8,"family":"serif"},frameon=False)
                     ax[1].legend(handles = handles[1][3:],\
                         prop={"size":8,"family":"serif"},frameon=False)
+        elif legendMethod == "grid":
+            # Implemented a gridded legeng
+            #print("Not yet implemented")
+            # Fake legend entries:
+            if nCols > 1:
+                legAx = ax[0,1]
+            else:
+                legAx = ax[0]
+            colaLog = matplotlib.lines.Line2D([0],[0],linestyle=logStyle,\
+                color=colaColour,label="")
+            colaLin = matplotlib.lines.Line2D([0],[0],linestyle=linStyle,\
+                color=colaColour,label="")
+            pmLog = matplotlib.lines.Line2D([0],[0],linestyle=logStyle,\
+                color=pmColour,label="")
+            pmLin = matplotlib.lines.Line2D([0],[0],linestyle=linStyle,\
+                color=pmColour,label="")
+            # Create a gridded legend:
+            legAx.legend(handles = [colaLin,colaLog,pmLin,pmLog],\
+                prop={"size":8,"family":"serif"},\
+                frameon=False,ncol=2,loc=legLoc)
+            # Text:
+            legAx.text(linText[0],linText[1],"Linear steps:",\
+                fontsize=fontsize,fontfamily=fontfamily,\
+                transform=legAx.transAxes)
+            legAx.text(logText[0],logText[1],"Log steps:",\
+                fontsize=fontsize,fontfamily=fontfamily,\
+                transform=legAx.transAxes)
+            legAx.text(colaText[0],colaText[1],"COLA:",\
+                fontsize=fontsize,fontfamily=fontfamily,\
+                transform=legAx.transAxes)
+            legAx.text(pmText[0],pmText[1],"PM:",\
+                fontsize=fontsize,fontfamily=fontfamily,\
+                transform=legAx.transAxes)
         else:
             # Manual positioning of legend entries:
             if nCols > 1:
@@ -3298,7 +3379,7 @@ def singleMassFunctionPlot(masses,mlow,mupp,nMassBins,textwidth=7.1014,\
         mass_function='Tinker',delta_wrt='SOCritical',\
         marker='x',linestyle='--',plotColour=seabornColormap[0],\
         colorTheory = seabornColormap[1],\
-        legendLoc='lower left',label="PM10 constrained",transfer_model='EH',\
+        legendLoc='lower left',label="PM10",transfer_model='EH',\
         fname=None,xlabel="Mass [$M_{\odot}h^{-1}$]",ylabel="Number of halos",\
         title=None,showLegend=True,tickRight=False,tickLeft=True,\
         savename=None,compColour=seabornColormap[0],volSim=None,\
@@ -3354,7 +3435,7 @@ def singleMassFunctionPlot(masses,mlow,mupp,nMassBins,textwidth=7.1014,\
         handles.append(ax.fill_between(massBinCentres,\
             hmfUnderdensePoisson[0]*factor,\
             hmfUnderdensePoisson[1]*factor,\
-            label = 'Unconstrained, \n' + \
+            label = '$\\Lambda$-CDM, \n' + \
             '$' + ("%.2g" % (deltaListMean - deltaListError)) + \
             ' \\leq \\delta < ' + \
             ("%.2g" % (deltaListMean + deltaListError)) + \

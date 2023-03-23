@@ -83,242 +83,261 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
         #               centre of mass.
         # verbose - print indications of progress
     # Cosmology:
-    cosmo = astropy.cosmology.LambdaCDM(100*h,Om0,Ode0)
-    # 2M++ catalogue data, and cluster locations:
-    [combinedAbellN,combinedAbellPos,abell_nums] = \
-        real_clusters.getCombinedAbellCatalogue(Om0 = 0.3111,Ode0 = 0.6889,\
-            h=0.6766,catFolder=catFolder)
-    clusterInd = [np.where(combinedAbellN == n)[0] for n in abell_nums]
-    clusterLoc = np.zeros((len(clusterInd),3))
-    for k in range(0,len(clusterInd)):
-        if len(clusterInd[k]) == 1:
-            clusterLoc[k,:] = combinedAbellPos[clusterInd[k][0],:]
-        else:
-            # Average positions:
-            clusterLoc[k,:] = np.mean(combinedAbellPos[clusterInd[k],:],0)
-    # Bias model data for each MCMC sample, and density fields:
-    if verbose:
-        print("Loading bias data...")
-    biasData = [h5py.File(samplesFolder + "/sample" + str(k) + "/mcmc_" + \
-        str(k) + ".h5",'r') for k in snapNumList]
-    mcmcDen = [1.0 + sample['scalars']['BORG_final_density'][()] \
-        for sample in biasData]
-    if N < mcmcDen[0].shape[0]:
-        print("Warning!!: requested resolution is lower than " + 
-        "the MCMC file. Density field will be downgraded.")
-        mcmcDen = [tools.downsample(den,int(den.shape[0]/N)) \
-            for den in mcmcDen]
-    elif N > mcmcDen[0].shape[0]:
-        print("Warning!!: requested resolution is higher than " + 
-        "the MCMC file. Density field will be interpolated.")
-        mcmcDen = [scipy.ndimage.zoom(den,N/den.shape[0]) \
-            for den in mcmcDen]
-    mcmcDenLin = [np.reshape(den,N**3) for den in mcmcDen]
-    mcmcDen_r = [np.reshape(den,(N,N,N),order='F') for den in mcmcDenLin]
-    mcmcDenLin_r = [np.reshape(den,N**3) for den in mcmcDen_r]
-    biasParam = [np.array([[sample['scalars']['galaxy_bias_' + str(k)][()] \
-        for k in range(0,nMagBins)]]) for sample in  biasData]
-    # Positions of density voxels, and KDtree for rapid access:
-    if verbose:
-        print("Computing KD-tree...")
-    grid = snapedit.gridListPermutation(N,perm=(2,1,0))
-    centroids = grid*boxsize/N + boxsize/(2*N)
-    positions = snapedit.unwrap(centroids - np.array([boxsize/2]*3),boxsize)
-    tree = scipy.spatial.cKDTree(snapedit.wrap(positions + boxsize/2,boxsize),\
-        boxsize=boxsize)
-    # Survey mask data:
-    if verbose:
-        print("Computing survey mask...")
-    surveyMask11 = healpy.read_map(surveyMaskPath + "completeness_11_5.fits")
-    surveyMask12 = healpy.read_map(surveyMaskPath + "completeness_12_5.fits")
-    [mask,angularMask,radialMas,mask12,mask11] = tools.loadOrRecompute(\
-        data_folder + "surveyMask.p",surveyMask,\
-        positions,surveyMask11,surveyMask12,cosmo,-0.94,\
-        Mstarh,keCorr = keCorr,mmin=mmin,numericalIntegration=True,\
-        mmax=mmax,splitApparent=True,splitAbsolute=True,returnComponents=True,\
-        _recomputeData=recomputeData)
-    # Obtain galaxy counts:
-    nsamples = len(snapNumList)
-    galaxyNumberCountExp = np.zeros((nBins,nClust,nMagBins))
-    galaxyNumberCountExpShells = np.zeros((nBins,nClust,nMagBins))
-    interval2MPPBootstrap = np.zeros((nBins,nClust,len(bootstrapInterval),\
-        nMagBins))
-    interval2MPPBootstrapShells = np.zeros((nBins,nClust,\
-        len(bootstrapInterval),nMagBins))
-    galaxyNumberCountsRobustAll = np.zeros((nBins,nClust,nsamples,nMagBins))
-    galaxyNumberCountsRobust = np.zeros((nBins,nClust,nMagBins))
-    galaxyNumberCountsRobustAllShells = \
-        np.zeros((nBins,nClust,nsamples,nMagBins))
-    galaxyNumberCountsRobustShells = np.zeros((nBins,nClust,nMagBins))
-    if error == "bootstrap":
-        # Need space for a lower and upper limit:
-        varianceAL = np.zeros((nBins,nClust,len(bootstrapInterval),nMagBins))
-        varianceALShell = np.zeros((nBins,nClust,len(bootstrapInterval),\
+    try:
+        cosmo = astropy.cosmology.LambdaCDM(100*h,Om0,Ode0)
+        # 2M++ catalogue data, and cluster locations:
+        [combinedAbellN,combinedAbellPos,abell_nums] = \
+            real_clusters.getCombinedAbellCatalogue(Om0 = 0.3111,Ode0 = 0.6889,\
+                h=0.6766,catFolder=catFolder)
+        clusterInd = [np.where(combinedAbellN == n)[0] for n in abell_nums]
+        clusterLoc = np.zeros((len(clusterInd),3))
+        for k in range(0,len(clusterInd)):
+            if len(clusterInd[k]) == 1:
+                clusterLoc[k,:] = combinedAbellPos[clusterInd[k][0],:]
+            else:
+                # Average positions:
+                clusterLoc[k,:] = np.mean(combinedAbellPos[clusterInd[k],:],0)
+        # Bias model data for each MCMC sample, and density fields:
+        if verbose:
+            print("Loading bias data...")
+        biasData = [h5py.File(samplesFolder + "/sample" + str(k) + "/mcmc_" + \
+            str(k) + ".h5",'r') for k in snapNumList]
+        mcmcDen = [1.0 + sample['scalars']['BORG_final_density'][()] \
+            for sample in biasData]
+        if N < mcmcDen[0].shape[0]:
+            print("Warning!!: requested resolution is lower than " + 
+            "the MCMC file. Density field will be downgraded.")
+            mcmcDen = [tools.downsample(den,int(den.shape[0]/N)) \
+                for den in mcmcDen]
+        elif N > mcmcDen[0].shape[0]:
+            print("Warning!!: requested resolution is higher than " + 
+            "the MCMC file. Density field will be interpolated.")
+            mcmcDen = [scipy.ndimage.zoom(den,N/den.shape[0]) \
+                for den in mcmcDen]
+        mcmcDenLin = [np.reshape(den,N**3) for den in mcmcDen]
+        mcmcDen_r = [np.reshape(den,(N,N,N),order='F') for den in mcmcDenLin]
+        mcmcDenLin_r = [np.reshape(den,N**3) for den in mcmcDen_r]
+        biasParam = [np.array([[sample['scalars']['galaxy_bias_' + str(k)][()] \
+            for k in range(0,nMagBins)]]) for sample in  biasData]
+        # Positions of density voxels, and KDtree for rapid access:
+        if verbose:
+            print("Computing KD-tree...")
+        grid = snapedit.gridListPermutation(N,perm=(2,1,0))
+        centroids = grid*boxsize/N + boxsize/(2*N)
+        positions = snapedit.unwrap(centroids - np.array([boxsize/2]*3),boxsize)
+        tree = scipy.spatial.cKDTree(snapedit.wrap(positions + boxsize/2,\
+            boxsize),boxsize=boxsize)
+        # Survey mask data:
+        if verbose:
+            print("Computing survey mask...")
+        surveyMask11 = healpy.read_map(surveyMaskPath + \
+            "completeness_11_5.fits")
+        surveyMask12 = healpy.read_map(surveyMaskPath + \
+            "completeness_12_5.fits")
+        [mask,angularMask,radialMas,mask12,mask11] = tools.loadOrRecompute(\
+            data_folder + "surveyMask.p",surveyMask,\
+            positions,surveyMask11,surveyMask12,cosmo,-0.94,\
+            Mstarh,keCorr = keCorr,mmin=mmin,numericalIntegration=True,\
+            mmax=mmax,splitApparent=True,splitAbsolute=True,\
+            returnComponents=True,_recomputeData=recomputeData)
+        # Obtain galaxy counts:
+        nsamples = len(snapNumList)
+        galaxyNumberCountExp = np.zeros((nBins,nClust,nMagBins))
+        galaxyNumberCountExpShells = np.zeros((nBins,nClust,nMagBins))
+        interval2MPPBootstrap = np.zeros((nBins,nClust,len(bootstrapInterval),\
             nMagBins))
-    else:
-        varianceAL = np.zeros((nBins,nClust,nMagBins))
-        varianceALShell = np.zeros((nBins,nClust,nMagBins))
-    posteriorMassAll = np.zeros((nBins,nClust,nsamples))
-    mUnit = Om0*2.7754e11*(boxsize/N)**3
-    # Obtain properties:
-    rBins = np.linspace(rBinMin,rBinMax,nBins+1)
-    wrappedPos = snapedit.wrap(clusterLoc + boxsize/2,boxsize)
-    # Healpix indices for each voxel:
-    if verbose:
-        print("Loading healpix data...")
-    if hpIndices is None:
-        restart = h5py.File(restartFile)
-        hpIndices = restart['scalars']['colormap3d'][()]
-    hpIndicesLinear = hpIndices.reshape(N**3)
-    # Get predicted galaxy counts in each voxel, for each MCMC sample:
-    if verbose:
-        print("Computing posterior predicted galaxy counts...")
-    ngMCMC = np.vstack([tools.loadOrRecompute(samplesFolder + "sample" + \
-            str(snapNumList[k]) + "/ngMCMC.p",ngPerLBin,\
-            biasParam,return_samples=True,mask=mask,\
-            accelerate=True,N=N,\
-            delta = [mcmcDenLin_r[k]],contrast=False,sampleList=[0],\
-            beta=biasParam[k][:,:,1],rhog = biasParam[k][:,:,3],\
-            epsg=biasParam[k][:,:,2],\
-            nmean=biasParam[k][:,:,0],biasModel = biasNew,\
-            _recomputeData = recomputeData) \
-            for k in range(0,nsamples)])
-    # Convert MCMC galaxy counts in voxels to counts in each healpix patch:
-    if verbose:
-        print("Converting voxel counts to healpix patch counts...")
-    ngHPMCMC = tools.loadOrRecompute(data_folder + "ngHPMCMC.p",\
-        getAllNgsToHealpix,ngMCMC,\
-        hpIndices,snapNumList,samplesFolder,nside,nres=N,\
-        _recomputeData=recomputeData)
-    # Compute counts in each healpix pixel for 2M++ survey:
-    if verbose:
-        print("Computing 2M++ galaxy counts...")
-    ng2MPP = np.reshape(tools.loadOrRecompute(data_folder + "mg2mppK3.p",\
-        survey.griddedGalCountFromCatalogue,\
-        cosmo,tmppFile=tmppFile,Kcorrection = True,N=N,\
-        _recomputeData=recomputeData),(nMagBins,N**3))
-    ngHP = tools.loadOrRecompute(data_folder + "ngHP3.p",\
-        tools.getCountsInHealpixSlices,\
-        ng2MPP,hpIndices,nside=nside,nres=N,_recomputeData=recomputeData)
-    # Amplitudes of the bias model in each healpix patch:
-    if verbose:
-        print("Computing bias patch amplitudes...")
-    npixels = 12*(nside**2)
-    Aalpha = np.zeros((nsamples,nMagBins,npixels*nRadialSlices))
-    inverseLambdaTot = np.zeros((nsamples,nMagBins,npixels*nRadialSlices))
-    # Sum the mask of the voxels in each healpix patch. Only where this sums to
-    # zero is lambda_bar_tot actually zero:
-    healpixMask = tools.getCountsInHealpixSlices(mask,hpIndices,nside=nside,\
-        nres=N)
-    del mask # No longer needed, and python doesn't seem to do the garbage 
-    # collection properly???
-    nz = np.where(healpixMask > 1e-300)
-    for k in range(0,nsamples):
-        #nz = np.where(ngHPMCMC[k] != 0.0)
-        # Formally, it's probably better to remove these pixels using the mask
-        # instead, in case there are any errors that make lambda zero:
-        # NB - rounding errors in the mask calculation sometimes give 
-        # tiny values of the mask instead of zero. These should also be 
-        # formally removed, so we should cut to some small value rather than
-        # doing a floating point comparison with zero which can be error prone.
-        inverseLambdaTot[k][nz] = 1.0/ngHPMCMC[k][nz]
-    Aalpha = inverseLambdaTot*ngHP
-    # Get centres of clusters in each MCMC sample:
-    if verbose:
-        print("Computing cluster centres in each sample...")
-    clusterCentresSim = []
-    densityList = [np.reshape(den,N**3) for den in mcmcDen_r]
-    for k in range(0,nsamples): 
-        snapPath = samplesFolder + "sample" + str(snapNumList[k]) + snapname
-        clusterCentresSim.append(\
-            simulation_tools.getClusterCentres(clusterLoc,\
-            snapPath = snapPath,fileSuffix = "clusters1",\
-            recompute=recomputeData,density=densityList[k],boxsize=boxsize,\
-            positions=positions,positionTree=tree,\
-            method="density",reductions=reductions,\
-            iterations=iterations))
-    if verbose:
-        print("Computing radial galaxy counts...")
-    # Loop over all bins and give spatial averages of the voxels:
-    for k in range(0,nBins):
-        print("Doing bin " + str(k+1) + " of " + str(nBins))
-        # Indices in the previous radial bin:
-        if k == 0:
-            indicesLast = [[] for centres in range(0,nClust)]
+        interval2MPPBootstrapShells = np.zeros((nBins,nClust,\
+            len(bootstrapInterval),nMagBins))
+        galaxyNumberCountsRobustAll = np.zeros((nBins,nClust,nsamples,\
+            nMagBins))
+        galaxyNumberCountsRobust = np.zeros((nBins,nClust,nMagBins))
+        galaxyNumberCountsRobustAllShells = \
+            np.zeros((nBins,nClust,nsamples,nMagBins))
+        galaxyNumberCountsRobustShells = np.zeros((nBins,nClust,nMagBins))
+        if error == "bootstrap":
+            # Need space for a lower and upper limit:
+            varianceAL = np.zeros((nBins,nClust,len(bootstrapInterval),\
+                nMagBins))
+            varianceALShell = np.zeros((nBins,nClust,len(bootstrapInterval),\
+                nMagBins))
         else:
-            indicesLast = indices
-        # Indices at <r:
-        indices = np.array(tree.query_ball_point(wrappedPos,rBins[k+1]))
-        # Indices in a single shell:
-        indicesShell = [np.array(np.setdiff1d(ind1,ind2),dtype=int) \
-            for ind1,ind2 in zip(indices,indicesLast)]
-        # This was used for summing about individual centres if they fluctuated
-        # between samples, but I don't really think that makes sense any more
-        # if we're looking at the variance of the sum of samples:
-        if centreMethod == "snapshot":
-            indicesSample = [np.array(tree.query_ball_point(\
-                -np.fliplr(snapedit.wrap(centres,boxsize)),\
-                rBins[k+1])) for centres in clusterCentresSim]
-        elif centreMethod == "density":
-            indicesSample = [np.array(tree.query_ball_point(\
-                snapedit.wrap(centres,boxsize),rBins[k+1])) \
-                for centres in clusterCentresSim]
-        elif centreMethod == "fixed":
-            indicesSample = [indices for centres in clusterCentresSim]
-        if np.any(np.array(indices,dtype=bool)):
-            for l in range(0,nClust):
-                voxels = np.array(indices[l],dtype=int)
-                if len(voxels != 0):
-                    # Evaluate the variance and expectation value
-                    # using different methods, for the N(<r) case:
-                    [expALSum,varAL] = getVoxelSums(\
-                        voxels,hpIndicesLinear,Aalpha,ngMCMC,inverseLambdaTot,\
-                        ngHP,error,num_samples,nsamples,nMagBins,\
-                        bootstrapInterval=bootstrapInterval)
-                    if error == "bootstrap":
-                        varianceAL[k,l,:,:] = varAL.reshape((\
-                            len(bootstrapInterval),nMagBins))
-                    else:
-                        varianceAL[k,l,:] = varAL.reshape(nMagBins)
-                    galaxyNumberCountsRobust[k,l,:] = expALSum
-                    # Now do the N(r), at a fixed shell:
-                    [expALSumShell,varALShell] = getVoxelSums(\
-                        np.array(indicesShell[l],dtype=int),hpIndicesLinear,\
-                        Aalpha,ngMCMC,inverseLambdaTot,ngHP,error,num_samples,\
-                        nsamples,nMagBins,bootstrapInterval=bootstrapInterval)
-                    if error == "bootstrap":
-                        varianceALShell[k,l,:,:] = \
-                            varALShell.reshape((\
+            varianceAL = np.zeros((nBins,nClust,nMagBins))
+            varianceALShell = np.zeros((nBins,nClust,nMagBins))
+        posteriorMassAll = np.zeros((nBins,nClust,nsamples))
+        mUnit = Om0*2.7754e11*(boxsize/N)**3
+        # Obtain properties:
+        rBins = np.linspace(rBinMin,rBinMax,nBins+1)
+        wrappedPos = snapedit.wrap(clusterLoc + boxsize/2,boxsize)
+        # Healpix indices for each voxel:
+        if verbose:
+            print("Loading healpix data...")
+        if hpIndices is None:
+            restart = h5py.File(restartFile)
+            hpIndices = restart['scalars']['colormap3d'][()]
+        hpIndicesLinear = hpIndices.reshape(N**3)
+        # Get predicted galaxy counts in each voxel, for each MCMC sample:
+        if verbose:
+            print("Computing posterior predicted galaxy counts...")
+        ngMCMC = np.vstack([tools.loadOrRecompute(samplesFolder + "sample" + \
+                str(snapNumList[k]) + "/ngMCMC.p",ngPerLBin,\
+                biasParam,return_samples=True,mask=mask,\
+                accelerate=True,N=N,\
+                delta = [mcmcDenLin_r[k]],contrast=False,sampleList=[0],\
+                beta=biasParam[k][:,:,1],rhog = biasParam[k][:,:,3],\
+                epsg=biasParam[k][:,:,2],\
+                nmean=biasParam[k][:,:,0],biasModel = biasNew,\
+                _recomputeData = recomputeData) \
+                for k in range(0,nsamples)])
+        # Convert MCMC galaxy counts in voxels to counts in each healpix patch:
+        if verbose:
+            print("Converting voxel counts to healpix patch counts...")
+        ngHPMCMC = tools.loadOrRecompute(data_folder + "ngHPMCMC.p",\
+            getAllNgsToHealpix,ngMCMC,\
+            hpIndices,snapNumList,samplesFolder,nside,nres=N,\
+            _recomputeData=recomputeData)
+        # Compute counts in each healpix pixel for 2M++ survey:
+        if verbose:
+            print("Computing 2M++ galaxy counts...")
+        ng2MPP = np.reshape(tools.loadOrRecompute(data_folder + "mg2mppK3.p",\
+            survey.griddedGalCountFromCatalogue,\
+            cosmo,tmppFile=tmppFile,Kcorrection = True,N=N,\
+            _recomputeData=recomputeData),(nMagBins,N**3))
+        ngHP = tools.loadOrRecompute(data_folder + "ngHP3.p",\
+            tools.getCountsInHealpixSlices,\
+            ng2MPP,hpIndices,nside=nside,nres=N,_recomputeData=recomputeData)
+        # Amplitudes of the bias model in each healpix patch:
+        if verbose:
+            print("Computing bias patch amplitudes...")
+        npixels = 12*(nside**2)
+        Aalpha = np.zeros((nsamples,nMagBins,npixels*nRadialSlices))
+        inverseLambdaTot = np.zeros((nsamples,nMagBins,npixels*nRadialSlices))
+        # Sum the mask of the voxels in each healpix patch. Only where this 
+        # sums to zero is lambda_bar_tot actually zero:
+        healpixMask = tools.getCountsInHealpixSlices(mask,hpIndices,\
+            nside=nside,nres=N)
+        # collection properly???
+        nz = np.where(healpixMask > 1e-300)
+        for k in range(0,nsamples):
+            #nz = np.where(ngHPMCMC[k] != 0.0)
+            # Formally, it's probably better to remove these pixels using the
+            # mask instead, in case there are any errors that make lambda zero:
+            # NB - rounding errors in the mask calculation sometimes give 
+            # tiny values of the mask instead of zero. These should also be 
+            # formally removed, so we should cut to some small value rather than
+            # doing a floating point comparison with zero which can be error 
+            # prone.
+            inverseLambdaTot[k][nz] = 1.0/ngHPMCMC[k][nz]
+        Aalpha = inverseLambdaTot*ngHP
+        # Get centres of clusters in each MCMC sample:
+        if verbose:
+            print("Computing cluster centres in each sample...")
+        clusterCentresSim = []
+        densityList = [np.reshape(den,N**3) for den in mcmcDen_r]
+        for k in range(0,nsamples): 
+            snapPath = samplesFolder + "sample" + str(snapNumList[k]) + snapname
+            clusterCentresSim.append(\
+                simulation_tools.getClusterCentres(clusterLoc,\
+                snapPath = snapPath,fileSuffix = "clusters1",\
+                recompute=recomputeData,density=densityList[k],boxsize=boxsize,\
+                positions=positions,positionTree=tree,\
+                method="density",reductions=reductions,\
+                iterations=iterations))
+        if verbose:
+            print("Computing radial galaxy counts...")
+        # Loop over all bins and give spatial averages of the voxels:
+        for k in range(0,nBins):
+            print("Doing bin " + str(k+1) + " of " + str(nBins))
+            # Indices in the previous radial bin:
+            if k == 0:
+                indicesLast = [[] for centres in range(0,nClust)]
+            else:
+                indicesLast = indices
+            # Indices at <r:
+            indices = np.array(tree.query_ball_point(wrappedPos,rBins[k+1]))
+            # Indices in a single shell:
+            indicesShell = [np.array(np.setdiff1d(ind1,ind2),dtype=int) \
+                for ind1,ind2 in zip(indices,indicesLast)]
+            # This was used for summing about individual centres if they 
+            # fluctuated between samples, but I don't really think that makes 
+            # sense any more if we're looking at the variance of the sum of 
+            # samples:
+            if centreMethod == "snapshot":
+                indicesSample = [np.array(tree.query_ball_point(\
+                    -np.fliplr(snapedit.wrap(centres,boxsize)),\
+                    rBins[k+1])) for centres in clusterCentresSim]
+            elif centreMethod == "density":
+                indicesSample = [np.array(tree.query_ball_point(\
+                    snapedit.wrap(centres,boxsize),rBins[k+1])) \
+                    for centres in clusterCentresSim]
+            elif centreMethod == "fixed":
+                indicesSample = [indices for centres in clusterCentresSim]
+            if np.any(np.array(indices,dtype=bool)):
+                for l in range(0,nClust):
+                    voxels = np.array(indices[l],dtype=int)
+                    if len(voxels != 0):
+                        # Evaluate the variance and expectation value
+                        # using different methods, for the N(<r) case:
+                        [expALSum,varAL] = getVoxelSums(\
+                            voxels,hpIndicesLinear,Aalpha,ngMCMC,\
+                            inverseLambdaTot,ngHP,error,num_samples,nsamples,\
+                            nMagBins,bootstrapInterval=bootstrapInterval)
+                        if error == "bootstrap":
+                            varianceAL[k,l,:,:] = varAL.reshape((\
                                 len(bootstrapInterval),nMagBins))
-                    else:
-                        varianceALShell[k,l,:] = varALShell.reshape(nMagBins)
-                    galaxyNumberCountsRobustShells[k,l,:] = expALSumShell
-                # Note - we are sometimes interested in looking at the counts
-                # in individual samples, so we compute these as well.
-                bootstrapSums = bootstrapGalaxyCounts(ng2MPP,\
-                        np.array(indices[l],dtype=int),num_samples)
-                bootstrapSumsShell = bootstrapGalaxyCounts(ng2MPP,\
-                        np.array(indicesShell[l],dtype=int),num_samples)
-                interval2MPPBootstrap[k,l,:,:] = np.percentile(\
-                        bootstrapSums,bootstrapInterval,\
-                        axis=1).reshape((len(bootstrapInterval),nMagBins))
-                interval2MPPBootstrapShells[k,l,:,:] = np.percentile(\
-                        bootstrapSumsShell,bootstrapInterval,\
-                        axis=1).reshape((len(bootstrapInterval),nMagBins))
-                for m in range(0,nMagBins):
-                    galaxyNumberCountExp[k,l,m] = np.sum(ng2MPP[m][indices[l]])
-                    galaxyNumberCountExpShells[k,l,m] = \
-                        np.sum(ng2MPP[m][indicesShell[l]])
-                    for n in range(0,nsamples):
-                        # Counts in a specific sample:
-                        galaxyNumberCountsRobustAll[k,l,n,m] += np.sum(\
-                            Aalpha[n,m,hpIndicesLinear[indices[l]]]*\
-                            ngMCMC[n,m][indices[l]])
-                        galaxyNumberCountsRobustAllShells[k,l,n,m] += np.sum(\
-                            Aalpha[n,m,hpIndicesLinear[indicesShell[l]]]*\
-                            ngMCMC[n,m][indicesShell[l]])
-                        posteriorMassAll[k,l,n] = np.sum(\
-                            mcmcDenLin_r[n][indices[l]]*mUnit)
+                        else:
+                            varianceAL[k,l,:] = varAL.reshape(nMagBins)
+                        galaxyNumberCountsRobust[k,l,:] = expALSum
+                        # Now do the N(r), at a fixed shell:
+                        [expALSumShell,varALShell] = getVoxelSums(\
+                            np.array(indicesShell[l],dtype=int),\
+                            hpIndicesLinear,Aalpha,ngMCMC,inverseLambdaTot,\
+                            ngHP,error,num_samples,nsamples,nMagBins,\
+                            bootstrapInterval=bootstrapInterval)
+                        if error == "bootstrap":
+                            varianceALShell[k,l,:,:] = \
+                                varALShell.reshape((\
+                                    len(bootstrapInterval),nMagBins))
+                        else:
+                            varianceALShell[k,l,:] = varALShell.reshape(\
+                                nMagBins)
+                        galaxyNumberCountsRobustShells[k,l,:] = expALSumShell
+                    # Note - we are sometimes interested in looking at the 
+                    # counts in individual samples, so we compute these as well.
+                    bootstrapSums = bootstrapGalaxyCounts(ng2MPP,\
+                            np.array(indices[l],dtype=int),num_samples)
+                    bootstrapSumsShell = bootstrapGalaxyCounts(ng2MPP,\
+                            np.array(indicesShell[l],dtype=int),num_samples)
+                    interval2MPPBootstrap[k,l,:,:] = np.percentile(\
+                            bootstrapSums,bootstrapInterval,\
+                            axis=1).reshape((len(bootstrapInterval),nMagBins))
+                    interval2MPPBootstrapShells[k,l,:,:] = np.percentile(\
+                            bootstrapSumsShell,bootstrapInterval,\
+                            axis=1).reshape((len(bootstrapInterval),nMagBins))
+                    for m in range(0,nMagBins):
+                        galaxyNumberCountExp[k,l,m] = \
+                            np.sum(ng2MPP[m][indices[l]])
+                        galaxyNumberCountExpShells[k,l,m] = \
+                            np.sum(ng2MPP[m][indicesShell[l]])
+                        for n in range(0,nsamples):
+                            # Counts in a specific sample:
+                            galaxyNumberCountsRobustAll[k,l,n,m] += np.sum(\
+                                Aalpha[n,m,hpIndicesLinear[indices[l]]]*\
+                                ngMCMC[n,m][indices[l]])
+                            galaxyNumberCountsRobustAllShells[k,l,n,m] += \
+                                np.sum(\
+                                Aalpha[n,m,hpIndicesLinear[indicesShell[l]]]*\
+                                ngMCMC[n,m][indicesShell[l]])
+                            posteriorMassAll[k,l,n] = np.sum(\
+                                mcmcDenLin_r[n][indices[l]]*mUnit)
+    except:
+        # Make sure we delete any variables
+        raise Exception("An exception occured.")
+    finally:
+        # Delete variables. Python doesn't seem to garbage collect these
+        # manually for some reason:
+        del mask, ngMCMC, ng2MPP, ngHP, ngHPMCMC, hpIndicesLinear
+        del positions, surveyMask11, surveyMask12, tree, centroids, grid
+        del angularMask, radialMas, mask12, mask11
     return [galaxyNumberCountExp,galaxyNumberCountExpShells,\
         interval2MPPBootstrap,interval2MPPBootstrapShells,\
         galaxyNumberCountsRobust,\

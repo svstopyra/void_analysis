@@ -100,7 +100,7 @@ if runTests:
         snapNumList = [7000, 7200, 7400],samplesFolder = 'new_chain/',\
         recomputeData = True)
 
-nBinsPPT = 11
+nBinsPPT = 6
 rebin = False
 print("Doing ppts")
 doPPTs = True
@@ -128,7 +128,7 @@ if doPPTs:
             tmppFile = "2mpp_data/2MPP.txt",\
             reductions = 4,iterations = 20,verbose=True,hpIndices=None,\
             centreMethod="density",data_folder = data_folder,\
-            bootstrapInterval = [16,84,2.5,97.5])
+            bootstrapInterval = [16,84,2.5,97.5,0.5,99.5,0.05,99.95])
 
 
 # Load or recompute the HMF/AMF data:
@@ -660,22 +660,56 @@ fontfamily='serif'
 fontsize = 8
 rBinCentres = plot.binCentres(rBins)
 ncList = [0,2]
-ylim = [1,100]
+logscale = False
+
+# Scaling and y limits:
+densityPlot = False
+if densityPlot:
+    if mode == "shells":
+        scale = 4*np.pi*(rBins[1:]**3 - rBins[0:-1]**3)/3.0
+    else:
+        scale = 4*np.pi*rBins[1:]**3/3.0
+    if logscale:
+        ylim = [1e-4,1]
+    else:
+        ylim = [0,1]
+else:
+    scale = 1.0
+    if logscale:
+        ylim = [1,200]
+    else:
+        ylim = [0,80]
+
+# Ticks:
+xticks = np.array([0,5,10,15,20])
+if densityPlot:
+    if logscale:
+        yticks = np.array([1e-4,1e-3,1e-2,1e-1,1])
+    else:
+        yticks = np.arange(0,ylim[1],20)
+else:
+    if logscale:
+        yticks = np.array([1,10,100])
+    else:
+        yticks = np.arange(0,ylim[1],20)
+
+truncateTicks = False
 xlim = [0,20]
+powerRange = 2
 fig, ax = plt.subplots(nRows,4,figsize=(textwidth,0.7*textwidth))
 for m in range(2,8):
     i = int((m-2)/nCols)
     j = m - 2 - nCols*i
     magTitle="$" + str(mAbs[m+1]) + " \\leq M_K < " + str(mAbs[m]) + "$"
     # Cluster 1:
-    bright = mcmcCounts[:,ncList[0],2*m]
+    bright = mcmcCounts[:,ncList[0],2*m]/scale
     nz1 = np.where(bright > 0)[0]
-    dim = mcmcCounts[:,ncList[0],2*m+1]
+    dim = mcmcCounts[:,ncList[0],2*m+1]/scale
     nz2 = np.where(dim > 0)[0]
-    bright2Mpp = counts2MPP[:,ncList[0],2*m]
-    dim2Mpp = counts2MPP[:,ncList[0],2*m+1]
-    dim2MppError = error2MPPAll[:,ncList[0],:,2*m+1].T
-    bright2MppError = error2MPPAll[:,ncList[0],:,2*m].T
+    bright2Mpp = counts2MPP[:,ncList[0],2*m]/scale
+    dim2Mpp = counts2MPP[:,ncList[0],2*m+1]/scale
+    dim2MppError = error2MPPAll[:,ncList[0],:,2*m+1].T/scale
+    bright2MppError = error2MPPAll[:,ncList[0],:,2*m].T/scale
     nz12Mpp = np.where(bright2Mpp)[0]
     nz22Mpp = np.where(dim2Mpp)[0]
     # Bright catalogue, cluster 1:
@@ -758,19 +792,25 @@ for m in range(2,8):
     ax[i,j].set_ylim(ylim)
     ax[i,j].set_xlim(xlim)
     #ax[i,j].set_title(magTitle,fontsize=fontsize,fontfamily=fontfamily)
-    ax[i,j].text(0.5*(xlim[1] + xlim[0]),\
-        ylim[0] + 0.5*(ylim[1] - ylim[0]),magTitle,ha='center',\
-        fontfamily=fontfamily,fontsize=fontsize)
-    ax[i,j].set_yscale('log')
+    if logscale:
+        ax[i,j].text(0.5*(xlim[1] + xlim[0]),\
+            ylim[0] + 0.5*(ylim[1] - ylim[0]),magTitle,ha='center',\
+            fontfamily=fontfamily,fontsize=fontsize)
+    else:
+        ax[i,j].text(0.5*(xlim[1] + xlim[0]),\
+            ylim[0] + 0.90*(ylim[1] - ylim[0]),magTitle,ha='center',\
+            fontfamily=fontfamily,fontsize=fontsize)
+    if logscale:
+        ax[i,j].set_yscale('log')
     # Cluster 2:
-    bright = mcmcCounts[:,ncList[1],2*m]
+    bright = mcmcCounts[:,ncList[1],2*m]/scale
     nz1 = np.where(bright > 0)[0]
-    dim = mcmcCounts[:,ncList[1],2*m+1]
+    dim = mcmcCounts[:,ncList[1],2*m+1]/scale
     nz2 = np.where(dim > 0)[0]
-    bright2Mpp = counts2MPP[:,ncList[1],2*m]
-    dim2Mpp = counts2MPP[:,ncList[1],2*m+1]
-    dim2MppError = error2MPPAll[:,ncList[1],:,2*m+1].T
-    bright2MppError = error2MPPAll[:,ncList[1],:,2*m].T
+    bright2Mpp = counts2MPP[:,ncList[1],2*m]/scale
+    dim2Mpp = counts2MPP[:,ncList[1],2*m+1]/scale
+    dim2MppError = error2MPPAll[:,ncList[1],:,2*m+1].T/scale
+    bright2MppError = error2MPPAll[:,ncList[1],:,2*m].T/scale
     nz12Mpp = np.where(bright2Mpp)[0]
     nz22Mpp = np.where(dim2Mpp)[0]
     # Bright catalogue, cluster 2:
@@ -853,17 +893,22 @@ for m in range(2,8):
     #ax[i,j+2].set_title(magTitle,fontsize=fontsize,fontfamily=fontfamily)
     ax[i,j+2].set_ylim(ylim)
     ax[i,j+2].set_xlim(xlim)
-    ax[i,j+2].text(0.5*(xlim[1] + xlim[0]),\
-        ylim[0] + 0.5*(ylim[1] - ylim[0]),magTitle,ha='center',\
-        fontfamily=fontfamily,fontsize=fontsize)
-    ax[i,j+2].set_yscale('log')
+    if logscale:
+        ax[i,j+2].text(0.5*(xlim[1] + xlim[0]),\
+            ylim[0] + 0.5*(ylim[1] - ylim[0]),magTitle,ha='center',\
+            fontfamily=fontfamily,fontsize=fontsize)
+    else:
+        ax[i,j+2].text(0.5*(xlim[1] + xlim[0]),\
+            ylim[0] + 0.90*(ylim[1] - ylim[0]),magTitle,ha='center',\
+            fontfamily=fontfamily,fontsize=fontsize)
+    if logscale:
+        ax[i,j+2].set_yscale('log')
 
 
 # Formatting the axis:
 nCols = 4
 nRows = 3
-xticks = np.array([0,5,10,15,20])
-yticks = np.array([1,10,100])
+
 for i in range(0,nRows):
     for j in range(0,nCols):
         ax[i,j].tick_params(axis='both', which='major', labelsize=fontsize)
@@ -872,14 +917,22 @@ for i in range(0,nRows):
             # Remove the y labels:
             ax[i,j].yaxis.set_ticklabels([])
         if i != 0 and j == 0:
-            ax[i,j].set_yticks(yticks[0:-1])
             # Change tick label fonts:
-            ylabels = ["$" + plot.scientificNotation(tick) + "$" \
-                for tick in yticks[0:-1]]
+            if truncateTicks:
+                ax[i,j].set_yticks(yticks[0:-1])
+                ylabels = ["$" + \
+                    plot.scientificNotation(tick,powerRange=powerRange) + "$" \
+                    for tick in yticks[0:-1]]
+            else:
+                ax[i,j].set_yticks(yticks)
+                ylabels = ["$" + \
+                    plot.scientificNotation(tick,powerRange=powerRange) + "$" \
+                    for tick in yticks]
             ax[i,j].yaxis.set_ticklabels(ylabels)
         if j == 0 and i == 0:
             ax[i,j].set_yticks(yticks)
-            ylabels = ["$" + plot.scientificNotation(tick) + "$" \
+            ylabels = ["$" + \
+                plot.scientificNotation(tick,powerRange=powerRange) + "$" \
                 for tick in yticks]
             ax[i,j].yaxis.set_ticklabels(ylabels)
         if i != nRows - 1:
@@ -899,17 +952,16 @@ for i in range(0,nRows):
                 ax[i,j].xaxis.set_ticklabels(xlabels)
 
 legendType = "fake"
-
 if legendType == "fake":
     # Legend with a single indicator. Colours will be explained in the caption.
     #fake2MPP = matplotlib.lines.Line2D([0],[0],color='k',\
     #    label='2M++',linestyle='-')
     fakeMCMC = matplotlib.lines.Line2D([0],[0],color='k',\
-        label='Posterior',linestyle='-')
+        label='Mean posterior',linestyle='-')
     fakeError1 = matplotlib.patches.Patch(color='k',alpha=0.5,\
-        label='2M++ bootstrap \n(68% CI)')
+        label='2M++ (68% CI)')
     fakeError2 = matplotlib.patches.Patch(color='k',alpha=0.25,\
-        label='2M++ bootstrap \n(95% CI)')
+        label='2M++ (95% CI)')
     ax[0,0].legend(handles = [fakeMCMC,fakeError1,fakeError2],\
         prop={"size":fontsize,"family":fontfamily},frameon=False,loc=(0.02,0.3))
 else:
@@ -928,8 +980,13 @@ plt.subplots_adjust(top=top,bottom=bottom,left=left,right=right,\
 # Common axis labels:
 fig.text((right+left)/2.0, 0.03,'$r\\,[\\mathrm{Mpc}h^{-1}]$',ha='center',\
     fontsize=fontsize,fontfamily=fontfamily)
-fig.text(0.03,(top+bottom)/2.0,'Number of galaxies',va='center',\
-    rotation='vertical',fontsize=fontsize,fontfamily=fontfamily)
+if densityPlot:
+    fig.text(0.03,(top+bottom)/2.0,\
+        'Galaxy number density [$h^3\\mathrm{Mpc}^{-3}$]',va='center',\
+        rotation='vertical',fontsize=fontsize,fontfamily=fontfamily)
+else:
+    fig.text(0.03,(top+bottom)/2.0,'Number of galaxies',va='center',\
+        rotation='vertical',fontsize=fontsize,fontfamily=fontfamily)
 
 # Cluster names:
 fig.text(left + (right - left)*0.25,0.97,clusterNames[ncList[0]][0],\
@@ -1659,7 +1716,7 @@ plot.singleMassFunctionPlot(constrainedHaloMasses512New,5e13,2e15,11,\
     comparableHaloMasses=comparableHaloMassesNew,\
     deltaListMean=deltaListMeanNew,deltaListError=deltaListErrorNew,\
     savename=figuresFolder + "cola20_mass_function.pdf",\
-    label="COLA20 constrained",showTheory=False)
+    label="COLA20",showTheory=False)
 
 
 # HMF/AMF comparison:
@@ -1708,7 +1765,7 @@ plot.singleMassFunctionPlot(constrainedHaloMasses512New,5e13,2e15,11,\
     savename=None,showTheory=False,legendLoc='lower left',\
     fontsize=fontsize,legendFontsize=fontsize,\
     ax=ax[0],ylabel='Number of halos',showLegend=False,\
-    title="Halos",label="COLA20 constrained",xticks=[2e14,5e14,1e15])
+    title="Halos",label="COLA20",xticks=[2e14,5e14,1e15])
 handles = plot.singleMassFunctionPlot(constrainedAntihaloMasses512New,\
     5e13,2e15,11,Om0=referenceSnapOld.properties['omegaM0'],\
     h=referenceSnapOld.properties['h'],ns=0.9611,sigma8=0.8288,\
@@ -1717,7 +1774,7 @@ handles = plot.singleMassFunctionPlot(constrainedAntihaloMasses512New,\
     deltaListMean=deltaListMeanNew,deltaListError=deltaListErrorNew,\
     savename=None,showTheory=False,fontsize=fontsize,legendFontsize=fontsize,\
     ax=ax[1],ylabel='Number of antihalos',returnHandles=True,showLegend=False,\
-    title="Antihalos",label="COLA20 constrained",xticks=[2e14,5e14,1e15])
+    title="Antihalos",label="COLA20",xticks=[2e14,5e14,1e15])
 plt.tight_layout()
 ax[1].legend(handles=tools.flatten(handles),\
     prop={"size":fontsize,"family":"serif"},loc='upper right',frameon=False)
@@ -1760,7 +1817,7 @@ plot.singleMassFunctionPlot(constrainedHaloMasses512New,5e13,2e15,11,\
     savename=None,showTheory=False,legendLoc='lower left',\
     fontsize=fontsize,legendFontsize=fontsize,\
     ax=ax[0],ylabel='Number of halos',showLegend=False,\
-    title="Halos",label="COLA20 constrained",xticks=[2e14,5e14,1e15],\
+    title="Halos",label="COLA20",xticks=[2e14,5e14,1e15],\
     plotColour=seabornColormap[4],compColour = 'grey')
 handles2 = plot.singleMassFunctionPlot(constrainedAntihaloMasses512New,\
     5e13,2e15,11,Om0=referenceSnapOld.properties['omegaM0'],\
@@ -1770,7 +1827,7 @@ handles2 = plot.singleMassFunctionPlot(constrainedAntihaloMasses512New,\
     deltaListMean=deltaListMeanNew,deltaListError=deltaListErrorNew,\
     savename=None,showTheory=False,fontsize=fontsize,legendFontsize=fontsize,\
     ax=ax[1],ylabel='Number of antihalos',returnHandles=True,showLegend=False,\
-    title="Antihalos",label="COLA20 constrained",xticks=[2e14,5e14,1e15],\
+    title="Antihalos",label="COLA20",xticks=[2e14,5e14,1e15],\
     plotColour=seabornColormap[4],compColour = 'grey')
 handles = handles1 + handles2
 plt.tight_layout()
@@ -2471,10 +2528,13 @@ if doCon:
         returnHandles=False,showLegend=True,nCols=3,showGADGET=False,\
         figsize=(textwidth,0.55*textwidth),showResMasses=False,logy=False,\
         ylim1=[0,2e15],ylim2=[7e14,3.2e15],top=0.931,bottom=0.114,left=0.08,\
-        right=0.96,hspace=0.0,wspace=0.0,yticks1=[5e14,1e15,1.5e15,2e15],\
+        right=0.92,hspace=0.0,wspace=0.0,yticks1=[5e14,1e15,1.5e15,2e15],\
         yticks2=[1e15,2e15,3e15],massLabelPos=0.97,\
         colaColour=seabornColormap[5],pmColour=seabornColormap[2],\
-        logStyle=':',linStyle='-',legendMethod="manual")
+        logStyle=':',linStyle='-',legendMethod="grid",\
+        linText=[0.1,0.8],logText=[0.1,0.7],colaText=[0.5,0.9],\
+        pmText=[0.75,0.9],legLoc=[0.5,0.65],secondYAxis=True,xlim=[3,256],\
+        selectMarker='o',selectSize=80,selectModels=True)
 
 
 
@@ -2501,7 +2561,10 @@ if doCon:
         top=0.97,bottom=0.11,left=0.19,right=0.93,hspace=0.0,wspace=0.0,\
         massLabelPos=0.96,\
         colaColour=seabornColormap[5],pmColour=seabornColormap[2],\
-        logStyle=':',linStyle='-',legendMethod="auto")
+        logStyle=':',linStyle='-',legendMethod="grid",\
+        linText=[0.1,0.8],logText=[0.1,0.7],colaText=[0.5,0.9],\
+        pmText=[0.75,0.9],legLoc=[0.5,0.65],secondYAxis=False,xlim=[3,256],\
+        selectMarker='o',selectSize=80,selectModels=True)
 
 
 #-------------------------------------------------------------------------------
