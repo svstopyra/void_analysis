@@ -100,16 +100,22 @@ if runTests:
         snapNumList = [7000, 7200, 7400],samplesFolder = 'new_chain/',\
         recomputeData = True)
 
-nBinsPPT = 30
+nBinsPPT = 11
+rebin = False
 print("Doing ppts")
 doPPTs = True
 if doPPTs:
-    [galaxyNumberCountExp,galaxyNumberCountsRobust,\
-        galaxyNumberCountsRobustAll,\
-        posteriorMassAll,Aalpha,varianceAL] = \
+    [galaxyNumberCountExp,galaxyNumberCountExpShells,\
+        interval2MPPBootstrap,interval2MPPBootstrapShells,\
+        galaxyNumberCountsRobust,\
+        galaxyNumberCountsRobustAll,posteriorMassAll,\
+        Aalpha,varianceAL,varianceALShell,\
+        galaxyNumberCountsRobustAllShells,\
+        galaxyNumberCountsRobustShells] = \
         tools.loadOrRecompute(\
             figuresFolder + "ppt_plots_data.p",getPPTPlotData,\
-            _recomputeData = recomputeData,nBins = nBinsPPT,nClust=9,\
+            _recomputeData = recomputeData or rebin,\
+            nBins = nBinsPPT,nClust=9,\
             nMagBins = 16,N=256,\
             restartFile = 'new_chain_restart/merged_restart.h5',\
             snapNumList = snapNumList,samplesFolder = 'new_chain/',\
@@ -121,7 +127,8 @@ if doPPTs:
             nside = 4,nRadialSlices=10,rmax=600,\
             tmppFile = "2mpp_data/2MPP.txt",\
             reductions = 4,iterations = 20,verbose=True,hpIndices=None,\
-            centreMethod="density",data_folder = data_folder)
+            centreMethod="density",data_folder = data_folder,\
+            bootstrapInterval = [16,84,2.5,97.5])
 
 
 # Load or recompute the HMF/AMF data:
@@ -628,10 +635,24 @@ variancesRobust = np.mean(galaxyNumberCountsRobustAll,2) + \
 
 errorType = "bootstrap"
 
+mode = "shells"
 
-mcmcCounts = galaxyNumberCountsRobustShells
-mcmcCountsAll = galaxyNumberCountsRobustAllShells
-errorCounts = varianceALShell
+if mode == "shells":
+    mcmcCounts = galaxyNumberCountsRobustShells
+    mcmcCountsAll = galaxyNumberCountsRobustAllShells
+    errorCounts = varianceALShell
+    counts2MPP = galaxyNumberCountExpShells
+    error2MPPAll = interval2MPPBootstrapShells
+else:
+    mcmcCounts = galaxyNumberCountsRobust
+    mcmcCountsAll = galaxyNumberCountsRobustAll
+    errorCounts = varianceAL
+    error2MPPAll = interval2MPPBootstrap
+    counts2MPP = galaxyNumberCountExp
+
+do2MPPerrors = True
+doMCMCerrors = False
+
 # PPTs just comparing Coma and PP, in each of the magnitude bins:
 nRows = 3
 nCols = 2
@@ -639,27 +660,44 @@ fontfamily='serif'
 fontsize = 8
 rBinCentres = plot.binCentres(rBins)
 ncList = [0,2]
-ylim = [1,1000]
+ylim = [1,100]
 xlim = [0,20]
 fig, ax = plt.subplots(nRows,4,figsize=(textwidth,0.7*textwidth))
 for m in range(2,8):
     i = int((m-2)/nCols)
     j = m - 2 - nCols*i
-    magTitle="$" + str(mAbs[m+1]) + " \\leq M < " + str(mAbs[m]) + "$"
+    magTitle="$" + str(mAbs[m+1]) + " \\leq M_K < " + str(mAbs[m]) + "$"
     # Cluster 1:
     bright = mcmcCounts[:,ncList[0],2*m]
     nz1 = np.where(bright > 0)[0]
     dim = mcmcCounts[:,ncList[0],2*m+1]
     nz2 = np.where(dim > 0)[0]
-    bright2Mpp = galaxyNumberCountExp[:,ncList[0],2*m]
-    dim2Mpp = galaxyNumberCountExp[:,ncList[0],2*m+1]
+    bright2Mpp = counts2MPP[:,ncList[0],2*m]
+    dim2Mpp = counts2MPP[:,ncList[0],2*m+1]
+    dim2MppError = error2MPPAll[:,ncList[0],:,2*m+1].T
+    bright2MppError = error2MPPAll[:,ncList[0],:,2*m].T
     nz12Mpp = np.where(bright2Mpp)[0]
     nz22Mpp = np.where(dim2Mpp)[0]
     # Bright catalogue, cluster 1:
-    ax[i,j].plot(rBinCentres[nz1],bright[nz1],\
-        color=seabornColormap[1],label="Posterior ($m < 11.5$)",linestyle=':')
-    ax[i,j].plot(rBinCentres[nz12Mpp],bright2Mpp[nz12Mpp],\
-        color=seabornColormap[1],label="2M++ ($m < 11.5$)",linestyle='-')
+    if len(nz1) > 1:
+        ax[i,j].plot(rBinCentres[nz1],bright[nz1],\
+            color=seabornColormap[1],label="Posterior ($m < 11.5$)",\
+            linestyle='-')
+    if do2MPPerrors and (len(nz12Mpp) > 1):
+        #ax[i,j].errorbar(rBinCentres[nz12Mpp],bright2Mpp[nz12Mpp],\
+        #    yerr=bright2MppError[:,nz12Mpp],color=seabornColormap[1],\
+        #    label="2M++ ($m < 11.5$)",linestyle='-')
+        #ax[i,j].plot(rBinCentres[nz12Mpp],bright2Mpp[nz12Mpp],\
+        #    color=seabornColormap[1],label="2M++ ($m < 11.5$)",linestyle='-')
+        ax[i,j].fill_between(rBinCentres[nz12Mpp],bright2MppError[0,nz12Mpp],\
+            bright2MppError[1,nz12Mpp],alpha=0.5,color=seabornColormap[1])
+        ax[i,j].fill_between(rBinCentres[nz12Mpp],bright2MppError[2,nz12Mpp],\
+            bright2MppError[3,nz12Mpp],alpha=0.25,color=seabornColormap[1])
+    else:
+        if len(nz12Mpp) > 1:
+            ax[i,j].plot(rBinCentres[nz12Mpp],bright2Mpp[nz12Mpp],\
+                color=seabornColormap[1],label="2M++ ($m < 11.5$)",\
+                linestyle='-')
     if errorType == "poisson":
         bounds = scipy.stats.poisson(bright[nz1]).interval(0.95)
     elif errorType == "quadrature":
@@ -675,13 +713,29 @@ for m in range(2,8):
             bright[nz1] + 2*stdDeviation[nz1])
     else:
         raise Exception("Invalid errorType!")
-    ax[i,j].fill_between(rBinCentres[nz1],bounds[0],bounds[1],\
-        color=seabornColormap[1],alpha=0.5)
+    if doMCMCerrors and (len(nz12Mpp) > 1):
+        ax[i,j].fill_between(rBinCentres[nz1],bounds[0],bounds[1],\
+            color=seabornColormap[1],alpha=0.5)
     # Dim Catalogue, cluster 1:
-    ax[i,j].plot(rBinCentres[nz2],dim[nz2],\
-        color=seabornColormap[0],label="Posterior ($m > 11.5$)",linestyle=':')
-    ax[i,j].plot(rBinCentres[nz22Mpp],dim2Mpp[nz22Mpp],\
-        color=seabornColormap[0],label="2M++ ($m > 11.5$)",linestyle='-')
+    if len(nz2) > 1:
+        ax[i,j].plot(rBinCentres[nz2],dim[nz2],\
+            color=seabornColormap[0],label="Posterior ($m > 11.5$)",\
+            linestyle='-')
+    if do2MPPerrors and (len(nz22Mpp) > 1):
+        #ax[i,j].errorbar(rBinCentres[nz22Mpp],dim2Mpp[nz22Mpp],\
+        #    yerr=dim2MppError[:,nz22Mpp],color=seabornColormap[0],\
+        #    label="2M++ ($m > 11.5$)",linestyle='-')
+        #ax[i,j].plot(rBinCentres[nz22Mpp],dim2Mpp[nz22Mpp],\
+        #    color=seabornColormap[0],label="2M++ ($m < 11.5$)",linestyle='-')
+        ax[i,j].fill_between(rBinCentres[nz22Mpp],dim2MppError[0,nz22Mpp],\
+            dim2MppError[1,nz22Mpp],alpha=0.5,color=seabornColormap[0])
+        ax[i,j].fill_between(rBinCentres[nz22Mpp],dim2MppError[2,nz22Mpp],\
+            dim2MppError[3,nz22Mpp],alpha=0.25,color=seabornColormap[0])
+    else:
+        if len(nz22Mpp) > 1:
+            ax[i,j].plot(rBinCentres[nz22Mpp],dim2Mpp[nz22Mpp],\
+                color=seabornColormap[0],label="2M++ ($m > 11.5$)",\
+                linestyle='-')
     if errorType == "poisson":
         bounds = scipy.stats.poisson(dim[nz2]).interval(0.95)
     elif errorType == "quadrature":
@@ -698,8 +752,9 @@ for m in range(2,8):
             dim[nz2] + 2*stdDeviation[nz2])
     else:
         raise Exception("Invalid errorType!")
-    ax[i,j].fill_between(rBinCentres[nz2],bounds[0],bounds[1],\
-        color=seabornColormap[0],alpha=0.5)
+    if doMCMCerrors and (len(nz2) > 1):
+        ax[i,j].fill_between(rBinCentres[nz2],bounds[0],bounds[1],\
+            color=seabornColormap[0],alpha=0.5)
     ax[i,j].set_ylim(ylim)
     ax[i,j].set_xlim(xlim)
     #ax[i,j].set_title(magTitle,fontsize=fontsize,fontfamily=fontfamily)
@@ -712,15 +767,32 @@ for m in range(2,8):
     nz1 = np.where(bright > 0)[0]
     dim = mcmcCounts[:,ncList[1],2*m+1]
     nz2 = np.where(dim > 0)[0]
-    bright2Mpp = galaxyNumberCountExp[:,ncList[1],2*m]
-    dim2Mpp = galaxyNumberCountExp[:,ncList[1],2*m+1]
+    bright2Mpp = counts2MPP[:,ncList[1],2*m]
+    dim2Mpp = counts2MPP[:,ncList[1],2*m+1]
+    dim2MppError = error2MPPAll[:,ncList[1],:,2*m+1].T
+    bright2MppError = error2MPPAll[:,ncList[1],:,2*m].T
     nz12Mpp = np.where(bright2Mpp)[0]
     nz22Mpp = np.where(dim2Mpp)[0]
     # Bright catalogue, cluster 2:
-    ax[i,j+2].plot(rBinCentres[nz1],bright[nz1],\
-        color=seabornColormap[1],label="Posterior ($m < 11.5$)",linestyle=':')
-    ax[i,j+2].plot(rBinCentres[nz12Mpp],bright2Mpp[nz12Mpp],\
-        color=seabornColormap[1],label="2M++ ($m < 11.5$)",linestyle='-')
+    if len(nz1) > 1:
+        ax[i,j+2].plot(rBinCentres[nz1],bright[nz1],\
+            color=seabornColormap[1],label="Posterior ($m < 11.5$)",\
+            linestyle='-')
+    if do2MPPerrors and (len(nz12Mpp) > 1):
+        #ax[i,j+2].errorbar(rBinCentres[nz12Mpp],bright2Mpp[nz12Mpp],\
+        #    yerr = bright2MppError[:,nz12Mpp],\
+        #    color=seabornColormap[1],label="2M++ ($m < 11.5$)",linestyle='-')
+        #ax[i,j+2].plot(rBinCentres[nz12Mpp],bright2Mpp[nz12Mpp],\
+        #    color=seabornColormap[1],label="2M++ ($m < 11.5$)",linestyle='-')
+        ax[i,j+2].fill_between(rBinCentres[nz12Mpp],bright2MppError[0,nz12Mpp],\
+            bright2MppError[1,nz12Mpp],alpha=0.5,color=seabornColormap[1])
+        ax[i,j+2].fill_between(rBinCentres[nz12Mpp],bright2MppError[2,nz12Mpp],\
+            bright2MppError[3,nz12Mpp],alpha=0.25,color=seabornColormap[1])
+    else:
+        if len(nz12Mpp) > 1:
+            ax[i,j+2].plot(rBinCentres[nz12Mpp],bright2Mpp[nz12Mpp],\
+                color=seabornColormap[1],label="2M++ ($m < 11.5$)",\
+                linestyle='-')
     if errorType == "poisson":
         bounds = scipy.stats.poisson(bright[nz1]).interval(0.95)
     elif errorType == "quadrature":
@@ -736,13 +808,29 @@ for m in range(2,8):
             bright[nz1] + 2*stdDeviation[nz1])
     else:
         raise Exception("Invalid errorType!")
-    ax[i,j+2].fill_between(rBinCentres[nz1],bounds[0],bounds[1],\
-        color=seabornColormap[1],alpha=0.5)
+    if doMCMCerrors and (len(nz1) > 1):
+        ax[i,j+2].fill_between(rBinCentres[nz1],bounds[0],bounds[1],\
+            color=seabornColormap[1],alpha=0.5)
     # Dim Catalogue, cluster 2:
-    ax[i,j+2].plot(rBinCentres[nz2],dim[nz2],\
-        color=seabornColormap[0],label="Posterior ($m > 11.5$)",linestyle=':')
-    ax[i,j+2].plot(rBinCentres[nz22Mpp],dim2Mpp[nz22Mpp],\
-        color=seabornColormap[0],label="2M++ ($m > 11.5$)",linestyle='-')
+    if len(nz2) > 1:
+        ax[i,j+2].plot(rBinCentres[nz2],dim[nz2],\
+            color=seabornColormap[0],label="Posterior ($m > 11.5$)",\
+            linestyle='-')
+    if do2MPPerrors and (len(nz22Mpp) > 1):
+        #ax[i,j+2].errorbar(rBinCentres[nz22Mpp],dim2Mpp[nz22Mpp],\
+        #    yerr = dim2MppError[:,nz22Mpp],color=seabornColormap[0],\
+        #    label="2M++ ($m > 11.5$)",linestyle='-')
+        #ax[i,j+2].plot(rBinCentres[nz22Mpp],dim2Mpp[nz22Mpp],\
+        #    color=seabornColormap[0],label="2M++ ($m < 11.5$)",linestyle='-')
+        ax[i,j+2].fill_between(rBinCentres[nz22Mpp],dim2MppError[0,nz22Mpp],\
+            dim2MppError[1,nz22Mpp],alpha=0.5,color=seabornColormap[0])
+        ax[i,j+2].fill_between(rBinCentres[nz22Mpp],dim2MppError[2,nz22Mpp],\
+            dim2MppError[3,nz22Mpp],alpha=0.25,color=seabornColormap[0])
+    else:
+        if len(nz22Mpp) > 1:
+            ax[i,j+2].plot(rBinCentres[nz22Mpp],dim2Mpp[nz22Mpp],\
+                color=seabornColormap[0],label="2M++ ($m > 11.5$)",\
+                linestyle='-')
     if errorType == "poisson":
         bounds = scipy.stats.poisson(dim[nz2]).interval(0.95)
     elif errorType == "quadrature":
@@ -759,8 +847,9 @@ for m in range(2,8):
             dim[nz2] + 2*stdDeviation[nz2])
     else:
         raise Exception("Invalid errorType!")
-    ax[i,j+2].fill_between(rBinCentres[nz2],bounds[0],bounds[1],\
-        color=seabornColormap[0],alpha=0.5)
+    if doMCMCerrors and (len(nz2) > 1):
+        ax[i,j+2].fill_between(rBinCentres[nz2],bounds[0],bounds[1],\
+            color=seabornColormap[0],alpha=0.5)
     #ax[i,j+2].set_title(magTitle,fontsize=fontsize,fontfamily=fontfamily)
     ax[i,j+2].set_ylim(ylim)
     ax[i,j+2].set_xlim(xlim)
@@ -774,7 +863,7 @@ for m in range(2,8):
 nCols = 4
 nRows = 3
 xticks = np.array([0,5,10,15,20])
-yticks = np.array([1,10,100,1000])
+yticks = np.array([1,10,100])
 for i in range(0,nRows):
     for j in range(0,nCols):
         ax[i,j].tick_params(axis='both', which='major', labelsize=fontsize)
@@ -782,13 +871,17 @@ for i in range(0,nRows):
         if j != 0:
             # Remove the y labels:
             ax[i,j].yaxis.set_ticklabels([])
-        if i != 0:
+        if i != 0 and j == 0:
             ax[i,j].set_yticks(yticks[0:-1])
             # Change tick label fonts:
-            if j == 0:
-                ylabels = ["$" + plot.scientificNotation(tick) + "$" \
-                    for tick in yticks[0:-1]]
-                ax[i,j].yaxis.set_ticklabels(ylabels)
+            ylabels = ["$" + plot.scientificNotation(tick) + "$" \
+                for tick in yticks[0:-1]]
+            ax[i,j].yaxis.set_ticklabels(ylabels)
+        if j == 0 and i == 0:
+            ax[i,j].set_yticks(yticks)
+            ylabels = ["$" + plot.scientificNotation(tick) + "$" \
+                for tick in yticks]
+            ax[i,j].yaxis.set_ticklabels(ylabels)
         if i != nRows - 1:
             # Remove x labels:
             ax[i,j].xaxis.set_ticklabels([])
@@ -805,8 +898,26 @@ for i in range(0,nRows):
                     for tick in xticks]
                 ax[i,j].xaxis.set_ticklabels(xlabels)
 
-ax[0,0].legend(prop={"size":fontsize,"family":fontfamily},frameon=False,\
-    loc=(0.02,0.3))
+legendType = "fake"
+
+if legendType == "fake":
+    # Legend with a single indicator. Colours will be explained in the caption.
+    #fake2MPP = matplotlib.lines.Line2D([0],[0],color='k',\
+    #    label='2M++',linestyle='-')
+    fakeMCMC = matplotlib.lines.Line2D([0],[0],color='k',\
+        label='Posterior',linestyle='-')
+    fakeError1 = matplotlib.patches.Patch(color='k',alpha=0.5,\
+        label='2M++ bootstrap \n(68% CI)')
+    fakeError2 = matplotlib.patches.Patch(color='k',alpha=0.25,\
+        label='2M++ bootstrap \n(95% CI)')
+    ax[0,0].legend(handles = [fakeMCMC,fakeError1,fakeError2],\
+        prop={"size":fontsize,"family":fontfamily},frameon=False,loc=(0.02,0.3))
+else:
+    # Default legend
+    ax[0,0].legend(prop={"size":fontsize,"family":fontfamily},frameon=False,\
+        loc=(0.02,0.3))
+
+
 left = 0.095
 bottom = 0.105
 top = 0.92
@@ -826,8 +937,7 @@ fig.text(left + (right - left)*0.25,0.97,clusterNames[ncList[0]][0],\
 fig.text(left + (right - left)*0.75,0.97,clusterNames[ncList[1]][0],\
     fontsize=fontsize,fontfamily=fontfamily,ha='center')
 
-plt.savefig(figuresFolder + "ppts_compared_" + clusterNames[ncList[0]][0] + \
-    "_vs_" + clusterNames[ncList[1]][0] + ".pdf")
+plt.savefig(figuresFolder + "ppts_compared.pdf")
 plt.show()
 
 

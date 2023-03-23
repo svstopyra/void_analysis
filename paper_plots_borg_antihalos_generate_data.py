@@ -141,8 +141,10 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
     nsamples = len(snapNumList)
     galaxyNumberCountExp = np.zeros((nBins,nClust,nMagBins))
     galaxyNumberCountExpShells = np.zeros((nBins,nClust,nMagBins))
-    interval2MPPBootstrap = np.zeros((nBins,nClust,2,nMagBins))
-    interval2MPPBootstrapShells = np.zeros((nBins,nClust,2,nMagBins))
+    interval2MPPBootstrap = np.zeros((nBins,nClust,len(bootstrapInterval),\
+        nMagBins))
+    interval2MPPBootstrapShells = np.zeros((nBins,nClust,\
+        len(bootstrapInterval),nMagBins))
     galaxyNumberCountsRobustAll = np.zeros((nBins,nClust,nsamples,nMagBins))
     galaxyNumberCountsRobust = np.zeros((nBins,nClust,nMagBins))
     galaxyNumberCountsRobustAllShells = \
@@ -150,8 +152,9 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
     galaxyNumberCountsRobustShells = np.zeros((nBins,nClust,nMagBins))
     if error == "bootstrap":
         # Need space for a lower and upper limit:
-        varianceAL = np.zeros((nBins,nClust,2,nMagBins))
-        varianceALShell = np.zeros((nBins,nClust,2,nMagBins))
+        varianceAL = np.zeros((nBins,nClust,len(bootstrapInterval),nMagBins))
+        varianceALShell = np.zeros((nBins,nClust,len(bootstrapInterval),\
+            nMagBins))
     else:
         varianceAL = np.zeros((nBins,nClust,nMagBins))
         varianceALShell = np.zeros((nBins,nClust,nMagBins))
@@ -207,6 +210,8 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
     # zero is lambda_bar_tot actually zero:
     healpixMask = tools.getCountsInHealpixSlices(mask,hpIndices,nside=nside,\
         nres=N)
+    del mask # No longer needed, and python doesn't seem to do the garbage 
+    # collection properly???
     nz = np.where(healpixMask > 1e-300)
     for k in range(0,nsamples):
         #nz = np.where(ngHPMCMC[k] != 0.0)
@@ -239,7 +244,7 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
         print("Doing bin " + str(k+1) + " of " + str(nBins))
         # Indices in the previous radial bin:
         if k == 0:
-            indicesLast = [[] for centres in clusterCentresSim]
+            indicesLast = [[] for centres in range(0,nClust)]
         else:
             indicesLast = indices
         # Indices at <r:
@@ -271,7 +276,8 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
                         ngHP,error,num_samples,nsamples,nMagBins,\
                         bootstrapInterval=bootstrapInterval)
                     if error == "bootstrap":
-                        varianceAL[k,l,:,:] = varAL.reshape((2,nMagBins))
+                        varianceAL[k,l,:,:] = varAL.reshape((\
+                            len(bootstrapInterval),nMagBins))
                     else:
                         varianceAL[k,l,:] = varAL.reshape(nMagBins)
                     galaxyNumberCountsRobust[k,l,:] = expALSum
@@ -282,22 +288,23 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
                         nsamples,nMagBins,bootstrapInterval=bootstrapInterval)
                     if error == "bootstrap":
                         varianceALShell[k,l,:,:] = \
-                            varALShell.reshape((2,nMagBins))
+                            varALShell.reshape((\
+                                len(bootstrapInterval),nMagBins))
                     else:
                         varianceALShell[k,l,:] = varALShell.reshape(nMagBins)
                     galaxyNumberCountsRobustShells[k,l,:] = expALSumShell
                 # Note - we are sometimes interested in looking at the counts
                 # in individual samples, so we compute these as well.
                 bootstrapSums = bootstrapGalaxyCounts(ng2MPP,\
-                        np.array(indices[l]),num_samples)
+                        np.array(indices[l],dtype=int),num_samples)
                 bootstrapSumsShell = bootstrapGalaxyCounts(ng2MPP,\
-                        np.array(indicesShell[l]),num_samples)
+                        np.array(indicesShell[l],dtype=int),num_samples)
                 interval2MPPBootstrap[k,l,:,:] = np.percentile(\
                         bootstrapSums,bootstrapInterval,\
-                        axis=1).reshape((2,nMagBins))
-                interval2MPPBootstrapShell[k,l,:,:] = np.percentile(\
+                        axis=1).reshape((len(bootstrapInterval),nMagBins))
+                interval2MPPBootstrapShells[k,l,:,:] = np.percentile(\
                         bootstrapSumsShell,bootstrapInterval,\
-                        axis=1).reshape((2,nMagBins))
+                        axis=1).reshape((len(bootstrapInterval),nMagBins))
                 for m in range(0,nMagBins):
                     galaxyNumberCountExp[k,l,m] = np.sum(ng2MPP[m][indices[l]])
                     galaxyNumberCountExpShells[k,l,m] = \
@@ -313,7 +320,7 @@ def getPPTPlotData(nBins = 31,nClust=9,nMagBins = 16,N=256,\
                         posteriorMassAll[k,l,n] = np.sum(\
                             mcmcDenLin_r[n][indices[l]]*mUnit)
     return [galaxyNumberCountExp,galaxyNumberCountExpShells,\
-        interval2MPPBootstrap,interval2MPPBootstrapShell,\
+        interval2MPPBootstrap,interval2MPPBootstrapShells,\
         galaxyNumberCountsRobust,\
         galaxyNumberCountsRobustAll,posteriorMassAll,\
         Aalpha,varianceAL,varianceALShell,\
