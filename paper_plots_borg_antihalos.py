@@ -994,6 +994,9 @@ fig.text(left + (right - left)*0.25,0.97,clusterNames[ncList[0]][0],\
 fig.text(left + (right - left)*0.75,0.97,clusterNames[ncList[1]][0],\
     fontsize=fontsize,fontfamily=fontfamily,ha='center')
 
+
+#plt.savefig(figuresFolder + "ppts_compared_" + clusterNames[ncList[0]][0] + \
+#    "_vs_" + clusterNames[ncList[1]][0] + ".pdf")
 plt.savefig(figuresFolder + "ppts_compared.pdf")
 plt.show()
 
@@ -1576,7 +1579,7 @@ for i in range(0,2):
         #    "\n Dim: " + \
         #    ("%.2g" % (100*nGalsList[nc][2*l+1]/np.sum(nGalsList[nc]))) + \
         #    "%" + "(" + ("%.2g" % (nGalsList[nc][2*l+1])) + ")"
-        title = "$" + str(MabsList[l+1]) + " < M_K \\leq" + \
+        title = "$" + str(MabsList[l+1]) + " \\leq M_K <" + \
             str(MabsList[l]) + "$\n$" + ("%.2g" % (nGalsList[nc][2*l] + \
             nGalsList[nc][2*l+1])) + "$ galaxies."
         if useLogBins:
