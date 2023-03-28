@@ -528,7 +528,7 @@ coord = astropy.coordinates.SkyCoord(\
 # Cartesian positions of galaxies in equatorial, comoving co-ordinates (Mpc/h):
 equatorialXYZ = np.vstack((coord.cartesian.x.value,\
     coord.cartesian.y.value,coord.cartesian.z.value)).T
-
+# In spherical polar co-ordinates:
 equatorialRThetaPhi = np.vstack((coord.icrs.spherical.distance.value,\
     coord.icrs.spherical.lon.value,\
     coord.icrs.spherical.lat.value)).T

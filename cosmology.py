@@ -12,6 +12,7 @@ import os
 from . import snapedit
 from astropy.coordinates import SkyCoord
 import astropy.units as u
+from camb import model, initialpower
 
 # Linear growth factor as a function of z:
 def fLinear(z,Om,Ol):
@@ -477,10 +478,13 @@ def rhoCos(Om):
     return rhoSI(Om)*Mpc**3/Msol
 
 
-# Compute power spectrum (Currently very indirect - could do this directly with CAMB):
-def powerSpectrum(h = 0.67,Om0=0.315568,Ob0 = 0.059235,sigma8=0.830,z = 0,kmin = 1e-4,kmax=2.0,npoints=200,Ok = 0.0,mnu=0.06,ns=0.96,As=2e-9,r=0,tau=0.06,nonLinear=True):
+# Code to compute power spectra with CAMB
+def powerSpectrum(h = 0.67,Om0=0.315568,Ob0 = 0.059235,sigma8=0.830,z = 0,\
+    kmin = 1e-4,kmax=2.0,npoints=200,\
+    Ok = 0.0,mnu=0.06,ns=0.96,As=2e-9,r=0,tau=0.06,nonLinear=True):
     pars = camb.CAMBparams()
-    pars.set_cosmology(H0 = 100.0*h,ombh2=Ob0*h**2,omch2=Om0*h**2,mnu=mnu,omk=Ok,tau=tau)
+    pars.set_cosmology(H0 = 100.0*h,ombh2=Ob0*h**2,omch2=(Om0 - Ob0)*h**2,\
+        mnu=mnu,omk=Ok,tau=tau)
     pars.InitPower.set_params(As=As, ns=ns, r=r)
     # Set redshift:
     if np.isscalar(z):
@@ -493,8 +497,34 @@ def powerSpectrum(h = 0.67,Om0=0.315568,Ob0 = 0.059235,sigma8=0.830,z = 0,kmin =
     else:
         pars.NonLinear = camb.model.NonLinear_none
     results = camb.get_results(pars)
-    kh, z, pk = results.get_matter_power_spectrum(minkh=kmin, maxkh=kmax, npoints = npoints)
+    kh, z, pk = results.get_matter_power_spectrum(minkh=kmin, maxkh=kmax, \
+        npoints = npoints)
     return [kh, pk]
+
+
+# Code to compute power spectra with CAMB
+def cambTransferFunction(h = 0.67,Om0=0.315568,Ob0 = 0.059235,sigma8=0.830,\
+    z = 0,kmin = 1e-4,kmax=2.0,npoints=200,\
+    Ok = 0.0,mnu=0.06,ns=0.96,r=0,tau=0.06,nonLinear=True):
+    pars = camb.CAMBparams()
+    pars.set_cosmology(H0 = 100.0*h,ombh2=Ob0*h**2,omch2=(Om0 - Ob0)*h**2,\
+        mnu=mnu,omk=Ok,tau=tau)
+    pars.InitPower.set_params(ns=ns, r=r)
+    # Set redshift:
+    if np.isscalar(z):
+        redshifts =  [z]
+    else:
+        redshifts = z
+    pars.set_matter_power(redshifts=redshifts, kmax=kmax)
+    if nonLinear:
+        pars.NonLinear = camb.model.NonLinear_both
+    else:
+        pars.NonLinear = camb.model.NonLinear_none
+    results = camb.get_results(pars)
+    trans = results.get_matter_transfer_data()
+    kh = trans.transfer_data[0,:,0]
+    t = delta = trans.transfer_data[camb.model.Transfer_cdm-1,:,0]
+    return [kh, t]
 
 # Estimate correlation function from power spectrum:
 def pkToxi(x,ki,pki):
