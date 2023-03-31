@@ -2117,6 +2117,26 @@ if doClusterMasses:
                     getBORGClusterMassEstimates,snapNameList,clusterLoc,\
                     equatorialXYZ,_recomputeData=recomputeData)
 
+# Fornax and Virgo:
+otherClustersLocRADec = np.array([[187,10,16.5],[9,-35,19.5]])
+coordOtherClusters = SkyCoord(ra=otherClustersLocRADec[:,0]*u.deg,\
+            dec = otherClustersLocRADec[:,1]*u.deg,\
+            distance=otherClustersLocRADec[:,2]*u.Mpc,frame='icrs')
+
+otherClustersLocXYZ = np.array([\
+    coordOtherClusters.cartesian.x.value,\
+    coordOtherClusters.cartesian.y.value,\
+    coordOtherClusters.cartesian.z.value]).T
+
+[meanMassesOther,meanCentresOther,sigmaMassesOther,sigmaCentresOther,\
+            clusterMassesOther,clusterCentresOther,clusterCounterpartsOther] = \
+                tools.loadOrRecompute(\
+                    data_folder + "mean_cluster_masses_other.p",\
+                    getBORGClusterMassEstimates,snapNameList,\
+                    otherClustersLocXYZ,equatorialXYZ,\
+                    _recomputeData=recomputeData)
+
+
 
 diff = clusterCentres - meanCentres
 dist = np.sqrt(np.sum(diff**2,2))
