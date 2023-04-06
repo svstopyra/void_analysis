@@ -25,6 +25,7 @@ import sys
 
 figuresFolder = "borg-antihalos_paper_figures/all_samples/"
 #figuresFolder = "borg-antihalos_paper_figures/batch5-2/"
+#figuresFolder = "borg-antihalos_paper_figures/batch5-4/"
 
 recomputeData = False
 testDataFolder = figuresFolder + "tests_data/"
@@ -81,7 +82,8 @@ snapNumList = [7300,7600,7900,8200,8500,8800,9100,9400,9700,10000,\
 #snapNumList = [7300,7600,7900,8200,8500,8800,9100,9400,9700,10000]
 # Batch10-2
 #snapNumList = [10300,10600,10900,11200,11500,11800,12100,12400,12700,13000]
-
+# Batch 5-5:
+#snapNumList = [13000,13300,13600,13900,14200]
 
 #snapNumListUncon = [1,2,3,4,5]
 snapNumListUncon = [1,2,3,4,5,6,7,8,9,10]
@@ -2121,7 +2123,7 @@ if doClusterMasses:
 otherClustersLocRADec = np.array([[187,10,16.5],[9,-35,19.5]])
 coordOtherClusters = SkyCoord(ra=otherClustersLocRADec[:,0]*u.deg,\
             dec = otherClustersLocRADec[:,1]*u.deg,\
-            distance=otherClustersLocRADec[:,2]*u.Mpc,frame='icrs')
+            distance=otherClustersLocRADec[:,2]*u.Mpc*h,frame='icrs')
 
 otherClustersLocXYZ = np.array([\
     coordOtherClusters.cartesian.x.value,\
@@ -2135,6 +2137,11 @@ otherClustersLocXYZ = np.array([\
                     getBORGClusterMassEstimates,snapNameList,\
                     otherClustersLocXYZ,equatorialXYZ,\
                     _recomputeData=recomputeData)
+
+# Displacement:
+dispOther = (clusterCentresOther - otherClustersLocXYZ)
+distOther = np.sqrt(np.sum(dispOther**2,2))
+
 
 
 
