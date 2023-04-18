@@ -29,7 +29,7 @@ from astropy.io import fits
 # MASS CONSTRAINTS PLOT
 def showClusterMassConstraints(meanCriticalMass,stdErrorCriticalMass,\
         figOut = '.',catFolder = "../../../catalogues/",h=0.705,Om0 = 0.3111,\
-        savename = "mass_constraints_plot.pdf"):
+        savename = "mass_constraints_plot.pdf",savePlotData=False):
     # Record mass constraints from different sources:
     # Norma mass from Woudt et al.:
     Mvt = 10.4e14
@@ -624,8 +624,14 @@ def showClusterMassConstraints(meanCriticalMass,stdErrorCriticalMass,\
                 refsToUse.append(refNames[reference[ks][l]])
                 refYearsList.append(refYear[reference[ks][l]])
     sortedRefs = np.argsort(refYearsList)
+    plotDataMass = [[] for k in range(0,9)]
+    plotDataRange = [[] for k in range(0,9)]
+    plotDataNames = [[] for k in range(0,9)]
+    plotDataClusters = []
     for k in range(0,9):
         ks = sortedClusters[k]
+        if savePlotData:
+            plotDataClusters.append(nameListLargeClusters[ks])
         ax[k].set_frame_on(False)
         ax[k].set_xscale('log')
         ax[k].set_ylabel(nameListLargeClusters[ks],rotation=0,
@@ -651,6 +657,12 @@ def showClusterMassConstraints(meanCriticalMass,stdErrorCriticalMass,\
                 alpha=alpha,
                 color=colorsList[ks][l],ec=colorsList[ks][l],ymax=bfrac[ks][l],\
                 ymin = 1.0 - tfrac[ks][l])
+            if savePlotData:
+                plotDataMass[k].append(constraint.mass*scaleMass)
+                plotDataRange[k].append(np.array([\
+                    constraint.mass*scaleMass - constraint.massLow*scaleMass,\
+                    constraint.mass*scaleMass + constraint.massHigh*scaleMass]))
+                plotDataNames[k].append(refNames[reference[ks][l]])
             # Select alignment for the reference label:
             refID = np.where(np.array(refsToUse)[sortedRefs]==\
                 refNames[reference[ks][l]])[0][0] +1
@@ -757,5 +769,19 @@ def showClusterMassConstraints(meanCriticalMass,stdErrorCriticalMass,\
         fontfamily=fontname,fontsize=fontsize1,fontweight='bold')
     plt.savefig(savename,dpi=500)
     plt.show()
+    if savePlotData:
+        plotData = [plotDataMass,plotDataRange,plotDataNames,plotDataClusters]
+        tools.savePickle(plotData,savename + ".data.p")
+        return plotData
+
+
+
+
+
+
+
+
+
+
 
 

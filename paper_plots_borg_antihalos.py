@@ -1856,17 +1856,18 @@ if doHMFs:
 
 #-------------------------------------------------------------------------------
 # RADIAL VOID PROFILES
-#if doCat:
-#    plot.plotConstrainedVsUnconstrainedProfiles(rBinStackCentres,nbarjSepStack,\
-#        sigmaSepStack,nbarjAllStackedUn,sigmaAllStackedUn,nbar,rMin,mMin,mMax,\
-#        showImmediately = True,fontsize = fontsize,\
-#        legendFontSize=legendFontsize,labelCon='Constrained',\
-#        labelRand='Unconstrained \nmean',\
-#        savename=figuresFolder + "profiles1415.pdf",showTitle=False,\
-#        meanErrorLabel = 'Unconstrained \nMean',\
-#        profileErrorLabel = 'Profile \nvariation \n',\
-#        nbarjUnconstrainedStacks=nbarjSepStackUn,\
-#        sigmajUnconstrainedStacks = sigmaSepStackUn,showMean=True)
+doVoidProfiles = True
+if doVoidProfiles:
+    plot.plotConstrainedVsUnconstrainedProfiles(rBinStackCentres,nbarjSepStack,\
+        sigmaSepStack,nbarjAllStackedUn,sigmaAllStackedUn,nbar,rMin,mMin,mMax,\
+        show = True,fontsize = fontsize,\
+        legendFontSize=legendFontsize,labelCon='Constrained',\
+        labelRand='Unconstrained \nmean',\
+        savename=figuresFolder + "profiles1415.pdf",showTitle=False,\
+        meanErrorLabel = 'Unconstrained \nMean',\
+        profileErrorLabel = 'Profile \nvariation \n',\
+        nbarjUnconstrainedStacks=nbarjSepStackUn,\
+        sigmajUnconstrainedStacks = sigmaSepStackUn,showMean=True)
 
 
 #-------------------------------------------------------------------------------
@@ -2381,9 +2382,11 @@ plt.show()
 
 # Mass comparison plot!
 if doClusterMasses:
-    massconstraintsplot.showClusterMassConstraints(meanMasses,sigmaMasses,\
-            figOut = figuresFolder,catFolder = "./catalogues/",h=h,Om0 = Om0,\
-            savename = figuresFolder + "mass_constraints_plot.pdf")
+    plotData = massconstraintsplot.showClusterMassConstraints(\
+        meanMasses,sigmaMasses,\
+        figOut = figuresFolder,catFolder = "./catalogues/",h=h,Om0 = Om0,\
+        savename = figuresFolder + "mass_constraints_plot.pdf",\
+        savePlotData=True)
 
 #-------------------------------------------------------------------------------
 # MASS FUNCTIONS PLOT 135 VS 300
@@ -2418,7 +2421,7 @@ if doCat:
 
 
 # Plot for the paper, using the new method:
-doProfiles = False
+doProfiles = True
 if doCat and doProfiles:
     textwidth=7.1014
     fontsize = 8

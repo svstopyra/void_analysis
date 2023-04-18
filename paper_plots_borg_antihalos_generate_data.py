@@ -2460,7 +2460,8 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
         mMin=1e11,mMax = 1e16,percThresh=99,chainFile="chain_properties.p",\
         Nden=256,recomputeUnconstrained = False,data_folder="./",\
         unconstrainedFolderNew = "new_chain/unconstrained_samples/",\
-        recomputeData=True,verbose=True):
+        recomputeData=True,verbose=True,catFracCut=True,combFracCut=False,\
+        cutScale='mass',rLower=5,rUpper=20,snrCut=True):
     # Load snapshots:
     if verbose:
         print("Catalogue construction. \nLoading snapshots..")
@@ -2666,39 +2667,82 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     [radiiListMeanUn,radiiListSigmaUn] = getMeanProperty(radiiListCombUn)
     [massListMeanUn,massListSigmaUn] = getMeanProperty(massListCombUn)
     # Determine percentiles from the unconstrained catalogues:
-    massBins = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),nBins))
-    [inMassBins,noInMassBins] = plot.binValues(massListMeanUn,massBins)
+    if cutScale == "mass":
+        massBins = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),nBins))
+        [inMassBins,noInMassBins] = plot.binValues(massListMeanUn,massBins)
+        scaleBins = massBins
+    elif cutScale == "radius":
+        radBins = np.linspace(rLower,rUpper,nBins)
+        [inRadBins,noInRadBins] = plot.binValues(radiiListMeanUn,radBins)
+        scaleBins = radBins
+    else:
+        raise Exception("Unrecognised 'cutScale' value ")
     percentilesComb = []
     percentilesCat = []
-    for k in range(0,len(inMassBins)):
+    for k in range(0,nBins-1):
+        if cutScale == "mass":
+            selection = inMassBins[k]
+        elif cutScale == "radius":
+            selection = inRadBins[k]
+        else:
+            raise Exception("Unrecognised 'cutScale' value ")
         if len(inMassBins[k]) > 0:
-            #percentiles.append(np.percentile(finalCatFracUn[inMassBins[k]],\
-            #    percThresh))
             percentilesComb.append(np.percentile(\
-                finalCombinatoricFracUn[inMassBins[k]],percThresh))
+                finalCombinatoricFracUn[selection],percThresh))
             percentilesCat.append(np.percentile(\
-                finalCatFracUn[inMassBins[k]],percThresh))
+                finalCatFracUn[selection],percThresh))
         else:
             percentilesComb.append(0.0)
             percentilesCat.append(0.0)
     massListComb = getPropertyFromCat(finalCatOpt,massListShort)
     [massListMean,massListSigma] = getMeanProperty(massListComb)
-    # Construct the filter by mass bin:
-    if verbose:
-        print("Filtering voids by mass bin...")
-        sys.stdout.flush()
+    radiiListComb = getPropertyFromCat(finalCatOpt,radiiListShort)
+    [radiiListMean,radiiListSigma] = getMeanProperty(radiiListComb)
+    # Construct the filter by mass bin or radius bin:
     catFracThresholds = percentilesCat
-    massFilter = [(massListMean > massBins[k]) & \
-        (massListMean <= massBins[k+1]) \
-        for k in range(0,len(massBins) - 1)]
     catFracFilter = [finalCatFracOpt > thresh for thresh in percentilesCat]
     combFracFilter = [finalCombinatoricFracOpt > thresh \
         for thresh in percentilesComb]
     combinedFilter = np.zeros(massListMean.shape,dtype=bool)
+    if cutScale == "mass":
+        if verbose:
+            print("Filtering voids by mass bin...")
+            sys.stdout.flush()
+        scaleFilter = [(massListMean > massBins[k]) & \
+            (massListMean <= massBins[k+1]) \
+            for k in range(0,len(massBins) - 1)]
+    if cutScale == "radius":
+        if verbose:
+            print("Filtering voids by radius bin...")
+            sys.stdout.flush()
+        scaleFilter = [(radiiListMean > radBins[k]) & \
+            (radiiListMean <= radBins[k+1]) \
+            for k in range(0,len(radBins) - 1)]
+    meanCatFrac = np.zeros(nBins-1)
+    stdErrCatFrac = np.zeros(nBins-1)
+    meanCombFrac = np.zeros(nBins-1)
+    stdErrCombFrac = np.zeros(nBins-1)
     for k in range(0,len(catFracThresholds)):
-        combinedFilter = combinedFilter | (massFilter[k] & catFracFilter[k] & \
-            combFracFilter[k])
-    combinedFilter = combinedFilter & (snrList > snrThresh)
+        individualFilter = scaleFilter[k] # In radius or mass bin k
+        # Include cuts on catalogue and combinatoric fractions:
+        if catFracCut:
+            individualFilter = individualFilter & catFracFilter[k]
+            meanCatFrac[k] = np.mean(finalCatFracOpt[individualFilter])
+            stdErrCatFrac[k] = np.std(finalCatFracOpt[individualFilter])/\
+                np.sqrt(np.sum(individualFilter))
+        if combFracCut:
+            individualFilter = individualFilter & combFracFilter[k]
+            meanCombFrac[k] = np.mean(finalCombFracOpt[individualFilter])
+            stdErrCombFrac[k] = np.std(finalCombFracOpt[individualFilter])/\
+                np.sqrt(np.sum(individualFilter))
+        combinedFilter = combinedFilter | individualFilter
+    if snrCut:
+        combinedFilter = combinedFilter & (snrList > snrThresh)
+    # Save data on the scale cut for future use:
+    tools.savePickle([scaleBins,percentilesCat,percentilesComb,\
+        meanCatFrac,stdErrCatFrac,meanCombFrac,stdErrCombFrac],\
+        data_folder + "catalogue_scale_cut_data.p")
+    # Cut on distance:
     distanceArray = np.sqrt(np.sum(meanCentresArray**2,1))
     combinedFilter135 = combinedFilter & \
         (distanceArray < rSphereInner)
