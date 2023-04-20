@@ -535,6 +535,19 @@ equatorialRThetaPhi = np.vstack((coord.icrs.spherical.distance.value,\
     coord.icrs.spherical.lon.value,\
     coord.icrs.spherical.lat.value)).T
 
+#-------------------------------------------------------------------------------
+# THRESHOLD PLOTS
+
+
+[scaleBins,percentilesCat,percentilesComb,\
+        meanCatFrac,stdErrCatFrac,meanCombFrac,stdErrCombFrac,\
+        radiiListMean,massListMean,massListSigma,radiiListSigma,\
+        massBins,radBins,scaleFilter] = tools.loadPickle(\
+        data_folder + "catalogue_scale_cut_data.p")
+
+
+
+meanRadii = np.array([np.mean(radiiListMean[inds]) for inds in scaleFilter])
 
 
 #-------------------------------------------------------------------------------

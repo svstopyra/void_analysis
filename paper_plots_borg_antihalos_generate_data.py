@@ -2667,13 +2667,13 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     [radiiListMeanUn,radiiListSigmaUn] = getMeanProperty(radiiListCombUn)
     [massListMeanUn,massListSigmaUn] = getMeanProperty(massListCombUn)
     # Determine percentiles from the unconstrained catalogues:
+    massBins = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),nBins))
+    [inMassBins,noInMassBins] = plot.binValues(massListMeanUn,massBins)
+    radBins = np.linspace(rLower,rUpper,nBins)
+    [inRadBins,noInRadBins] = plot.binValues(radiiListMeanUn,radBins)
     if cutScale == "mass":
-        massBins = 10**(np.linspace(np.log10(mLower),np.log10(mUpper),nBins))
-        [inMassBins,noInMassBins] = plot.binValues(massListMeanUn,massBins)
         scaleBins = massBins
     elif cutScale == "radius":
-        radBins = np.linspace(rLower,rUpper,nBins)
-        [inRadBins,noInRadBins] = plot.binValues(radiiListMeanUn,radBins)
         scaleBins = radBins
     else:
         raise Exception("Unrecognised 'cutScale' value ")
@@ -2724,23 +2724,25 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     stdErrCombFrac = np.zeros(nBins-1)
     for k in range(0,len(catFracThresholds)):
         individualFilter = scaleFilter[k] # In radius or mass bin k
+        if snrCut:
+            individualFilter = individualFilter & (snrList > snrThresh)
         # Include cuts on catalogue and combinatoric fractions:
+        meanCatFrac[k] = np.mean(finalCatFracOpt[individualFilter])
+        stdErrCatFrac[k] = np.std(finalCatFracOpt[individualFilter])/\
+            np.sqrt(np.sum(individualFilter))
+        meanCombFrac[k] = np.mean(finalCombinatoricFracOpt[individualFilter])
+        stdErrCombFrac[k] = np.std(finalCombinatoricFracOpt[individualFilter])/\
+            np.sqrt(np.sum(individualFilter))
         if catFracCut:
             individualFilter = individualFilter & catFracFilter[k]
-            meanCatFrac[k] = np.mean(finalCatFracOpt[individualFilter])
-            stdErrCatFrac[k] = np.std(finalCatFracOpt[individualFilter])/\
-                np.sqrt(np.sum(individualFilter))
         if combFracCut:
             individualFilter = individualFilter & combFracFilter[k]
-            meanCombFrac[k] = np.mean(finalCombFracOpt[individualFilter])
-            stdErrCombFrac[k] = np.std(finalCombFracOpt[individualFilter])/\
-                np.sqrt(np.sum(individualFilter))
         combinedFilter = combinedFilter | individualFilter
-    if snrCut:
-        combinedFilter = combinedFilter & (snrList > snrThresh)
     # Save data on the scale cut for future use:
     tools.savePickle([scaleBins,percentilesCat,percentilesComb,\
-        meanCatFrac,stdErrCatFrac,meanCombFrac,stdErrCombFrac],\
+        meanCatFrac,stdErrCatFrac,meanCombFrac,stdErrCombFrac,\
+        radiiListMean,massListMean,massListSigma,radiiListSigma,\
+        massBins,radBins,scaleFilter],\
         data_folder + "catalogue_scale_cut_data.p")
     # Cut on distance:
     distanceArray = np.sqrt(np.sum(meanCentresArray**2,1))
