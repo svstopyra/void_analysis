@@ -2081,7 +2081,7 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
                                         twoWayMatchCounts += 1
                         finalCombinatoricFrac.append(twoWayMatchCounts/\
                             (Ncats*(Ncats-1)))
-    return [np.array(finalCat),shortHaloList,np.array(twoWayMatchLists),\
+    return [np.array(finalCat),shortHaloList,twoWayMatchLists,\
         finalCandidates,finalRatios,finalDistances,allCandidates,\
         candidateCounts,allRatios,np.array(finalCombinatoricFrac),\
         np.array(finalCatFrac),alreadyMatched]
