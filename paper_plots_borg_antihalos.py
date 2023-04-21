@@ -15,6 +15,7 @@ import matplotlib.colors as colors
 import pickle
 import numpy as np
 import seaborn as sns
+import pandas
 seabornColormap = sns.color_palette("colorblind",as_cmap=True)
 import pynbody
 import astropy.units as u
@@ -545,10 +546,81 @@ equatorialRThetaPhi = np.vstack((coord.icrs.spherical.distance.value,\
         massBins,radBins,scaleFilter] = tools.loadPickle(\
         data_folder + "catalogue_scale_cut_data.p")
 
+[finalCatOpt,shortHaloListOpt,twoWayMatchListOpt,finalCandidatesOpt,\
+        finalRatiosOpt,finalDistancesOpt,allCandidatesOpt,candidateCountsOpt,\
+        allRatiosOpt,finalCombinatoricFracOpt,finalCatFracOpt,\
+        alreadyMatched] = pickle.load(\
+            open(data_folder + "catalogue_all_data.p","rb"))
+
+[finalCatUn,shortHaloListUn,twoWayMatchListUn,\
+            finalCandidatesOUn,\
+            finalRatiosUn,finalDistancesUn,allCandidatesUn,candidateCountsUn,\
+            allRatiosUn,finalCombinatoricFracUn,finalCatFracUn,\
+            antihaloCentresUn,antihaloMassesUn,antihaloRadiiUn,\
+            centralAntihalosUn,centralAntihaloMassesUn,sortedListUn,\
+            ahCountsUn,radiiListShortUn,massListShortUn] = pickle.load(open(\
+                data_folder + "unconstrained_catalogue.p","rb"))
+radiiListCombUn = getPropertyFromCat(finalCatUn,radiiListShortUn)
+massListCombUn = getPropertyFromCat(finalCatUn,massListShortUn)
+[radiiListMeanUn,radiiListSigmaUn] = getMeanProperty(radiiListCombUn)
+[massListMeanUn,massListSigmaUn] = getMeanProperty(massListCombUn)
+massFilterUn = [(massListMeanUn > scaleBins[k]) & \
+            (massListMeanUn <= scaleBins[k+1]) \
+            for k in range(0,len(scaleBins) - 1)]
 
 
 meanRadii = np.array([np.mean(radiiListMean[inds]) for inds in scaleFilter])
 
+
+plt.plot(meanRadii,meanCombFrac,linestyle='-',color=seabornColormap[0])
+plt.plot(meanRadii,percentilesComb,linestyle=':',color=seabornColormap[0])
+plt.plot(meanRadii,meanCatFrac,linestyle='-',color=seabornColormap[1])
+plt.plot(meanRadii,percentilesCat,linestyle=':',color=seabornColormap[1])
+plt.xlabel('Radius [$\\mathrm{Mpc}h^{-1}$]')
+plt.ylabel('Catalogue or Combinatoric fraction')
+line1 = mlines.Line2D([],[],linestyle='-',color=seabornColormap[0],\
+    label='Combinatoric Fraction')
+line2 = mlines.Line2D([],[],linestyle='-',color=seabornColormap[1],\
+    label='Catalogue Fraction')
+line3 = mlines.Line2D([],[],linestyle='-',color='k',\
+    label='Mean of posterior')
+line4 = mlines.Line2D([],[],linestyle=':',color='k',\
+    label='Threshold (99th percentile)')
+plt.legend(handles=[line1,line2,line3,line4])
+plt.savefig(figuresFolder + "catalogue_and_combinatoric_fractions.pdf")
+plt.show()
+
+# Violin plot:
+binNames = [str(x) for x in range(1,len(scaleFilter))]
+violinData = [finalCombinatoricFracOpt[inds] for inds in scaleFilter]
+violinDataUn = [finalCombinatoricFracUn[inds] for inds in massFilterUn]
+
+combined = dict(zip(binNames,\
+    [{'value':{'posterior':violinData[ind],'random':violinDataUn[ind]}} \
+    for ind in range(0,len(violinData))]))
+combined2 = {'posterior':dict(zip(binNames,violinData)),\
+    'random':dict(zip(binNames,violinDataUn))}
+
+dfList = [pandas.concat([pandas.DataFrame({'posterior':violinData[ind]}),\
+    pandas.DataFrame({'random':violinDataUn[ind]})]) \
+    for ind in range(0,len(violinData))]
+dfList2 = [df.melt() for df in dfList]
+for df in dfList2:
+    df['X'] = 1
+
+combined = pandas.DataFrame({'bin':dict(zip(binNames,dfList2))}).melt()
+
+
+fig, ax = plt.subplots(figsize=(textwidth,textwidth))
+sns.violinplot(data=dfList2[3],x='X',y='value',hue='variable',split=True,\
+    cut=0.0)
+
+
+sns.violinplot(data=combined,x='bin',y='value',hue='variable',split=True,\
+    cut=0.0)
+
+plt.violinplot(violinData,positions=meanRadii[:-2])
+plt.violinplot(violinDataUn,positions=meanRadii[:-1])
 
 #-------------------------------------------------------------------------------
 # PPTs PLOT:
