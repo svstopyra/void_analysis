@@ -27,6 +27,8 @@ import sys
 figuresFolder = "borg-antihalos_paper_figures/all_samples/"
 #figuresFolder = "borg-antihalos_paper_figures/batch5-2/"
 #figuresFolder = "borg-antihalos_paper_figures/batch5-4/"
+#figuresFolder = "borg-antihalos_paper_figures/batch10-2/"
+#figuresFolder = "borg-antihalos_paper_figures/batch10-1/"
 
 recomputeData = False
 testDataFolder = figuresFolder + "tests_data/"
@@ -592,28 +594,56 @@ plt.show()
 
 # Violin plot:
 binNames = [str(x) for x in range(1,len(scaleFilter))]
-violinData = [finalCombinatoricFracOpt[inds] for inds in scaleFilter]
-violinDataUn = [finalCombinatoricFracUn[inds] for inds in massFilterUn]
-
-combined = dict(zip(binNames,\
-    [{'value':{'posterior':violinData[ind],'random':violinDataUn[ind]}} \
-    for ind in range(0,len(violinData))]))
-combined2 = {'posterior':dict(zip(binNames,violinData)),\
-    'random':dict(zip(binNames,violinDataUn))}
-
-dfList = [pandas.concat([pandas.DataFrame({'posterior':violinData[ind]}),\
-    pandas.DataFrame({'random':violinDataUn[ind]})]) \
-    for ind in range(0,len(violinData))]
-dfList2 = [df.melt() for df in dfList]
-for df in dfList2:
-    df['X'] = 1
-
-combined = pandas.DataFrame({'bin':dict(zip(binNames,dfList2))}).melt()
+#violinData = [finalCombinatoricFracOpt[inds] for inds in scaleFilter]
+#violinDataUn = [finalCombinatoricFracUn[inds] for inds in massFilterUn]
+violinData = [finalCatFracOpt[inds] for inds in scaleFilter]
+violinDataUn = [finalCatFracUn[inds] for inds in massFilterUn]
+# New idea. Arrange things into a data frame with categories 'value', 'simtype'
+# and 'radius':
+combinedValues = np.hstack([np.hstack([violinData[ind],violinDataUn[ind]]) \
+    for ind in range(0,len(violinData))])
+combinedLabels = np.hstack([np.hstack([\
+    np.full(len(violinData[ind]),'posterior'),\
+    np.full(len(violinDataUn[ind]),'random')]) \
+    for ind in range(0,len(violinData))])
+combinedRadii = np.hstack([np.hstack([\
+    np.full(len(violinData[ind]),meanRadii[ind]),\
+    np.full(len(violinDataUn[ind]),meanRadii[ind])]) \
+    for ind in range(0,len(violinData))])
+combinedBins = np.hstack([np.hstack([\
+    np.full(len(violinData[ind]),ind),\
+    np.full(len(violinDataUn[ind]),ind)]) \
+    for ind in range(0,len(violinData))])
+combinedData = {'value':combinedValues,'simType':combinedLabels,\
+    'radius':combinedRadii,'bin':combinedBins}
+combinedFrame = pandas.DataFrame(data=combinedData)
 
 
 fig, ax = plt.subplots(figsize=(textwidth,textwidth))
-sns.violinplot(data=dfList2[3],x='X',y='value',hue='variable',split=True,\
-    cut=0.0)
+sns.violinplot(data=combinedFrame,x='radius',y='value',hue='simType',\
+    split=True,cut=0.0,scale='area',bw=1,ax=ax)
+ax = plt.gca()
+ax.set_xticklabels([("%.3g" % r) for r in meanRadii[np.isfinite(meanRadii)]])
+ax.set_xlabel('Mean radius in bin [$\\mathrm{Mpc}h^{-1}$]')
+ax.set_ylabel('Catalogue Fraction')
+numViolins = len(ax.get_xticklabels())
+plt.plot(range(0,numViolins),percentilesCat[0:numViolins],'k:',\
+    label='99th \npercentile \nrandom \ncatalogue')
+plt.plot(range(0,numViolins),meanCatFrac[0:numViolins],'k-',\
+    label='Mean of \nposterior \ncatalogue')
+plt.legend(frameon=False,loc='upper left')
+plt.title('Catalogue fraction for ' + str(len(snapNumList)) + ' samples.')
+plt.savefig(figuresFolder + "catalogue_fraction_violins.pdf")
+plt.show()
+
+
+textwidth=7.1014
+textheight=9.0971
+fig, ax = plt.subplots(figsize=(textwidth,textwidth))
+for k in range(0,len(dfList2)):
+    if len(dfList2[k]) > 0:
+        sns.violinplot(data=dfList2[k],x='X',y='value',hue='variable',\
+            split=True,cut=0.0,ax=ax)
 
 
 sns.violinplot(data=combined,x='bin',y='value',hue='variable',split=True,\
@@ -621,6 +651,12 @@ sns.violinplot(data=combined,x='bin',y='value',hue='variable',split=True,\
 
 plt.violinplot(violinData,positions=meanRadii[:-2])
 plt.violinplot(violinDataUn,positions=meanRadii[:-1])
+
+# Anti-halo properties:
+allCentralsSorted = [np.array(centralAntihalos[ns][0])[sortedList[ns]] \
+    for ns in range(0,len(snapNumList))]
+allFinalCatAHs = [finalCatOpt[combinedFilter135][:,ns]-1 \
+    for ns in range(0,len(snapNumList))]
 
 #-------------------------------------------------------------------------------
 # PPTs PLOT:
