@@ -27,6 +27,8 @@ import sys
 figuresFolder = "borg-antihalos_paper_figures/all_samples/"
 #figuresFolder = "borg-antihalos_paper_figures/batch5-2/"
 #figuresFolder = "borg-antihalos_paper_figures/batch5-4/"
+#figuresFolder = "borg-antihalos_paper_figures/batch5-1/"
+#figuresFolder = "borg-antihalos_paper_figures/batch5-3/"
 #figuresFolder = "borg-antihalos_paper_figures/batch10-2/"
 #figuresFolder = "borg-antihalos_paper_figures/batch10-1/"
 
@@ -261,7 +263,7 @@ if doCat:
             snapListUnconstrained = None,snapListUnconstrainedRev=None,\
             mLower = "auto",mUpper = 2e15,nBins = 8,muOpt = muOpt,\
             rSearchOpt = rSearchOpt,rSphere = rSphere,\
-            rSphereInner = rSphereInner,NWayMatch = True,rMin=rMin,rMax=rMax,\
+            rSphereInner = rSphereInner,NWayMatch = False,rMin=rMin,rMax=rMax,\
             mMin=mMin,mMax = mMax,percThresh=99,chainFile="chain_properties.p",\
             Nden=256,recomputeUnconstrained = True,data_folder=data_folder,\
             _recomputeData = recomputeData,recomputeData=recomputeData)
@@ -657,6 +659,284 @@ allCentralsSorted = [np.array(centralAntihalos[ns][0])[sortedList[ns]] \
     for ns in range(0,len(snapNumList))]
 allFinalCatAHs = [finalCatOpt[combinedFilter135][:,ns]-1 \
     for ns in range(0,len(snapNumList))]
+
+
+#-------------------------------------------------------------------------------
+# CATALOGUE CONSISTENCY CHECKS
+
+
+# Consistency check:
+centresListFinal = []
+antihalosListFinal = []
+cataloguesFinal = []
+filtersFinal = []
+scaleFiltersFinal = []
+divisionsList = ['batch5-2/','batch10-1/','all_samples/']
+finalCatFracList = []
+combinedFiltersList = []
+snrLists = []
+snrThresh = 10
+for name in divisionsList:
+    base_folder = 'borg-antihalos_paper_figures/' + name
+    [massListMean,combinedFilter135,combinedFilter,rBinStackCentresCombined,\
+            nbarjSepStackCombined,sigmaSepStackCombined,\
+            nbarjAllStackedUnCombined,sigmaAllStackedUnCombined,nbar,rMin2,\
+            mMin2,mMax2,nbarjSepStackUn,sigmaSepStackUn,\
+            rBinStackCentres,nbarjSepStack,\
+            sigmaSepStack,nbarjAllStackedUn,sigmaAllStackedUn,\
+            nbarjSepStackUn,sigmaSepStackUn] = tools.loadPickle(\
+                base_folder + "finalCatData.p")
+    [finalCatOpt,shortHaloListOpt,twoWayMatchListOpt,finalCandidatesOpt,\
+        finalRatiosOpt,finalDistancesOpt,allCandidatesOpt,candidateCountsOpt,\
+        allRatiosOpt,finalCombinatoricFracOpt,finalCatFracOpt,\
+        alreadyMatched] = pickle.load(\
+            open(base_folder + "catalogue_all_data.p","rb"))
+    catData = np.load(base_folder + "catalogue_data.npz")
+    [scaleBins,percentilesCat,percentilesComb,\
+            meanCatFrac,stdErrCatFrac,meanCombFrac,stdErrCombFrac,\
+            radiiListMean,massListMean,massListSigma,radiiListSigma,\
+            massBins,radBins,scaleFilter] = tools.loadPickle(\
+            base_folder + "catalogue_scale_cut_data.p")
+    snrLists.append(catData['snr'])
+    centresListFinal.append(catData['centres'][combinedFilter135])
+    antihalosListFinal.append(finalCatOpt[combinedFilter135])
+    cataloguesFinal.append(finalCatOpt)
+    filtersFinal.append(combinedFilter135)
+    scaleFiltersFinal.append(scaleFilter)
+    finalCatFracList.append(finalCatFracOpt)
+
+compareLists = [antihalosListFinal[0],antihalosListFinal[1][:,5:],\
+    antihalosListFinal[2][:,5:10]]
+
+
+def compareAHLists(list1,list2,enforceExact=True):
+    result = np.zeros(len(list1),dtype=bool)
+    for k in range(0,len(list1)):
+        if enforceExact:
+            result[k] = np.any(np.all(list1[k] == list2,1))
+        else:
+            result[k] = np.any(np.any((list1[k] == list2) & (list1[k] >= 0),1))
+    return result
+
+
+
+successValues = [compareAHLists(compareLists[0],compareLists[1],\
+    enforceExact=False),
+    compareAHLists(compareLists[0],compareLists[2],\
+    enforceExact=False)]
+
+backwardsValues = [compareAHLists(compareLists[1],compareLists[0],\
+    enforceExact=False),
+    compareAHLists(compareLists[2],compareLists[0],\
+    enforceExact=False)]
+
+successRate5 = [np.sum(val)/len(val) for val in successValues]
+backwardsRate5 = [np.sum(val)/len(val) for val in backwardsValues]
+
+successValues10 = compareAHLists(antihalosListFinal[1],\
+    antihalosListFinal[2][:,0:10],enforceExact=False)
+backwardsValues10 = compareAHLists(antihalosListFinal[2][:,0:10],\
+    antihalosListFinal[1],enforceExact=False)
+
+successRate10 = np.sum(successValues10)/len(successValues10)
+backwardsRate10 = np.sum(backwardsValues10)/len(backwardsValues10)
+
+# Test the failed 20->5 matches:
+# Get the 20-sample voids that don't appear in the 5-sample set:
+failed20in5 = compareLists[2][np.logical_not(backwardsValues[1])]
+# Find the corresponding voids that made it into the pre-cut 5-sample catalogue:
+findFailed20In5 = compareAHLists(cataloguesFinal[0],failed20in5)
+# Compute the fraction that would have made the cut if we allowed chain-matches:
+thresholdList = np.zeros(len(combinedFilter135))
+for filt, thresh in zip(scaleFiltersFinal[2],percentilesCat):
+    thresholdList[filt] = thresh
+
+# Relevant thresholds for each failed 20->5 void:
+thresholdListCut = thresholdList[combinedFilter135]
+catFracsFailed20in5 = np.sum(failed20in5 >= 0,1)/failed20in5.shape[1]
+wouldSucceed = (catFracsFailed20in5 >= \
+    thresholdListCut[np.logical_not(backwardsValues[1])])
+
+# Play the same game with 20->10:
+failed20in10 = antihalosListFinal[2][:,0:10][np.logical_not(backwardsValues10)]
+# Find the corresponding voids that made it into the pre-cut 5-sample catalogue:
+findFailed20In10 = compareAHLists(cataloguesFinal[1],failed20in10)
+catFracsFailed20in10 = np.sum(failed20in10 >= 0,1)/failed20in10.shape[1]
+wouldSucceed = (catFracsFailed20in10 >= \
+    thresholdListCut[np.logical_not(backwardsValues10)])
+
+# Compute expected failure rates per void, for each void in the 20-sample
+# catalogue:
+failureChance = np.zeros(len(finalCatFracOpt[combinedFilter135]))
+nSelectCats = 10
+thresholdList = np.zeros(len(filtersFinal[2]))
+for filt, thresh in zip(scaleFiltersFinal[2],percentilesCat):
+    thresholdList[filt] = thresh
+
+# Relevant thresholds for each failed 20->5 void:
+thresholdListCut = thresholdList[filtersFinal[2]]
+for k in range(0,len(failureChance)):
+    thresh_k = thresholdListCut[k]
+    cat_k = finalCatFracList[2][filtersFinal[2]][k]
+    failureChance[k] = scipy.stats.binom.cdf(nSelectCats*thresh_k,nSelectCats,cat_k)
+
+successChance = 1.0 - failureChance
+
+# Expected fraction that would make it into the 10-sample catalogue:
+survival20to10 = np.sum(1.0 - failureChance)/len(failureChance)
+
+# Non-trivial to compute the variance here, since the sum of binomials with
+# different probabilities is not binomial. We can monte-carlo it though:
+
+def monteCarloSums(successChances,ntries=1000,seed=None,returnSamples=False):
+    # Generate 1 or zero based on the success chances, ntries times:
+    if seed is not None:
+        np.random.seed(seed)
+    samples = np.random.binomial(1,successChances,\
+        size=(ntries,len(successChances)))
+    sampleSums = np.sum(samples,1)
+    meanSum = np.mean(sampleSums)
+    varSum = np.var(sampleSums)
+    if returnSamples:
+        return sampleSums
+    else:
+        return [meanSum,varSum]
+
+
+fig, axAll = plt.subplots(1,3,figsize=(1.5*textwidth,1.5*0.3*textwidth))
+
+withChain=True
+chainFraction = np.sum(failed20in10 >= 0,1)/failed20in10.shape[1]
+chainSuccess = (chainFraction > \
+    thresholdListCut[np.logical_not(backwardsValues10)])
+
+sampleSums = monteCarloSums(successChance,ntries=1000,seed=1000,\
+    returnSamples=True)
+[meanSum,varSum] = monteCarloSums(successChance,ntries=1000,seed=1000)
+
+axAll[0].hist(sampleSums/len(successChance),color=seabornColormap[0],alpha=0.5,\
+    label='Monte carlo samples',density=False,bins=7)
+axAll[0].axvline(meanSum/len(successChance),color='k',linestyle='--',\
+    label='Monte-carlo mean \nsurvival fraction')
+axAll[0].axvline((len(successChance) - len(failed20in10))/len(successChance),\
+    color='k',linestyle=':',label='Observed survival \nfraction')
+if withChain:
+    axAll[0].axvline((len(successChance) - len(failed20in10) + np.sum(chainSuccess))/\
+        len(successChance),color='grey',linestyle=':',\
+        label='Observed survival \nfraction (with \nchain-successes)')
+
+axAll[0].set_xlabel('Survival Fraction',fontsize=8)
+axAll[0].set_ylabel('Monte-carlo samples',fontsize=8)
+#axAll[0].legend()
+axAll[0].set_title('20 to 10 samples.',fontsize=8)
+#if withChain:
+#    plt.savefig(figuresFolder + "monte_carlo_survival_20_to_10_with_chain.pdf")
+#else:
+#    plt.savefig(figuresFolder + "monte_carlo_survival_20_to_10.pdf")
+
+#plt.show()
+
+
+# We should do the same for the 20->5 case:
+failureChance = np.zeros(len(finalCatFracList[2][filtersFinal[2]]))
+nSelectCats = 5
+thresholdList = np.zeros(len(filtersFinal[2]))
+for filt, thresh in zip(scaleFiltersFinal[2],percentilesCat):
+    thresholdList[filt] = thresh
+
+# Relevant thresholds for each failed 20->5 void:
+thresholdListCut = thresholdList[filtersFinal[2]]
+for k in range(0,len(failureChance)):
+    thresh_k = thresholdListCut[k]
+    cat_k = finalCatFracList[2][filtersFinal[2]][k]
+    failureChance[k] = scipy.stats.binom.cdf(nSelectCats*thresh_k,nSelectCats,cat_k)
+
+successChance = 1.0 - failureChance
+chainFraction = np.sum(failed20in5 >= 0,1)/failed20in5.shape[1]
+chainSuccess = (chainFraction > \
+    thresholdListCut[np.logical_not(backwardsValues[1])])
+
+sampleSums = monteCarloSums(successChance,ntries=1000,seed=1000,\
+    returnSamples=True)
+[meanSum,varSum] = monteCarloSums(successChance,ntries=1000,seed=1000)
+
+axAll[1].hist(sampleSums/len(successChance),color=seabornColormap[0],alpha=0.5,\
+    label='Monte carlo samples',density=False,bins=10)
+axAll[1].axvline(meanSum/len(successChance),color='k',linestyle='--',\
+    label='Monte-carlo mean \nsurvival fraction')
+axAll[1].axvline((len(successChance) - len(failed20in5))/len(successChance),\
+    color='k',linestyle=':',label='Observed survival \nfraction')
+if withChain:
+    axAll[1].axvline((len(successChance) - len(failed20in5) + np.sum(chainSuccess))/\
+        len(successChance),color='grey',linestyle=':',\
+        label='Observed survival \nfraction (with \nchain-successes)')
+
+axAll[1].set_xlabel('Survival Fraction',fontsize=8)
+axAll[1].set_ylabel('Monte-carlo samples',fontsize=8)
+#axAll[1].legend()
+axAll[1].set_title('20 to 5 samples.',fontsize=8)
+#if withChain:
+#    plt.savefig(figuresFolder + "monte_carlo_survival_20_to_5_with_chain.pdf")
+#else:
+#    plt.savefig(figuresFolder + "monte_carlo_survival_20_to_5.pdf")
+
+#plt.show()
+
+# For completeness, let's do 10->5 as well?
+failed10in5 = antihalosListFinal[1][:,5:10][np.logical_not(backwardsValues[0])]
+failureChance = np.zeros(len(finalCatFracList[1][filtersFinal[1]]))
+nSelectCats = 5
+thresholdList = np.zeros(len(filtersFinal[1]))
+for filt, thresh in zip(scaleFiltersFinal[1],percentilesCat):
+    thresholdList[filt] = thresh
+
+# Relevant thresholds for each failed 20->5 void:
+thresholdListCut = thresholdList[filtersFinal[1]]
+
+for k in range(0,len(failureChance)):
+    thresh_k = thresholdListCut[k]
+    cat_k = finalCatFracList[1][filtersFinal[1]][k]
+    failureChance[k] = scipy.stats.binom.cdf(nSelectCats*thresh_k,nSelectCats,cat_k)
+
+successChance = 1.0 - failureChance
+chainFraction = np.sum(failed10in5 >= 0,1)/failed10in5.shape[1]
+chainSuccess = (chainFraction > \
+    thresholdListCut[np.logical_not(backwardsValues[0])])
+
+sampleSums = monteCarloSums(successChance,ntries=1000,seed=1000,\
+    returnSamples=True)
+[meanSum,varSum] = monteCarloSums(successChance,ntries=1000,seed=1000)
+
+axAll[2].hist(sampleSums/len(successChance),color=seabornColormap[0],alpha=0.5,\
+    label='Monte carlo samples',density=False,bins=10)
+axAll[2].axvline(meanSum/len(successChance),color='k',linestyle='--',\
+    label='Monte-carlo mean \nsurvival fraction')
+axAll[2].axvline((len(successChance) - len(failed10in5))/len(successChance),\
+    color='k',linestyle=':',label='Observed survival \nfraction')
+if withChain:
+    axAll[2].axvline((len(successChance) - len(failed10in5) + np.sum(chainSuccess))/\
+        len(successChance),color='grey',linestyle=':',\
+        label='Observed survival \nfraction (with \nchain-successes)')
+
+axAll[2].set_xlabel('Survival Fraction',fontsize=8)
+axAll[2].set_ylabel('Monte-carlo samples',fontsize=8)
+axAll[2].legend(prop={"size":8,"family":"serif"},frameon=False)
+axAll[2].set_title('10 to 5 samples.',\
+    fontsize=8)
+#if withChain:
+#    plt.savefig(figuresFolder + "monte_carlo_survival_10_to_5_with_chain.pdf")
+#else:
+#    plt.savefig(figuresFolder + "monte_carlo_survival_10_to_5.pdf")
+
+plt.tight_layout()
+if withChain:
+    plt.savefig(figuresFolder + "monte_carlo_survival_with_chain.pdf")
+else:
+    plt.savefig(figuresFolder + "monte_carlo_survival.pdf")
+
+plt.show()
+
+
 
 #-------------------------------------------------------------------------------
 # PPTs PLOT:
