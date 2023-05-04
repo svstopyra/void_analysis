@@ -676,6 +676,7 @@ finalCatFracList = []
 combinedFiltersList = []
 snrLists = []
 snrThresh = 10
+allCatData = []
 for name in divisionsList:
     base_folder = 'borg-antihalos_paper_figures/' + name
     [massListMean,combinedFilter135,combinedFilter,rBinStackCentresCombined,\
@@ -704,9 +705,11 @@ for name in divisionsList:
     filtersFinal.append(combinedFilter135)
     scaleFiltersFinal.append(scaleFilter)
     finalCatFracList.append(finalCatFracOpt)
+    allCatData.append(catData)
 
 compareLists = [antihalosListFinal[0],antihalosListFinal[1][:,5:],\
     antihalosListFinal[2][:,5:10]]
+
 
 
 def compareAHLists(list1,list2,enforceExact=True):
@@ -934,6 +937,164 @@ if withChain:
 else:
     plt.savefig(figuresFolder + "monte_carlo_survival.pdf")
 
+plt.show()
+
+# False positives:
+
+catFracFilter = [[catFrac > thresh for thresh in percentilesCat] \
+    for catFrac in finalCatFracList]
+
+distanceFilters = [np.sqrt(np.sum(catData['centres']**2,1)) < 135 \
+    for catData in allCatData]
+
+cutFiltersList = [[scaleFilter & (snrLists[k] > snrThresh) & catFilter & \
+    distanceFilters[k] for scaleFilter, catFilter in \
+    zip(scaleFiltersFinal[k],catFracFilter[k])]\
+    for k in range(0,3)]
+
+
+
+
+removedFiltersList = [[scaleFilter & (snrLists[k] > snrThresh) & \
+    np.logical_not(catFilter) & distanceFilters[k] \
+    for scaleFilter, catFilter in \
+    zip(scaleFiltersFinal[k],catFracFilter[k])]\
+    for k in range(0,3)]
+
+massBinCentres = plot.binCentres(scaleBins)
+counts = np.array([[np.sum(l) for l in cutFiltersList[k]] for k in range(0,3)]).T
+plt.semilogx(massBinCentres,counts,label=['5 samples','10 samples','20 samples'])
+plt.xlabel('Mass [$M_{\\odot}h^{-1}$]')
+plt.ylabel('Number of Voids')
+plt.title('Combined Catalogues')
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "mass_counts.pdf")
+plt.show()
+
+# Need to figure out which voids that were rejected at 20, have a
+# chance of appearing at 10:
+
+
+failedVoids20 = np.zeros(removedFiltersList[2][0].shape,dtype=bool)
+for k in range(0,len(removedFiltersList[2])):
+    failedVoids20 = failedVoids20 | removedFiltersList[2][k]
+
+catProbabilities = finalCatFracList[2][failedVoids20]
+thresholdList = np.zeros(len(filtersFinal[2]))
+for filt, thresh in zip(scaleFiltersFinal[2],percentilesCat):
+    thresholdList[filt] = thresh
+
+thresholds = thresholdList[failedVoids20]
+
+nSelectCats=10
+failureChance = np.zeros(catProbabilities.shape)
+for k in range(0,len(catProbabilities)):
+    thresh_k = thresholds[k]
+    cat_k = catProbabilities[k]
+    failureChance[k] = scipy.stats.binom.cdf(nSelectCats*thresh_k,nSelectCats,cat_k)
+
+successChance = 1.0 - failureChance
+
+sampleSums = monteCarloSums(successChance,ntries=1000,seed=1000,\
+    returnSamples=True)
+[meanSum,varSum] = monteCarloSums(successChance,ntries=1000,seed=1000)
+
+
+fig, ax = plt.subplots(1,3,figsize=(1.5*textwidth,1.5*0.3*textwidth))
+
+ax[0].hist(sampleSums/len(compareLists[1]),color=seabornColormap[0],alpha=0.5,\
+    label='Monte carlo samples',density=False,bins=7)
+ax[0].axvline(meanSum/len(compareLists[1]),color='k',linestyle='--',\
+    label='Monte-carlo mean \nfalse positive')
+ax[0].axvline((len(compareLists[1]) - np.sum(successValues10))/\
+    len(compareLists[1]),\
+    color='k',linestyle=':',label='Observed false \npositive')
+
+ax[0].set_xlabel('False-positive fraction',fontsize=8)
+ax[0].set_ylabel('Monte-carlo samples',fontsize=8)
+deviation = (len(compareLists[1]) - np.sum(successValues10) - meanSum)/\
+    np.sqrt(varSum)
+#plt.legend(prop={"size":8,"family":"serif"},frameon=False)
+ax[0].set_title('20 to 10 samples ($' + ("%.2g" % deviation) + "\\sigma$)",\
+    fontsize=8)
+#plt.savefig(figuresFolder + "false_positive_fraction.pdf")
+#plt.show()
+
+
+nSelectCats=5
+failureChance = np.zeros(catProbabilities.shape)
+for k in range(0,len(catProbabilities)):
+    thresh_k = thresholds[k]
+    cat_k = catProbabilities[k]
+    failureChance[k] = scipy.stats.binom.cdf(nSelectCats*thresh_k,nSelectCats,cat_k)
+
+successChance = 1.0 - failureChance
+
+sampleSums = monteCarloSums(successChance,ntries=1000,seed=1000,\
+    returnSamples=True)
+[meanSum,varSum] = monteCarloSums(successChance,ntries=1000,seed=1000)
+
+ax[1].hist(sampleSums/len(compareLists[0]),color=seabornColormap[0],alpha=0.5,\
+    label='Monte carlo samples',density=False,bins=10)
+ax[1].axvline(meanSum/len(compareLists[0]),color='k',linestyle='--',\
+    label='Monte-carlo mean \nfalse positive')
+ax[1].axvline((len(compareLists[0]) - np.sum(successValues[1]))/\
+    len(compareLists[0]),\
+    color='k',linestyle=':',label='Observed false \npositive')
+
+ax[1].set_xlabel('False-positive fraction',fontsize=8)
+ax[1].set_ylabel('Monte-carlo samples',fontsize=8)
+#plt.legend(prop={"size":8,"family":"serif"},frameon=False)
+deviation = (len(compareLists[0]) - np.sum(successValues[1]) - meanSum)/\
+    np.sqrt(varSum)
+ax[1].set_title('20 to 5 samples ($' + ("%.2g" % deviation) + "\\sigma$)",\
+    fontsize=8)
+#plt.savefig(figuresFolder + "false_positive_fraction_20-5.pdf")
+#plt.show()
+
+# 10-5 case:
+
+
+failedVoids10 = np.zeros(removedFiltersList[1][0].shape,dtype=bool)
+for k in range(0,len(removedFiltersList[1])):
+    failedVoids10 = failedVoids10 | removedFiltersList[1][k]
+
+catProbabilities = finalCatFracList[1][failedVoids10]
+thresholdList = np.zeros(len(filtersFinal[1]))
+for filt, thresh in zip(scaleFiltersFinal[1],percentilesCat):
+    thresholdList[filt] = thresh
+
+thresholds = thresholdList[failedVoids10]
+nSelectCats=5
+failureChance = np.zeros(catProbabilities.shape)
+for k in range(0,len(catProbabilities)):
+    thresh_k = thresholds[k]
+    cat_k = catProbabilities[k]
+    failureChance[k] = scipy.stats.binom.cdf(nSelectCats*thresh_k,nSelectCats,cat_k)
+
+successChance = 1.0 - failureChance
+
+sampleSums = monteCarloSums(successChance,ntries=1000,seed=1000,\
+    returnSamples=True)
+[meanSum,varSum] = monteCarloSums(successChance,ntries=1000,seed=1000)
+
+ax[2].hist(sampleSums/len(compareLists[0]),color=seabornColormap[0],alpha=0.5,\
+    label='Monte carlo samples',density=False,bins=10)
+ax[2].axvline(meanSum/len(compareLists[0]),color='k',linestyle='--',\
+    label='Monte-carlo mean \nfalse positive')
+ax[2].axvline((len(compareLists[0]) - np.sum(successValues[0]))/\
+    len(compareLists[0]),\
+    color='k',linestyle=':',label='Observed false \npositive')
+
+ax[2].set_xlabel('False-positive fraction',fontsize=8)
+ax[2].set_ylabel('Monte-carlo samples',fontsize=8)
+ax[2].legend(prop={"size":8,"family":"serif"},frameon=False)
+deviation = (len(compareLists[0]) - np.sum(successValues[0]) - meanSum)/\
+    np.sqrt(varSum)
+ax[2].set_title('10 to 5 samples ($' + ("%.2g" % deviation) + "\\sigma$)",\
+    fontsize=8)
+plt.tight_layout()
+plt.savefig(figuresFolder + "false_positive_fraction.pdf")
 plt.show()
 
 
