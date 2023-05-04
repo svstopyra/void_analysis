@@ -261,7 +261,7 @@ if doCat:
             snapnameRev = "gadget_full_reverse_512/snapshot_001",\
             samplesFolder="new_chain/",snapList = None,snapListRev = None,\
             snapListUnconstrained = None,snapListUnconstrainedRev=None,\
-            mLower = "auto",mUpper = 2e15,nBins = 8,muOpt = muOpt,\
+            mLower = "auto",mUpper = 2e15,nBinEdges = 8,muOpt = muOpt,\
             rSearchOpt = rSearchOpt,rSphere = rSphere,\
             rSphereInner = rSphereInner,NWayMatch = False,rMin=rMin,rMax=rMax,\
             mMin=mMin,mMax = mMax,percThresh=99,chainFile="chain_properties.p",\

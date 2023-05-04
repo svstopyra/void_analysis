@@ -2451,7 +2451,7 @@ def getMeanProperty(propertyList,stripNaN=True,lowerLimit=0,stdError=True):
 # Apply cuts to the catalogue based on combinatoric or catalogue fraction:
 def applyCatalogueCuts(finalCatFracOpt,finalCombinatoricFracOpt,\
         percentilesCat,percentilesComb,scaleFilter,\
-        snrList,snrThresh,catFracCut,combFracCut):
+        snrList,snrThresh,catFracCut,combFracCut,snrCut):
     # Catalogue and combinatoric fraction filters:
     catFracFilter = [finalCatFracOpt > thresh for thresh in percentilesCat]
     combFracFilter = [finalCombinatoricFracOpt > thresh \
@@ -2759,7 +2759,7 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     # catalouge:
     combinedFilter = applyCatalogueCuts(finalCatFracOpt,\
         finalCombinatoricFracOpt,percentilesCat,percentilesComb,scaleFilter,\
-        snrList,snrThresh,catFracCut,combFracCut)
+        snrList,snrThresh,catFracCut,combFracCut,snrCut)
     # Save data on the scale cut for future use:
     tools.savePickle([scaleBins,percentilesCat,percentilesComb,\
         meanCatFrac,stdErrCatFrac,meanCombFrac,stdErrCombFrac,\
