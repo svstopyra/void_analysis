@@ -2481,7 +2481,8 @@ def applyCatalogueCuts(finalCatFracOpt,finalCombinatoricFracOpt,\
         if combFracCut:
             individualFilter = individualFilter & combFracFilter[k]
         combinedFilter = combinedFilter | individualFilter
-    return combinedFilter
+    return [combinedFilter, meanCatFrac, stdErrCatFrac, \
+        meanCombFrac, stdErrCombFrac]
 
 # Generate thresholds for the combined catalogue, using random catalogues:
 def getThresholdsInBins(nBins,cutScale,massListMeanUn,radiiListMeanUn,\
@@ -2757,7 +2758,8 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
             for k in range(0,len(radBins) - 1)]
     # Apply catalogue/combinatoric/snr cuts to construct the filtered final
     # catalouge:
-    combinedFilter = applyCatalogueCuts(finalCatFracOpt,\
+    [combinedFilter, meanCatFrac, stdErrCatFrac, \
+        meanCombFrac, stdErrCombFrac] = applyCatalogueCuts(finalCatFracOpt,\
         finalCombinatoricFracOpt,percentilesCat,percentilesComb,scaleFilter,\
         snrList,snrThresh,catFracCut,combFracCut,snrCut)
     # Save data on the scale cut for future use:
