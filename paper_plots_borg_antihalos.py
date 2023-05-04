@@ -2432,6 +2432,28 @@ if doVoidProfiles:
         sigmajUnconstrainedStacks = sigmaSepStackUn,showMean=True)
 
 
+# Get profiles for the constrained voids only:
+
+snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
+        + "gadget_full_forward_512/snapshot_001") for snapNum in snapNumList]
+
+meanCentres = catData['centres'][combinedFilter135]
+meanRadii = catData['radii'][combinedFilter135]
+meanMasses = catData['mass'][combinedFilter135]
+pairsList = [None for snap in snapList]
+volumesList = [None for snap in snapList]
+conditionList = [None for snap in snapList]
+
+centresList = [meanCentres for snap in snapList]
+radiiList = [meanRadii for snap in snapList]
+massList = [meanMasses for snap in snapList]
+[nbarjStack,sigmaStack] = stacking.computeMeanStacks(centresList,radiiList,\
+    massesList,conditionList,\
+        pairsList,volumesList,\
+        snapList,nbar,rBins,rMin,rMax,mMin,mMax,\
+        method="poisson",errorType = "Weighted",toInclude = "all")
+
+
 #-------------------------------------------------------------------------------
 # BIAS FUNCTIONAL FORM
 
