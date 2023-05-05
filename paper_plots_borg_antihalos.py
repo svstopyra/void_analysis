@@ -2437,20 +2437,46 @@ if doVoidProfiles:
 snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
         + "gadget_full_forward_512/snapshot_001") for snapNum in snapNumList]
 
+snapNameList = [samplesFolder + "sample" + str(snapNum) + "/" \
+        + "gadget_full_forward_512/snapshot_001" for snapNum in snapNumList]
+
+# These aren't going to be correct though, relative to the simulations.
+# Need to re-do this to get the correct centres.
 meanCentres = catData['centres'][combinedFilter135]
+meanCentresGadgetCoord = snapedit.wrap(np.fliplr(meanCentres) + boxsize/2,boxsize)
 meanRadii = catData['radii'][combinedFilter135]
 meanMasses = catData['mass'][combinedFilter135]
 pairsList = [None for snap in snapList]
 volumesList = [None for snap in snapList]
 conditionList = [None for snap in snapList]
-
-centresList = [meanCentres for snap in snapList]
+rEffMin = 0.0
+rEffMax = 10.0
+nRadiusBins = 101
+nbar = (512/boxsize)**3
+rBinStack = np.linspace(rEffMin,rEffMax,nRadiusBins)
+centresList = [meanCentresGadgetCoord for snap in snapList]
 radiiList = [meanRadii for snap in snapList]
 massList = [meanMasses for snap in snapList]
+
+
+# Just get the pairs for each void, and sample:
+
+allPairs = []
+allVolumes = []
+for k in range(0,len(snapNameList)):
+    [nPairsList,volumesList] = stacking.getPairCounts(meanCentresGadgetCoord,\
+            meanRadii,snapNameList[k],rBinStack,tree=None,\
+            method='poisson',vorVolumes=None)
+    allPairs.append(nPairsList)
+    allVolumes.append(volumesList)
+
+
+
+
 [nbarjStack,sigmaStack] = stacking.computeMeanStacks(centresList,radiiList,\
     massesList,conditionList,\
         pairsList,volumesList,\
-        snapList,nbar,rBins,rMin,rMax,mMin,mMax,\
+        snapList,nbar,rBinStack,rMin,rMax,mMin,mMax,\
         method="poisson",errorType = "Weighted",toInclude = "all")
 
 

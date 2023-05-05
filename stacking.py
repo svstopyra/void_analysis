@@ -9,6 +9,7 @@ thread_count = mp.cpu_count()
 import scipy.integrate as integrate
 from scipy.stats import kstest
 import gc
+import pynbody
 
 # Weighted mean of a variable:
 def weightedMean(xi,wi,biasFactor = 0,axis=None):
