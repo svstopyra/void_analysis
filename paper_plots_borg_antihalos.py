@@ -2454,6 +2454,7 @@ rEffMax = 10.0
 nRadiusBins = 101
 nbar = (512/boxsize)**3
 rBinStack = np.linspace(rEffMin,rEffMax,nRadiusBins)
+rBinStackCentres = plot.binCentres(rBinStack)
 centresList = [meanCentresGadgetCoord for snap in snapList]
 radiiList = [meanRadii for snap in snapList]
 massList = [meanMasses for snap in snapList]
@@ -2469,6 +2470,154 @@ for k in range(0,len(snapNameList)):
             method='poisson',vorVolumes=None)
     allPairs.append(nPairsList)
     allVolumes.append(volumesList)
+
+tools.savePickle([allPairs,allVolumes],\
+    data_folder + "pair_counts_mcmc_cut.p")
+[allPairs,allVolumes] = tools.loadPickle(\
+    data_folder + "pair_counts_mcmc_cut.p")
+
+# Mean profiles over all samples:
+flattenedPairs = np.array(allPairs)
+flattenedVols = np.array(allVolumes)
+flattenedDen = flattenedPairs/flattenedVols
+meanVols = np.mean(flattenedVols,0)
+meanDensity = np.mean(flattenedPairs/flattenedVols,0)
+sigmaDensity = np.std(flattenedPairs/flattenedVols,0)/np.sqrt(len(snapNumList))
+
+# Stacked mean profiles:
+rhoStacked = (np.sum(meanDensity*meanVols,0) + 1)/np.sum(meanVols,0)
+varStacked = np.var(meanDensity,0)
+weights = meanVols/np.sum(meanVols,0)
+# Error accounting for profile uncertainty:
+sigmaRhoStacked = np.sqrt(np.sum((sigmaDensity**2 + varStacked)*weights**2,0))
+# Error ignoring the profile uncertainty:
+sigmaRhoStacked2 = np.sqrt(np.sum((varStacked)*weights**2,0))
+
+# Profile and errors for each sample:
+rhoStackedSep = (np.sum(flattenedDen*flattenedVols,1) + 1)/\
+    np.sum(flattenedVols,1)
+varStackedSep = np.var(flattenedDen,1)
+weightsSep = flattenedVols/(np.sum(flattenedVols,1)[:,None,:])
+sigmaRhoStackedSep = np.sqrt(np.sum((varStackedSep[:,None,:])*weightsSep**2,1))
+
+# Now to repeat the analysis for unconstrained simulations, but sampling based
+# on the same size distribution:
+snapname = "gadget_full_forward_512/snapshot_001"
+snapNameListUncon = [unconstrainedFolderNew + "sample" \
+            + str(snapNum) + "/" + snapname for snapNum in snapNumListUncon]
+snapSample = pynbody.load(snapNameListUncon[0])
+ahPropsUnconstrained = [tools.loadPickle(name + ".AHproperties.p")\
+            for name in snapNameListUncon]
+ahCentresListUn = [props[5] for props in ahPropsUnconstrained]
+antihaloRadiiUn = [props[7] for props in ahPropsUnconstrained]
+ahTreeCentres = [scipy.spatial.cKDTree(centres,boxsize) \
+    for centres in ahCentresListUn]
+
+# Get a random selection of centres:
+np.random.seed(1000)
+# Get random selection of centres and their densities:
+nRandCentres = 10000
+randCentres = np.random.random((nRandCentres,3))*boxsize
+mUnit = snapSample['mass'][0]*1e10
+randOverDen = []
+rSphere = 135
+volSphere = 4*np.pi*rSphere**3/3
+rhoCrit = 2.7754e11
+Om0 = snapSample.properties['omegaM0']
+rhoMean = rhoCrit*Om0
+for k in range(0,len(snapNameListUncon)):
+    snap = pynbody.load(snapNameListUncon[k])
+    gc.collect() # Clear memory of the previous snapshot
+    tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
+    gc.collect()
+    randOverDen.append(mUnit*tree.query_ball_point(randCentres,rSphere,\
+        workers=-1,return_length=True)/(volSphere*rhoMean) - 1.0)
+    del snap, tree
+    gc.collect()
+
+
+# Get comparable density regions:
+comparableDensity = [(delta <= deltaListMeanNew + deltaListErrorNew) & \
+    (delta > deltaListMeanNew - deltaListErrorNew) for delta in randOverDen]
+centresToUse = [randCentres[comp] for comp in comparableDensity]
+
+# Bins to use when building a catalogue similar to the constrained
+# catalogue:
+rEffBinEdges = np.linspace(10,25,6)
+[inRadBinsComb,noInRadBinsComb] = plot.binValues(meanRadii,rEffBinEdges)
+
+# Get pair counts in similar-density regions:
+allPairsUncon = []
+allVolumesUncon = []
+np.random.seed(1000)
+for ns in range(0,len(snapNameListUncon)):
+    snapLoaded = pynbody.load(snapNameListUncon[ns])
+    tree = scipy.spatial.cKDTree(snapLoaded['pos'],boxsize=boxsize)
+    for centre in centresToUse[ns]:
+        # Get anti-halos:
+        centralAntihalos = tools.getAntiHalosInSphere(ahCentresListUn[ns],\
+            rSphere,origin=centre)
+        # Get radii and randomly select voids with the same
+        # radius distribution as the combined catalogue:
+        centralRadii = antihaloRadiiUn[ns][centralAntihalos[1]]
+        centralCentres = ahCentresListUn[ns][centralAntihalos[1]]
+        [inRadBins,noInRadBins] = plot.binValues(centralRadii,rEffBinEdges)
+        # Select voids with the same radius distribution as the combined 
+        # catalogue:
+        selection = []
+        for k in range(0,len(rEffBinEdges)-1):
+            if noInRadBinsComb[k] > 0:
+                selection.append(np.random.choice(inRadBins[k],\
+                    np.min([noInRadBinsComb[k],noInRadBins[k]]),replace=False))
+        selectArray = np.hstack(selection)
+        # Now get pair counts around these voids:
+        [nPairsList,volumesList] = stacking.getPairCounts(\
+            centralCentres[selectArray],\
+            centralRadii[selectArray],snapLoaded,rBinStack,\
+            tree=tree,method='poisson',vorVolumes=None)
+        allPairsUncon.append(nPairsList)
+        allVolumesUncon.append(volumesList)
+    # Delete temporaries to save memory:
+    del snapLoaded, tree
+    gc.collect()
+
+tools.savePickle([allPairsUncon,allVolumesUncon],\
+    data_folder + "pair_counts_random_cut.p")
+[allPairsUncon,allVolumesUncon] = tools.loadPickle(\
+    data_folder + "pair_counts_random_cut.p")
+
+# Stacked profiles in each region:
+rhoStackedUnAll = np.array([(np.sum(allPairsUncon[k],0)+1)/\
+    np.sum(allVolumesUncon[k],0) for k in range(0,len(allVolumesUncon))])
+variancesUnAll = np.array([np.var(allPairsUncon[k]/allVolumesUncon[k],0) \
+    for k in range(0,len(allVolumesUncon))])
+weightsUnAll = [(allVolumesUncon[k])/np.sum(allVolumesUncon[k],0) \
+    for k in range(0,len(allVolumesUncon))]
+sumSquareWeights = np.array([np.sum(wi**2,0) for wi in weightsUnAll])
+
+# Filter to catch broken unconstrained sims during testing:
+filterCores = np.where(rhoStackedUnAll[:,0] < 0.15)[0]
+sigmaStackedUnAll = np.std(rhoStackedUnAll[filterCores],0)
+meanStackedUnAll = np.mean(rhoStackedUnAll[filterCores],0)
+
+
+# Plot comparison:
+fig, ax = plt.subplots(figsize=(textwidth,0.5*textwidth))
+ax.fill_between(rBinStackCentres,(meanStackedUnAll - sigmaStackedUnAll)/nbar,\
+    (meanStackedUnAll + sigmaStackedUnAll)/nbar,alpha=0.5,color='grey',\
+    label='Random catalogue')
+ax.errorbar(rBinStackCentres,rhoStacked/nbar,yerr=sigmaRhoStacked/nbar,\
+    color='k',linestyle='-',label='Constrained Catalogue')
+ax.axvline(1.0,color='grey',linestyle=':')
+ax.axhline(1.0,color='grey',linestyle=':')
+ax.set_xlabel('$R/R_{\\mathrm{eff}}$',fontsize=8)
+ax.set_ylabel('$\\rho/\\bar{\\rho}$',fontsize=8)
+ax.legend(prop={"size":fontsize,"family":"serif"},frameon=False)
+ax.set_xrange([0,10])
+ax.set_yrange([0,1.2])
+plt.tight_layout()
+plt.savefig(figuresFolder + "profiles_vs_random.pdf")
+plt.show()
 
 
 
