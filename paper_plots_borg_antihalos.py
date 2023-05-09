@@ -3136,6 +3136,47 @@ plot.plotLocalUniverseMollweide(100,snapList[ns],\
 
 plt.show()
 
+
+
+# Simple plot of the galaxy distribution overlaid:
+ns = 0
+plot.plotLocalUniverseMollweide(100,snapList[ns],\
+            alpha_shapes = None,\
+            largeAntihalos = None,hr=None,\
+            coordAbell = None,\
+            abellListLocation = None,\
+            nameListLargeClusters = None,\
+            ha = ha,va= va, annotationPos = None,\
+            vmin=1e-2,vmax=1e2,legLoc = 'lower left',bbox_to_anchor = (-0.1,-0.2),\
+            snapsort = snapsortList_all[ns],antihaloCentres = None,\
+            figOut = figuresFolder + "/mollweide_galaxies_" + \
+            str(ns) + plotFormat,\
+            showFig=False,figsize = (scale*textwidth,scale*0.55*textwidth),\
+            voidColour = colourListAll[ns],antiHaloLabel=labelListAll[ns],\
+            bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
+            galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
+            voidAlpha = 0.6,labelFontSize=12,legendFontSize=8,title="",dpi=600)
+
+plt.show()
+
+
+
+
+pointsToScatter = plot.filterPolarPointsToAnnulus(equatorialRThetaPhi[:,1:],\
+            equatorialRThetaPhi[:,0],135,thickness=135)
+healpy.mollview()
+ax = plt.gca()
+ax.set_autoscale_on(True)
+healpy.graticule(color='grey')
+plot.mollweideScatter(pointsToScatter,ax=ax)
+plot.plotZoA(ax=ax,galacticCentreZOA = [-30,30],\
+            nPointsZOA=200,bRangeCentre = [-10,10],bRange = [-5,5],\
+            nPointsEdgeZOA = 21,\
+            fc='grey',ec=None,alpha=0.5,label='Zone of Avoidance')
+
+plt.show()
+
+
 #-------------------------------------------------------------------------------
 # CLUSTER MASS PLOT
 

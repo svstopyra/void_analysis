@@ -3264,7 +3264,8 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,\
         xlabel="Mass [$M_{\odot}h^{-1}$]",ylabel="Number of halos",\
         ylim=[1e1,2e4],title="Gadget Simulation",showLegend=True,\
         tickRight=False,tickLeft=True,savename=None,\
-        linking_length=0.2,showTheory=True,returnHandles=False):
+        linking_length=0.2,showTheory=True,returnHandles=False,\
+        massErrors=False):
     [dndm,m] = cosmology.TMF_from_hmf(massLower,massUpper,\
         h=h,Om0=Om0,Delta=Delta,delta_wrt=delta_wrt,\
         mass_function=mass_function,sigma8=sigma8,Ob0 = Ob0,\
@@ -3291,8 +3292,14 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,\
     if color is None:
         color = seabornColormap[0]
     handles = []
-    handles.append(ax.errorbar(massBinCentres,noInBins,sigmaBins,marker=marker,\
-        linestyle=linestyle,label=label,color=color))
+    if massErrors:
+        # Plot with an error bar
+        handles.append(ax.errorbar(massBinCentres,noInBins,sigmaBins,\
+            marker=marker,linestyle=linestyle,label=label,color=color))
+    else:
+        # Plot without an error bar
+        handles.append(ax.plot(massBinCentres,noInBins,\
+            marker=marker,linestyle=linestyle,label=label,color=color))
     if showTheory:
         if colorTheory is None:
             colorTheory = colorTheory
