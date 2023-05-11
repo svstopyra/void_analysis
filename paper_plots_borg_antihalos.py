@@ -2535,6 +2535,10 @@ for k in range(0,len(snapNameListUncon)):
     del snap, tree
     gc.collect()
 
+tools.savePickle([randCentres,randOverDen],\
+    data_folder + "random_centres_and_densities.p")
+[allPairs,allVolumes] = tools.loadPickle(\
+    data_folder + "random_centres_and_densities.p")
 
 # Get comparable density regions:
 comparableDensity = [(delta <= deltaListMeanNew + deltaListErrorNew) & \
@@ -2867,6 +2871,12 @@ snapListRev =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
 
 hrList = [snap.halos() for snap in snapListRev]
 
+# Anti-halo centres in Equatorial co-ordinates:
+ahCentresEquatorial = [tools.remapAntiHaloCentre(props[5],boxsize,\
+    swapXZ=False,reverse=True) for props in allProps]
+ahDistancesEquatorial = [np.sqrt(np.sum(pos**2,1)) \
+    for pos in ahCentresEquatorial]
+
 for snap in snapList:
     tools.remapBORGSimulation(snap,swapXZ=False,reverse=True)
 
@@ -3034,7 +3044,8 @@ for ns in range(0,len(snapNameList)):
 
 
 filterToUse = np.where(combinedFilter135)[0]
-nVoidsToShow = 10
+#nVoidsToShow = 10
+nVoidsToShow = len(filterToUse)
 #selection = np.intersect1d(sortedRadiiOpt,filterToUse)[:(nVoidsToShow)]
 selection = sortedRadiiOpt[np.arange(0,nVoidsToShow)]
 asListAll = []
@@ -3044,6 +3055,15 @@ labelListAll = []
 
 plotFormat='.pdf'
 #plotFormat='.pdf'
+
+textwidth=7.1014
+textheight=9.0971
+scale = 1.26
+width = textwidth
+height = 0.55*textwidth
+cropPoint = ((scale -1)/2)*np.array([width,height]) + np.array([0,0.09])
+bound_box = transforms.Bbox([[cropPoint[0], cropPoint[1]],
+    [cropPoint[0] + width, cropPoint[1] + height]])
 
 if doSky:
     #
@@ -3092,8 +3112,13 @@ if doSky:
         colourListAll.append(colourList)
         laListAll.append(laList)
         labelListAll.append(labelList)
-    plt.clf()
+
+
+
+# All anti-halos:
+if doSky:
     for ns in range(0,len(snapNumList)):
+        plt.clf()
         plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
             alpha_shapes = asListAll[ns],\
             largeAntihalos = laListAll[ns],hr=hrList[ns],\
@@ -3109,10 +3134,42 @@ if doSky:
             str(ns) + plotFormat,\
             showFig=False,figsize = (scale*textwidth,scale*0.55*textwidth),\
             voidColour = colourListAll[ns],antiHaloLabel=labelListAll[ns],\
-            bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
+            bbox_inches = 'tight',galaxyAngles=equatorialRThetaPhi[:,1:],\
             galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
-            voidAlpha = 0.6)
-    plt.show()
+            voidAlpha = 0.6,margins=None)
+        plt.show()
+
+# All anti-halos in shells:
+distanceShells = [0,50,100,150]
+for k in range(1,len(distanceShells)):
+    for ns in range(0,len(snapNumList)):
+        plt.clf()
+        distances = ahDistancesEquatorial[ns][laListAll[ns]]
+        inShell = np.where((distances > distanceShells[k-1]) & \
+            (distances <= distanceShells[k]))[0]
+        plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
+            alpha_shapes = [asListAll[ns][x] for x in inShell],\
+            largeAntihalos = np.array(laListAll[ns])[inShell],\
+            hr=hrList[ns],\
+            coordAbell = coordCombinedAbellSphere,\
+            abellListLocation = clusterIndMain,\
+            nameListLargeClusters = [name[0] for name in clusterNames],\
+            ha = ha,va= va, annotationPos = annotationPos,\
+            title = 'Local super-volume: large voids (antihalos) within $' + \
+            str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",\
+            vmin=1e-2,vmax=1e2,legLoc = 'lower left',\
+            bbox_to_anchor = (-0.1,-0.2),\
+            snapsort = snapsortList_all[ns],antihaloCentres = None,\
+            figOut = figuresFolder + "/ah_match_sample_" + \
+            str(ns) + "_dist_" + str(distanceShells[k-1]) + "-" + \
+            str(distanceShells[k]) + plotFormat,\
+            showFig=False,figsize = (scale*textwidth,scale*0.55*textwidth),\
+            voidColour = [colourListAll[ns][x] for x in inShell],\
+            antiHaloLabel=[labelListAll[ns][x] for x in inShell],\
+            bbox_inches = 'tight',galaxyAngles=equatorialRThetaPhi[:,1:],\
+            galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
+            voidAlpha = 0.6,margins=None)
+        plt.show()
 
 
 # Simple plot of the galaxy distribution overlaid:
@@ -3206,8 +3263,8 @@ if doCat:
     volSphere = 4*np.pi*rSphere**3/3
     plot.massFunctionComparison(massListMean[combinedFilter135],\
         massListMean[combinedFilter],volSphere135,nBins=nBins,\
-        labelLeft = "Combined catalogue",\
-        labelRight  ="Combined catalogue",\
+        labelLeft = "Combined catalogue \n(well-constrained voids only)",\
+        labelRight  ="Combined catalogue \n(well-constrained voids only)",\
         ylabel="Number of antihalos",savename=figuresFolder + \
         "mass_function_combined_300vs135.pdf",massLower=mLower,\
         ylim=[1,1000],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,\

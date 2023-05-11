@@ -3011,6 +3011,9 @@ def getVoidProfilesForPaper(finalCatOpt,combinedFilter,\
     antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
             for props in allProps]
     antihaloCentresUnmapped = [props[5] for props in allProps]
+    antihaloMasses = [props[3] for props in allProps]
+    antihaloRadii = [props[7] for props in allProps]
+    vorVols = [props[4] for props in allProps]
     # SNR data:
     [mcmcArray,num,N,NCAT,no_bias_params,bias_matrix,mean_field,\
         std_field,hmc_Elh,hmc_Eprior,hades_accept_count,\
@@ -3032,9 +3035,6 @@ def getVoidProfilesForPaper(finalCatOpt,combinedFilter,\
             for k in range(0,len(snapNameList))]
     snrFilter = [snr > snrThresh for snr in snrAllCatsList]
     # More AH properties:
-    antihaloMasses = [props[3] for props in allProps]
-    antihaloRadii = [props[7] for props in allProps]
-    vorVols = [props[4] for props in allProps]
     centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],rSphere,\
                 filterCondition = (antihaloRadii[k] > rMin) & \
                 (antihaloRadii[k] <= rMax) & (antihaloMasses[k] > mMin) & \
