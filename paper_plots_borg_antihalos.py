@@ -660,6 +660,42 @@ allCentralsSorted = [np.array(centralAntihalos[ns][0])[sortedList[ns]] \
 allFinalCatAHs = [finalCatOpt[combinedFilter135][:,ns]-1 \
     for ns in range(0,len(snapNumList))]
 
+#-------------------------------------------------------------------------------
+# TESTS WITH DIFFERENT PERCENTILES:
+
+nBinEdges = 8
+rLower = 5
+rUpper = 20
+Om = snapList[0].properties['omegaM0']
+rhoc = 2.7754e11
+boxsize = snapList[0].properties['boxsize'].ratio("Mpc a h**-1")
+N = int(np.cbrt(len(snapList[0])))
+mUnit = 8*Om*rhoc*(boxsize/N)**3
+mLower = 100*mUnit
+mUpper = 2e15
+percThresh = 99
+cutScale = "mass"
+
+[percentilesCat, percentilesComb] = getThresholdsInBins(\
+        nBinEdges-1,cutScale,massListMeanUn,radiiListMeanUn,\
+        finalCombinatoricFracUn,finalCatFracUn,\
+        rLower,rUpper,mLower,mUpper,percThresh,massBins=massBins,\
+        radBins=radBins)
+
+
+snrList = catData['snr']
+meanCentresArray = catData['centres']
+catFracCut=True
+combFracCut=False
+snrCut=True
+
+[combinedFilter, meanCatFrac, stdErrCatFrac, \
+        meanCombFrac, stdErrCombFrac] = applyCatalogueCuts(finalCatFracOpt,\
+        finalCombinatoricFracOpt,percentilesCat,percentilesComb,scaleFilter,\
+        snrList,snrThresh,catFracCut,combFracCut,snrCut)
+distanceArray = np.sqrt(np.sum(meanCentresArray**2,1))
+combinedFilter135 = combinedFilter & \
+    (distanceArray < rSphereInner)
 
 #-------------------------------------------------------------------------------
 # CATALOGUE CONSISTENCY CHECKS
