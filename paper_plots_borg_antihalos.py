@@ -689,6 +689,39 @@ catFracCut=True
 combFracCut=False
 snrCut=True
 
+
+# Loop:
+threshList = np.array([0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9])
+voidCounts = np.zeros((7,len(threshList)),dtype=int)
+for k in range(0,len(threshList)):
+    percentilesCat = threshList[k]*np.ones(7)
+    [combinedFilter, meanCatFrac, stdErrCatFrac, \
+        meanCombFrac, stdErrCombFrac] = applyCatalogueCuts(finalCatFracOpt,\
+        finalCombinatoricFracOpt,percentilesCat,percentilesComb,scaleFilter,\
+        snrList,snrThresh,catFracCut,combFracCut,snrCut)
+    distanceArray = np.sqrt(np.sum(meanCentresArray**2,1))
+    combinedFilter135 = combinedFilter & \
+        (distanceArray < rSphereInner)
+    for l in range(0,7):
+        voidCounts[l,k] = np.sum(scaleFilter[l] & \
+            (finalCatFracOpt > percentilesCat[l]) & \
+            (distanceArray < rSphereInner))
+
+# Get theory prediction:
+[dndm,m] = cosmology.TMF_from_hmf(massBins[0],massBins[-1],\
+        h=h,Om0=Om0,Delta=200,delta_wrt='SOCritical',\
+        mass_function='Tinker',sigma8=0.8102,Ob0 = 0.04825,\
+        transfer_model='CAMB',ns=0.9611,\
+        linking_length=0.2)
+volSim =  4*np.pi*rSphereInner**3/3
+n = cosmology.dndm_to_n(m,dndm,massBins)
+bounds = np.array(scipy.stats.poisson(n*volSim).interval(0.95))
+# 99th percentiles:
+[percentilesCat, percentilesComb] = getThresholdsInBins(\
+        nBinEdges-1,cutScale,massListMeanUn,radiiListMeanUn,\
+        finalCombinatoricFracUn,finalCatFracUn,\
+        rLower,rUpper,mLower,mUpper,percThresh,massBins=massBins,\
+        radBins=radBins)
 [combinedFilter, meanCatFrac, stdErrCatFrac, \
         meanCombFrac, stdErrCombFrac] = applyCatalogueCuts(finalCatFracOpt,\
         finalCombinatoricFracOpt,percentilesCat,percentilesComb,scaleFilter,\
@@ -696,6 +729,38 @@ snrCut=True
 distanceArray = np.sqrt(np.sum(meanCentresArray**2,1))
 combinedFilter135 = combinedFilter & \
     (distanceArray < rSphereInner)
+voidCounts99 = np.zeros(7,dtype=int)
+for l in range(0,7):
+    voidCounts99[l] = np.sum(scaleFilter[l] & \
+            (finalCatFracOpt > percentilesCat[l]) & \
+            (distanceArray < rSphereInner))
+
+
+# Plot:
+fig, ax = plt.subplots(figsize=(0.45*textwidth,0.45*textwidth))
+massBinCentres = plot.binCentres(massBins)
+for k in range(0,len(threshList)):
+    ax.plot(massBinCentres,voidCounts[:,k],\
+        label = ("%.2g" % threshList[k]),\
+        color = matplotlib.colormaps['hot'](threshList[k]))
+
+ax.set_xlabel("Mass bin [$M_{\\odot}h%{-1}$]",fontsize=8)
+ax.set_ylabel("Number of Voids",fontsize=8)
+ax.set_yscale('log')
+ax.set_xscale('log')
+ax.set_ylim([1,200])
+ax.plot(massBinCentres,n*volSim,":",label='Tinker \nprediction',\
+    color='grey')
+ax.fill_between(massBinCentres,bounds[0],bounds[1],facecolor='grey',\
+    alpha=0.5,interpolate=True,label='$' + str(100*0.95) + \
+    '\%$ \nConfidence \nInterval')
+plt.plot(massBinCentres,voidCounts99,color='k',linestyle='--',\
+    label='99th \npercentile')
+ax.legend(prop={"size":6,"family":"serif"},frameon=False,ncol=2,\
+    loc='upper right')
+plt.tight_layout()
+plt.savefig(figuresFolder + "thresholds_test.pdf")
+plt.show()
 
 #-------------------------------------------------------------------------------
 # CATALOGUE CONSISTENCY CHECKS
