@@ -171,20 +171,35 @@ def getPoissonAndErrors(bins,count,alpha=0.32):
 
 
 # Compute alpha-shapes for large antihalos on a Mollweide plot:
-def computeMollweideAlphaShapes(snap,largeAntihalos,hr,alphaVal = 7,snapsort=None):
+def computeMollweideAlphaShapes(snap,largeAntihalos=None,hr=None,alphaVal = 7,\
+        snapsort=None,posList=None):
     ahMWPos = []
     alpha_shapes = []
     if snapsort is None:
         snapsort = np.argsort(snap['iord'])
     boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
-    for k in range(0,len(largeAntihalos)):
-        posXYZ = snapedit.unwrap(
-            snap['pos'][snapsort[hr[largeAntihalos[k]+1]['iord']],:],boxsize)
+    if (largeAntihalos is not None) and (hr is not None):
+        numVoids = len(largeAntihalos)
+    elif type(posList) == list:
+        numVoids = len(posList)
+    else:
+        raise Exception("Must specify either list of anti-halos or a list" + \
+            " of positions")
+    for k in range(0,numVoids):
+        if type(posList) == list:
+            posXYZ = posList[k]
+        elif (largeAntihalos is not None) and (hr is not None):
+            posXYZ = snapedit.unwrap(
+                snap['pos'][snapsort[hr[largeAntihalos[k]+1]['iord']],:],\
+                boxsize)
+        else:
+            # Technically this should happen as the previous exception should
+            # have caught it...
+            raise Exception("Error - could not find void particle positions")
         posMW = plot_utilities.computeMollweidePositions(posXYZ)
         ahMWPos.append(posMW)
         alpha_shapes.append(alphashape.alphashape(
             np.array([posMW[0],posMW[1]]).T,alphaVal))
-
     return [ahMWPos,alpha_shapes]
 
 # Systematic way of writing constraints on cluster masses.

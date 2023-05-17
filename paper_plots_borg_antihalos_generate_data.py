@@ -20,7 +20,7 @@ import healpy
 import matplotlib.pylab as plt
 import os
 import sys
-
+import alphashape
 
 
 # KE correction used to compute magnitudes. Used by PPTs:
@@ -1259,6 +1259,121 @@ def getSNRFilterFromChainFile(chainFile,snrThresh,snapNameList,boxsize,\
     snrFilter = [snr > snrThresh for snr in snrAllCatsList]
     return snrFilter
 
+# Get alpha shapes for the combined catalogue:
+def getFinalCatalogueAlphaShapes(snapNumList,finalCat,verbose=True,\
+        samplesFolder = "new_chain/",recomputeData = False,\
+        snapForFolder = "gadget_full_forward_512",\
+        snapRevFolder = "gadget_full_reverse_512",\
+        snapname = "gadget_full_forward_512/snapshot_001",\
+        snapnameRev = "gadget_full_reverse_512/snapshot_001",\
+        reCentreSnaps = True,figuresFolder='',\
+        snapList = None,snapListRev = None,antihaloCatalogueList=None,\
+        snapsortList = None,ahProps = None,massRange = None,rRange = None,\
+        additionalFilters = None,rSphere=135,data_folder="./",\
+        centralAntihalos = None,alphaVal = 7):
+    # Load snapshots:
+    try:
+        if verbose:
+            print("Loading snapshots...")
+        if snapList is None:
+            snapList = [pynbody.load(samplesFolder + "sample" + \
+                str(snapNum) + "/" + snapname) for snapNum in snapNumList]
+        if snapListRev is None:
+            snapListRev = [pynbody.load(samplesFolder + "sample" + \
+            str(snapNum) + "/" + snapnameRev) for snapNum in snapNumList]
+        if reCentreSnaps:
+            for snap in snapList:
+                tools.remapBORGSimulation(snap,swapXZ=False,reverse=True)
+                snap.recentred = True
+        if verbose:
+            print("Loading antihalo properties...")
+        boxsize = snapList[0].properties['boxsize'].ratio("Mpc a h**-1")
+        if antihaloCatalogueList is None:
+            antihaloCatalogueList = [snap.halos() for snap in snapListRev]
+        if ahProps is None:
+            ahProps = [tools.loadPickle(snap.filename + ".AHproperties.p") \
+                for snap in snapList]
+        antihaloRadii = [props[7] for props in ahProps]
+        antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize,\
+            swapXZ=False,reverse=True) for props in ahProps]
+        antihaloMasses = [props[3] for props in ahProps]
+        print("Getting snapsort lists...")
+        if snapsortList is None:
+            snapsortList = [np.argsort(snap['iord']) \
+                for snap in snapList]
+        if centralAntihalos is None:
+            print("Constructing filters...")
+            if rRange is None:
+                rRangeCond = [np.ones(len(antihaloRadii[k]),dtype=bool) \
+                    for k in range(0,len(snapNumList))]
+            else:
+                rRangeCond = [(antihaloRadii[k] > rRange[0]) & \
+                    (antihaloRadii[k] <= rRange[1]) \
+                    for k in range(0,len(snapNumList))]
+            if massRange is None:
+                mRangeCond = [np.ones(len(antihaloRadii[k]),dtype=bool) \
+                    for k in range(0,len(snapNumList))]
+            else:
+                mRangeCond = [(antihaloMasses[k] > massRange[0]) & \
+                    (antihaloMasses[k] <= massRange[1]) \
+                    for k in range(0,len(snapNumList))]
+            filterCond = [rRangeCond[k] & mRangeCond[k] \
+                for k in range(0,len(snapNumList))]
+            if additionalFilters is not None:
+                filterCond = [filterCond[k] & additionalFilters[k] \
+                    for k in range(0,len(snapNumList))]
+            print("Selecting antihalos...")
+            centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],\
+                    rSphere,filterCondition = filterCond[k]) \
+                    for k in range(0,len(snapNumList))]
+        massSortCentral = [\
+            np.flip(np.argsort(antihaloMasses[k][centralAntihalos[k][0]])) \
+            for k in range(0,len(centralAntihalos))]
+        largeAntihalos = [np.array(centralAntihalos[ns][0],dtype=int)[\
+                massSortCentral[ns]] \
+                for ns in range(0,len(snapList))]
+        if verbose:
+            print("Computing alpha shapes...")
+        # From here, we have to combined the positions of ALL voids:
+        positionLists = [] # Positions of all particles in all voids
+        centralAntihaloMasses = [\
+                antihaloMasses[k][centralAntihalos[k][0]] \
+                for k in range(0,len(centralAntihalos))]
+        sortedList = [np.flip(np.argsort(centralAntihaloMasses[ns])) \
+            for ns in range(0,len(snapNumList))]
+        fullListAll = [np.array(centralAntihalos[ns][0])[sortedList[ns]] \
+            for ns in range(0,len(snapNumList))]
+        alpha_shapes = []
+        ahMWPos = []
+        for k in range(0,finalCat.shape[0]):
+            allPosXYZ = np.full((0,3),0)
+            for ns in range(0,finalCat.shape[1]):
+                # Select the correct anti-halo
+                fullList = fullListAll[ns]
+                listPosition = finalCat[k,ns]-1
+                if listPosition >= 0:
+                    # Only include anti-halos which we have representatives for
+                    # in a given catalogue
+                    ahNumber = fullList[listPosition]
+                    posXYZ = snapedit.unwrap(
+                        snapList[ns]['pos'][snapsortList[ns][\
+                        antihaloCatalogueList[ns][\
+                        largeAntihalos[ns][ahNumber]+1]['iord']],:],boxsize)
+                    allPosXYZ = np.vstack((allPosXYZ,posXYZ))
+            posMW = plot_utilities.computeMollweidePositions(allPosXYZ)
+            ahMWPos.append(posMW)
+            alpha_shapes.append(alphashape.alphashape(
+                    np.array([posMW[0],posMW[1]]).T,alphaVal))
+    except:
+        # Make sure we delete the snapshots!
+        for snap in snapList:
+            del snap
+        for snap in snapListRev:
+            del snap
+        raise Exception("Error occurred. Deleting snapshots")
+    return [ahMWPos,alpha_shapes]
+
+# Get alpha shapes for individual voids:
 def getAntihaloSkyPlotData(snapNumList,nToPlot=None,verbose=True,\
         samplesFolder = "new_chain/",recomputeData = False,\
         snapForFolder = "gadget_full_forward_512",\

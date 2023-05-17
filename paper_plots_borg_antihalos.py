@@ -238,11 +238,16 @@ mMin = 1e11
 mMax = 1e16
 rMin = 5
 rMax = 30
-muOpt = 0.9
-rSearchOpt = 1
+#muOpt = 0.9
+muOpt = 0.55830868
+#rSearchOpt = 1
+rSearchOpt = 1.1565106
 rSphere = 300
 rSphereInner = 135
-
+# Optimum parameters with 1-way purity/completeness:
+# np.array([1.21232077, 0.54490005])
+# Optimum with 2-way:
+# np.array([1.1565106 , 0.55830868])
 
 doCat = True
 if doCat:
@@ -344,16 +349,6 @@ antihaloMasses = [props[3] for props in allProps]
 antihaloRadii = [props[7] for props in allProps]
 
 
-
-nearestPointsList = [tree.query_ball_point(\
-        snapedit.wrap(antihaloCentres[k] + boxsize/2,boxsize),\
-        antihaloRadii[k],workers=-1) \
-        for k in range(0,len(antihaloCentres))]
-snrAllCatsList = [np.array([np.mean(snrFieldLin[points]) \
-        for points in nearestPointsList[k]]) for k in range(0,len(snapNumList))]
-snrFilter2 = [snr > snrThresh for snr in snrAllCatsList]
-
-
 centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],rSphere,\
             filterCondition = (antihaloRadii[k] > rMin) & \
             (antihaloRadii[k] <= rMax) & (antihaloMasses[k] > mMin) & \
@@ -364,6 +359,16 @@ centralAntihaloMasses = [\
             for k in range(0,len(centralAntihalos))]
 sortedList = [np.flip(np.argsort(centralAntihaloMasses[k])) \
         for k in range(0,len(snapNumList))]
+
+
+
+nearestPointsList = [tree.query_ball_point(\
+        snapedit.wrap(antihaloCentres[k] + boxsize/2,boxsize),\
+        antihaloRadii[k],workers=-1) \
+        for k in range(0,len(antihaloCentres))]
+snrAllCatsList = [np.array([np.mean(snrFieldLin[points]) \
+        for points in nearestPointsList[k]]) for k in range(0,len(snapNumList))]
+snrFilter2 = [snr > snrThresh for snr in snrAllCatsList]
 
 
 ahCounts = np.array([len(cahs[0]) for cahs in centralAntihalos])
@@ -447,7 +452,17 @@ if doSky:
             "skyplot_data_all_snr_filtered.p",\
             getAntihaloSkyPlotData,snapNumList,samplesFolder=samplesFolder,\
             _recomputeData = recomputeData,recomputeData = recomputeData,\
-            massRange = [mMin,mMax],nToPlot = 200,\
+            massRange = [mMin,mMax],nToPlot = 400,\
+            rRange = [5,30],reCentreSnaps = True,\
+            additionalFilters=snrFilter,rSphere=rSphere,\
+            centralAntihalos=centralAntihalos)
+    # Alpha shapes for the final catalogue alone:
+    [ahMWPos,alpha_shapes_finalCat] = tools.loadOrRecompute(figuresFolder + \
+            "skyplot_data_final_cat.p",\
+            getFinalCatalogueAlphaShapes,snapNumList,\
+            finalCatOpt[combinedFilter135],samplesFolder=samplesFolder,\
+            _recomputeData = recomputeData,recomputeData = recomputeData,\
+            massRange = [mMin,mMax],\
             rRange = [5,30],reCentreSnaps = True,\
             additionalFilters=snrFilter,rSphere=rSphere,\
             centralAntihalos=centralAntihalos)
@@ -620,6 +635,8 @@ combinedData = {'value':combinedValues,'simType':combinedLabels,\
     'radius':combinedRadii,'bin':combinedBins}
 combinedFrame = pandas.DataFrame(data=combinedData)
 
+dataCounts = [len(x) for x in violinData]
+dataCountsUn = [len(x) for x in violinDataUn]
 
 fig, ax = plt.subplots(figsize=(textwidth,textwidth))
 sns.violinplot(data=combinedFrame,x='radius',y='value',hue='simType',\
@@ -635,6 +652,10 @@ plt.plot(range(0,numViolins),meanCatFrac[0:numViolins],'k-',\
     label='Mean of \nposterior \ncatalogue')
 plt.legend(frameon=False,loc='upper left')
 plt.title('Catalogue fraction for ' + str(len(snapNumList)) + ' samples.')
+for k in range(0,len(dataCounts)):
+    plt.text(k,0.05,"(" + str(dataCounts[k]) + "," + str(dataCountsUn[k]) + \
+        ")",horizontalalignment = 'center')
+
 plt.savefig(figuresFolder + "catalogue_fraction_violins.pdf")
 plt.show()
 
@@ -760,6 +781,390 @@ ax.legend(prop={"size":6,"family":"serif"},frameon=False,ncol=2,\
     loc='upper right')
 plt.tight_layout()
 plt.savefig(figuresFolder + "thresholds_test.pdf")
+plt.show()
+
+#-------------------------------------------------------------------------------
+# PURITY PLOTS
+
+def imshowComparison(leftGrid,rightGrid,top=0.851,bottom=0.167,left=0.088,\
+        right=0.845,hspace=0.2,wspace=0.0,cbaxPar = [0.87,0.2,0.02,0.68],\
+        figsize=(8,4),cmap = 'Blues',extentLeft = None,extentRight=None,\
+        vLeft = [0.0,0.6],vRight = None,aspect='auto',origin='lower',\
+        xlabel='Search radius ($R_{\mathrm{search}}/\sqrt{R_1R_2}$)',\
+        ylabel = 'Radius ratio threshold ($\mu_{\mathrm{rad}}$)',\
+        ylabelRight = None,\
+        titleLeft = 'Two-way completeness ($^2C_{\mu_{\mathrm{rad}}}$)',\
+        titleRight = 'Two-way purity ($^2P_{\mu_{\mathrm{rad}}}$)',\
+        cbarLabel = 'Two-way completeness/purity',show = True,savename=None,\
+        scaling = 'linear',superTitle=None,supTitleSize = 14):
+    if vRight is None:
+        vRight = vLeft
+        cbarMode = "single"
+    else:
+        cbarMode = "double"
+    if ylabelRight is None:
+        ylabelRight = ylabel
+    fig, ax = plt.subplots(1,2,figsize=figsize)
+    imLeft = ax[0].imshow(leftGrid,extent=extentLeft,aspect=aspect,\
+        cmap=cmap,origin=origin,vmin=vLeft[0],vmax=vLeft[1])
+    imRight = ax[1].imshow(rightGrid,extent=extentRight,aspect=aspect,\
+        cmap=cmap,origin=origin,vmin=vRight[0],vmax=vRight[1])
+    for axi in ax:
+        axi.set_xlabel(xlabel)
+    ax[0].set_ylabel(ylabel)
+    ax[1].set_ylabel(ylabelRight)
+    ax[0].set_title(titleLeft)
+    ax[1].set_title(titleRight)
+    ax[1].yaxis.label.set_visible(False)
+    ax[1].yaxis.set_major_formatter(NullFormatter())
+    ax[1].yaxis.set_minor_formatter(NullFormatter())
+    if scaling == 'linear':
+        normFunc = colors.Normalize
+    elif scaling == 'log':
+        normFunc = colors.LogNorm
+    else:
+        raise Exception("Unknown normFunc")
+    if superTitle is not None:
+        fig.suptitle(superTitle,fontsize=supTitleSize)
+    if cbarMode == "single":
+        sm = cm.ScalarMappable(normFunc(vmin=vLeft[0],vmax=vLeft[1]),\
+            cmap=cmap)
+        cbax = fig.add_axes(cbaxPar)
+        cbar = plt.colorbar(sm, orientation="vertical",\
+            label=cbarLabel,cax=cbax)
+        plt.subplots_adjust(top=top,bottom=bottom,left=left,right=right,\
+            hspace=hspace,wspace=wspace)
+    else:
+        imList = [imLeft,imRight]
+        vList = [vLeft,vRight]
+        for k in range(0,len(imList)):
+            sm = cm.ScalarMappable(normFunc(\
+                vmin=vList[k][0],vmax=vList[k][1]),cmap=cmap)
+            plt.colorbar(sm,ax=ax[k],orientation="vertical",cmap=cmap)
+        plt.tight_layout()
+    if savename is not None:
+        plt.savefig(savename)
+    if show:
+        plt.show()
+
+#threshList = np.hstack((np.array([1e-2]),np.arange(0.1,1,0.10)))
+#distArr = np.hstack((np.array([1e-2]),np.arange(0.25,3,0.25)))
+distArr = np.arange(0,3,0.25)
+threshList =np.arange(0.0,1,0.10)
+#threshList = np.arange(0.5,1,0.05)
+#distArr = np.arange(0,3,0.1)
+mLower1 = 1e13
+mUpper1 = 1e15
+rSphere1 = 135
+snapListRev =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
+        + "gadget_full_reverse_512/snapshot_001") for snapNum in snapNumList]
+hrList = [snap.halos() for snap in snapListRev]
+diffMap = [np.setdiff1d(np.arange(0,len(snapNumList)),[k]) \
+    for k in range(0,len(snapNumList))]
+ahProps = [tools.loadPickle(name + ".AHproperties.p")\
+            for name in snapNameList]
+
+purity_1f = np.zeros((len(distArr),len(threshList)))
+completeness_1f = np.zeros((len(distArr),len(threshList)))
+purity_2f = np.zeros((len(distArr),len(threshList)))
+completeness_2f = np.zeros((len(distArr),len(threshList)))
+
+# For testing these, we can use a combined list of MCMC and random catalogues:
+snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
+        + "gadget_full_forward_512/snapshot_001") for snapNum in snapNumList]
+snapListUn = [pynbody.load("new_chain/unconstrained_samples/sample" + \
+    str(num) + "/gadget_full_forward_512/snapshot_001") \
+    for num in snapNumListUncon]
+snapListRevUn = [pynbody.load(\
+    "new_chain/unconstrained_samples/sample" + \
+    str(num) + "/gadget_full_reverse_512/snapshot_001") \
+    for num in snapNumListUncon]
+hrListUn = [snap.halos() for snap in snapListRevUn]
+ahPropsUn = [pickle.load(\
+            open(snap.filename + ".AHproperties.p","rb")) \
+            for snap in snapListUn]
+antihaloCentresUn = [tools.remapAntiHaloCentre(props[5],boxsize) \
+            for props in ahPropsUn]
+antihaloMassesUn = [props[3] for props in ahPropsUn]
+antihaloRadiiUn = [props[7] for props in ahPropsUn]
+
+snapNumListComb = snapNumList + snapNumListUncon
+snapListCombined = snapList + snapListUn
+snapListRevCombined = snapListRev + snapListRevUn
+hrListComb = hrList + hrListUn
+ahPropsComb = ahProps + ahPropsUn
+antihaloRadiiComb = antihaloRadii + antihaloRadiiUn
+antihaloMassesComb = antihaloMasses + antihaloMassesUn
+antihaloCentresComb = antihaloCentres + antihaloCentresUn
+
+diffMapComb = [np.setdiff1d(np.arange(0,len(snapListCombined)),[k]) \
+    for k in range(0,len(snapListCombined))]
+
+
+diffMapMCMCToRandom = [np.setdiff1d(\
+    np.arange(len(snapList),len(snapListCombined)),[k]) \
+    for k in range(0,len(snapList))]
+
+# Compute the catalogue with these settings:
+for k in range(0,len(distArr)):
+    for l in range(0,len(threshList)):
+        print(("%.2g" % (100*(k*len(threshList) + l)/\
+            (len(distArr)*len(threshList)))) + "% done.")
+        rSearch = distArr[k]
+        muR = threshList[l]
+        [finalCatTest,shortHaloListTest,twoWayMatchListTest,\
+            finalCandidatesTest,finalRatiosTest,finalDistancesTest,\
+            allCandidatesTest,candidateCountsTest,allRatiosTest,\
+            finalCombinatoricFracTest,finalCatFracTest,alreadyMatched] = \
+            constructAntihaloCatalogue(\
+                snapNumListComb,snapList=snapListCombined,\
+                snapListRev=snapListRevCombined,\
+                ahProps=ahPropsComb,hrList=hrListComb,max_index=None,\
+                twoWayOnly=True,blockDuplicates=True,\
+                crossMatchThreshold = muR,distMax = rSearch,\
+                rSphere=rSphere1,massRange = [mLower1,mUpper1],\
+                NWayMatch = False,rMin=rMin,rMax=rMax,\
+                additionalFilters = None,verbose=False)
+        # Get the anti-halo properties used for filtering:
+        centralAntihalosTest = [tools.getAntiHalosInSphere(\
+            antihaloCentresComb[ns],rSphere1,\
+            filterCondition = (antihaloRadiiComb[ns] > rMin) & \
+            (antihaloRadiiComb[ns] <= rMax) & \
+            (antihaloMassesComb[ns] > mLower1) & \
+            (antihaloMassesComb[ns] <= mUpper1) ) \
+            for ns in range(0,len(snapListCombined))]
+        centralAntihaloMassesTest = [\
+            antihaloMassesComb[ns][centralAntihalosTest[ns][0]] \
+            for ns in range(0,len(centralAntihalosTest))]
+        sortedListTest = [\
+            np.flip(np.argsort(centralAntihaloMassesTest[ns])) \
+            for ns in range(0,len(snapListCombined))]
+        ahCountsTest = np.array([len(cahs[0]) \
+            for cahs in centralAntihalosTest])
+        massListShortTest = [np.array([antihaloMassesComb[ns1][\
+            centralAntihalosTest[ns1][0][sortedListTest[ns1][ns2]]] \
+            for ns2 in range(0,np.min([ahCountsTest[ns1],max_index]))]) \
+            for ns1 in range(0,len(snapListCombined))]
+        massFilter = [(massListShortTest[n] > mLower1) & \
+            (massListShortTest[n] <= mUpper1) \
+            for n in range(0,len(massListShortTest))]
+        # Compute purity and completeness:
+        purity_1f[k,l] = 1.0 - np.mean([[\
+            np.sum((candidateCountsTest[i][j] > 0) & \
+            (massFilter[i]))/np.sum(massFilter[i]) \
+            for j in diffMapMCMCToRandom[i]] \
+            for i in range(0,len(snapList))])
+        completeness_1f[k,l] = np.mean(\
+            [[np.sum((candidateCountsTest[j][i] > 0) & \
+            (massFilter[j]))/np.sum((massFilter[j])) \
+            for j in diffMap[i]] \
+            for i in range(0,len(snapList))])
+        purity_2f[k,l] = 1.0 - np.mean(\
+            [[np.sum(np.array(twoWayMatchListTest[i])[:,j] & \
+            (massFilter[i]))/np.sum(massFilter[i]) \
+            for i in range(0,len(snapList))] \
+            for j in range(len(snapList)-1,len(ahCountsTest)-1)])
+        completeness_2f[k,l] = np.mean(\
+            [[np.sum(np.array(twoWayMatchListTest[i])[:,j] & \
+            (massFilter[i]))/np.sum(massFilter[i]) \
+            for i in range(0,len(snapList))] \
+            for j in range(0,len(snapList)-1)])
+
+euclideanDist2 = np.sqrt((purity_2f - 1.0)**2  + (completeness_2f - 1.0)**2)
+euclideanDist1 = np.sqrt((purity_1f - 1.0)**2  + (completeness_1f - 1.0)**2)
+
+
+tools.savePickle([purity_1f,purity_2f,completeness_1f,completeness_2f],\
+    data_folder + "purity_completeness_data.p")
+
+[purity_1f,purity_2f,completeness_1f,completeness_2f] = tools.loadPickle(\
+    data_folder + "purity_completeness_data.p")
+
+[purity_1f,purity_2f,completeness_1f,completeness_2f] = tools.loadPickle(\
+    "borg-antihalos_paper_figures/all_samples/" + \
+    "purity_completeness_data_whole_range.p")
+
+ylabel = 'Radius ratio threshold ($\mu_{\mathrm{R}}$)'
+imshowComparison(completeness_2f.T,completeness_1f.T,\
+    extentLeft= (np.min(distArr),np.max(distArr),\
+    np.min(threshList),np.max(threshList)),\
+    extentRight = (np.min(distArr),np.max(distArr),\
+    np.min(threshList),np.max(threshList)),ylabel=ylabel,vLeft=[0,1.0],\
+    titleLeft='Two-way completeness ($^2C_{\mu_{\mathrm{rad}}}$)',\
+    titleRight = 'One-way completeness ($^1C_{\mu_{\mathrm{rad}}}$)')
+
+
+imshowComparison(purity_2f.T,completeness_2f.T,\
+    extentLeft= (np.min(distArr),np.max(distArr),\
+    np.min(threshList),np.max(threshList)),\
+    extentRight = (np.min(distArr),np.max(distArr),\
+    np.min(threshList),np.max(threshList)),ylabel=ylabel,vLeft=[0,1.0],\
+    titleLeft='One-way purity ($^2C_{\mu_{\mathrm{rad}}}$)',\
+    titleRight = 'One-way completeness ($^1C_{\mu_{\mathrm{rad}}}$)')
+
+
+imshowComparison(euclideanDist2.T,euclideanDist1.T,\
+    extentLeft= (np.min(distArr),np.max(distArr),\
+    np.min(threshList),np.max(threshList)),\
+    extentRight = (np.min(distArr),np.max(distArr),\
+    np.min(threshList),np.max(threshList)),ylabel=ylabel,vLeft=[0,1.0],\
+    titleLeft='$\\sqrt{(^2C_{\mu_{\mathrm{rad}}}-1)^2 + ' + \
+    '(^2P_{\mu_{\mathrm{rad}}}-1)^2}$',\
+    titleRight = '$\\sqrt{(^1C_{\mu_{\mathrm{rad}}}-1)^2 + ' + \
+    '(^1P_{\mu_{\mathrm{rad}}}-1)^2}$')
+
+plt.plot(distArr,purity_2f)
+
+# Purity at fixed mu_R:
+sm = cm.ScalarMappable(colors.Normalize(vmin=0,\
+    vmax=1.0),cmap=matplotlib.colormaps['hot'])
+for k in range(0,len(threshList)):
+    plt.plot(distArr,purity_2f[:,k],\
+        color = matplotlib.colormaps['hot'](threshList[k]))
+
+plt.xlabel('$\\mu_S$')
+plt.ylabel('Purity, $^2P_{\mu_{\mathrm{rad}}}$')
+plt.colorbar(sm,label='$\\mu_R$')
+plt.show()
+
+
+
+plt.plot(distArr,euclideanDist2)
+
+
+plt.plot(threshList,euclideanDist2.T)
+
+# Euclidean distance at fixed mu_S:
+sm = cm.ScalarMappable(colors.Normalize(vmin=np.min(distArr),\
+    vmax=np.max(distArr)),cmap=matplotlib.colormaps['hot'])
+for k in range(0,len(distArr)):
+    plt.plot(threshList,euclideanDist2[k,:],\
+        color = matplotlib.colormaps['hot'](distArr[k]/np.max(distArr)))
+
+plt.xlabel('$\\mu_R$')
+plt.ylabel('$\\sqrt{(^2C_{\mu_{\mathrm{rad}}}-1)^2 + ' + \
+    '(^2P_{\mu_{\mathrm{rad}}}-1)^2}$')
+plt.colorbar(sm,label='$\\mu_S$')
+plt.show()
+
+
+# Euclidean distance at fixed mu_R:
+sm = cm.ScalarMappable(colors.Normalize(vmin=0,\
+    vmax=1.0),cmap=matplotlib.colormaps['hot'])
+for k in range(0,len(threshList)):
+    plt.plot(distArr,euclideanDist2[:,k],\
+        color = matplotlib.colormaps['hot'](threshList[k]))
+
+plt.xlabel('$\\mu_S$')
+plt.ylabel('$\\sqrt{(^2C_{\mu_{\mathrm{rad}}}-1)^2 + ' + \
+    '(^2P_{\mu_{\mathrm{rad}}}-1)^2}$')
+plt.colorbar(sm,label='$\\mu_R$')
+plt.show()
+
+from scipy.interpolate import RegularGridInterpolator
+interpolator = RegularGridInterpolator((distArr,threshList),\
+    euclideanDist2,method='cubic')
+interpolator1 = RegularGridInterpolator((distArr,threshList),\
+    euclideanDist1,method='cubic')
+
+
+purityInterp = scipy.interpolate.RegularGridInterpolator((distArr,threshList),\
+    purity_2f,method='cubic')
+completenessInterp = scipy.interpolate.RegularGridInterpolator(\
+    (distArr,threshList),completeness_2f,method='cubic')
+
+
+purityInterp1 = scipy.interpolate.RegularGridInterpolator((distArr,threshList),\
+    purity_1f,method='cubic')
+completenessInterp1 = scipy.interpolate.RegularGridInterpolator(\
+    (distArr,threshList),completeness_1f,method='cubic')
+
+
+
+# Minimise to obtain optimal parameters:
+optimal = scipy.optimize.minimize(interpolator,np.array([1,0.5]),\
+    bounds=(tools.minmax(distArr),tools.minmax(threshList)))
+optimal1 = scipy.optimize.minimize(interpolator1,np.array([1,0.5]),\
+    bounds=(tools.minmax(distArr),tools.minmax(threshList)))
+
+
+optimumParams = optimal.x
+optimalPurity = purityInterp(optimumParams)
+optimalCompleteness = completenessInterp(optimumParams)
+
+
+optimumParams1 = optimal1.x
+optimalPurity1 = purityInterp1(optimumParams1)
+optimalCompleteness1 = completenessInterp1(optimumParams1)
+
+
+
+# Plot interpolated surface:
+xx = np.linspace(np.min(distArr) + 1e-3,np.max(distArr)-1e-3,100)
+yy = np.linspace(np.min(threshList) + 1e-3,np.max(threshList) - 1e-3,100)
+X, Y = np.meshgrid(xx,yy,indexing='ij')
+fig = plt.figure()
+ax = fig.add_subplot(projection='3d')
+ax.plot_wireframe(X,Y,interpolator((X,Y)),alpha=0.5,color='grey')
+ax.scatter3D(optimumParams[0],optimumParams[1],optimal.fun,\
+    color=seabornColormap[0],label = "Optimal, $(\mu_R = " + \
+   ("%.3g" % optimumParams[0]) + ",\mu_S = " + \
+   ("%.3g" % optimumParams[1]) + ")$")
+ax.set_xlabel('Search distance ratio, $\\mu_{S}$')
+ax.set_ylabel('Radius ratio, $\\mu_{R}$')
+ax.set_zlabel('$\\sqrt{(^2C-1)^2 + ' + \
+    '(^2P-1)^2}$')
+plt.legend()
+plt.tight_layout()
+plt.savefig(figuresFolder + 'optimal_parameters.pdf')
+plt.show()
+
+
+# Plot Completeness and Purity on separate wireframes:
+
+# Plot interpolated surface:
+xx = np.linspace(np.min(distArr) + 1e-3,np.max(distArr)-1e-3,100)
+yy = np.linspace(np.min(threshList) + 1e-3,np.max(threshList) - 1e-3,100)
+X, Y = np.meshgrid(xx,yy,indexing='ij')
+fig = plt.figure()
+ax1 = fig.add_subplot(1,2,1,projection='3d')
+ax2 = fig.add_subplot(1,2,2,projection='3d')
+ax1.plot_wireframe(X,Y,purityInterp((X,Y)),alpha=0.5,color='grey')
+ax2.plot_wireframe(X,Y,completenessInterp((X,Y)),alpha=0.5,color='grey')
+ax1.scatter3D(optimumParams[0],optimumParams[1],purityInterp(optimumParams),\
+    color=seabornColormap[0],label = "Optimal, $(\mu_R = " + \
+    ("%.3g" % optimumParams[0]) + ",\mu_S = " + \
+    ("%.3g" % optimumParams[1]) + ")$")
+ax2.scatter3D(optimumParams[0],optimumParams[1],\
+    completenessInterp(optimumParams),\
+    color=seabornColormap[0],label = "Optimal, $(\mu_R = " + \
+    ("%.3g" % optimumParams[0]) + ",\mu_S = " + \
+    ("%.3g" % optimumParams[1]) + ")$")
+ax1.set_xlabel('Search distance ratio, $\\mu_{S}$')
+ax1.set_ylabel('Radius ratio, $\\mu_{R}$')
+ax1.set_zlabel('Purity, $^2P$')
+ax2.set_xlabel('Search distance ratio, $\\mu_{S}$')
+ax2.set_ylabel('Radius ratio, $\\mu_{R}$')
+ax2.set_zlabel('Completeness, $^2C$')
+plt.legend()
+#plt.tight_layout()
+plt.savefig(figuresFolder + 'optimal_purity_completeness.pdf')
+plt.show()
+
+
+
+
+# Scatter plot:
+fig, ax = plt.subplots(figsize=(textwidth,textwidth))
+ax.scatter(purity_1f,completeness_1f,color=seabornColormap[0],label='1-way')
+ax.scatter(purity_2f,completeness_2f,color=seabornColormap[1],label='2-way')
+ax.set_xlabel('Purity')
+ax.set_ylabel('Completeness')
+ax.set_ylim([0,1.0])
+ax.set_xlim([0,1.0])
+ax.legend()
+ax.set_aspect('equal')
+plt.savefig(figuresFolder + "purity_completeness_scatter.pdf")
 plt.show()
 
 #-------------------------------------------------------------------------------
@@ -3256,8 +3661,9 @@ for k in range(1,len(distanceShells)):
             abellListLocation = clusterIndMain,\
             nameListLargeClusters = [name[0] for name in clusterNames],\
             ha = ha,va= va, annotationPos = annotationPos,\
-            title = 'Local super-volume: large voids (antihalos) within $' + \
-            str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",\
+            title = 'Antihalos within $' + \
+            str(distanceShells[k-1]) + "< r/\\mathrm{\\,Mpc}h^{-1} <= " + \
+            str(distanceShells[k]) + "$",\
             vmin=1e-2,vmax=1e2,legLoc = 'lower left',\
             bbox_to_anchor = (-0.1,-0.2),\
             snapsort = snapsortList_all[ns],antihaloCentres = None,\
