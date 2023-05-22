@@ -849,8 +849,10 @@ def imshowComparison(leftGrid,rightGrid,top=0.851,bottom=0.167,left=0.088,\
 
 #threshList = np.hstack((np.array([1e-2]),np.arange(0.1,1,0.10)))
 #distArr = np.hstack((np.array([1e-2]),np.arange(0.25,3,0.25)))
-distArr = np.arange(0,3,0.25)
-threshList =np.arange(0.0,1,0.10)
+#distArr = np.arange(0,3,0.25)
+#threshList =np.arange(0.0,1,0.10)
+distArr = np.arange(0.5,1.6,0.1)
+threshList =np.arange(0.5,1.1,0.10)
 #threshList = np.arange(0.5,1,0.05)
 #distArr = np.arange(0,3,0.1)
 mLower1 = 1e13
@@ -915,11 +917,37 @@ for k in range(0,len(distArr)):
         [finalCatTest,shortHaloListTest,twoWayMatchListTest,\
             finalCandidatesTest,finalRatiosTest,finalDistancesTest,\
             allCandidatesTest,candidateCountsTest,allRatiosTest,\
-            finalCombinatoricFracTest,finalCatFracTest,alreadyMatched] = \
+            finalCombinatoricFracTest,finalCatFracTest,alreadyMatchedTest] = \
             constructAntihaloCatalogue(\
                 snapNumListComb,snapList=snapListCombined,\
                 snapListRev=snapListRevCombined,\
                 ahProps=ahPropsComb,hrList=hrListComb,max_index=None,\
+                twoWayOnly=True,blockDuplicates=True,\
+                crossMatchThreshold = muR,distMax = rSearch,\
+                rSphere=rSphere1,massRange = [mLower1,mUpper1],\
+                NWayMatch = False,rMin=rMin,rMax=rMax,\
+                additionalFilters = None,verbose=False)
+        [finalCatMCMC,shortHaloListMCMC,twoWayMatchListMCMC,\
+            finalCandidatesMCMC,finalRatiosMCMC,finalDistancesMCMC,\
+            allCandidatesMCMC,candidateCountsMCMC,allRatiosMCMC,\
+            finalCombinatoricFracMCMC,finalCatFracMCMC,alreadyMatchedMCMC] = \
+            constructAntihaloCatalogue(\
+                snapNumList,snapList=snapList,\
+                snapListRev=snapListRev,\
+                ahProps=ahProps,hrList=hrList,max_index=None,\
+                twoWayOnly=True,blockDuplicates=True,\
+                crossMatchThreshold = muR,distMax = rSearch,\
+                rSphere=rSphere1,massRange = [mLower1,mUpper1],\
+                NWayMatch = False,rMin=rMin,rMax=rMax,\
+                additionalFilters = None,verbose=False)
+        [finalCatRand,shortHaloListRand,twoWayMatchListRand,\
+            finalCandidatesRand,finalRatiosRand,finalDistancesRand,\
+            allCandidatesRand,candidateCountsRand,allRatiosRand,\
+            finalCombinatoricFracRand,finalCatFracRand,alreadyMatchedRand] = \
+            constructAntihaloCatalogue(\
+                snapNumListUncon,snapList=snapListUn,\
+                snapListRev=snapListRevUn,\
+                ahProps=ahPropsUn,hrList=hrListUn,max_index=None,\
                 twoWayOnly=True,blockDuplicates=True,\
                 crossMatchThreshold = muR,distMax = rSearch,\
                 rSphere=rSphere1,massRange = [mLower1,mUpper1],\
@@ -1061,6 +1089,7 @@ plt.ylabel('$\\sqrt{(^2C_{\mu_{\mathrm{rad}}}-1)^2 + ' + \
 plt.colorbar(sm,label='$\\mu_R$')
 plt.show()
 
+# Build 2-d interpolators to use with optimising the parameters:
 from scipy.interpolate import RegularGridInterpolator
 interpolator = RegularGridInterpolator((distArr,threshList),\
     euclideanDist2,method='cubic')
