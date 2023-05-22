@@ -858,6 +858,17 @@ threshList =np.arange(0.5,1.1,0.10)
 mLower1 = 1e13
 mUpper1 = 1e15
 rSphere1 = 135
+nBinEdges = 8
+rLower = 5
+rUpper = 20
+percThresh = 99
+cutScale = "radius"
+catFracCut = True
+combFracCut = False
+snrCut = True
+radBins = np.linspace(rLower,rUpper,nBinEdges)
+massBins = 10**(np.linspace(np.log10(mLower1),np.log10(mUpper1),nBinEdges))
+scaleBins = radBins
 snapListRev =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
         + "gadget_full_reverse_512/snapshot_001") for snapNum in snapNumList]
 hrList = [snap.halos() for snap in snapListRev]
@@ -870,6 +881,13 @@ purity_1f = np.zeros((len(distArr),len(threshList)))
 completeness_1f = np.zeros((len(distArr),len(threshList)))
 purity_2f = np.zeros((len(distArr),len(threshList)))
 completeness_2f = np.zeros((len(distArr),len(threshList)))
+catPercentile99Rand = np.zeros((len(distArr),len(threshList)))
+catPercentileBins99Rand = np.zeros((len(distArr),len(threshList),nBinEdges-1))
+catMeanRand = np.zeros((len(distArr),len(threshList)))
+catMeanMCMC = np.zeros((len(distArr),len(threshList)))
+catMeanMCMCCut = np.zeros((len(distArr),len(threshList)))
+catSizeMCMC = np.zeros((len(distArr),len(threshList)),dtype=int)
+catSizeMCMCCut = np.zeros((len(distArr),len(threshList)),dtype=int)
 
 # For testing these, we can use a combined list of MCMC and random catalogues:
 snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
@@ -898,6 +916,71 @@ ahPropsComb = ahProps + ahPropsUn
 antihaloRadiiComb = antihaloRadii + antihaloRadiiUn
 antihaloMassesComb = antihaloMasses + antihaloMassesUn
 antihaloCentresComb = antihaloCentres + antihaloCentresUn
+
+
+
+
+# A few things needed for computing catalogue fractions:
+# For MCMC samples:
+
+[mcmcArray,num,N,NCAT,no_bias_params,bias_matrix,mean_field,\
+        std_field,hmc_Elh,hmc_Eprior,hades_accept_count,\
+        hades_attempt_count] = pickle.load(open(chainFile,"rb"))
+snrField = mean_field**2/std_field**2
+snrFieldLin = np.reshape(snrField,Nden**3)
+grid = snapedit.gridListPermutation(Nden,perm=(2,1,0))
+centroids = grid*boxsize/Nden + boxsize/(2*Nden)
+positions = snapedit.unwrap(centroids - np.array([boxsize/2]*3),boxsize)
+tree = scipy.spatial.cKDTree(snapedit.wrap(positions + boxsize/2,boxsize),\
+    boxsize=boxsize)
+nearestPointsList = [tree.query_ball_point(\
+    snapedit.wrap(antihaloCentres[k] + boxsize/2,boxsize),\
+    antihaloRadii[k],workers=-1) \
+    for k in range(0,len(antihaloCentres))]
+snrAllCatsList = [np.array([np.mean(snrFieldLin[points]) \
+    for points in nearestPointsList[k]]) for k in range(0,len(snapNumList))]
+snrFilter = [snr > snrThresh for snr in snrAllCatsList]
+
+centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],rSphere,\
+            filterCondition = (antihaloRadii[k] > rMin) & \
+            (antihaloRadii[k] <= rMax) & (antihaloMasses[k] > mMin) & \
+            (antihaloMasses[k] <= mMax) & snrFilter[k]) \
+            for k in range(0,len(snapNumList))]
+ahCounts = np.array([len(cahs[0]) for cahs in centralAntihalos])
+max_index = np.max(ahCounts)
+radiiListShort = [np.array([antihaloRadii[l][\
+            centralAntihalos[l][0][sortedList[l][k]]] \
+            for k in range(0,np.min([ahCounts[l],max_index]))]) \
+            for l in range(0,len(snapNumList))]
+massListShort = [np.array([antihaloMasses[l][\
+            centralAntihalos[l][0][sortedList[l][k]]] \
+            for k in range(0,np.min([ahCounts[l],max_index]))]) \
+            for l in range(0,len(snapNumList))]
+centresListShort = [np.array([antihaloCentres[l][\
+            centralAntihalos[l][0][sortedList[l][k]],:] \
+            for k in range(0,np.min([ahCounts[l],max_index]))]) \
+            for l in range(0,len(snapNumList))]
+# For randoms:
+centralAntihalosUn = [tools.getAntiHalosInSphere(antihaloCentresUn[k],\
+            rSphere,filterCondition = (antihaloRadiiUn[k] > rMin) & \
+            (antihaloRadiiUn[k] <= rMax) & (antihaloMassesUn[k] > mMin) & \
+            (antihaloMassesUn[k] <= mMax)) \
+            for k in range(0,len(snapNumListUncon))]
+centralAntihaloRadiiUn = [\
+            antihaloRadiiUn[k][centralAntihalosUn[k][0]] \
+            for k in range(0,len(centralAntihalosUn))]
+sortedListUn = [np.flip(np.argsort(centralAntihaloRadiiUn[k])) \
+                    for k in range(0,len(snapNumListUncon))]
+ahCountsUn = np.array([len(cahs[0]) for cahs in centralAntihalosUn])
+max_indexUn = np.max(ahCountsUn)
+radiiListShortUn = [np.array([antihaloRadiiUn[l][\
+    centralAntihalosUn[l][0][sortedListUn[l][k]]] \
+    for k in range(0,np.min([ahCountsUn[l],max_indexUn]))]) \
+    for l in range(0,len(snapNumListUncon))]
+massListShortUn = [np.array([antihaloMassesUn[l][\
+    centralAntihalosUn[l][0][sortedListUn[l][k]]] \
+    for k in range(0,np.min([ahCountsUn[l],max_indexUn]))]) \
+    for l in range(0,len(snapNumListUncon))]
 
 diffMapComb = [np.setdiff1d(np.arange(0,len(snapListCombined)),[k]) \
     for k in range(0,len(snapListCombined))]
@@ -953,6 +1036,37 @@ for k in range(0,len(distArr)):
                 rSphere=rSphere1,massRange = [mLower1,mUpper1],\
                 NWayMatch = False,rMin=rMin,rMax=rMax,\
                 additionalFilters = None,verbose=False)
+        # Compute percentiles:
+        radiiListOpt = getPropertyFromCat(finalCatMCMC,radiiListShort)
+        massListOpt = getPropertyFromCat(finalCatMCMC,massListShort)
+        [radiiMeanOpt, radiiSigmaOpt]  = getMeanProperty(radiiListOpt)
+        [massMeanOpt, massSigmaOpt]  = getMeanProperty(massListOpt)
+        scaleFilter = [(radiiMeanOpt > radBins[k]) & \
+            (radiiMeanOpt <= radBins[k+1]) \
+            for k in range(0,len(radBins) - 1)]
+        radiiListCombUn = getPropertyFromCat(finalCatRand,radiiListShortUn)
+        massListCombUn = getPropertyFromCat(finalCatRand,massListShortUn)
+        [radiiListMeanUn,radiiListSigmaUn] = getMeanProperty(radiiListCombUn)
+        [massListMeanUn,massListSigmaUn] = getMeanProperty(massListCombUn)
+        [percentilesCatTest, percentilesCombTest] = getThresholdsInBins(\
+            nBinEdges-1,cutScale,massListMeanUn,radiiListMeanUn,\
+            finalCombinatoricFracRand,finalCatFracRand,\
+            rLower,rUpper,mLower1,mUpper1,percThresh,massBins=massBins,\
+            radBins=radBins)
+        finalCentresOptList = np.array([getCentresFromCat(\
+            finalCatMCMC,centresListShort,ns) \
+            for ns in range(0,len(snapNumList))])
+        meanCentreOpt = np.nanmean(finalCentresOptList,0)
+        nearestPoints = tree.query_ball_point(\
+            snapedit.wrap(meanCentreOpt + boxsize/2,boxsize),radiiMeanOpt,\
+            workers=-1)
+        snrList = np.array([np.mean(snrFieldLin[points]) \
+            for points in nearestPoints])
+        [combinedFilterTest, meanCatFracTest, stdErrCatFracTest, \
+            meanCombFracTest, stdErrCombFracTest] = applyCatalogueCuts(\
+            finalCatFracMCMC,finalCombinatoricFracMCMC,percentilesCatTest,\
+            percentilesCombTest,scaleFilter,snrList,snrThresh,catFracCut,\
+            combFracCut,snrCut)
         # Get the anti-halo properties used for filtering:
         centralAntihalosTest = [tools.getAntiHalosInSphere(\
             antihaloCentresComb[ns],rSphere1,\
@@ -976,6 +1090,14 @@ for k in range(0,len(distArr)):
         massFilter = [(massListShortTest[n] > mLower1) & \
             (massListShortTest[n] <= mUpper1) \
             for n in range(0,len(massListShortTest))]
+        # Catalogue fraction calculations:
+        catPercentileBins99Rand[k,l,:] = percentilesCatTest
+        catPercentile99Rand[k,l] = np.percentile(finalCatFracRand,99)
+        catMeanRand[k,l] = np.mean(finalCatFracRand)
+        catMeanMCMC[k,l] = np.mean(finalCatFracMCMC)
+        catMeanMCMCCut[k,l] = np.mean(finalCatFracMCMC[combinedFilter])
+        catSizeMCMC[k,l] = len(finalCatFracMCMC)
+        catSizeMCMCCut[k,l] = len(finalCatFracMCMC[combinedFilter])
         # Compute purity and completeness:
         purity_1f[k,l] = 1.0 - np.mean([[\
             np.sum((candidateCountsTest[i][j] > 0) & \

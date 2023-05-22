@@ -2639,7 +2639,7 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
         Nden=256,recomputeUnconstrained = False,data_folder="./",\
         unconstrainedFolderNew = "new_chain/unconstrained_samples/",\
         recomputeData=True,verbose=True,catFracCut=True,combFracCut=False,\
-        cutScale='mass',rLower=5,rUpper=20,snrCut=True):
+        cutScale='mass',rLower=5,rUpper=20,snrCut=True,sortBy="radius"):
     # Load snapshots:
     if verbose:
         print("Catalogue construction. \nLoading snapshots..")
@@ -2709,8 +2709,17 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
     centralAntihaloMasses = [\
             antihaloMasses[k][centralAntihalos[k][0]] \
             for k in range(0,len(centralAntihalos))]
-    sortedList = [np.flip(np.argsort(centralAntihaloMasses[k])) \
-            for k in range(0,len(snapNumList))]
+    centralAntihaloRadii = [\
+            antihaloRadii[k][centralAntihalos[k][0]] \
+            for k in range(0,len(centralAntihalos))]
+    if sortBy == "mass":
+        sortedList = [np.flip(np.argsort(centralAntihaloMasses[k])) \
+                for k in range(0,len(snapNumList))]
+    elif sortBy == "radius":
+        sortedList = [np.flip(np.argsort(centralAntihaloRadii[k])) \
+                for k in range(0,len(snapNumList))]
+    else:
+        raise Exception("sortBy parameter'" + str(sortBy) + "' invalid.")
     # Gather these into shortened property lists for the anti-halos
     # in the central region, including only those that match the filter:
     ahCounts = np.array([len(cahs[0]) for cahs in centralAntihalos])
@@ -2810,8 +2819,17 @@ def getFinalCatalogue(snapNumList,snapNumListUncon,snrThresh = 10,\
         centralAntihaloMassesUn = [\
             antihaloMassesUn[k][centralAntihalosUn[k][0]] \
             for k in range(0,len(centralAntihalosUn))]
-        sortedListUn = [np.flip(np.argsort(centralAntihaloMassesUn[k])) \
-            for k in range(0,len(snapNumListUncon))]
+        centralAntihaloRadiiUn = [\
+            antihaloRadiiUn[k][centralAntihalosUn[k][0]] \
+            for k in range(0,len(centralAntihalosUn))]
+        if sortBy == "mass":
+            sortedListUn = [np.flip(np.argsort(centralAntihaloMassesUn[k])) \
+                    for k in range(0,len(snapNumListUncon))]
+        elif sortBy == "radius":
+            sortedListUn = [np.flip(np.argsort(centralAntihaloRadiiUn[k])) \
+                    for k in range(0,len(snapNumListUncon))]
+        else:
+            raise Exception("sortBy parameter'" + str(sortBy) + "' invalid.")
         ahCountsUn = np.array([len(cahs[0]) for cahs in centralAntihalosUn])
         max_indexUn = np.max(ahCountsUn)
         radiiListShortUn = [np.array([antihaloRadiiUn[l][\
