@@ -2618,7 +2618,7 @@ def getThresholdsInBins(nBins,cutScale,massListMeanUn,radiiListMeanUn,\
             selection = inRadBins[k]
         else:
             raise Exception("Unrecognised 'cutScale' value ")
-        if len(inMassBins[k]) > 0:
+        if len(selection) > 0:
             percentilesComb.append(np.percentile(\
                 finalCombinatoricFracUn[selection],percThresh))
             percentilesCat.append(np.percentile(\

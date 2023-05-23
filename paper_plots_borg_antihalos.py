@@ -852,7 +852,7 @@ def imshowComparison(leftGrid,rightGrid,top=0.851,bottom=0.167,left=0.088,\
 #distArr = np.arange(0,3,0.25)
 #threshList =np.arange(0.0,1,0.10)
 distArr = np.arange(0.5,1.6,0.1)
-threshList =np.arange(0.5,1.1,0.10)
+threshList =np.arange(0.5,1.01,0.10)
 #threshList = np.arange(0.5,1,0.05)
 #distArr = np.arange(0,3,0.1)
 mLower1 = 1e13
@@ -941,11 +941,16 @@ snrAllCatsList = [np.array([np.mean(snrFieldLin[points]) \
     for points in nearestPointsList[k]]) for k in range(0,len(snapNumList))]
 snrFilter = [snr > snrThresh for snr in snrAllCatsList]
 
-centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],rSphere,\
+centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],rSphere1,\
             filterCondition = (antihaloRadii[k] > rMin) & \
             (antihaloRadii[k] <= rMax) & (antihaloMasses[k] > mMin) & \
             (antihaloMasses[k] <= mMax) & snrFilter[k]) \
             for k in range(0,len(snapNumList))]
+centralAntihaloRadii = [\
+            antihaloRadii[k][centralAntihalos[k][0]] \
+            for k in range(0,len(centralAntihalos))]
+sortedList = [np.flip(np.argsort(centralAntihaloRadii[k])) \
+                    for k in range(0,len(snapNumList))]
 ahCounts = np.array([len(cahs[0]) for cahs in centralAntihalos])
 max_index = np.max(ahCounts)
 radiiListShort = [np.array([antihaloRadii[l][\
@@ -962,7 +967,7 @@ centresListShort = [np.array([antihaloCentres[l][\
             for l in range(0,len(snapNumList))]
 # For randoms:
 centralAntihalosUn = [tools.getAntiHalosInSphere(antihaloCentresUn[k],\
-            rSphere,filterCondition = (antihaloRadiiUn[k] > rMin) & \
+            rSphere1,filterCondition = (antihaloRadiiUn[k] > rMin) & \
             (antihaloRadiiUn[k] <= rMax) & (antihaloMassesUn[k] > mMin) & \
             (antihaloMassesUn[k] <= mMax)) \
             for k in range(0,len(snapNumListUncon))]
@@ -1022,7 +1027,7 @@ for k in range(0,len(distArr)):
                 crossMatchThreshold = muR,distMax = rSearch,\
                 rSphere=rSphere1,massRange = [mLower1,mUpper1],\
                 NWayMatch = False,rMin=rMin,rMax=rMax,\
-                additionalFilters = None,verbose=False)
+                additionalFilters = snrFilter,verbose=False)
         [finalCatRand,shortHaloListRand,twoWayMatchListRand,\
             finalCandidatesRand,finalRatiosRand,finalDistancesRand,\
             allCandidatesRand,candidateCountsRand,allRatiosRand,\
@@ -1092,12 +1097,15 @@ for k in range(0,len(distArr)):
             for n in range(0,len(massListShortTest))]
         # Catalogue fraction calculations:
         catPercentileBins99Rand[k,l,:] = percentilesCatTest
-        catPercentile99Rand[k,l] = np.percentile(finalCatFracRand,99)
-        catMeanRand[k,l] = np.mean(finalCatFracRand)
-        catMeanMCMC[k,l] = np.mean(finalCatFracMCMC)
-        catMeanMCMCCut[k,l] = np.mean(finalCatFracMCMC[combinedFilter])
+        if len(finalCatFracRand) > 0:
+            catPercentile99Rand[k,l] = np.percentile(finalCatFracRand,99)
+            catMeanRand[k,l] = np.mean(finalCatFracRand)
+        if len(finalCatFracMCMC) > 0:
+            catMeanMCMC[k,l] = np.mean(finalCatFracMCMC)
+        if np.sum(combinedFilterTest) > 0:
+            catMeanMCMCCut[k,l] = np.mean(finalCatFracMCMC[combinedFilterTest])
         catSizeMCMC[k,l] = len(finalCatFracMCMC)
-        catSizeMCMCCut[k,l] = len(finalCatFracMCMC[combinedFilter])
+        catSizeMCMCCut[k,l] = len(finalCatFracMCMC[combinedFilterTest])
         # Compute purity and completeness:
         purity_1f[k,l] = 1.0 - np.mean([[\
             np.sum((candidateCountsTest[i][j] > 0) & \
@@ -1124,15 +1132,25 @@ euclideanDist2 = np.sqrt((purity_2f - 1.0)**2  + (completeness_2f - 1.0)**2)
 euclideanDist1 = np.sqrt((purity_1f - 1.0)**2  + (completeness_1f - 1.0)**2)
 
 
-tools.savePickle([purity_1f,purity_2f,completeness_1f,completeness_2f],\
+tools.savePickle([purity_1f,purity_2f,completeness_1f,completeness_2f,\
+    catPercentileBins99Rand,catPercentile99Rand,catMeanRand,\
+    catMeanMCMC,catMeanMCMCCut,catSizeMCMC,catSizeMCMCCut],\
     data_folder + "purity_completeness_data.p")
 
-[purity_1f,purity_2f,completeness_1f,completeness_2f] = tools.loadPickle(\
+[purity_1f,purity_2f,completeness_1f,completeness_2f,\
+    catPercentileBins99Rand,catPercentile99Rand,catMeanRand,\
+    catMeanMCMC,catMeanMCMCCut,catSizeMCMC,catSizeMCMCCut]= tools.loadPickle(\
     data_folder + "purity_completeness_data.p")
 
 [purity_1f,purity_2f,completeness_1f,completeness_2f] = tools.loadPickle(\
     "borg-antihalos_paper_figures/all_samples/" + \
     "purity_completeness_data_whole_range.p")
+
+
+[purity_1f,purity_2f,completeness_1f,completeness_2f,\
+    catPercentileBins99Rand,catPercentile99Rand,catMeanRand,\
+    catMeanMCMC,catMeanMCMCCut,catSizeMCMC,catSizeMCMCCut]= tools.loadPickle(\
+    "borg-antihalos_paper_figures/all_samples/" + "purity_completeness_data.p")
 
 ylabel = 'Radius ratio threshold ($\mu_{\mathrm{R}}$)'
 imshowComparison(completeness_2f.T,completeness_1f.T,\
@@ -1317,6 +1335,80 @@ ax.legend()
 ax.set_aspect('equal')
 plt.savefig(figuresFolder + "purity_completeness_scatter.pdf")
 plt.show()
+
+
+
+# Plot of the catalogue fraction of survivors:
+# Plot interpolated surface:
+xx = np.linspace(np.min(distArr) + 1e-3,np.max(distArr)-1e-3,100)
+yy = np.linspace(np.min(threshList) + 1e-3,np.max(threshList) - 1e-3,100)
+X, Y = np.meshgrid(xx,yy,indexing='ij')
+catPercentile99Rand_Interp = scipy.interpolate.RegularGridInterpolator(\
+    (distArr,threshList),catPercentile99Rand,method='cubic')
+catMeanRand_Interp = scipy.interpolate.RegularGridInterpolator(\
+    (distArr,threshList),catMeanRand,method='cubic')
+fig = plt.figure()
+ax1 = fig.add_subplot(1,2,1,projection='3d')
+ax2 = fig.add_subplot(1,2,2,projection='3d')
+ax1.plot_wireframe(X,Y,catPercentile99Rand_Interp((X,Y)),alpha=0.5,color='grey')
+ax2.plot_wireframe(X,Y,catMeanRand_Interp((X,Y)),alpha=0.5,color='grey')
+#ax1.scatter3D(optimumParams[0],optimumParams[1],catMeanMCMCCut_Interp(optimumParams),\
+#    color=seabornColormap[0],label = "Optimal, $(\mu_R = " + \
+#    ("%.3g" % optimumParams[0]) + ",\mu_S = " + \
+#    ("%.3g" % optimumParams[1]) + ")$")
+#ax2.scatter3D(optimumParams[0],optimumParams[1],\
+#    completenessInterp(optimumParams),\
+#    color=seabornColormap[0],label = "Optimal, $(\mu_R = " + \
+#    ("%.3g" % optimumParams[0]) + ",\mu_S = " + \
+#    ("%.3g" % optimumParams[1]) + ")$")
+ax1.set_xlabel('Search distance ratio, $\\mu_{S}$')
+ax1.set_ylabel('Radius ratio, $\\mu_{R}$')
+ax1.set_zlabel('Catalogue fraction')
+ax2.set_xlabel('Search distance ratio, $\\mu_{S}$')
+ax2.set_ylabel('Radius ratio, $\\mu_{R}$')
+ax2.set_zlabel('Catalogue fraction')
+ax1.set_title('99th Percentile of Random Catalogues')
+ax2.set_title('Mean of Random Catalogues')
+plt.legend()
+#plt.tight_layout()
+plt.savefig(figuresFolder + 'randcat_fcat.pdf')
+plt.show()
+
+
+
+# Plot of the catalogue fraction of randoms:
+# Plot interpolated surface:
+xx = np.linspace(np.min(distArr) + 1e-3,np.max(distArr)-1e-3,100)
+yy = np.linspace(np.min(threshList) + 1e-3,np.max(threshList) - 1e-3,100)
+X, Y = np.meshgrid(xx,yy,indexing='ij')
+Xi, Yi = np.meshgrid(distArr,threshList,indexing='ij')
+catMeanMCMCCut_Interp = scipy.interpolate.RegularGridInterpolator(\
+    (distArr,threshList),catMeanMCMCCut,method='cubic')
+catSizeMCMCCut_Interp = scipy.interpolate.RegularGridInterpolator(\
+    (distArr,threshList),catSizeMCMCCut,method='cubic')
+fig = plt.figure()
+ax1 = fig.add_subplot(1,2,1,projection='3d')
+ax2 = fig.add_subplot(1,2,2,projection='3d')
+ax1.plot_wireframe(X,Y,catMeanMCMCCut_Interp((X,Y)),alpha=0.5,color='grey')
+ax2.plot_wireframe(X,Y,catSizeMCMCCut_Interp((X,Y)),alpha=0.5,color='grey')
+ax1.scatter3D(Xi,Yi,catMeanMCMCCut,color=seabornColormap[0],label = "Samples")
+ax2.scatter3D(Xi,Yi,catSizeMCMCCut,color=seabornColormap[0],label = "Samples")
+ax1.set_xlabel('Search distance ratio, $\\mu_{S}$')
+ax1.set_ylabel('Radius ratio, $\\mu_{R}$')
+ax1.set_zlabel('Catalogue fraction')
+ax2.set_xlabel('Search distance ratio, $\\mu_{S}$')
+ax2.set_ylabel('Radius ratio, $\\mu_{R}$')
+ax2.set_zlabel('Number of voids')
+ax1.set_title('Mean Catalogue fraction (after cut)')
+ax2.set_title('Catalogue Size (after cut)')
+plt.legend()
+#plt.tight_layout()
+plt.savefig(figuresFolder + 'f_cat_and_Ncat.pdf')
+plt.show()
+
+
+
+
 
 #-------------------------------------------------------------------------------
 # CATALOGUE CONSISTENCY CHECKS
