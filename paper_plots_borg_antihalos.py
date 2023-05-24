@@ -1518,10 +1518,12 @@ plt.subplots_adjust(top=0.839,bottom=0.219,left=0.099,right=0.924,hspace=0.2,\
 plt.savefig(figuresFolder + 'mcmccat_fcat_Ncat_heatmap_binned_filter.pdf')
 plt.show()
 
-plt.scatter(catMeanMCMCCut,catSizeMCMCCut)
+plt.scatter(catMeanMCMCCut[0:6,3:5],catSizeMCMCCut[0:6,3:5])
 plt.xlabel('Mean MCMC catalogue fraction after cut')
 plt.ylabel('Number of voids in MCMC catalogue after cut')
-plt.savefig(figuresFolder + "fcat_vs_Ncat_scatter_binned_filter.pdf")
+plt.xlim([0,1])
+plt.ylim([0,400])
+#plt.savefig(figuresFolder + "fcat_vs_Ncat_scatter_binned_filter.pdf")
 plt.show()
 
 
