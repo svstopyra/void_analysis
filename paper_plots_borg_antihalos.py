@@ -910,6 +910,16 @@ catSizeBinsMCMC = np.zeros((len(distArr),len(threshList),nBinEdges-1),\
 catSizeBinsMCMCCut = np.zeros((len(distArr),len(threshList),nBinEdges-1),
     dtype=int)
 
+combMeanRand = np.zeros((len(distArr),len(threshList)))
+combMeanMCMC = np.zeros((len(distArr),len(threshList)))
+combMeanMCMCCut = np.zeros((len(distArr),len(threshList)))
+combMeanMCMCCutNoBins = np.zeros((len(distArr),len(threshList)))
+combPercentileRand = np.zeros((len(distArr),len(threshList),\
+    len(percThreshList)))
+combPercentile99BinsRand = np.zeros((len(distArr),len(threshList),\
+    nBinEdges-1))
+combPercentileMaxRand = np.zeros((len(distArr),len(threshList)))
+
 # For testing these, we can use a combined list of MCMC and random catalogues:
 snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
         + "gadget_full_forward_512/snapshot_001") for snapNum in snapNumList]
@@ -1127,6 +1137,7 @@ for k in range(0,len(distArr)):
             for n in range(0,len(massListShortTest))]
         # Catalogue fraction calculations:
         catPercentile99BinsRand[k,l,:] = percentilesCatTest
+        combPercentile99BinsRand[k,l,:] = percentilesCombTest
         allBinsFilterRand = np.where((radiiListMeanUn > radBins[0]) & \
             (radiiListMeanUn <= radBins[-1]))[0]
         allBinsFilterMCMC = np.where((radiiMeanOpt > radBins[0]) & \
@@ -1135,10 +1146,15 @@ for k in range(0,len(distArr)):
             if len(allBinsFilterRand) > 0:
                 catPercentileMaxRand[k,l] = np.max(\
                     finalCatFracRand[allBinsFilterRand])
+                combPercentileMaxRand[k,l] = np.max(\
+                    finalCombinatoricFracRand[allBinsFilterRand])
                 for m,thresh in zip(range(0,len(percThreshList)),percThreshList):
                     catPercentileRand[k,l,m] = np.percentile(\
                         finalCatFracRand[allBinsFilterRand],thresh)
+                    combPercentileRand[k,l,m] = np.percentile(\
+                        finalCombinatoricFracRand[allBinsFilterRand],thresh)
             catMeanRand[k,l] = np.mean(finalCatFracRand)
+            combMeanRand[k,l] = np.mean(finalCombinatoricFracRand)
             combinedFilterNoBins = np.where(\
                 (finalCatFracMCMC > catPercentileRand[k,l,-1]) & \
                 (radiiMeanOpt > radBins[0]) & \
@@ -1147,13 +1163,19 @@ for k in range(0,len(distArr)):
                 finalCatFracMCMC[combinedFilterNoBins])
             catMeanMCMCCutNoBins[k,l] = np.mean(\
                 finalCatFracMCMC[combinedFilterNoBins])
+            catMeanMCMCCutNoBins[k,l] = np.mean(\
+                finalCombinatoricFracMCMC[combinedFilterNoBins])
             [inRadBinsCut,noInRadBinsCut] = plot.binValues(\
                 radiiMeanOpt[combinedFilterNoBins],radBins)
             catSizeMCMCCutNoBinsInBins[k,l,:] = noInRadBinsCut
         if len(finalCatFracMCMC) > 0:
             catMeanMCMC[k,l] = np.mean(finalCatFracMCMC)
+        if len(finalCombinatoricFracMCMC) > 0:
+            combMeanMCMC[k,l] = np.mean(finalCombinatoricFracMCMC)
         if np.sum(combinedFilterTest) > 0:
             catMeanMCMCCut[k,l] = np.mean(finalCatFracMCMC[combinedFilterTest])
+            combMeanMCMCCut[k,l] = np.mean(\
+                finalCombinatoricFracMCMC[combinedFilterTest])
         catSizeMCMC[k,l] = len(finalCatFracMCMC)
         catSizeMCMCCut[k,l] = len(finalCatFracMCMC[combinedFilterTest])
         [inRadBinsCut,noInRadBinsCut] = plot.binValues(\
@@ -1188,6 +1210,11 @@ euclideanDist2 = np.sqrt((purity_2f - 1.0)**2  + (completeness_2f - 1.0)**2)
 euclideanDist1 = np.sqrt((purity_1f - 1.0)**2  + (completeness_1f - 1.0)**2)
 
 
+tools.savePickle([combMeanRand,combMeanMCMC,combMeanMCMCCut,\
+    combMeanMCMCCutNoBins,combPercentileRand,combPercentileMaxRand,\
+    combPercentile99BinsRand],\
+    data_folder + "combinatoric_fraction_data.p")
+
 tools.savePickle([purity_1f,purity_2f,completeness_1f,completeness_2f,\
     catPercentile99BinsRand,catPercentileRand,catMeanRand,\
     catMeanMCMC,catMeanMCMCCut,catSizeMCMC,catSizeMCMCCut,\
@@ -1206,7 +1233,8 @@ tools.savePickle([purity_1f,purity_2f,completeness_1f,completeness_2f,\
     "borg-antihalos_paper_figures/all_samples/" + \
     "purity_completeness_data_whole_range.p")
 
-
+distArr = np.linspace(0.0,0.75,16) # Catgrid 3
+threshList = np.linspace(0.75,1.0,11) # Catgrid 3
 [purity_1f,purity_2f,completeness_1f,completeness_2f,\
     catPercentile99BinsRand,catPercentileRand,catMeanRand,\
     catMeanMCMC,catMeanMCMCCut,catSizeMCMC,catSizeMCMCCut,\
@@ -1214,6 +1242,19 @@ tools.savePickle([purity_1f,purity_2f,completeness_1f,completeness_2f,\
     catSizeMCMCCutNoBinsInBins,catPercentileMaxRand,\
     catMeanMCMCCutNoBins] =  tools.loadPickle(\
     "borg-antihalos_paper_figures/all_samples/" + "purity_completeness_data.p")
+
+
+# Catgrid 3:
+distArr = np.arange(0.0,1.3,0.1) # Catgrid 2
+threshList =np.arange(0.5,1.01,0.05) # Catgrid 2
+[purity_1f,purity_2f,completeness_1f,completeness_2f,\
+    catPercentile99BinsRand,catPercentileRand,catMeanRand,\
+    catMeanMCMC,catMeanMCMCCut,catSizeMCMC,catSizeMCMCCut,\
+    catSizeBinsMCMC,catSizeBinsMCMCCut,catSizeMCMCCutNoBins,\
+    catSizeMCMCCutNoBinsInBins,catPercentileMaxRand,\
+    catMeanMCMCCutNoBins] =  tools.loadPickle(\
+    "borg-antihalos_paper_figures/all_samples/" + "purity_completeness_data_catgrid2.p")
+
 
 ylabel = 'Radius ratio threshold ($\mu_{\mathrm{R}}$)'
 imshowComparison(completeness_2f.T,completeness_1f.T,\
@@ -1558,24 +1599,113 @@ optimalParamNcat = scipy.optimize.minimize(lambda x: -Ncat_Interp(x),\
     tools.minmax(threshList)))
 # Optimal number of voids at [0.14237877, 0.85891552]
 
-
+# Scatter plot of fcat vs Ncat:
 plt.clf()
 fig, ax = plt.subplots()
-ax.scatter(catMeanMCMCCut,catSizeMCMCCut)
+cmap='plasma'
+Xi, Yi = np.meshgrid(distArr,threshList,indexing='ij')
+sm = cm.ScalarMappable(colors.Normalize(vmin=np.min(Yi),vmax=np.max(Yi)),\
+    cmap=cmap)
+ax.scatter(catMeanMCMCCut[:5,:],catSizeMCMCCut[:5,:],c=Yi[:5,:],cmap=cmap,\
+    norm=colors.Normalize(vmin=np.min(Yi),vmax=np.max(Yi)))
+plt.colorbar(sm,label='Radius ratio, $\mu_R$')
 ax.set_xlabel('Mean MCMC catalogue fraction after cut')
-ax.set_ylabel('Number of voids in MCMC catalogue after cut')
+ax.set_ylabel('Number of voids in MCMC catalogue after cut, ' + \
+    '$N_{\\mathrm{cat}}$')
 #ax.set_xlim([0,1])
 #ax.set_ylim([0,400])
 plt.savefig(figuresFolder + "fcat_vs_Ncat_scatter_binned_filter.pdf")
 plt.show()
 
 # Plot of the mean catalogue fraction after cuts vs random fraction:
+survivingFraction = np.zeros(catSizeMCMCCut.shape)
+nz = np.where(np.sum(catSizeBinsMCMC,2) != 0)
+survivingFraction[nz] = np.sum(catSizeBinsMCMCCut,2)[nz]/\
+    np.sum(catSizeBinsMCMC,2)[nz]
 euclideanDistance = np.sqrt((catMeanMCMCCut-1)**2 + \
-    (catPercentileRand[:,:,-1])**2)
+    (survivingFraction-1)**2)/np.sqrt(2)
 
 euclidInterp = scipy.interpolate.RegularGridInterpolator(\
     (distArr,threshList),euclideanDistance,method='cubic')
+sfInterp = scipy.interpolate.RegularGridInterpolator(\
+    (distArr,threshList),survivingFraction,method='cubic')
 
+
+
+# Heatmaps of MCMC f_{survive} and Ncat:
+xx = np.linspace(np.min(distArr) + 1e-3,np.max(distArr)-1e-3,100)
+yy = np.linspace(np.min(threshList) + 1e-3,np.max(threshList) - 1e-3,100)
+X, Y = np.meshgrid(xx,yy,indexing='ij')
+cmap = 'coolwarm'
+fcat_Interp = scipy.interpolate.RegularGridInterpolator(\
+    (distArr,threshList),catMeanMCMCCutNoBins,method='cubic')
+fig, ax = plt.subplots(1,2,figsize=(textwidth,0.43*textwidth))
+ax1 = ax[0]
+ax2 = ax[1]
+ax1.imshow(fcat_Interp((X,Y)).T,vmin=0,vmax=1.0,\
+    cmap=cmap,extent=(np.min(distArr),np.max(distArr),\
+    np.min(threshList),np.max(threshList)),aspect='auto',origin='lower')
+ax2.imshow(sfInterp((X,Y)).T,vmin=0,vmax=1.0,cmap=cmap,\
+    extent=(np.min(distArr),np.max(distArr),\
+    np.min(threshList),np.max(threshList)),aspect='auto',origin='lower')
+c1 = ax1.contour(X,Y,fcat_Interp((X,Y)),[0.3,0.5,0.7],\
+    colors=['k','k','k'])
+ax1.clabel(c1,inline=True)
+#ax1.contour(X,Y,catPercentile99Rand_Interp((X,Y)))
+c2 = ax2.contour(X,Y,sfInterp((X,Y)),[0.3,0.5,0.7],\
+    colors=['k','k','k'])
+ax2.clabel(c2,inline=True)
+Xi, Yi = np.meshgrid(distArr,threshList,indexing='ij')
+ax1.scatter(Xi,Yi,marker='.',color='k')
+ax2.scatter(Xi,Yi,marker='.',color='k')
+#ax2.contour(X,Y,catMeanRand_Interp((X,Y)))
+ax1.set_xlabel('Search distance ratio, $\\mu_{S}$')
+ax1.set_ylabel('Radius ratio, $\\mu_{R}$')
+ax1.set_title('Mean MCMC Catalogue \nFraction after cut')
+sm = cm.ScalarMappable(colors.Normalize(vmin=0.0,vmax=1.0),cmap=cmap)
+plt.colorbar(sm,label='Catalogue fraction',ax=ax1)
+ax2.set_xlabel('Search distance ratio, $\\mu_{S}$')
+ax2.set_ylabel('Radius ratio, $\\mu_{R}$')
+ax2.set_title('Fraction of MCMC voids\n surviving cut, ' + \
+    '$N_{\\mathrm{cat}}/N_{\\mathrm{cat,uncut}}$')
+sm = cm.ScalarMappable(colors.Normalize(vmin=0.0,vmax=1.0),\
+    cmap=cmap)
+plt.colorbar(sm,label='$N_{\\mathrm{cat}}/N_{\\mathrm{cat,uncut}}$',ax=ax2)
+#sm = cm.ScalarMappable(colors.Normalize(vmin=0.0,vmax=1.0),cmap=cmap)
+#cbax = fig.add_axes([0.87,0.2,0.02,0.68])
+#cbar = plt.colorbar(sm, orientation="vertical",\
+#    label='Catalogue fraction Or $N_{cat}/\\mathrm{max}(N_{cat})$',cax=cbax)
+#plt.tight_layout()
+plt.subplots_adjust(top=0.839,bottom=0.219,left=0.099,right=0.924,hspace=0.2,\
+    wspace=0.394)
+plt.savefig(figuresFolder + 'mcmccat_fsur_Ncat_heatmap.pdf')
+plt.show()
+
+
+
+
+# Scatter plot of f_sur vs f_cat:
+plt.clf()
+fig, ax = plt.subplots()
+cmap='plasma'
+Xi, Yi = np.meshgrid(distArr,threshList,indexing='ij')
+sm = cm.ScalarMappable(colors.Normalize(vmin=np.min(Yi),vmax=np.max(Yi)),\
+    cmap=cmap)
+ax.scatter(catMeanMCMCCut[:5,:],survivingFraction[:5,:],c=Yi[:5,:],cmap=cmap,\
+    norm=colors.Normalize(vmin=np.min(Yi),vmax=np.max(Yi)))
+plt.colorbar(sm,label='Radius ratio, $\mu_R$')
+ax.set_xlabel('Mean MCMC catalogue fraction after cut')
+ax.set_ylabel('Fraction of voids surviving cut, ' + \
+    '$N_{\\mathrm{cat}}/N_{\\mathrm{cat,uncut}}$')
+#ax.set_xlim([0,1])
+#ax.set_ylim([0,400])
+plt.savefig(figuresFolder + "fcat_vs_fsurv_scatter.pdf")
+plt.show()
+
+
+
+
+# Heatmap of Euclidean distance:
 fig, ax = plt.subplots()
 ax.imshow(euclidInterp((X,Y)).T,vmin=0,vmax=1.0,\
     cmap=cmap,extent=(np.min(distArr),np.max(distArr),\
@@ -1585,7 +1715,10 @@ c1 = ax.contour(X,Y,euclidInterp((X,Y)),[0.3,0.5,0.7],\
 ax.clabel(c1,inline=True)
 ax.set_xlabel('Search distance ratio, $\\mu_{S}$')
 ax.set_ylabel('Radius ratio, $\\mu_{R}$')
-ax.set_title('$\\sqrt{(f_{\\mathrm{cat,MCMC}}-1)^2 + f_{\\mathrm{cat,rand}}^2}$')
+#ax.set_title('$\\sqrt{((f_{\\mathrm{cat,MCMC}}-1)^2 + ' + \
+#    'f_{\\mathrm{cat,rand}}^2)/2}$')
+ax.set_title('$\\sqrt{((f_{\\mathrm{cat,MCMC}}-1)^2 + ' + \
+    '(N_{\\mathrm{cat}}/N_{\\mathrm{cat,uncut}} - 1)^2)/2}$')
 sm = cm.ScalarMappable(colors.Normalize(vmin=0.0,vmax=1.0),cmap=cmap)
 plt.colorbar(sm,label='Euclidean Distance',ax=ax)
 plt.savefig(figuresFolder + 'euclidean_distance.pdf')
@@ -4213,7 +4346,7 @@ if doClusterMasses:
         savePlotData=True)
 
 #-------------------------------------------------------------------------------
-
+# MASS FUNCTIONS PLOT 135 VS 300
 
 # Get optimal catalogues:
 rSphere2 = 300
@@ -4245,7 +4378,7 @@ rSphere2 = 300
         snapListRev=snapListRevUn,\
         ahProps=ahPropsUn,hrList=hrListUn,max_index=None,\
         twoWayOnly=True,blockDuplicates=True,\
-        crossMatchThreshold = muR,distMax = rSearch,\
+        crossMatchThreshold = muOpt,distMax = rSearchOpt,\
         rSphere=rSphere2,massRange = [mLower1,mUpper1],\
         NWayMatch = False,rMin=rMin,rMax=rMax,\
         additionalFilters = None,verbose=False,\
@@ -4335,6 +4468,7 @@ massListCombUn = getPropertyFromCat(finalCatRand,massListShortUn)
 #    rLower,rUpper,mLower1,mUpper1,percThresh,massBins=massBins,\
 #    radBins=radBins)
 percentilesCat300 = [0.0 for k in range(0,7)]
+percentilesComb300 = [0.0 for k in range(0,7)]
 finalCentresOptList = np.array([getCentresFromCat(\
     finalCat300,centresListShort,ns) \
     for ns in range(0,len(snapNumList))])
@@ -4360,7 +4494,7 @@ leftFilter = (radiiMeanOpt > 10) & (radiiMeanOpt <= 25) & distFilter135 & \
 rightFilter = (radiiMeanOpt > 10) & (radiiMeanOpt <= 25) & \
     (finalCatFrac300 > 0.0) & (snrList > snrThresh)
 
-# MASS FUNCTIONS PLOT 135 VS 300
+
 if doCat:
     nBins = 8
     Om = referenceSnap.properties['omegaM0']
@@ -4386,6 +4520,49 @@ if doCat:
         titleLeft = "Combined catalogue, $<135\\mathrm{Mpc}h^{-1}$",\
         titleRight = "Combined catalogue, $<300\\mathrm{Mpc}h^{-1}$",\
         volSimRight = volSphere,ylimRight=[1,1000],legendLoc="upper right")
+
+# Histogram of catalogue fraction:
+plt.clf()
+inBinsMCMC = np.where(leftFilter)[0]
+#inBinsRand = np.where((radiiListMeanUn > radBins[0]) & \
+#    (radiiListMeanUn <= radBins[-1]))[0]
+plt.hist(finalCatFrac300[inBinsMCMC],color=seabornColormap[0],alpha=0.5,\
+    label='MCMC catalogue',bins=np.linspace(0.025,1+0.025,21))
+#plt.hist(finalCatFracRand[inBinsRand],color=seabornColormap[1],alpha=0.5,\
+#    label='Random catalogue',bins=np.linspace(0,1,21))
+plt.xlabel('Catalogue fraction')
+plt.ylabel('Number of voids')
+plt.yscale('log')
+plt.legend()
+plt.savefig(figuresFolder + "catalogue_fraction_histograms_optimal.pdf")
+plt.show()
+
+
+# Histogram of radii:
+plt.clf()
+inBinsMCMC = np.where(leftFilter)[0]
+#inBinsRand = np.where((radiiListMeanUn > radBins[0]) & \
+#    (radiiListMeanUn <= radBins[-1]))[0]
+plt.hist(radiiMeanOpt[inBinsMCMC],color=seabornColormap[0],alpha=0.5,\
+    label='MCMC catalogue',bins=np.linspace(10,25,8))
+#plt.hist(radiiListMeanUn[inBinsRand],color=seabornColormap[1],alpha=0.5,\
+#    label='Random catalogue',bins=radBins)
+plt.xlabel('Radius')
+plt.ylabel('Number of voids')
+plt.yscale('log')
+plt.legend()
+plt.savefig(figuresFolder + "radii_histograms_optimal.pdf")
+plt.show()
+
+# Scatter plot of catalogue fraction and radius:
+plt.clf()
+fig, ax = plt.subplots(figsize=(textwidth,textwidth))
+inBinsMCMC = np.where(leftFilter)[0]
+ax.scatter(finalCatFrac300[inBinsMCMC],radiiMeanOpt[inBinsMCMC])
+ax.set_xlabel('Catalogue fraction')
+ax.set_ylabel('Radius [$\\mathrm{Mpc}h^{-1}$]')
+plt.savefig(figuresFolder + "radius_fcat_scatter.pdf")
+plt.show()
 
 #-------------------------------------------------------------------------------
 # UNDERDENSE PROFILES PLOT
