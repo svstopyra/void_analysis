@@ -239,15 +239,20 @@ mMax = 1e16
 rMin = 5
 rMax = 30
 #muOpt = 0.9
-muOpt = 0.55830868
+#muOpt = 0.55830868
 #rSearchOpt = 1
-rSearchOpt = 1.1565106
+#rSearchOpt = 1.1565106
 rSphere = 300
 rSphereInner = 135
 # Optimum parameters with 1-way purity/completeness:
 # np.array([1.21232077, 0.54490005])
 # Optimum with 2-way:
 # np.array([1.1565106 , 0.55830868])
+
+# Optimal number of voids in the final catalogue:
+# [0.14237877, 0.85891552]
+muOpt = 0.85891552
+rSearchOpt = 0.14237877
 
 doCat = True
 if doCat:
@@ -1203,10 +1208,11 @@ tools.savePickle([purity_1f,purity_2f,completeness_1f,completeness_2f,\
 
 
 [purity_1f,purity_2f,completeness_1f,completeness_2f,\
-    catPercentileBins99Rand,catPercentile99Rand,catMeanRand,\
+    catPercentile99BinsRand,catPercentileRand,catMeanRand,\
     catMeanMCMC,catMeanMCMCCut,catSizeMCMC,catSizeMCMCCut,\
     catSizeBinsMCMC,catSizeBinsMCMCCut,catSizeMCMCCutNoBins,\
-    catSizeMCMCCutNoBinsInBins] =  tools.loadPickle(\
+    catSizeMCMCCutNoBinsInBins,catPercentileMaxRand,\
+    catMeanMCMCCutNoBins] =  tools.loadPickle(\
     "borg-antihalos_paper_figures/all_samples/" + "purity_completeness_data.p")
 
 ylabel = 'Radius ratio threshold ($\mu_{\mathrm{R}}$)'
@@ -1543,6 +1549,15 @@ plt.subplots_adjust(top=0.839,bottom=0.219,left=0.099,right=0.924,hspace=0.2,\
     wspace=0.394)
 plt.savefig(figuresFolder + 'mcmccat_fcat_Ncat_heatmap_binned_filter.pdf')
 plt.show()
+
+
+# Optimal Ncat:
+
+optimalParamNcat = scipy.optimize.minimize(lambda x: -Ncat_Interp(x),\
+    np.array([0.15,0.87]),bounds=(tools.minmax(distArr),\
+    tools.minmax(threshList)))
+# Optimal number of voids at [0.14237877, 0.85891552]
+
 
 plt.clf()
 fig, ax = plt.subplots()
@@ -4198,6 +4213,153 @@ if doClusterMasses:
         savePlotData=True)
 
 #-------------------------------------------------------------------------------
+
+
+# Get optimal catalogues:
+rSphere2 = 300
+[finalCat300,shortHaloList300,twoWayMatchList300,\
+            finalCandidates300,finalRatios300,finalDistances300,\
+            allCandidates300,candidateCounts300,allRatios300,\
+            finalCombinatoricFrac300,finalCatFrac300,alreadyMatched300] = \
+            tools.loadOrRecompute(data_folder + \
+                "mcmc_catalogue_optimal_Ncat.p",\
+                constructAntihaloCatalogue,\
+                snapNumList,snapList=snapList,\
+                snapListRev=snapListRev,\
+                ahProps=ahProps,hrList=hrList,max_index=None,\
+                twoWayOnly=True,blockDuplicates=True,\
+                crossMatchThreshold = muOpt,distMax = rSearchOpt,\
+                rSphere=rSphere2,massRange = [mLower1,mUpper1],\
+                NWayMatch = False,rMin=rMin,rMax=rMax,\
+                additionalFilters = snrFilter,verbose=False,\
+                _recomputeData=True)
+
+[finalCatRand,shortHaloListRand,twoWayMatchListRand,\
+    finalCandidatesRand,finalRatiosRand,finalDistancesRand,\
+    allCandidatesRand,candidateCountsRand,allRatiosRand,\
+    finalCombinatoricFracRand,finalCatFracRand,alreadyMatchedRand] = \
+    tools.loadOrRecompute(data_folder + \
+        "random_catalogue_optimal_Ncat.p",\
+        constructAntihaloCatalogue,\
+        snapNumListUncon,snapList=snapListUn,\
+        snapListRev=snapListRevUn,\
+        ahProps=ahPropsUn,hrList=hrListUn,max_index=None,\
+        twoWayOnly=True,blockDuplicates=True,\
+        crossMatchThreshold = muR,distMax = rSearch,\
+        rSphere=rSphere2,massRange = [mLower1,mUpper1],\
+        NWayMatch = False,rMin=rMin,rMax=rMax,\
+        additionalFilters = None,verbose=False,\
+        _recomputeData=True)
+
+# A few things needed for computing catalogue fractions:
+# For MCMC samples:
+[mcmcArray,num,N,NCAT,no_bias_params,bias_matrix,mean_field,\
+        std_field,hmc_Elh,hmc_Eprior,hades_accept_count,\
+        hades_attempt_count] = pickle.load(open(chainFile,"rb"))
+snrField = mean_field**2/std_field**2
+snrFieldLin = np.reshape(snrField,Nden**3)
+grid = snapedit.gridListPermutation(Nden,perm=(2,1,0))
+centroids = grid*boxsize/Nden + boxsize/(2*Nden)
+positions = snapedit.unwrap(centroids - np.array([boxsize/2]*3),boxsize)
+tree = scipy.spatial.cKDTree(snapedit.wrap(positions + boxsize/2,boxsize),\
+    boxsize=boxsize)
+nearestPointsList = [tree.query_ball_point(\
+    snapedit.wrap(antihaloCentres[k] + boxsize/2,boxsize),\
+    antihaloRadii[k],workers=-1) \
+    for k in range(0,len(antihaloCentres))]
+snrAllCatsList = [np.array([np.mean(snrFieldLin[points]) \
+    for points in nearestPointsList[k]]) for k in range(0,len(snapNumList))]
+snrFilter = [snr > snrThresh for snr in snrAllCatsList]
+
+centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],rSphere2,\
+            filterCondition = (antihaloRadii[k] > rMin) & \
+            (antihaloRadii[k] <= rMax) & (antihaloMasses[k] > mMin) & \
+            (antihaloMasses[k] <= mMax) & snrFilter[k]) \
+            for k in range(0,len(snapNumList))]
+centralAntihaloRadii = [\
+            antihaloRadii[k][centralAntihalos[k][0]] \
+            for k in range(0,len(centralAntihalos))]
+sortedList = [np.flip(np.argsort(centralAntihaloRadii[k])) \
+                    for k in range(0,len(snapNumList))]
+ahCounts = np.array([len(cahs[0]) for cahs in centralAntihalos])
+max_index = np.max(ahCounts)
+radiiListShort = [np.array([antihaloRadii[l][\
+            centralAntihalos[l][0][sortedList[l][k]]] \
+            for k in range(0,np.min([ahCounts[l],max_index]))]) \
+            for l in range(0,len(snapNumList))]
+massListShort = [np.array([antihaloMasses[l][\
+            centralAntihalos[l][0][sortedList[l][k]]] \
+            for k in range(0,np.min([ahCounts[l],max_index]))]) \
+            for l in range(0,len(snapNumList))]
+centresListShort = [np.array([antihaloCentres[l][\
+            centralAntihalos[l][0][sortedList[l][k]],:] \
+            for k in range(0,np.min([ahCounts[l],max_index]))]) \
+            for l in range(0,len(snapNumList))]
+# For randoms:
+centralAntihalosUn = [tools.getAntiHalosInSphere(antihaloCentresUn[k],\
+            rSphere2,filterCondition = (antihaloRadiiUn[k] > rMin) & \
+            (antihaloRadiiUn[k] <= rMax) & (antihaloMassesUn[k] > mMin) & \
+            (antihaloMassesUn[k] <= mMax)) \
+            for k in range(0,len(snapNumListUncon))]
+centralAntihaloRadiiUn = [\
+            antihaloRadiiUn[k][centralAntihalosUn[k][0]] \
+            for k in range(0,len(centralAntihalosUn))]
+sortedListUn = [np.flip(np.argsort(centralAntihaloRadiiUn[k])) \
+                    for k in range(0,len(snapNumListUncon))]
+ahCountsUn = np.array([len(cahs[0]) for cahs in centralAntihalosUn])
+max_indexUn = np.max(ahCountsUn)
+radiiListShortUn = [np.array([antihaloRadiiUn[l][\
+    centralAntihalosUn[l][0][sortedListUn[l][k]]] \
+    for k in range(0,np.min([ahCountsUn[l],max_indexUn]))]) \
+    for l in range(0,len(snapNumListUncon))]
+massListShortUn = [np.array([antihaloMassesUn[l][\
+    centralAntihalosUn[l][0][sortedListUn[l][k]]] \
+    for k in range(0,np.min([ahCountsUn[l],max_indexUn]))]) \
+    for l in range(0,len(snapNumListUncon))]
+
+# Compute percentiles:
+radiiListOpt = getPropertyFromCat(finalCat300,radiiListShort)
+massListOpt = getPropertyFromCat(finalCat300,massListShort)
+[radiiMeanOpt, radiiSigmaOpt]  = getMeanProperty(radiiListOpt)
+[massMeanOpt, massSigmaOpt]  = getMeanProperty(massListOpt)
+scaleFilter = [(radiiMeanOpt > radBins[k]) & \
+    (radiiMeanOpt <= radBins[k+1]) \
+    for k in range(0,len(radBins) - 1)]
+radiiListCombUn = getPropertyFromCat(finalCatRand,radiiListShortUn)
+massListCombUn = getPropertyFromCat(finalCatRand,massListShortUn)
+[radiiListMeanUn,radiiListSigmaUn] = getMeanProperty(radiiListCombUn)
+[massListMeanUn,massListSigmaUn] = getMeanProperty(massListCombUn)
+#[percentilesCat300, percentilesComb300] = getThresholdsInBins(\
+#    nBinEdges-1,cutScale,massListMeanUn,radiiListMeanUn,\
+#    finalCombinatoricFracRand,finalCatFracRand,\
+#    rLower,rUpper,mLower1,mUpper1,percThresh,massBins=massBins,\
+#    radBins=radBins)
+percentilesCat300 = [0.0 for k in range(0,7)]
+finalCentresOptList = np.array([getCentresFromCat(\
+    finalCat300,centresListShort,ns) \
+    for ns in range(0,len(snapNumList))])
+meanCentreOpt = np.nanmean(finalCentresOptList,0)
+nearestPoints = tree.query_ball_point(\
+    snapedit.wrap(meanCentreOpt + boxsize/2,boxsize),radiiMeanOpt,\
+    workers=-1)
+snrList = np.array([np.mean(snrFieldLin[points]) \
+    for points in nearestPoints])
+[combinedFilter300, meanCatFrac300, stdErrCatFrac300, \
+    meanCombFrac300, stdErrCombFrac300] = applyCatalogueCuts(\
+    finalCatFrac300,finalCombinatoricFrac300,percentilesCat300,\
+    percentilesComb300,scaleFilter,snrList,snrThresh,catFracCut,\
+    combFracCut,snrCut)
+
+distances  = np.sqrt(np.sum(meanCentreOpt**2,1))
+distFilter135 = (distances < 135)
+
+#leftFilter = combinedFilter300 & distFilter135
+#rightFilter = combinedFilter300
+leftFilter = (radiiMeanOpt > 10) & (radiiMeanOpt <= 25) & distFilter135 & \
+    (finalCatFrac300 > 0.0) & (snrList > snrThresh)
+rightFilter = (radiiMeanOpt > 10) & (radiiMeanOpt <= 25) & \
+    (finalCatFrac300 > 0.0) & (snrList > snrThresh)
+
 # MASS FUNCTIONS PLOT 135 VS 300
 if doCat:
     nBins = 8
@@ -4213,8 +4375,8 @@ if doCat:
     # Check mass functions:
     volSphere135 = 4*np.pi*rSphereInner**3/3
     volSphere = 4*np.pi*rSphere**3/3
-    plot.massFunctionComparison(massListMean[combinedFilter135],\
-        massListMean[combinedFilter],volSphere135,nBins=nBins,\
+    plot.massFunctionComparison(massMeanOpt[leftFilter],\
+        massMeanOpt[rightFilter],volSphere135,nBins=nBins,\
         labelLeft = "Combined catalogue \n(well-constrained voids only)",\
         labelRight  ="Combined catalogue \n(well-constrained voids only)",\
         ylabel="Number of antihalos",savename=figuresFolder + \
