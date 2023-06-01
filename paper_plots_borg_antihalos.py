@@ -919,6 +919,12 @@ combPercentileRand = np.zeros((len(distArr),len(threshList),\
 combPercentile99BinsRand = np.zeros((len(distArr),len(threshList),\
     nBinEdges-1))
 combPercentileMaxRand = np.zeros((len(distArr),len(threshList)))
+catSizeBinsMCMCCutComb = np.zeros((len(distArr),len(threshList),\
+    nBinEdges-1))
+catSizeMCMCCutComb = np.zeros((len(distArr),len(threshList)))
+combMeanMCMCCutComb = np.zeros((len(distArr),len(threshList)))
+catMeanMCMCCutComb = np.zeros((len(distArr),len(threshList)))
+
 
 # For testing these, we can use a combined list of MCMC and random catalogues:
 snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
@@ -1110,8 +1116,13 @@ for k in range(0,len(distArr)):
         [combinedFilterTest, meanCatFracTest, stdErrCatFracTest, \
             meanCombFracTest, stdErrCombFracTest] = applyCatalogueCuts(\
             finalCatFracMCMC,finalCombinatoricFracMCMC,percentilesCatTest,\
-            percentilesCombTest,scaleFilter,snrList,snrThresh,catFracCut,\
-            combFracCut,snrCut)
+            percentilesCombTest,scaleFilter,snrList,snrThresh,True,\
+            False,snrCut)
+        [combinedFilterComb, meanCatFracComb, stdErrCatFracComb, \
+            meanCombFracComb, stdErrCombFracComb] = applyCatalogueCuts(\
+            finalCatFracMCMC,finalCombinatoricFracMCMC,percentilesCatTest,\
+            percentilesCombTest,scaleFilter,snrList,snrThresh,False,\
+            True,snrCut)
         # Get the anti-halo properties used for filtering:
         centralAntihalosTest = [tools.getAntiHalosInSphere(\
             antihaloCentresComb[ns],rSphere1,\
@@ -1163,7 +1174,7 @@ for k in range(0,len(distArr)):
                 finalCatFracMCMC[combinedFilterNoBins])
             catMeanMCMCCutNoBins[k,l] = np.mean(\
                 finalCatFracMCMC[combinedFilterNoBins])
-            catMeanMCMCCutNoBins[k,l] = np.mean(\
+            combMeanMCMCCutNoBins[k,l] = np.mean(\
                 finalCombinatoricFracMCMC[combinedFilterNoBins])
             [inRadBinsCut,noInRadBinsCut] = plot.binValues(\
                 radiiMeanOpt[combinedFilterNoBins],radBins)
@@ -1176,14 +1187,23 @@ for k in range(0,len(distArr)):
             catMeanMCMCCut[k,l] = np.mean(finalCatFracMCMC[combinedFilterTest])
             combMeanMCMCCut[k,l] = np.mean(\
                 finalCombinatoricFracMCMC[combinedFilterTest])
+        if np.sum(combinedFilterComb) > 0:
+            catMeanMCMCCutComb[k,l] = np.mean(\
+                finalCatFracMCMC[combinedFilterComb])
+            combMeanMCMCCutComb[k,l] = np.mean(\
+                finalCombinatoricFracMCMC[combinedFilterComb])
         catSizeMCMC[k,l] = len(finalCatFracMCMC)
         catSizeMCMCCut[k,l] = len(finalCatFracMCMC[combinedFilterTest])
+        catSizeMCMCCutComb[k,l] = len(finalCatFracMCMC[combinedFilterComb])
         [inRadBinsCut,noInRadBinsCut] = plot.binValues(\
             radiiMeanOpt[combinedFilterTest],radBins)
+        [inRadBinsCutComb,noInRadBinsCutComb] = plot.binValues(\
+            radiiMeanOpt[combinedFilterComb],radBins)
         [inRadBins,noInRadBins] = plot.binValues(\
             radiiMeanOpt,radBins)
         catSizeBinsMCMC[k,l,:] = noInRadBins
         catSizeBinsMCMCCut[k,l,:] = noInRadBinsCut
+        catSizeBinsMCMCCutComb[k,l,:] = noInRadBinsCutComb
         # Compute purity and completeness:
         #purity_1f[k,l] = 1.0 - np.mean([[\
         #    np.sum((candidateCountsTest[i][j] > 0) & \
@@ -1212,7 +1232,8 @@ euclideanDist1 = np.sqrt((purity_1f - 1.0)**2  + (completeness_1f - 1.0)**2)
 
 tools.savePickle([combMeanRand,combMeanMCMC,combMeanMCMCCut,\
     combMeanMCMCCutNoBins,combPercentileRand,combPercentileMaxRand,\
-    combPercentile99BinsRand],\
+    combPercentile99BinsRand,catSizeBinsMCMCCutComb,\
+    catSizeMCMCCutComb,combMeanMCMCCutComb,catMeanMCMCCutComb],\
     data_folder + "combinatoric_fraction_data.p")
 
 tools.savePickle([purity_1f,purity_2f,completeness_1f,completeness_2f,\
@@ -1233,6 +1254,7 @@ tools.savePickle([purity_1f,purity_2f,completeness_1f,completeness_2f,\
     "borg-antihalos_paper_figures/all_samples/" + \
     "purity_completeness_data_whole_range.p")
 
+# Catgrid 3:
 distArr = np.linspace(0.0,0.75,16) # Catgrid 3
 threshList = np.linspace(0.75,1.0,11) # Catgrid 3
 [purity_1f,purity_2f,completeness_1f,completeness_2f,\
@@ -1241,10 +1263,14 @@ threshList = np.linspace(0.75,1.0,11) # Catgrid 3
     catSizeBinsMCMC,catSizeBinsMCMCCut,catSizeMCMCCutNoBins,\
     catSizeMCMCCutNoBinsInBins,catPercentileMaxRand,\
     catMeanMCMCCutNoBins] =  tools.loadPickle(\
-    "borg-antihalos_paper_figures/all_samples/" + "purity_completeness_data.p")
+    "borg-antihalos_paper_figures/all_samples/" + "purity_completeness_data_catgrid3.p")
+[combMeanRand,combMeanMCMC,combMeanMCMCCut,\
+    combMeanMCMCCutNoBins,combPercentileRand,combPercentileMaxRand,\
+    combPercentile99BinsRand,catSizeBinsMCMCCutComb,\
+    catSizeMCMCCutComb,combMeanMCMCCutComb,catMeanMCMCCutComb] = tools.loadPickle(\
+    "borg-antihalos_paper_figures/all_samples/" + "combinatoric_fraction_data_catgrid3.p")
 
-
-# Catgrid 3:
+# Catgrid 2:
 distArr = np.arange(0.0,1.3,0.1) # Catgrid 2
 threshList =np.arange(0.5,1.01,0.05) # Catgrid 2
 [purity_1f,purity_2f,completeness_1f,completeness_2f,\
@@ -1254,7 +1280,11 @@ threshList =np.arange(0.5,1.01,0.05) # Catgrid 2
     catSizeMCMCCutNoBinsInBins,catPercentileMaxRand,\
     catMeanMCMCCutNoBins] =  tools.loadPickle(\
     "borg-antihalos_paper_figures/all_samples/" + "purity_completeness_data_catgrid2.p")
-
+[combMeanRand,combMeanMCMC,combMeanMCMCCut,\
+    combMeanMCMCCutNoBins,combPercentileRand,combPercentileMaxRand,\
+    combPercentile99BinsRand,catSizeBinsMCMCCutComb,\
+    catSizeMCMCCutComb,combMeanMCMCCutComb,catMeanMCMCCutComb] = tools.loadPickle(\
+    "borg-antihalos_paper_figures/all_samples/" + "combinatoric_fraction_data_catgrid2.p")
 
 ylabel = 'Radius ratio threshold ($\mu_{\mathrm{R}}$)'
 imshowComparison(completeness_2f.T,completeness_1f.T,\
@@ -1500,46 +1530,50 @@ plt.savefig(figuresFolder + 'randcat_fcat_combined.pdf')
 plt.show()
 
 # Heatmaps of randoms:
+# Catalogue fractions:
 xx = np.linspace(np.min(distArr) + 1e-3,np.max(distArr)-1e-3,100)
 yy = np.linspace(np.min(threshList) + 1e-3,np.max(threshList) - 1e-3,100)
 X, Y = np.meshgrid(xx,yy,indexing='ij')
 cmap = 'coolwarm'
 catPercentile99Rand_Interp = scipy.interpolate.RegularGridInterpolator(\
     (distArr,threshList),catPercentileRand[:,:,-1],method='cubic')
-catMaxRand_Interp = scipy.interpolate.RegularGridInterpolator(\
-    (distArr,threshList),catPercentileMaxRand,method='cubic')
+#catMaxRand_Interp = scipy.interpolate.RegularGridInterpolator(\
+#    (distArr,threshList),catPercentileMaxRand,method='cubic')
+combPercentile99Rand_Interp = scipy.interpolate.RegularGridInterpolator(\
+    (distArr,threshList),combPercentileRand[:,:,-1],method='cubic')
 fig, ax = plt.subplots(1,2,figsize=(textwidth,0.45*textwidth))
 ax1 = ax[0]
 ax2 = ax[1]
 ax1.imshow(catPercentile99Rand_Interp((X,Y)).T,vmin=0,vmax=1.0,\
     cmap=cmap,extent=(np.min(distArr),np.max(distArr),\
     np.min(threshList),np.max(threshList)),aspect='auto',origin='lower')
-ax2.imshow(catMaxRand_Interp((X,Y)).T,vmin=0,vmax=1.0,cmap=cmap,\
+ax2.imshow(combPercentile99Rand_Interp((X,Y)).T,vmin=0,vmax=1.0,cmap=cmap,\
     extent=(np.min(distArr),np.max(distArr),\
     np.min(threshList),np.max(threshList)),aspect='auto',origin='lower')
 c1 = ax1.contour(X,Y,catPercentile99Rand_Interp((X,Y)),[0.2,0.3,0.4,0.5],\
     colors=['k','k','k'])
 ax1.clabel(c1,inline=True)
 #ax1.contour(X,Y,catPercentile99Rand_Interp((X,Y)))
-c2 = ax2.contour(X,Y,catMaxRand_Interp((X,Y)),[0.2,0.3,0.4,0.5],\
+c2 = ax2.contour(X,Y,combPercentile99Rand_Interp((X,Y)),[0.02,0.03],\
     colors=['k','k','k'])
 ax2.clabel(c2,inline=True)
 #ax2.contour(X,Y,catMeanRand_Interp((X,Y)))
 ax1.set_xlabel('Search distance ratio, $\\mu_{S}$')
 ax1.set_ylabel('Radius ratio, $\\mu_{R}$')
-ax1.set_title('99th Percentile')
+ax1.set_title('99th Percentile \nCatalogue Fraction')
 ax2.set_xlabel('Search distance ratio, $\\mu_{S}$')
 ax2.set_ylabel('Radius ratio, $\\mu_{R}$')
-ax2.set_title('Maximum')
+ax2.set_title('99th Percentile \nCombinatoric Fraction')
 sm = cm.ScalarMappable(colors.Normalize(vmin=0.0,vmax=1.0),cmap=cmap)
 cbax = fig.add_axes([0.87,0.2,0.02,0.68])
 cbar = plt.colorbar(sm, orientation="vertical",\
     label='Catalogue fraction',cax=cbax)
 #plt.tight_layout()
-plt.subplots_adjust(top=0.883,bottom=0.195,left=0.099,right=0.839,hspace=0.2,\
+plt.subplots_adjust(top=0.87,bottom=0.195,left=0.099,right=0.839,hspace=0.2,\
     wspace=0.254)
 plt.savefig(figuresFolder + 'randcat_fcat_heatmap.pdf')
 plt.show()
+
 
 # Heatmaps of MCMC fcat and Ncat:
 xx = np.linspace(np.min(distArr) + 1e-3,np.max(distArr)-1e-3,100)
@@ -1588,8 +1622,61 @@ plt.colorbar(sm,label='Number of Voids',ax=ax2)
 #plt.tight_layout()
 plt.subplots_adjust(top=0.839,bottom=0.219,left=0.099,right=0.924,hspace=0.2,\
     wspace=0.394)
-plt.savefig(figuresFolder + 'mcmccat_fcat_Ncat_heatmap_binned_filter.pdf')
+plt.savefig(figuresFolder + 'mcmccat_fcat_Ncat_heatmap.pdf')
 plt.show()
+
+
+
+# Heatmaps of MCMC fcat and Ncat:
+xx = np.linspace(np.min(distArr) + 1e-3,np.max(distArr)-1e-3,100)
+yy = np.linspace(np.min(threshList) + 1e-3,np.max(threshList) - 1e-3,100)
+X, Y = np.meshgrid(xx,yy,indexing='ij')
+cmap = 'coolwarm'
+fcat_Interp = scipy.interpolate.RegularGridInterpolator(\
+    (distArr,threshList),combMeanMCMCCut,method='cubic')
+Ncat_Interp = scipy.interpolate.RegularGridInterpolator(\
+    (distArr,threshList),catSizeMCMCCutComb,method='cubic')
+fig, ax = plt.subplots(1,2,figsize=(textwidth,0.43*textwidth))
+ax1 = ax[0]
+ax2 = ax[1]
+ax1.imshow(fcat_Interp((X,Y)).T,vmin=0,vmax=1.0,\
+    cmap=cmap,extent=(np.min(distArr),np.max(distArr),\
+    np.min(threshList),np.max(threshList)),aspect='auto',origin='lower')
+ax2.imshow(Ncat_Interp((X,Y)).T,vmin=0,vmax=np.max(catSizeMCMCCut),cmap=cmap,\
+    extent=(np.min(distArr),np.max(distArr),\
+    np.min(threshList),np.max(threshList)),aspect='auto',origin='lower')
+c1 = ax1.contour(X,Y,fcat_Interp((X,Y)),[0.1,0.3,0.5,0.7],\
+    colors=['k','k','k'])
+ax1.clabel(c1,inline=True)
+#ax1.contour(X,Y,catPercentile99Rand_Interp((X,Y)))
+c2 = ax2.contour(X,Y,Ncat_Interp((X,Y)),[100,200,300,500],\
+    colors=['k','k','k'])
+ax2.clabel(c2,inline=True)
+Xi, Yi = np.meshgrid(distArr,threshList,indexing='ij')
+ax1.scatter(Xi,Yi,marker='.',color='k')
+ax2.scatter(Xi,Yi,marker='.',color='k')
+#ax2.contour(X,Y,catMeanRand_Interp((X,Y)))
+ax1.set_xlabel('Search distance ratio, $\\mu_{S}$')
+ax1.set_ylabel('Radius ratio, $\\mu_{R}$')
+ax1.set_title('Mean MCMC Combinatoric \nFraction after cut')
+sm = cm.ScalarMappable(colors.Normalize(vmin=0.0,vmax=1.0),cmap=cmap)
+plt.colorbar(sm,label='Combinatoric fraction',ax=ax1)
+ax2.set_xlabel('Search distance ratio, $\\mu_{S}$')
+ax2.set_ylabel('Radius ratio, $\\mu_{R}$')
+ax2.set_title('MCMC number of voids \nafter cut')
+sm = cm.ScalarMappable(colors.Normalize(vmin=0.0,vmax=np.max(catSizeMCMCCutNoBins)),\
+    cmap=cmap)
+plt.colorbar(sm,label='Number of Voids',ax=ax2)
+#sm = cm.ScalarMappable(colors.Normalize(vmin=0.0,vmax=1.0),cmap=cmap)
+#cbax = fig.add_axes([0.87,0.2,0.02,0.68])
+#cbar = plt.colorbar(sm, orientation="vertical",\
+#    label='Catalogue fraction Or $N_{cat}/\\mathrm{max}(N_{cat})$',cax=cbax)
+#plt.tight_layout()
+plt.subplots_adjust(top=0.839,bottom=0.219,left=0.099,right=0.924,hspace=0.2,\
+    wspace=0.394)
+plt.savefig(figuresFolder + 'mcmccat_fcomb_Ncat_heatmap.pdf')
+plt.show()
+
 
 
 # Optimal Ncat:
@@ -1625,12 +1712,22 @@ survivingFraction[nz] = np.sum(catSizeBinsMCMCCut,2)[nz]/\
 euclideanDistance = np.sqrt((catMeanMCMCCut-1)**2 + \
     (survivingFraction-1)**2)/np.sqrt(2)
 
+survivingFractionComb = np.zeros(catSizeMCMCCut.shape)
+nz = np.where(np.sum(catSizeBinsMCMC,2) != 0)
+survivingFractionComb[nz] = np.sum(catSizeBinsMCMCCutComb,2)[nz]/\
+    np.sum(catSizeBinsMCMC,2)[nz]
+euclideanDistanceComb = np.sqrt((combMEanMCMCCutComb-1)**2 + \
+    (survivingFractionComb-1)**2)/np.sqrt(2)
+
 euclidInterp = scipy.interpolate.RegularGridInterpolator(\
     (distArr,threshList),euclideanDistance,method='cubic')
 sfInterp = scipy.interpolate.RegularGridInterpolator(\
     (distArr,threshList),survivingFraction,method='cubic')
 
-
+euclidInterpComb = scipy.interpolate.RegularGridInterpolator(\
+    (distArr,threshList),euclideanDistanceComb,method='cubic')
+sfInterpComb = scipy.interpolate.RegularGridInterpolator(\
+    (distArr,threshList),survivingFractionComb,method='cubic')
 
 # Heatmaps of MCMC f_{survive} and Ncat:
 xx = np.linspace(np.min(distArr) + 1e-3,np.max(distArr)-1e-3,100)
@@ -1639,20 +1736,24 @@ X, Y = np.meshgrid(xx,yy,indexing='ij')
 cmap = 'coolwarm'
 fcat_Interp = scipy.interpolate.RegularGridInterpolator(\
     (distArr,threshList),catMeanMCMCCutNoBins,method='cubic')
+fcomb_Interp = scipy.interpolate.RegularGridInterpolator(\
+    (distArr,threshList),combMeanMCMCCutNoBins,method='cubic')
 fig, ax = plt.subplots(1,2,figsize=(textwidth,0.43*textwidth))
 ax1 = ax[0]
 ax2 = ax[1]
-ax1.imshow(fcat_Interp((X,Y)).T,vmin=0,vmax=1.0,\
+ax1.imshow(fcomb_Interp((X,Y)).T,vmin=0,vmax=1.0,\
     cmap=cmap,extent=(np.min(distArr),np.max(distArr),\
     np.min(threshList),np.max(threshList)),aspect='auto',origin='lower')
-ax2.imshow(sfInterp((X,Y)).T,vmin=0,vmax=1.0,cmap=cmap,\
+ax2.imshow(sfInterpComb((X,Y)).T,vmin=0,vmax=1.0,cmap=cmap,\
     extent=(np.min(distArr),np.max(distArr),\
     np.min(threshList),np.max(threshList)),aspect='auto',origin='lower')
-c1 = ax1.contour(X,Y,fcat_Interp((X,Y)),[0.3,0.5,0.7],\
+c1 = ax1.contour(X,Y,fcomb_Interp((X,Y)),[0.1,0.2,0.3],\
     colors=['k','k','k'])
+#c1 = ax1.contour(X,Y,fcat_Interp((X,Y)),[0.3,0.5,0.7],\
+#    colors=['k','k','k'])
 ax1.clabel(c1,inline=True)
 #ax1.contour(X,Y,catPercentile99Rand_Interp((X,Y)))
-c2 = ax2.contour(X,Y,sfInterp((X,Y)),[0.3,0.5,0.7],\
+c2 = ax2.contour(X,Y,sfInterpComb((X,Y)),[0.3,0.5,0.7],\
     colors=['k','k','k'])
 ax2.clabel(c2,inline=True)
 Xi, Yi = np.meshgrid(distArr,threshList,indexing='ij')
@@ -1661,14 +1762,15 @@ ax2.scatter(Xi,Yi,marker='.',color='k')
 #ax2.contour(X,Y,catMeanRand_Interp((X,Y)))
 ax1.set_xlabel('Search distance ratio, $\\mu_{S}$')
 ax1.set_ylabel('Radius ratio, $\\mu_{R}$')
-ax1.set_title('Mean MCMC Catalogue \nFraction after cut')
-sm = cm.ScalarMappable(colors.Normalize(vmin=0.0,vmax=1.0),cmap=cmap)
-plt.colorbar(sm,label='Catalogue fraction',ax=ax1)
+#ax1.set_title('Mean MCMC Catalogue \nFraction after cut')
+ax1.set_title('Mean MCMC Combinatoric \nFraction after cut')
+sm = cm.ScalarMappable(colors.Normalize(vmin=0.0,vmax=0.3),cmap=cmap)
+plt.colorbar(sm,label='Combinatoric fraction',ax=ax1)
 ax2.set_xlabel('Search distance ratio, $\\mu_{S}$')
 ax2.set_ylabel('Radius ratio, $\\mu_{R}$')
 ax2.set_title('Fraction of MCMC voids\n surviving cut, ' + \
     '$N_{\\mathrm{cat}}/N_{\\mathrm{cat,uncut}}$')
-sm = cm.ScalarMappable(colors.Normalize(vmin=0.0,vmax=1.0),\
+sm = cm.ScalarMappable(colors.Normalize(vmin=0.0,vmax=0.3),\
     cmap=cmap)
 plt.colorbar(sm,label='$N_{\\mathrm{cat}}/N_{\\mathrm{cat,uncut}}$',ax=ax2)
 #sm = cm.ScalarMappable(colors.Normalize(vmin=0.0,vmax=1.0),cmap=cmap)
@@ -1678,7 +1780,7 @@ plt.colorbar(sm,label='$N_{\\mathrm{cat}}/N_{\\mathrm{cat,uncut}}$',ax=ax2)
 #plt.tight_layout()
 plt.subplots_adjust(top=0.839,bottom=0.219,left=0.099,right=0.924,hspace=0.2,\
     wspace=0.394)
-plt.savefig(figuresFolder + 'mcmccat_fsur_Ncat_heatmap.pdf')
+plt.savefig(figuresFolder + 'mcmccat_fsur_fcomb_heatmap.pdf')
 plt.show()
 
 
@@ -1722,6 +1824,26 @@ ax.set_title('$\\sqrt{((f_{\\mathrm{cat,MCMC}}-1)^2 + ' + \
 sm = cm.ScalarMappable(colors.Normalize(vmin=0.0,vmax=1.0),cmap=cmap)
 plt.colorbar(sm,label='Euclidean Distance',ax=ax)
 plt.savefig(figuresFolder + 'euclidean_distance.pdf')
+plt.show()
+
+
+# Heatmap of Euclidean distance:
+fig, ax = plt.subplots()
+ax.imshow(euclidInterpComb((X,Y)).T,vmin=0,vmax=1.0,\
+    cmap=cmap,extent=(np.min(distArr),np.max(distArr),\
+    np.min(threshList),np.max(threshList)),aspect='auto',origin='lower')
+c1 = ax.contour(X,Y,euclidInterpComb((X,Y)),[0.3,0.4,0.5,0.6,0.7,0.8,0.9],\
+    colors=['k','k','k','k','k','k','k'])
+ax.clabel(c1,inline=True)
+ax.set_xlabel('Search distance ratio, $\\mu_{S}$')
+ax.set_ylabel('Radius ratio, $\\mu_{R}$')
+#ax.set_title('$\\sqrt{((f_{\\mathrm{cat,MCMC}}-1)^2 + ' + \
+#    'f_{\\mathrm{cat,rand}}^2)/2}$')
+ax.set_title('$\\sqrt{((f_{\\mathrm{cat,MCMC}}-1)^2 + ' + \
+    '(N_{\\mathrm{cat}}/N_{\\mathrm{cat,uncut}} - 1)^2)/2}$')
+sm = cm.ScalarMappable(colors.Normalize(vmin=0.0,vmax=1.0),cmap=cmap)
+plt.colorbar(sm,label='Euclidean Distance',ax=ax)
+plt.savefig(figuresFolder + 'euclidean_distance_comb.pdf')
 plt.show()
 
 
