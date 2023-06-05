@@ -331,7 +331,7 @@ chainFile="chain_properties.p"
 
 snrFilter = getSNRFilterFromChainFile(chainFile,snrThresh,snapNameList,boxsize)
 
-
+chainFile="chain_properties.p"
 [mcmcArray,num,N,NCAT,no_bias_params,bias_matrix,mean_field,\
         std_field,hmc_Elh,hmc_Eprior,hades_accept_count,\
         hades_attempt_count] = pickle.load(open(chainFile,"rb"))
