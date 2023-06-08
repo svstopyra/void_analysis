@@ -1257,7 +1257,7 @@ def getSNRFilterFromChainFile(chainFile,snrThresh,snapNameList,boxsize,\
             for k in range(0,len(snapNameList))]
     # Filter those above the threshold:
     snrFilter = [snr > snrThresh for snr in snrAllCatsList]
-    return snrFilter
+    return [snrFilter,snrAllCatsList]
 
 # Get alpha shapes for the combined catalogue:
 def getFinalCatalogueAlphaShapes(snapNumList,finalCat,verbose=True,\
