@@ -4,6 +4,7 @@ from void_analysis.tools import mcmcFileToWhiteNoise
 from void_analysis import antihalos, context, cosmology, halos, plot_utilities
 from void_analysis import real_clusters, simulation_tools, snapedit, stacking
 from void_analysis import survey, tools
+from void_analysis import paper_plots_borg_antihalos_generate_data as catalogue
 import numpy as np
 import pynbody
 import multiprocessing as mp
@@ -419,6 +420,76 @@ class test_ppts(test_base):
         referenceFile = self.dataFolder + "cluster_centre_ref.p"
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
+    def test_getAllNgsToHealpix(self):
+        # Get data:
+        hpIndices = tools.loadPickle(self.dataFolder + "hpIndices_ref.p")
+        ngList = tools.loadPickle(self.dataFolder + \
+            "function_tests_simulation_tools/" + "ngPerLBin_ref.p")
+        computed = getAllNgsToHealpix(ngList,hpIndices,[2791],\
+            self.dataFolder + "reference_constrained/",4,recomputeData=False,\
+            nres=64)
+        referenceFile = self.dataFolder + "getAllNgsToHealpix_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_bootstrapGalaxyCounts(self):
+        np.random.seed(1000)
+        voxels = np.random.randint(100,size=100)
+        counts = np.random.randint(100,size=(16,100))
+        computed = bootstrapGalaxyCounts(counts,voxels,1000,randomSeed=1000)
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "bootstrapGalaxyCounts_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_getAalpha(self):
+        # Get data:
+        [mask,angularMask,radialMas,mask12,mask11] = tools.loadPickle(\
+            self.dataFolder + "function_tests_survey/" + "surveyMask_ref.p")
+        hpIndices = tools.loadPickle(self.dataFolder + "hpIndices_ref.p")
+        ngHPMCMC = tools.loadPickle(self.dataFolder + \
+            "getAllNgsToHealpix_ref.p")
+        nside = 4
+        npixels = 12*(nside**2)
+        # Perform test:
+        computed = getAalpha(mask,hpIndices,ngHPMCMC,1,nMagBins,npixels,10)
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "getAalpha_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_getVoxelSums(self):
+        # Get data:
+        N = 64
+        hpIndices = tools.loadPickle(self.dataFolder + "hpIndices_ref.p")
+        hpIndicesLinear = hpIndices.reshape(N**3)
+        with open(self.dataFolder + "ngCounts_ref.p","rb") as infile:
+            ngMCMC = np.reshape(pickle.load(infile),(nMagBins,N**3))
+        ngHP = tools.loadPickle(self.dataFolder + "hpCounts_ref.p")
+        [Aalpha,inverseLambdaTot] = tools.loadPickle(self.dataFolder + \
+            self.test_subfolder + "getAalpha_ref.p")
+        # Random selection of test voxels:
+        voxels = np.arange(85899 - 10,85899 + 10)
+        computed = getVoxelSums(\
+            voxels,hpIndicesLinear,Aalpha,ngMCMC,\
+            inverseLambdaTot,ngHP,"bootstrap",1000,1,\
+            16,bootstrapInterval=[2.5,97.5])
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "getVoxelSums_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_getPPTForPoints(self):
+        points = np.array([[0,0,0],[50,50,50]])
+        with open(self.dataFolder + "hpIndices_ref.p","rb") as infile:
+            hpIndices = pickle.load(infile)
+        computed = getPPTForPoints(points,hpIndices=hpIndices,\
+            snapNumList = [2791,3250],N=64,\
+            samplesFolder = self.dataFolder + "reference_constrained/",\
+            tmppFile=self.dataFolder + "2mpp_data/2MPP.txt",\
+            catFolder=self.dataFolder,surveyMaskPath = self.dataFolder + \
+            "2mpp_data/",recomputeData = True,\
+            snapname = "/gadget_full_forward/snapshot_001",verbose=False)
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "getPPTForPoints_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
 
 # Test HMF code:
 #@unittest.skip("Tests in development")
@@ -470,6 +541,21 @@ class test_void_profiles(test_base):
         self.rtol=1e-5
         self.atol=1e-8
         self.generateTestData = generateMode
+        # Some things shared by the catalogue tests:
+        self.snapNumList = [2791,3250,5511]
+        self.samplesFolder = dataFolder + "reference_constrained/"
+        self.snapname = "gadget_full_forward/snapshot_001"
+        self.snapList =  [pynbody.load(self.samplesFolder + "sample" + \
+            str(snapNum) + "/" + self.snapname) for snapNum in self.snapNumList]
+        self.ahPropsConstrained = [tools.loadPickle(snap.filename + \
+            ".AHproperties.p") \
+            for snap in self.snapList]
+        self.antihaloRadii = [props[7] for props in self.ahPropsConstrained]
+        self.antihaloMassesList = [props[3] \
+            for props in self.ahPropsConstrained]
+        self.ahCentresList = [props[5] \
+            for props in self.ahPropsConstrained]
+        self.vorVols = [props[4] for props in self.ahPropsConstrained]
     def test_void_stacking(self):
         print("Running stacking test.")
         snapNumList = [2791,3250]
@@ -585,7 +671,36 @@ class test_void_profiles(test_base):
         referenceFile = self.dataFolder + "void_profiles_pipeline_ref.p"
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
-
+    def test_getPartialPairCountsAndVols(self):
+        snapNameList = [self.samplesFolder + self.snapname + "sample" + \
+            str(snapNum) for snapNum in self.snapNumList]
+        filterListToApply = [np.range(0,20) for snapNum in self.snapNumList]
+        rEffMax=3.0
+        rEffMin=0.0
+        nBins=31
+        rBins = np.linspace(rEffMin,rEffMax,nBins)
+        computed = getPartialPairCountsAndVols(self.snapNameList,\
+            self.antihaloRadii,self.antihaloMassesList,\
+            self.ahCentresList,self.vorVols,rBins,"poisson",\
+            5,25,1e14,1e15,677.7,filterListToApply=filterListToApply)
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "getPartialPairCountsAndVols_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_getCentreListUnconstrained(self):
+        [computed,tree] = getCentreListUnconstrained(self.snapList,
+            randomSeed = 1000,numDenSamples = 1000,rSphere = 135,\
+            densityRange = [-0.051,-0.049])
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "getCentreListUnconstrained_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_getGridPositionsAndTreeForSims(self):
+        computed = getGridPositionsAndTreeForSims(677.7,Nden=256,perm=(2,1,0))
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "getGridPositionsAndTreeForSims_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
 
 
 # Tests for the tools package:
@@ -3257,6 +3372,172 @@ class test_snapedit(test_base):
             "extrapolateZeldovich_ref.p"
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
+
+
+
+# Unit tests for paper plot scripts:
+class test_catalogue_code(test_base):
+    def setUp(self):
+        self.dataFolder=dataFolder
+        self.test_subfolder = "function_tests_catalogue/"
+        self.rtol=1e-5
+        self.atol=1e-8
+        self.generateTestData = generateMode
+        # Some things shared by the catalogue tests:
+        self.snapNumList = [2791,3250,5511]
+        self.samplesFolder = dataFolder + "reference_constrained/"
+        self.snapname = "gadget_full_forward/snapshot_001"
+        self.snapNameList = [self.samplesFolder + "sample" + \
+            str(snapNum) + "/" + self.snapname for snapNum in self.snapNumList]
+        self.snapList =  [pynbody.load(self.samplesFolder + "sample" + \
+            str(snapNum) + "/" + self.snapname) for snapNum in self.snapNumList]
+        self.ahPropsConstrained = [tools.loadPickle(snap.filename + \
+            ".AHproperties.p") \
+            for snap in self.snapList]
+        self.antihaloRadii = [props[7] for props in self.ahPropsConstrained]
+        self.antihaloMassesList = [props[3] \
+            for props in self.ahPropsConstrained]
+        self.ahCentresList = [props[5] \
+            for props in self.ahPropsConstrained]
+        self.vorVols = [props[4] for props in self.ahPropsConstrained]
+    def test_constructAntihaloCatalogue(self):
+        # Test without N-way matching:
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "constructAntihaloCatalogue_ref.p"
+        computed = catalogue.constructAntihaloCatalogue(\
+            [2791,3250,5511],\
+            samplesFolder="data_for_tests/reference_constrained/",\
+            verbose=False,rSphere=135,max_index=None,thresh=0.5,\
+            snapname = "gadget_full_forward/snapshot_001",\
+            snapnameRev = "gadget_full_reverse/snapshot_001",\
+            fileSuffix= '',matchType='distance',crossMatchQuantity='radius',\
+            crossMatchThreshold = 0.9,distMax=0.5,sortMethod='ratio',\
+            blockDuplicates=True,twoWayOnly = True,\
+            snapList=None,snapListRev=None,ahProps=None,hrList=None,\
+            rMin = 5,rMax = 30,mode="fractional",massRange = None,\
+            snapSortList = None,overlapList = None,NWayMatch = False,\
+            additionalFilters = None)
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_constructAntihaloCatalogueNway(self):
+        # Test with N-way matching:
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "constructAntihaloCatalogueNway_ref.p"
+        computed = catalogue.constructAntihaloCatalogue(\
+            [2791,3250,5511],\
+            samplesFolder="data_for_tests/reference_constrained/",\
+            verbose=False,rSphere=135,max_index=None,thresh=0.5,\
+            snapname = "gadget_full_forward/snapshot_001",\
+            snapnameRev = "gadget_full_reverse/snapshot_001",\
+            fileSuffix= '',matchType='distance',crossMatchQuantity='radius',\
+            crossMatchThreshold = 0.9,distMax=0.5,sortMethod='ratio',\
+            blockDuplicates=True,twoWayOnly = True,\
+            snapList=None,snapListRev=None,ahProps=None,hrList=None,\
+            rMin = 5,rMax = 30,mode="fractional",massRange = None,\
+            snapSortList = None,overlapList = None,NWayMatch = True,\
+            additionalFilters = None)
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_getSNRFilterFromChainFile(self):
+        chainFile = self.dataFolder + "chain_properties.p"
+        computed = getSNRFilterFromChainFile(chainFile,10,self.snapNameList,\
+            677.7,Nden = 256,allProps=None)
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "getSNRFilterFromChainFile_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_getFinalCatalogueAlphaShapes(self):
+        # Not really a good way to test alpha-shapes yet...
+        print("WARNING - TEST NOT IMPLEMENTED YET FOR getFinalCatalogueAlphaShapes")
+        self.assertTrue(True)
+    def test_getAntihaloSkyPlotData(self):
+        # Not really a good way to test alpha-shapes yet...
+        print("WARNING - TEST NOT IMPLEMENTED YET FOR getAntihaloSkyPlotData")
+        self.assertTrue(True)
+    def test_getMatchPynbody(self):
+        [snap1,snap2] = [self.snapList[0],self.snapList[1]]
+        [cat1,cat2] = [snap.halos() for snap in [snap1,snap2]]
+        [quantity1,quantity2] = [self.antihaloRadii[k] for k in range(0,2)]
+        computed = getMatchPynbody(snap1,snap2,cat1,cat2,quantity1,quantity2,\
+            max_index = 200,threshold = 0.5,\
+            quantityThresh=0.5,fractionType='normal')
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "getMatchPynbody_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_getMatchDistance(self):
+        [snap1,snap2] = [self.snapList[0],self.snapList[1]]
+        [centres1,centres2] = [self.ahCentresList[k] for k in range(0,2)]
+        [quantity1,quantity2] = [self.antihaloRadii[k] for k in range(0,2)]
+        computed = getMatchDistance(snap1,snap2,centres1,centres2,\
+            quantity1,quantity2,tree1=None,tree2=None,distMax = 20.0,\
+            max_index=200,quantityThresh=0.5,sortMethod='distance',\
+            mode="fractional",sortQuantity = 0,cat1=None,cat2=None,\
+            volumes1=None,volumes2=None,overlap = None)
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "getMatchDistance_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_isInZoA(self):
+        computed = isInZoA(np.array([0,0,0]),inUnits="equatorial",\
+            galacticCentreZOA = [-30,30],bRangeCentre = [-10,10],\
+            bRange = [-5,5])
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "isInZoA_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_overlapMap(self):
+        [snap1,snap2] = [self.snapList[0],self.snapList[1]]
+        [cat1,cat2] = [snap.halos() for snap in [snap1,snap2]]
+        [volumes1,volumes2] = [self.vorVols[k] for k in range(0,2)]
+        computed = overlapMap(cat1,cat2,volumes1,volumes2,
+            checkFirst = False,verbose=False)
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "overlapMap_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_checkOverlap(self):
+        list1 [1,2,3]
+        list2 = [3,4,5]
+        list3 = [4,5,6]
+        self.assertTrue(checkOverlap(list1,list2))
+        self.assertFalse(checkOverlap(list1,list3))
+    def test_linearFromIJ(self):
+        self.assertTrue(linearFromIJ(2,6,20) == 40)
+    def test_getPoissonSamples(self):
+        computed = getPoissonSamples(100,100,seed = 1000)
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "getPoissonSamples_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_estimatePoissonRatioErrorbarMonteCarlo(
+        computed = estimatePoissonRatioErrorbarMonteCarlo(100,100,\
+            errorVal = 0.67,seed = 1000,nSamples=1000,returnSamples=False)
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "estimatePoissonRatioErrorbarMonteCarlo_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_getMeanCentresFromCombinedCatalogue(self):
+        # Get Data;
+        rMin = 5
+        rMax = 30
+        combinedCat = tools.loadPickle(self.dataFolder + self.test_subfolder + \
+            "constructAntihaloCatalogue_ref.p")
+        antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
+            for props in ahProps]
+        filterCond = [(antihaloRadii[k] > rMin) & (antihaloRadii[k] <= rMax) \
+            for k in range(0,len(snapNumList))]
+        centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],\
+            135,filterCondition = filterCond[k]) \
+            for k in range(0,len(snapNumList))]
+        centresListShort = [np.array([antihaloCentres[l][\
+            centralAntihalos[l][0][sortedList[l][k]],:] \
+            for k in range(0,np.min([ahCounts[l],max_index]))]) \
+            for l in range(0,len(snapNumList))]
+        # Test:
+        computed = getMeanCentresFromCombinedCatalogue(combinedCat,centresList,\
+        returnError=False,boxsize=None)
+
 
 
 
