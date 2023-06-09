@@ -1777,19 +1777,20 @@ def computeShortCentresList(snapNumList,antihaloCentres,antihaloRadii,\
         centralAntihalos[l][0][sortedList[l][k]],:] \
         for k in range(0,np.min([ahCounts[l],max_index]))]) \
         for l in range(0,len(snapNumList))]
-    return [centresListShort,centralAntihalos,sortedList,ahCounts]
+    return [centresListShort,centralAntihalos,sortedList,ahCounts,max_index]
 
 
 # Take a shortened list of anti-halos in each sample, and compute lists of 
 # properties for each such as mass or radius:
-def getShortenedQuantity(quantity,shortenedList,sortedList,ahCounts,max_index):
-    return [np.array([antihaloRadii[l][\
+def getShortenedQuantity(quantity,centralAntihalos,shortenedList,sortedList,\
+        ahCounts,max_index):
+    return [np.array([quantity[l][\
             centralAntihalos[l][0][sortedList[l][k]]] \
             for k in range(0,np.min([ahCounts[l],max_index]))]) \
             for l in range(0,len(shortenedList))]
 
 # Get the two way matches of a void in other catalogues:
-def getTwoWayMatches(nVoid,otherColumns,numCats,\
+def getTwoWayMatches(nVoid,nCat,otherColumns,numCats,\
         oneWayMatchesAllCatalogues,oneWayMatchesOther=None):
     oneWayMatches = oneWayMatchesAllCatalogues[nCat]
     if oneWayMatchesOther is None:
@@ -1803,7 +1804,7 @@ def getTwoWayMatches(nVoid,otherColumns,numCats,\
             # 2-way only if the other matches back to this:
             twoWayMatch[m] = (\
                 oneWayMatchesAllCatalogues[otherColumns[m]][\
-                oneWayMatches[nVoid,otherColumns[m]] - 1,k] == nVoid+1)
+                oneWayMatches[nVoid,otherColumns[m]] - 1,nCat] == nVoid+1)
     return twoWayMatch
 
 # Check which of a void's matches are new:
@@ -1843,7 +1844,7 @@ def checkIfVoidIsNeeded(nVoid,nCat,alreadyMatched,twoWayMatch,otherColumns,
 # accidentally include them:
 def markCompanionsAsFound(nVoid,nCat,numCats,oneWayMatches,\
         oneWayMatchesAllCatalogues,allCandidates,allRatios,allDistances,\
-        NWayMatch=False):
+        alreadyMatched,NWayMatch=False):
     candm = []
     ratiosm = []
     distancesm = []
@@ -1940,13 +1941,13 @@ def getNumberOfTwoWayMatchesNway(numCats,allCands,allCandidates,diffMap):
 # Count the number of two way matches.
 # TODO - can we merge this with getNumberOfTwoWayMatchesNway? They are 
 # similar, but doing slightly different things:
-def getTotalNumberOfTwoWayMatches(nVoid,numCats,diffMap,allCands,\
+def getTotalNumberOfTwoWayMatches(nVoid,numCats,diffMap,\
         allCandidates,oneWayMatches):
     twoWayMatchCounts = 0
     for m in range(0,numCats):
         for d in diffMap[m]:
             allCands = allCandidates[m][d][\
-                oneWayMatches[l][m]-1]
+                oneWayMatches[nVoid][m]-1]
             if len(allCands) > 0:
                 if allCands[0] == oneWayMatches[nVoid][d]-1:
                     twoWayMatchCounts += 1
@@ -2035,14 +2036,16 @@ def applyNWayMatching(nVoid,nCat,numCats,oneWayMatches,alreadyMatched,\
 def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
         oneWayMatchesOther,oneWayMatchesAllCatalogues,twoWayMatch,\
         allCandidates,alreadyMatched,candidateCounts,NWayMatch,\
-        allRatios,allDistances):
+        allRatios,allDistances,diffMap,finalCandidates,\
+        finalCat,finalRatios,finalDistances,finalCombinatoricFrac,\
+        finalCatFrac):
     oneWayMatches = oneWayMatchesAllCatalogues[nCat]
     # Mark companions of this void as already found, to avoid duplication.
     # Additionally, store the candidates (candm), radius ratios (ratiosm) and 
     # distances to candidates (distancesm) of this void for output data:
     [candm,ratiosm,distancesm] = markCompanionsAsFound(nVoid,nCat,numCats,\
         oneWayMatches,oneWayMatchesAllCatalogues,allCandidates,allRatios,\
-        allDistances,NWayMatch=NWayMatch)
+        allDistances,alreadyMatched,NWayMatch=NWayMatch)
     finalCandidates.append(candm)
     if NWayMatch:
         # Get the best candidates using the N-way matching code:
@@ -2065,7 +2068,7 @@ def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
             numCats))
         # Compute the combinatoric fraction:
         twoWayMatchCounts = getTotalNumberOfTwoWayMatches(nVoid,numCats,\
-            diffMap,allCands,allCandidates,oneWayMatches)
+            diffMap,allCandidates,oneWayMatches)
         finalCombinatoricFrac.append(twoWayMatchCounts/\
             (numCats*(numCats-1)))
 
@@ -2141,7 +2144,9 @@ def getOverlapList(numCats,hrListCentral,volumesList):
 
 # Perform matching between two catalogues:
 def getMatchCandidatesTwoCatalogues(n1,n2,matchType,snapListRev,hrListCentral,\
-        quantityList,max_index,thresh,crossMatchThreshold):
+        centresListShort,quantityList,max_index,thresh,crossMatchThreshold,\
+        quantityListRad,quantityListMass,crossMatchQuantity,treeList,distMax,\
+        sortMethod,mode,volumesList):
     if matchType == 'pynbody':
         # Use pynbody's halo catalogue matching to identify likely
         # matches:
@@ -2200,6 +2205,54 @@ def getMatchCandidatesTwoCatalogues(n1,n2,matchType,snapListRev,hrListCentral,\
         raise Exception("Unrecognised matching type requested.")
     return [match, candidatesList,ratioList,distList]
 
+def getOneWayMatchesAllCatalogues(numCats,matchType,snapListRev,\
+        hrListCentral,centresListShort,quantityList,max_index,thresh,\
+        crossMatchThreshold,ahCounts,quantityListRad,quantityListMass,\
+        crossMatchQuantity,treeList,distMax,sortMethod,mode,volumesList):
+    matchArrayList = [[] for k in range(0,numCats)] # List of best 
+        # matches in each one way pair
+    allCandidates = [] # List of candidates for each one way pair
+    allRatios = [] # List of the radius (or mass) ratios of each candidate
+    allDistances = [] # List of distances from a void to all it's candidates
+    for k in range(0,numCats):
+        matchArrayListNew = matchArrayList[k]
+        allCandidatesNew = []
+        allRatiosNew = []
+        allDistancesNew = []
+        for l in range(0,numCats):
+            if l != k:
+                [match, candidatesList,ratioList,distList] = \
+                    getMatchCandidatesTwoCatalogues(k,l,matchType,snapListRev,\
+                        hrListCentral,centresListShort,quantityList,max_index,\
+                        thresh,crossMatchThreshold,quantityListRad,\
+                        quantityListMass,crossMatchQuantity,treeList,distMax,\
+                        sortMethod,mode,volumesList)
+                matchArrayListNew.append(match)
+            elif l == k:
+                # Placeholder entries when matching a catalogue to itself:
+                matchArrayListNew.append([-2] + \
+                    list(np.arange(1,np.min([ahCounts[l],max_index])+1)))
+                candidatesList = np.array([[m] \
+                    for m in np.arange(1,np.min([ahCounts[l],max_index])+1)])
+                ratioList = np.ones(len(candidatesList))
+                distList = np.zeros(len(candidatesList))
+            allCandidatesNew.append(candidatesList)
+            allRatiosNew.append(ratioList)
+            allDistancesNew.append(distList)
+        matchArrayList[k] = list(matchArrayListNew)
+        allCandidates.append(allCandidatesNew)
+        allRatios.append(allRatiosNew)
+        allDistances.append(allDistancesNew)
+    # Here we arrange the one-way matches of every void in every 
+    # catalogue. This is a list of Ncat matrices, one for each catalogue.
+    # Each matrix has dimensions Nvoids_i x Ncat (Nvoids_i being the number of
+    # voids in catalogue i):
+    oneWayMatchesAllCatalogues = \
+        [np.array(matchArrayList[k]).transpose()[1:,:] \
+        for k in range(0,numCats)]
+    return [oneWayMatchesAllCatalogues,matchArrayList,allCandidates,\
+        allRatios,allDistances]
+
 # Construct an anti-halo catalogue from reversed snapshots
 def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
         verbose=True,rSphere=135,max_index=None,thresh=0.5,\
@@ -2222,14 +2275,11 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
     if verbose:
         print("Loading snapshots...")
     # Construct filtered anti-halo lists:
-    [centresListShort,centralAntihalos,sortedList,ahCounts] = \
+    [centresListShort,centralAntihalos,sortedList,ahCounts,max_index] = \
         computeShortCentresList(snapNumList,antihaloCentres,\
             antihaloRadii,antihaloMasses,rSphere,rMin,rMax,massRange=massRange,\
             additionalFilters=additionalFilters,sortBy = sortBy,\
             max_index=max_index)
-    centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],\
-        rSphere,filterCondition = filterCond[k]) \
-        for k in range(0,numCats)]
     # Construct new antihalo catalogues from the filtered list:
     if verbose:
         print("Constructing constrained region catalogues...")
@@ -2251,24 +2301,18 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
             if len(overlapList) != int(numCats*(numCats - 1)/2):
                 raise Exception("Invalid overlapList!")
     # Construct matches:
-    matchArrayList = [[] for k in range(0,numCats)] # List of best 
-        # matches in each one way pair
-    allCandidates = [] # List of candidates for each one way pair
-    allRatios = [] # List of the radius (or mass) ratios of each candidate
-    allDistances = [] # List of distances from a void to all it's candidates
     # Create lists of the quantity to match voids with (mass or radius), chosen
     # to match centresListShort:
-    if crossMatchQuantity == 'radius':
-        quantityList = getShortenedQuantity(antihaloRadii,centresListShort,\
-            sortedList,ahCounts,max_index)
-    elif crossMatchQuantity == 'mass':
-        quantityList = getShortenedQuantity(antihaloMasses,centresListShort,\
-            sortedList,ahCounts,max_index)
-    elif crossMatchQuantity == "both":
-        quantityListRad = getShortenedQuantity(antihaloRadii,centresListShort,\
-            sortedList,ahCounts,max_index)
-        quantityListMass = getShortenedQuantity(antihaloMasses,\
+    quantityListRad = getShortenedQuantity(antihaloRadii,centralAntihalos,\
             centresListShort,sortedList,ahCounts,max_index)
+    quantityListMass = getShortenedQuantity(antihaloMasses,\
+        centralAntihalos,centresListShort,sortedList,ahCounts,max_index)
+    if crossMatchQuantity == 'radius':
+        quantityList = quantityListRad
+    elif crossMatchQuantity == 'mass':
+        quantityList = quantityListMass
+    elif crossMatchQuantity == 'both':
+        quantityList = quantityList
     else:
         raise Exception('Unrecognised cross-match quantity.')
     # Build a KD tree with the centres in centresListShort for efficient 
@@ -2279,33 +2323,12 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
     if verbose:
         print("Computing matches...")
     # Main loop to compute candidate matches:
-    for k in range(0,numCats):
-        matchArrayListNew = matchArrayList[k]
-        allCandidatesNew = []
-        allRatiosNew = []
-        allDistancesNew = []
-        for l in range(0,numCats):
-            if l != k:
-                [match, candidatesList,ratioList,distList] = \
-                    getMatchCandidatesTwoCatalogues(k,l,matchType,snapListRev,\
-                        hrListCentral,quantityList,max_index,thresh,\
-                        crossMatchThreshold)
-                matchArrayListNew.append(match)
-            elif l == k:
-                # Placeholder entries when matching a catalogue to itself:
-                matchArrayListNew.append([-2] + \
-                    list(np.arange(1,np.min([ahCounts[l],max_index])+1)))
-                candidatesList = np.array([[m] \
-                    for m in np.arange(1,np.min([ahCounts[l],max_index])+1)])
-                ratioList = np.ones(len(candidatesList))
-                distList = np.zeros(len(candidatesList))
-            allCandidatesNew.append(candidatesList)
-            allRatiosNew.append(ratioList)
-            allDistancesNew.append(distList)
-        matchArrayList[k] = list(matchArrayListNew)
-        allCandidates.append(allCandidatesNew)
-        allRatios.append(allRatiosNew)
-        allDistances.append(allDistancesNew)
+    [oneWayMatchesAllCatalogues,matchArrayList,allCandidates,\
+        allRatios,allDistances] = getOneWayMatchesAllCatalogues(numCats,\
+            matchType,snapListRev,hrListCentral,centresListShort,quantityList,\
+            max_index,thresh,crossMatchThreshold,ahCounts,quantityListRad,\
+            quantityListMass,crossMatchQuantity,treeList,distMax,\
+            sortMethod,mode,volumesList)
     # Combined to a single catalogue:
     if verbose:
         print("Combining to a single catalogue...")
@@ -2335,13 +2358,6 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
     # boolean array - every time we find a void, we flag it here so that
     # we can later check if it has already been added:
     alreadyMatched = np.zeros((numCats,max_index),dtype=bool)
-    # Here we arrange the one-way matches of every void in every 
-    # catalogue. This is a list of Ncat matrices, one for each catalogue.
-    # Each matrix has dimensions Nvoids_i x Ncat (Nvoids_i being the number of
-    # voids in catalogue i):
-    oneWayMatchesAllCatalogues = \
-        [np.array(matchArrayList[k]).transpose()[1:,:] \
-        for k in range(0,numCats)]
     # List of the other catalogues, for each catalogue:
     diffMap = [np.setdiff1d(np.arange(0,numCats),[k]) \
         for k in range(0,numCats)]
@@ -2355,7 +2371,7 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
         oneWayMatchesOther = oneWayMatches[:,otherColumns]
         # Loop over all voids in this catalogue:
         for l in range(0,np.min([ahCounts[k],max_index])):
-            twoWayMatch = getTwoWayMatches(l,otherColumns,numCats,\
+            twoWayMatch = getTwoWayMatches(l,k,otherColumns,numCats,\
                 oneWayMatchesAllCatalogues,\
                 oneWayMatchesOther=oneWayMatchesOther)
             twoWayMatchLists[k].append(twoWayMatch)
@@ -2367,10 +2383,12 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
                     otherColumns,candidateCounts,oneWayMatches,\
                     twoWayOnly=twoWayOnly,blockDuplicates=blockDuplicates):
                 continue
-            matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
+            matchVoidToOtherCatalogues(l,k,numCats,otherColumns,\
                 oneWayMatchesOther,oneWayMatchesAllCatalogues,twoWayMatch,\
                 allCandidates,alreadyMatched,candidateCounts,NWayMatch,\
-                allCandidates,allRatios,allDistances)
+                allRatios,allDistances,diffMap,finalCandidates,\
+                finalCat,finalRatios,finalDistances,finalCombinatoricFrac,\
+                finalCatFrac)
     return [np.array(finalCat),shortHaloList,twoWayMatchLists,\
         finalCandidates,finalRatios,finalDistances,allCandidates,\
         candidateCounts,allRatios,np.array(finalCombinatoricFrac),\
