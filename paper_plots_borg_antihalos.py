@@ -5362,7 +5362,7 @@ rSearchOpt = 0.5
                 twoWayOnly=True,blockDuplicates=True,\
                 crossMatchThreshold = muOpt,distMax = rSearchOpt,\
                 rSphere=rSphere2,massRange = [mMin,mMax],\
-                NWayMatch = False,rMin=rMin,rMax=rMax,\
+                NWayMatch = True,rMin=rMin,rMax=rMax,\
                 additionalFilters = snrFilter,verbose=False)
 
 finalCentres300List = np.array([getCentresFromCat(\
@@ -5408,20 +5408,6 @@ meanCentreOpt = np.nanmean(finalCentresOptList,0)
 catFractionsOpt = finalCatFracOpt
 #catFractionsOpt = finalCombinatoricFracOpt
 
-nV = np.where(finalCat300[:,5] == 2)[0][0]
-nV1 = np.where(finalCatOpt[:,5] == 2)[0][0]
-
-centreRat = mutualCentreRatio(radiiList300[nV],finalCentres300List[:,nV,:])
-centreRat1 = mutualCentreRatio(radiiListOpt[nV1],finalCentresOptList[:,nV1,:])
-radiiRat = mutualRadiusRatios(radiiList300[nV])
-radiiRat1 = mutualRadiusRatios(radiiListOpt[nV1])
-
-snrCat300 = getSNRForVoidRealisations(finalCat300,snrAllCatsList,ahNumbers)
-snrCatOpt = getSNRForVoidRealisations(finalCatOpt,snrAllCatsList,ahNumbers)
-haveVoids300 = np.where(finalCat300 >= 0)
-haveVoidsOpt = np.where(finalCatOpt >= 0)
-
-
 # Test for void splitting:
 nVTest = 0
 locator = [np.where(finalCat300[:,k] == finalCatOpt[nVTest][k]) \
@@ -5447,13 +5433,34 @@ massList300 = getRadiiFromCat(finalCat300,massListShort)
 [massMean300, massSigma300]  = getMeanProperty(massList300)
 
 
+
+nV = np.where(finalCat300[:,5] == 2)[0][0]
+nV1 = np.where(finalCatOpt[:,5] == 2)[0][0]
+
+centreRat = mutualCentreRatio(radiiList300[nV],finalCentres300List[:,nV,:])
+centreRat1 = mutualCentreRatio(radiiListOpt[nV1],finalCentresOptList[:,nV1,:])
+radiiRat = mutualRadiusRatios(radiiList300[nV])
+radiiRat1 = mutualRadiusRatios(radiiListOpt[nV1])
+
+snrCat300 = getSNRForVoidRealisations(finalCat300,snrAllCatsList,ahNumbers)
+snrCatOpt = getSNRForVoidRealisations(finalCatOpt,snrAllCatsList,ahNumbers)
+haveVoids300 = np.where(finalCat300 >= 0)
+haveVoidsOpt = np.where(finalCatOpt >= 0)
+
+
+
+
 catToPlot = finalCat300
 #catToPlot = finalCatOpt
 radiiToPlot = radiiList300
 #radiiToPlot = radiiListOpt
 indList = []
-#nV = 0
-nV = 3858
+nV = 0
+#nV = 3858
+#title = "Old run, void " + str(nV+1) + \
+#    " ($\\mu_R = 0.9,\\mu_S = 1.0$, N-way-match = True)"
+title = "New run, void " + str(nV + 1) + \
+    " ($\\mu_R = 0.925,\\mu_S = 0.5$, N-way-match = True)"
 #nV = np.where(finalCat300[:,5] == 2)[0][0] # Intermediate SNR
 #nV = np.where(finalCat300[:,0] == 2)[0][0] # Intermediate SNR
 #nV = np.where(finalCat300[:,0] == 785)[0][0] # V high SNR
@@ -5561,7 +5568,7 @@ for ns in range(0,len(snapNumList)):
     # Scatter plot of all voids in the region:
     if showOtherCentres:
         # Get all voids in this box:
-        centreFilter = getAllVoidsWithinBox(sampleCentre,Lbox,\
+        centreFilter = getAllVoidsWithinBox(meanCentre,Lbox,\
             centresListShort[ns])
         centreNumbers = ahNumbers[ns][centreFilter]
         # Remove the sample void so we don't double plot it:
@@ -5586,7 +5593,7 @@ for ns in range(0,len(snapNumList)):
     plt.ylabel('y ($\\mathrm{Mpc}h^{-1}$)')
     plt.xlim([meanCentre[0] - Lbox/2,meanCentre[0] + Lbox/2])
     plt.ylim([meanCentre[1] - Lbox/2,meanCentre[1] + Lbox/2])
-    plt.title('Sample ' + str(snapNumList[ns]))
+    plt.title(title + '\nSample ' + str(snapNumList[ns]))
     cbar = plt.colorbar(sm, orientation="vertical")
     plt.savefig(figuresFolder + "frame_" + str(ns) + ".png")
     #plt.show()
