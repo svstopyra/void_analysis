@@ -41,7 +41,6 @@ else:
 
 dataFolder = config['TESTING']['DataFolder']
 generateMode = config['TESTING']['GenerateMode'] == 'True'
-print(generateMode)
 
 # Base test class:
 class test_base(unittest.TestCase):
