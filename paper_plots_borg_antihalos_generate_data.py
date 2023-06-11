@@ -1695,8 +1695,8 @@ def overlapMap(cat1,cat2,volumes1,volumes2,checkFirst = False,verbose=False):
 
 # Check whether two halos have any overlap:
 def checkOverlap(list1,list2):
-    [min1,max1] = minmax(list1)
-    [min2,max2] = minmax(list2)
+    [min1,max1] = tools.minmax(list1)
+    [min2,max2] = tools.minmax(list2)
     if max1 < min2:
         return False
     elif min1 > max2:
@@ -1971,7 +1971,7 @@ def computeQuantityForCandidates(quantity,numCats,allCands,diffMap):
     return quantityAverages
 
 def applyNWayMatching(nVoid,nCat,numCats,oneWayMatches,alreadyMatched,\
-        diffMap,allCandidates):
+        diffMap,allCandidates,allRatios,allDistances):
     # Follow all chains of two way matches to get possible void candidates:
     allCands = followAllMatchChains(nVoid,nCat,numCats,oneWayMatches,\
         alreadyMatched,diffMap,allCandidates)
@@ -2051,7 +2051,7 @@ def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
         # Get the best candidates using the N-way matching code:
         [bestCandidates,bestRatios,bestDistances,numberOfLinks] = \
             applyNWayMatching(nVoid,nCat,numCats,oneWayMatches,alreadyMatched,\
-                diffMap,allCandidates)
+                diffMap,allCandidates,allRatios,allDistances)
         finalCat.append(bestCandidates)
         finalRatios.append(bestRatios)
         finalDistances.append(bestDistances)

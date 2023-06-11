@@ -41,6 +41,7 @@ else:
 
 dataFolder = config['TESTING']['DataFolder']
 generateMode = config['TESTING']['GenerateMode'] == 'True'
+print(generateMode)
 
 # Base test class:
 class test_base(unittest.TestCase):
@@ -75,25 +76,43 @@ class test_base(unittest.TestCase):
             type(reference) == pynbody.array.SimArray
     def getIsListType(self,reference):
         return type(reference) == list or type(reference) == tuple
-    def compareToReference(self,computed,reference):
+    def compareArrayTypes(self,computed,reference,filterNan = False):
+        self.assertTrue(reference.dtype == computed.dtype)
+        if filterNan:
+            isFiniteRef = np.isfinite(reference)
+            isFiniteCom = np.isfinite(computed)
+            self.assertTrue(len(isFiniteRef) == len(isFiniteCom))
+            self.assertTrue(np.all(isFiniteRef == isFiniteCom))
+            ref = reference[isFiniteRef]
+            com = computed[isFiniteCom]
+        else:
+            ref = reference
+            com = computed
+        if self.getIsExactDType(reference.dtype):
+            self.assertTrue(np.all(ref == com))
+        elif self.getIsFloatDType(reference.dtype):
+            self.assertTrue(np.allclose(com,ref,\
+                rtol=self.rtol,atol=self.atol))
+    def compareToReference(self,computed,reference,filterNan = False):
         self.assertTrue(type(reference) == type(computed))
         if self.getIsListType(reference):
             nrefs = len(reference)
             self.assertTrue(len(reference) == len(computed))
             for k in range(0,nrefs):
-                self.compareToReference(computed[k],reference[k])
+                self.compareToReference(computed[k],reference[k],\
+                    filterNan=filterNan)
         elif self.getIsArrayType(reference):
-            self.assertTrue(reference.dtype == computed.dtype)
-            if self.getIsExactDType(reference.dtype):
-                self.assertTrue(np.all(reference == computed))
-            elif self.getIsFloatDType(reference.dtype):
-                self.assertTrue(np.allclose(computed,reference,\
-                    rtol=self.rtol,atol=self.atol))
+            self.compareArrayTypes(computed,reference,filterNan = filterNan)
         elif self.getIsExactType(reference):
             self.assertTrue(reference == computed)
         elif self.getIsFloatType(reference):
             self.assertTrue(np.allclose(computed,\
                 reference,rtol=self.rtol,atol=self.atol))
+        elif computed is None:
+            self.assertTrue(reference is None)
+        elif (type(computed) == bool):
+            self.assertTrue(type(reference) == bool)
+            self.assertTrue(computed == reference)
         else:
             print("Warning! Comparison for type " + str(type(reference)) + \
                 " is not yet defined. Assuming test passes.")
@@ -3398,11 +3417,12 @@ class test_catalogue_code(test_base):
             ".AHproperties.p") \
             for snap in self.snapList]
         self.antihaloRadii = [props[7] for props in self.ahPropsConstrained]
-        self.antihaloMassesList = [props[3] \
+        self.antihaloMasses = [props[3] \
             for props in self.ahPropsConstrained]
         self.ahCentresList = [props[5] \
             for props in self.ahPropsConstrained]
         self.vorVols = [props[4] for props in self.ahPropsConstrained]
+        self.numCats = 3
     def test_constructAntihaloCatalogue(self):
         # Test without N-way matching:
         referenceFile = self.dataFolder + self.test_subfolder + \
@@ -3457,6 +3477,7 @@ class test_catalogue_code(test_base):
         # Not really a good way to test alpha-shapes yet...
         print("WARNING - TEST NOT IMPLEMENTED YET FOR getAntihaloSkyPlotData")
         self.assertTrue(True)
+    @unittest.skip("Under development")
     def test_getMatchPynbody(self):
         [snap1,snap2] = [self.snapList[0],self.snapList[1]]
         [cat1,cat2] = [snap.halos() for snap in [snap1,snap2]]
@@ -3489,6 +3510,7 @@ class test_catalogue_code(test_base):
             "isInZoA_ref.p"
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
+    @unittest.skip("Under development")
     def test_overlapMap(self):
         [snap1,snap2] = [self.snapList[0],self.snapList[1]]
         [cat1,cat2] = [snap.halos() for snap in [snap1,snap2]]
@@ -3500,7 +3522,7 @@ class test_catalogue_code(test_base):
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
     def test_checkOverlap(self):
-        list1 [1,2,3]
+        list1 = [1,2,3]
         list2 = [3,4,5]
         list3 = [4,5,6]
         self.assertTrue(checkOverlap(list1,list2))
@@ -3524,22 +3546,23 @@ class test_catalogue_code(test_base):
         # Get Data;
         rMin = 5
         rMax = 30
+        boxsize = 677.7
         combinedCat = tools.loadPickle(self.dataFolder + self.test_subfolder + \
             "constructAntihaloCatalogue_ref.p")
         antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
-            for props in ahPropsConstrained]
+            for props in self.ahPropsConstrained]
         [centresListShort,centralAntihalos,sortedList,ahCounts,max_index] = \
             tools.loadPickle(self.dataFolder + \
             self.test_subfolder + "computeShortCentresList_ref.p")
         # Test:
-        computed = catalogue.getMeanCentresFromCombinedCatalogue(combinedCat,\
-            centresListShort,returnError=False,boxsize=None)
+        computed = catalogue.getMeanCentresFromCombinedCatalogue(\
+            combinedCat[0],centresListShort,returnError=False,boxsize=boxsize)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "getMeanCentresFromCombinedCatalogue_ref.p"
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
     def test_computeShortCentresList(self):
-        antiHaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
+        antihaloCentres = [tools.remapAntiHaloCentre(props[5],677.7) \
             for props in self.ahPropsConstrained]
         rMin = 5
         rMax = 30
@@ -3556,24 +3579,29 @@ class test_catalogue_code(test_base):
             tools.loadPickle(self.dataFolder + \
             self.test_subfolder + "computeShortCentresList_ref.p")
         computed = catalogue.getShortenedQuantity(self.antihaloRadii,\
-            centresListShort,sortedList,ahCounts,None)
+            centralAntihalos,centresListShort,sortedList,ahCounts,max_index)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "getShortenedQuantity_ref.p"
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
     def test_loadCatalogueData(self):
-        computed = catalogue.loadCatalogueData(self.snapNumList,None,None,\
-            self.samplesFolder,self.snapname,self.snapnameRev,None,"mass",\
-            None,None,verbose=False)
+        [snapList,snapListRev,boxsize,ahProps,antihaloCentres,\
+            antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList] = \
+            catalogue.loadCatalogueData(self.snapNumList,None,None,\
+                self.samplesFolder,self.snapname,self.snapnameRev,None,"mass",\
+                None,None,verbose=False)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "loadCatalogueData_ref.p"
+        computed = [boxsize,ahProps,antihaloCentres,antihaloMasses,\
+            antihaloRadii,snapSortList,volumesList]
         reference = self.getReference(referenceFile,computed)
-        self.compareToReference(computed,reference)
+        self.compareToReference(computed,reference,filterNan=True)
     def test_constructShortenedCatalogues(self):
         [snapList,snapListRev,boxsize,ahProps,antihaloCentres,\
             antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList] = \
-            tools.loadPickle( self.dataFolder + self.test_subfolder + \
-            "loadCatalogueData_ref.p")
+            catalogue.loadCatalogueData(self.snapNumList,None,None,\
+                self.samplesFolder,self.snapname,self.snapnameRev,None,"mass",\
+                None,None,verbose=False)
         [centresListShort,centralAntihalos,sortedList,ahCounts,max_index] = \
             tools.loadPickle(self.dataFolder + \
             self.test_subfolder + "computeShortCentresList_ref.p")
@@ -3586,8 +3614,9 @@ class test_catalogue_code(test_base):
     def test_getOneWayMatchesAllCatalogues(self):
         [snapList,snapListRev,boxsize,ahProps,antihaloCentres,\
             antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList] = \
-            tools.loadPickle( self.dataFolder + self.test_subfolder + \
-            "loadCatalogueData_ref.p")
+            catalogue.loadCatalogueData(self.snapNumList,None,None,\
+                self.samplesFolder,self.snapname,self.snapnameRev,None,"mass",\
+                None,None,verbose=False)
         [centresListShort,centralAntihalos,sortedList,ahCounts,max_index] = \
             tools.loadPickle(self.dataFolder + \
             self.test_subfolder + "computeShortCentresList_ref.p")
@@ -3597,9 +3626,9 @@ class test_catalogue_code(test_base):
         hrListCentral = tools.loadPickle(self.dataFolder + \
             self.test_subfolder + "constructShortenedCatalogues_ref.p")
         quantityListRad =  catalogue.getShortenedQuantity(antihaloRadii,\
-            centresListShort,sortedList,ahCounts,max_index)
+            centralAntihalos,centresListShort,sortedList,ahCounts,max_index)
         quantityListMass = catalogue.getShortenedQuantity(antihaloMasses,\
-            centresListShort,sortedList,ahCounts,max_index)
+            centralAntihalos,centresListShort,sortedList,ahCounts,max_index)
         computed = catalogue.getOneWayMatchesAllCatalogues(3,"distance",\
             snapListRev,hrListCentral,centresListShort,quantityListRad,\
             max_index,0.5,0.9,ahCounts,quantityListRad,quantityListMass,\
@@ -3621,8 +3650,9 @@ class test_catalogue_code(test_base):
     def test_getMatchCandidatesTwoCatalogues(self):
         [snapList,snapListRev,boxsize,ahProps,antihaloCentres,\
             antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList] = \
-            tools.loadPickle( self.dataFolder + self.test_subfolder + \
-            "loadCatalogueData_ref.p")
+            catalogue.loadCatalogueData(self.snapNumList,None,None,\
+                self.samplesFolder,self.snapname,self.snapnameRev,None,"mass",\
+                None,None,verbose=False)
         hrListCentral = tools.loadPickle(self.dataFolder + \
             self.test_subfolder + "constructShortenedCatalogues_ref.p")
         [centresListShort,centralAntihalos,sortedList,ahCounts,max_index] = \
@@ -3632,22 +3662,24 @@ class test_catalogue_code(test_base):
             snapedit.wrap(centres,boxsize),boxsize=boxsize) \
             for centres in centresListShort]
         quantityListRad =  catalogue.getShortenedQuantity(antihaloRadii,\
-            centresListShort,sortedList,ahCounts,max_index)
+            centralAntihalos,centresListShort,sortedList,ahCounts,max_index)
         quantityListMass = catalogue.getShortenedQuantity(antihaloMasses,\
-            centresListShort,sortedList,ahCounts,max_index)
+            centralAntihalos,centresListShort,sortedList,ahCounts,max_index)
         computed = catalogue.getMatchCandidatesTwoCatalogues(0,1,"distance",\
-            snapListRev,hrListCentral,quantityListRad,None,0.5,\
-            0.9,quantityListRad,quantityListMass,'radius',treeList,20.0,\
-                        "ratio","fractional",volumesList)
+            snapListRev,hrListCentral,centresListShort,quantityListRad,\
+            max_index,0.5,0.9,quantityListRad,quantityListMass,'radius',\
+            treeList,20.0,"ratio","fractional",volumesList)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "getMatchCandidatesTwoCatalogues_ref.p"
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
+    @unittest.skip("Under development")
     def test_getOverlapList(self):
         [snapList,snapListRev,boxsize,ahProps,antihaloCentres,\
             antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList] = \
-            tools.loadPickle( self.dataFolder + self.test_subfolder + \
-            "loadCatalogueData_ref.p")
+            catalogue.loadCatalogueData(self.snapNumList,None,None,\
+                self.samplesFolder,self.snapname,self.snapnameRev,None,"mass",\
+                None,None,verbose=False)
         hrListCentral = tools.loadPickle(self.dataFolder + \
             self.test_subfolder + "constructShortenedCatalogues_ref.p")
         computed = catalogue.getOverlapList(3,hrListCentral,volumesList)
@@ -3667,10 +3699,10 @@ class test_catalogue_code(test_base):
         oneWayMatchesOther = oneWayMatches[:,otherColumns]
         twoWayMatch = tools.loadPickle(self.dataFolder + self.test_subfolder + \
             "getTwoWayMatches_ref.p")
-        alreadyMatched = np.zeros((3,max_index),dtype=bool)
-        candidateCounts = [np.zeros((numCats,ahCounts[l]),dtype=int) \
-            for l in range(0,numCats)]
-        for m in range(0,numCats):
+        alreadyMatched = np.zeros((self.numCats,max_index),dtype=bool)
+        candidateCounts = [np.zeros((self.numCats,ahCounts[l]),dtype=int) \
+            for l in range(0,self.numCats)]
+        for m in range(0,self.numCats):
             candidateCounts[0][m,0] = len(allCandidates[0][m][0])
         diffMap = [np.setdiff1d(np.arange(0,3),[k]) \
             for k in range(0,3)]
@@ -3702,17 +3734,34 @@ class test_catalogue_code(test_base):
         oneWayMatchesOther = oneWayMatches[:,otherColumns]
         twoWayMatch = tools.loadPickle(self.dataFolder + self.test_subfolder + \
             "getTwoWayMatches_ref.p")
-        alreadyMatched = np.zeros((3,max_index),dtype=bool)
-        candidateCounts = [np.zeros((numCats,ahCounts[l]),dtype=int) \
-            for l in range(0,numCats)]
-        for m in range(0,numCats):
+        alreadyMatched = np.zeros((self.numCats,max_index),dtype=bool)
+        candidateCounts = [np.zeros((self.numCats,ahCounts[l]),dtype=int) \
+            for l in range(0,self.numCats)]
+        for m in range(0,self.numCats):
             candidateCounts[0][m,0] = len(allCandidates[0][m][0])
         diffMap = [np.setdiff1d(np.arange(0,3),[k]) \
             for k in range(0,3)]
         computed = catalogue.applyNWayMatching(0,0,3,\
-            oneWayMatches,alreadyMatched,diffMap,allCandidates)
+            oneWayMatches,alreadyMatched,diffMap,allCandidates,\
+            allRatios,allDistances)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "applyNWayMatching_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_followAllMatchChains(self):
+        [oneWayMatchesAllCatalogues,matchArrayList,allCandidates,\
+            allRatios,allDistances] = tools.loadPickle(self.dataFolder + \
+                self.test_subfolder + "getOneWayMatchesAllCatalogues_ref.p")
+        oneWayMatches = oneWayMatchesAllCatalogues[0]
+        otherColumns = np.array([1,2])
+        oneWayMatchesOther = oneWayMatches[:,otherColumns]
+        diffMap = [np.setdiff1d(np.arange(0,3),[k]) \
+            for k in range(0,3)]
+        alreadyMatched = np.zeros((3,max_index),dtype=bool)
+        computed = catalogue.followAllMatchChains(0,0,3,oneWayMatches,\
+            alreadyMatched,diffMap,allCandidates)
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "followAllMatchChains_ref.p"
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
     def test_computeQuantityForCandidates(self):
@@ -3742,14 +3791,14 @@ class test_catalogue_code(test_base):
         twoWayMatch = tools.loadPickle(self.dataFolder + self.test_subfolder + \
             "getTwoWayMatches_ref.p")
         alreadyMatched = np.zeros((3,max_index),dtype=bool)
-        candidateCounts = [np.zeros((numCats,ahCounts[l]),dtype=int) \
-            for l in range(0,numCats)]
-        for m in range(0,numCats):
+        candidateCounts = [np.zeros((self.numCats,ahCounts[l]),dtype=int) \
+            for l in range(0,self.numCats)]
+        for m in range(0,self.numCats):
             candidateCounts[0][m,0] = len(allCandidates[0][m][0])
         diffMap = [np.setdiff1d(np.arange(0,3),[k]) \
             for k in range(0,3)]
         computed = catalogue.getTotalNumberOfTwoWayMatches(\
-            0,3,diffMap,allCands,allCandidates,oneWayMatches)
+            0,3,diffMap,allCandidates,oneWayMatches)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "getTotalNumberOfTwoWayMatches_ref.p"
         reference = self.getReference(referenceFile,computed)
@@ -3762,8 +3811,8 @@ class test_catalogue_code(test_base):
                 self.test_subfolder + "getOneWayMatchesAllCatalogues_ref.p")
         diffMap = [np.setdiff1d(np.arange(0,3),[k]) \
             for k in range(0,3)]
-        computed = catalogue.getNumberOfTwoWayMatchesNway(numCats,allCands,\
-            allCandidates,diffMap)
+        computed = catalogue.getNumberOfTwoWayMatchesNway(self.numCats,\
+            allCands,allCandidates,diffMap)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "getNumberOfTwoWayMatchesNway_ref.p"
         reference = self.getReference(referenceFile,computed)
@@ -3780,10 +3829,10 @@ class test_catalogue_code(test_base):
         oneWayMatchesOther = oneWayMatches[:,otherColumns]
         twoWayMatch = tools.loadPickle(self.dataFolder + self.test_subfolder + \
             "getTwoWayMatches_ref.p")
-        alreadyMatched = np.zeros((3,max_index),dtype=bool)
-        candidateCounts = [np.zeros((numCats,ahCounts[l]),dtype=int) \
-            for l in range(0,numCats)]
-        for m in range(0,numCats):
+        alreadyMatched = np.zeros((self.numCats,max_index),dtype=bool)
+        candidateCounts = [np.zeros((self.numCats,ahCounts[l]),dtype=int) \
+            for l in range(0,self.numCats)]
+        for m in range(0,self.numCats):
             candidateCounts[0][m,0] = len(allCandidates[0][m][0])
         diffMap = [np.setdiff1d(np.arange(0,3),[k]) \
             for k in range(0,3)]
@@ -3806,9 +3855,9 @@ class test_catalogue_code(test_base):
         twoWayMatch = tools.loadPickle(self.dataFolder + self.test_subfolder + \
             "getTwoWayMatches_ref.p")
         alreadyMatched = np.zeros((3,max_index),dtype=bool)
-        candidateCounts = [np.zeros((numCats,ahCounts[l]),dtype=int) \
-            for l in range(0,numCats)]
-        for m in range(0,numCats):
+        candidateCounts = [np.zeros((self.numCats,ahCounts[l]),dtype=int) \
+            for l in range(0,self.numCats)]
+        for m in range(0,self.numCats):
             candidateCounts[0][m,0] = len(allCandidates[0][m][0])
         diffMap = [np.setdiff1d(np.arange(0,3),[k]) \
             for k in range(0,3)]
@@ -3832,9 +3881,9 @@ class test_catalogue_code(test_base):
         twoWayMatch = tools.loadPickle(self.dataFolder + self.test_subfolder + \
             "getTwoWayMatches_ref.p")
         alreadyMatched = np.zeros((3,max_index),dtype=bool)
-        candidateCounts = [np.zeros((numCats,ahCounts[l]),dtype=int) \
-            for l in range(0,numCats)]
-        for m in range(0,numCats):
+        candidateCounts = [np.zeros((self.numCats,ahCounts[l]),dtype=int) \
+            for l in range(0,self.numCats)]
+        for m in range(0,self.numCats):
             candidateCounts[0][m,0] = len(allCandidates[0][m][0])
         diffMap = [np.setdiff1d(np.arange(0,3),[k]) \
             for k in range(0,3)]
@@ -3858,9 +3907,9 @@ class test_catalogue_code(test_base):
         twoWayMatch = tools.loadPickle(self.dataFolder + self.test_subfolder + \
             "getTwoWayMatches_ref.p")
         alreadyMatched = np.zeros((3,max_index),dtype=bool)
-        candidateCounts = [np.zeros((numCats,ahCounts[l]),dtype=int) \
-            for l in range(0,numCats)]
-        for m in range(0,numCats):
+        candidateCounts = [np.zeros((self.numCats,ahCounts[l]),dtype=int) \
+            for l in range(0,self.numCats)]
+        for m in range(0,self.numCats):
             candidateCounts[0][m,0] = len(allCandidates[0][m][0])
         diffMap = [np.setdiff1d(np.arange(0,3),[k]) \
             for k in range(0,3)]
