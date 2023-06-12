@@ -1511,6 +1511,135 @@ def getMatchPynbody(snap1,snap2,cat1,cat2,quantity1,quantity2,\
             match.append(mostProbable + 1)
         return [np.array(match,dtype=int),candidatesList]
 
+# Function to match a single void:
+def getCandidatesForVoid(centre,searchRadius,boxsize,otherCentres,\
+        otherTree=None):
+    if otherTree is None:
+        otherTree = scipy.spatial.cKDTree(snapedit.wrap(otherCentres,boxsize),\
+            boxsize=boxsize)
+    candidates = otherTree.query_ball_point(snapedit.wrap(centre,boxsize),\
+        searchRadius,workers=-1)
+    return candidates
+
+# Get the radius/mass ratios of all candidates, without sorting:
+def getUnsortedRatios(candidates,searchQuantity,otherQuantities):
+    if not np.isscalar(searchQuantity):
+        # This happens if we are checking multiple quantities, or possibly
+        # multiple thresholds, simultaneously.
+        nQuantLen = len(searchQuantity) # Number of quantities being
+            # tested
+        quantRatio = np.zeros((len(candidates),nQuantLen))
+        for l in range(0,nQuantLen):
+            bigger = np.where(\
+                otherQuantities[candidates,l] > searchQuantity[l])[0]
+            quantRatio[:,l] = otherQuantities[candidates,l]/\
+                searchQuantity[l]
+            quantRatio[bigger,l] = searchQuantity[l]/\
+                otherQuantities[candidates,l][bigger]
+    else:
+        bigger = np.where(\
+            otherQuantities[candidates] > searchQuantity)[0]
+        quantRatio = otherQuantities[candidates]/searchQuantity
+        quantRatio[bigger] = searchQuantity/\
+            otherQuantities[candidates][bigger]
+    return quantRatio
+
+# Sort the candidates in descending order of radius/mass ratio:
+def sortQuantRatiosByRatio(quantRatio,distances,sortMethod,sortQuantity):
+    # sort the quantRatio from biggest to smallest, so we find
+    # the most similar anti-halo within the search distance:
+    if len(quantRatio.size) > 1:
+        indSort = np.flip(np.argsort(quantRatio[:,sortQuantity]))
+    else:
+        indSort = np.flip(np.argsort(quantRatio))
+    quantRatio = quantRatio[indSort]
+    sortedCandidates = np.array(candidates,dtype=int)[indSort]
+    return [quantRatio,sortedCandidates]
+
+# Function to process candidates for a match to a given void. We compute their
+# radius ratio and distance ratio, to check whether they are within the
+# thresholds required:
+def processCandidates(candidates,centre,otherCentres,searchQuantity,\
+        otherQuantities):
+    # Number of search quantities (radius or mass) to process for this void:
+    if np.isscalar(searchQuantity):
+        nQuantLen = len(searchQuantity)
+    else:
+        nQuantLen = 1
+    if len(candidates) > 0:
+        # Sort indices:
+        distances = np.sqrt(np.sum((\
+                otherCentres[candidates,:] - centre)**2,1))
+        # Unsorted radius (or mass) ratios:
+        quantRatio = getUnsortedRatios(candidates,searchQuantity,\
+            otherQuantities)
+        if sortMethod == 'distance':
+            # Sort the antihalos by distance. Candidate is the closest
+            # halo which satisfies the threshold criterion:
+            indSort = np.argsort(distances)
+            sortedCandidates = np.array(candidates,dtype=int)[indSort]
+            bigger = np.where(\
+                otherQuantities[sortedCandidates] > searchQuantity)[0]
+            quantRatio = otherQuantities[sortedCandidates]/searchQuantity
+            quantRatio[bigger] = searchQuantity/\
+                otherQuantities[sortedCandidates][bigger]
+        elif sortMethod == 'ratio':
+            # sort the quantRatio from biggest to smallest, so we find
+            # the most similar anti-halo within the search distance:
+            [quantRatio,sortedCandidates] = sortQuantRatiosByRatio(\
+                quantRatio,distances,sortMethod,sortQuantity)
+        elif sortMethod == "volumes":
+            volOverlapFrac = overlap[k,candidates]
+            indSort = np.flip(np.argsort(volOverlapFrac))
+            quantRatio = quantRatio[indSort]
+            sortedCandidates = np.array(candidates,dtype=int)[indSort]
+        else:
+            raise Exception("Unrecognised sorting method")
+        # Get thresholds for these candidates:
+        if mode == "fractional":
+            if not np.isscalar(searchQuantity):
+                candRadii = otherQuantities[sortedCandidates,0]
+                # Geometric mean of radii, to ensure symmetry.
+                geometricRadii = np.sqrt(searchQuantity[0]*candRadii)
+                condition = (quantRatio[:,0] >= quantityThresh[0]) & \
+                    (distances[indSort] <= geometricRadii*distMax)
+                for l in range(1,nQuantLen):
+                    condition = condition & \
+                        (quantRatio[:,l] >= quantityThresh[l])
+                candidates = np.where(condition)[0]
+            else:
+                candRadii = otherQuantities[sortedCandidates]
+                # Geometric mean of radii, to ensure symmetry.
+                geometricRadii = np.sqrt(searchQuantity*candRadii)
+                candidates = np.where((quantRatio >= quantityThresh) & \
+                    (distances[indSort] <= geometricRadii*distMax))[0]
+        else:
+            if not np.isscalar(searchQuantity):
+                condition = np.ones(quantityRatio.shape[0],dtype=bool)
+                for l in range(0,nQuantLen):
+                    condition = condition & \
+                        (quantRatio[:,l] >= quantityThresh[l])
+                candidates = np.where(condition)[0]
+            else:
+                candidates = np.where((quantRatio >= quantityThresh))[0]
+        candidatesList.append(np.array(candidates)[candidates])
+        ratioList.append(quantRatio[candidates])
+        distList.append(distances[candidates])
+        if len(candidates) > 0:
+            # Add the most probable - remembering the +1 offset for 
+            # pynbody halo catalogue IDs:
+            match.append(sortedCandidates[candidates[0]] + 1)
+        else:
+            match.append(-1)
+    else:
+        match.append(-1)
+        candidatesList.append(np.array([]))
+        ratioList.append([])
+        distList.append([])
+
+
+
+# Function to match all voids:
 def getMatchDistance(snap1,snap2,centres1,centres2,\
         quantity1,quantity2,tree1=None,tree2=None,distMax = 20.0,\
         max_index=200,quantityThresh=0.5,sortMethod='distance',\

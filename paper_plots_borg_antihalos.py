@@ -1275,9 +1275,11 @@ tools.savePickle([purity_1f,purity_2f,completeness_1f,completeness_2f,\
     data_folder + "purity_completeness_data.p")
 
 [purity_1f,purity_2f,completeness_1f,completeness_2f,\
-    catPercentileBins99Rand,catPercentile99Rand,catMeanRand,\
+    catPercentile99BinsRand,catPercentileRand,catMeanRand,\
     catMeanMCMC,catMeanMCMCCut,catSizeMCMC,catSizeMCMCCut,\
-    catSizeMCMCCutNoBins]= tools.loadPickle(\
+    catSizeBinsMCMC,catSizeBinsMCMCCut,catSizeMCMCCutNoBins,\
+    catSizeMCMCCutNoBinsInBins,catPercentileMaxRand,\
+    catMeanMCMCCutNoBins]= tools.loadPickle(\
     data_folder + "purity_completeness_data.p")
 
 [purity_1f,purity_2f,completeness_1f,completeness_2f] = tools.loadPickle(\
@@ -4615,6 +4617,9 @@ if doClusterMasses:
 
 # Get optimal catalogues:
 rSphere2 = 300
+muOpt = 0.925
+rSearchOpt = 0.5
+NWayMatch = False
 [finalCat300,shortHaloList300,twoWayMatchList300,\
             finalCandidates300,finalRatios300,finalDistances300,\
             allCandidates300,candidateCounts300,allRatios300,\
@@ -4628,7 +4633,7 @@ rSphere2 = 300
                 twoWayOnly=True,blockDuplicates=True,\
                 crossMatchThreshold = muOpt,distMax = rSearchOpt,\
                 rSphere=rSphere2,massRange = [mLower1,mUpper1],\
-                NWayMatch = False,rMin=rMin,rMax=rMax,\
+                NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
                 additionalFilters = snrFilter,verbose=False,\
                 _recomputeData=True)
 
@@ -4645,7 +4650,7 @@ rSphere2 = 300
         twoWayOnly=True,blockDuplicates=True,\
         crossMatchThreshold = muOpt,distMax = rSearchOpt,\
         rSphere=rSphere2,massRange = [mLower1,mUpper1],\
-        NWayMatch = False,rMin=rMin,rMax=rMax,\
+        NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
         additionalFilters = None,verbose=False,\
         _recomputeData=True)
 
@@ -5351,6 +5356,7 @@ ahProps = [tools.loadPickle(name + ".AHproperties.p")\
 rSphere2 = 300
 muOpt = 0.925
 rSearchOpt = 0.5
+NWayMatch = True
 [finalCat300,shortHaloList300,twoWayMatchList300,\
             finalCandidates300,finalRatios300,finalDistances300,\
             allCandidates300,candidateCounts300,allRatios300,\
@@ -5362,7 +5368,7 @@ rSearchOpt = 0.5
                 twoWayOnly=True,blockDuplicates=True,\
                 crossMatchThreshold = muOpt,distMax = rSearchOpt,\
                 rSphere=rSphere2,massRange = [mMin,mMax],\
-                NWayMatch = True,rMin=rMin,rMax=rMax,\
+                NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
                 additionalFilters = snrFilter,verbose=False)
 
 finalCentres300List = np.array([getCentresFromCat(\
@@ -5447,8 +5453,13 @@ snrCatOpt = getSNRForVoidRealisations(finalCatOpt,snrAllCatsList,ahNumbers)
 haveVoids300 = np.where(finalCat300 >= 0)
 haveVoidsOpt = np.where(finalCatOpt >= 0)
 
-
-
+# Void Filter:
+distance300 = np.sqrt(np.sum(meanCentre300**2,1))
+distFilter = (distance300 < 135)
+voidFilter300 = np.where((radiiMean300 >= 10) & (radiiMean300 < 25) & \
+    (finalCatFrac300 > 0.1))[0]
+voidFilter135 = np.where((radiiMean300 >= 10) & (radiiMean300 < 25) & \
+    (finalCatFrac300 > 0.1) & distFilter)[0]
 
 catToPlot = finalCat300
 #catToPlot = finalCatOpt
