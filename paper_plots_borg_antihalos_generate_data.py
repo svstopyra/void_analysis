@@ -2236,7 +2236,6 @@ def refineVoidCentres(voidMatches,ratiosm,distancesm,numCats,centresList,\
         iterations += 1
         if iterations > iterMax:
             raise Exception("Void centres refinining did not converge.")
-    print("\nCentres refined after " + str(iterations) + " iterations.")
     return [voidMatchesNew,ratiosm,distancesm]
 
 # Add an entry to the catalogue:
