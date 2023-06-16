@@ -1723,7 +1723,7 @@ def getMatchDistance(snap1,snap2,centres1,centres2,\
     ratioList = []
     distList = []
     # Fina candidates for all anti-halos:
-    [searchRadii,searchOther] = getAllCandidatesFromTrees(\
+    [searchRadii,searchOther] = getAllCandidatesFromTrees(centres1,\
         quantity1,quantity2,quantityThresh,distMax,tree1,tree2,mode = mode)
     # Build an overlap map, if we are using this method:
     if overlap is None and sortMethod == "volumes":
