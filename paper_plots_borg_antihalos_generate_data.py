@@ -1665,8 +1665,8 @@ def findAndProcessCandidates(centre,otherCentres,searchQuantity,\
             quantRatio,distances,quantityThresh,\
             distMax,searchQuantity,otherQuantities,sortedCandidates,nQuantLen,\
             indSort,mode=mode)
-        selectCandidates = np.array(candidates)[matchingVoids])
-        selectedQuantRatios = quantRatio[matchingVoids])
+        selectCandidates = np.array(candidates)[matchingVoids]
+        selectedQuantRatios = quantRatio[matchingVoids]
         selectedDistances = distances[matchingVoids]
         if len(matchingVoids) > 0:
             # Add the most probable - remembering the +1 offset for 
