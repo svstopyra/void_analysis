@@ -1695,7 +1695,7 @@ def getCandidatesForVoidInAllCatalogues(centre,radius,centresList,\
                 for centres in centresList]
     for ns in range(0,numCats):
         searchRadii = getSearchRadii(radius,quantitiesList[ns],\
-            quantityThresh,distMax)
+            quantityThresh,distMax,mode=mode)
         [selectedMatches,selectCandidates,selectedQuantRatios,\
             selectedDistances] = findAndProcessCandidates(\
                 centre,centresList[ns],radius,\
@@ -1707,7 +1707,8 @@ def getCandidatesForVoidInAllCatalogues(centre,radius,centresList,\
         newCatalogueRow.append(selectedMatches)
     return np.array(newCatalogueRow)
 
-def getSearchRadii(quantity1,quantity2,quantityThresh,distMax):
+def getSearchRadii(quantity1,quantity2,quantityThresh,distMax,\
+        mode="fractional"):
     if mode == "fractional":
         radii1 = quantity1/quantityThresh
         radii2 = quantity2/quantityThresh
@@ -1723,7 +1724,8 @@ def getSearchRadii(quantity1,quantity2,quantityThresh,distMax):
 
 def getAllCandidatesFromTrees(centres1,quantity1,quantity2,quantityThresh,\
         distMax,tree1,tree2,boxsize,mode = "fractional"):
-    searchRadii = getSearchRadii(quantity1,quantity2,quantityThresh,distMax)
+    searchRadii = getSearchRadii(quantity1,quantity2,quantityThresh,distMax,\
+        mode = mode)
     if mode == "fractional":
         # Interpret distMax as a fraction of the void radius, not the 
         # distance in Mpc/h.
