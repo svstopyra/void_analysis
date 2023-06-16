@@ -1637,9 +1637,9 @@ def findAndProcessCandidates(centre,otherCentres,searchQuantity,\
         distMax = 20.0,mode="fractional",treeOther=None):
     # Number of search quantities (radius or mass) to process for this void:
     if np.isscalar(searchQuantity):
-        nQuantLen = len(searchQuantity)
-    else:
         nQuantLen = 1
+    else:
+        nQuantLen = len(searchQuantity)
     # If we don't have candidates already, then we should find them:
     if candidates is None:
         if treeOther is None:
