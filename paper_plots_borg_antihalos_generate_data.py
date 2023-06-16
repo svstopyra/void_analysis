@@ -1556,7 +1556,7 @@ def computeQuantityRatio(otherQuantities,searchQuantity):
 def sortQuantRatiosByRatio(quantRatio,distances,sortMethod,sortQuantity):
     # sort the quantRatio from biggest to smallest, so we find
     # the most similar anti-halo within the search distance:
-    if len(quantRatio.size) > 1:
+    if len(quantRatio.shape) > 1:
         indSort = np.flip(np.argsort(quantRatio[:,sortQuantity]))
     else:
         indSort = np.flip(np.argsort(quantRatio))
@@ -1579,7 +1579,7 @@ def sortCandidatesByVolumes(candidates,quantRatio,overlapForVoid):
     return [quantRatio,sortedCandidates,indSort]
 
 def getSortedQuantRatio(sortMethod,candidates,quantRatio,distances,
-        otherQuantities,searchQuantiy,overlapForVoid,sortQuantity):
+        otherQuantities,searchQuantity,overlapForVoid,sortQuantity):
     if sortMethod == 'distance':
         # Sort the antihalos by distance. Candidate is the closest
         # halo which satisfies the threshold criterion:
