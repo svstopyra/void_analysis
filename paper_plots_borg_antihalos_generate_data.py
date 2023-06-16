@@ -1646,7 +1646,7 @@ def findAndProcessCandidates(centre,otherCentres,searchQuantity,\
         if treeOther is None:
             treeOther = scipy.spatial.cKDTree(\
                 snapedit.wrap(otherCentres,boxsize),boxsize=boxsize)
-        candidates = tree2.query_ball_point(snapedit.wrap(centre,boxsize),\
+        candidates = treeOther.query_ball_point(snapedit.wrap(centre,boxsize),\
             searchRadii,workers=-1)
     # Check we have a sensible overlap map:
     if (overlapForVoid is None) and (sortMethod == "volumes"):
