@@ -2201,7 +2201,7 @@ def getMeanRadiusFromVoidMatches(voidMatches,numCats,radiusList):
 # Code to iterate on the centres of a given void, so that we are less
 # dependent on matching to a particular void:
 def refineVoidCentres(voidMatches,ratiosm,distancesm,numCats,centresList,\
-        radiusList,iterMax = 100):
+        radiusList,overlapForVoid=None,treeList = None,iterMax = 100):
     voidMatchesLast = np.array([-1 for k in range(0,numCats)])
     voidMatchesNew = voidMatches
     iterations = 0
@@ -2213,10 +2213,10 @@ def refineVoidCentres(voidMatches,ratiosm,distancesm,numCats,centresList,\
         meanRadius = getMeanRadiusFromVoidMatches(\
             voidMatchesNew,numCats,radiusList)
         # Get all the voids within the thresholds from this centre:
-        voidMatchesNew = getCandidatesForVoidInAllCatalogues(centre,radius,\
-            centresList,quantitiesList,boxsize,searchRadii,sortQuantity,\
-            sortMethod,quantityThresh,distMax,mode,overlapForVoid=None,\
-            treeList=None)
+        voidMatchesNew = getCandidatesForVoidInAllCatalogues(
+            meanCentres,meanRadius,centresList,quantitiesList,boxsize,\
+            searchRadii,sortQuantity,sortMethod,quantityThresh,distMax,mode,\
+            overlapForVoid=overlapForVoid,treeList=treeList)
         # Check that we didn't run completely out of voids, as this will
         # make our centre meaningless.
         if np.all(voidMatchesNew < 0):
@@ -2232,7 +2232,7 @@ def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
         allCandidates,alreadyMatched,candidateCounts,NWayMatch,\
         allRatios,allDistances,diffMap,finalCandidates,\
         finalCat,finalRatios,finalDistances,finalCombinatoricFrac,\
-        finalCatFrac,refineCentres,centresList,radiusList):
+        finalCatFrac,refineCentres,centresList,radiusList,treeList=None):
     oneWayMatches = oneWayMatchesAllCatalogues[nCat]
     # Mark companions of this void as already found, to avoid duplication.
     # Additionally, store the candidates (candm), radius ratios (ratiosm) and 
@@ -2256,7 +2256,7 @@ def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
         if refineCentres:
             [voidMatches,ratiosm,distancesm] = refineVoidCentres(\
                 oneWayMatches[nVoid],ratiosm,distancesm,numCats,centresList,\
-                radiusList)
+                radiusList,overlapForVoid = None,treeList = treeList)
         else:
             voidMatches = oneWayMatches[nVoid]
         # Block the voids we have identified from appearing again:
@@ -2591,7 +2591,8 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
                 allCandidates,alreadyMatched,candidateCounts,NWayMatch,\
                 allRatios,allDistances,diffMap,finalCandidates,\
                 finalCat,finalRatios,finalDistances,finalCombinatoricFrac,\
-                finalCatFrac,refineCentres,centresListShort,quantityListRad)
+                finalCatFrac,refineCentres,centresListShort,quantityListRad,\
+                treeList = treeList)
     return [np.array(finalCat),shortHaloList,twoWayMatchLists,\
         finalCandidates,finalRatios,finalDistances,allCandidates,\
         candidateCounts,allRatios,np.array(finalCombinatoricFrac),\
