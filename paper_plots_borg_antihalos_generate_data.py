@@ -1738,11 +1738,15 @@ def getMatchDistance(snap1,snap2,centres1,centres2,\
     for k in range(0,np.min([len(centres1),max_index])):
         candidates = searchOther[k]
         centre = centres1[k]
+        if overlap is None:
+            overlapForVoid = None
+        else:
+            overlapForVoid = overlap[k]
         [selectedMatches,selectCandidates,selectedQuantRatios,\
             selectedDistances] = findAndProcessCandidates(\
             centre,centres2,quantity1[k],\
             quantity2,boxsize,searchRadii,candidates=candidates,\
-            sortMethod=sortMethod,overlapForVoid=overlap[k],\
+            sortMethod=sortMethod,overlapForVoid=overlapForVoid,\
             quantityThresh=quantityThresh,distMax = distMax,mode=mode,\
             treeOther=tree2)
         candidatesList.append(selectCandidates)
