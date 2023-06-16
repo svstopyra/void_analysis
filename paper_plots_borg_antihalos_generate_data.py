@@ -2293,14 +2293,13 @@ def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
 
 # Load simulations and catalogue data so that we can combine them. If these
 # are already loaded, this function won't reload them.
-def loadCatalogueData(snapNumList,snapList,snapListRev,samplesFolder,snapname,\
-        snapnameRev,ahProps,sortMethod,snapSortList,hrList,verbose=False):
-    if snapList is None:
-        snapList =  [pynbody.load(samplesFolder + "sample" + \
-            str(snapNum) + "/" + snapname) for snapNum in snapNumList]
-    if snapListRev is None:
-        snapListRev =  [pynbody.load(samplesFolder + "sample" + \
-            str(snapNum) + "/" + snapnameRev) for snapNum in snapNumList]
+def loadCatalogueData(snapList,snapListRev,ahProps,sortMethod,snapSortList,\
+        hrList,verbose=False):
+    # If snaplists are strings, then load them:
+    if type(snapList[0]) == str:
+        snapList = [pynbody.load(snap) for snap in snapList]
+    if type(snapListRev[0]) == str:
+        snapListRev = [pynbody.load(snap) for snap in snapListRev]
     # Load centres so that we can filter to the constrained region:
     boxsize = snapList[0].properties['boxsize'].ratio("Mpc a h**-1")
     if verbose:
@@ -2472,6 +2471,10 @@ def getOneWayMatchesAllCatalogues(numCats,matchType,snapListRev,\
     return [oneWayMatchesAllCatalogues,matchArrayList,allCandidates,\
         allRatios,allDistances]
 
+def constructSnapNameList(samplesFolder,snapNumList,snapname):
+    return [samplesFolder + "sample" + str(snapNum) + "/" + \
+            snapname for snapNum in snapNumList]
+
 # Construct an anti-halo catalogue from reversed snapshots
 def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
         verbose=True,rSphere=135,max_index=None,thresh=0.5,\
@@ -2486,11 +2489,15 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
         additionalFilters = None,sortBy="mass",refineCentres=False,\
         sortQuantity = 0):
     # Load snapshots:
+    if snapList is None:
+        snapList = constructSnapNameList(samplesFolder,snapNumList,snapname)
+    if snapListRev is None:
+        snapListRev = constructSnapNameList(samplesFolder,snapNumList,\
+            snapnameRev)
     [snapList,snapListRev,boxsize,ahProps,antihaloCentres,\
         antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList] = \
-        loadCatalogueData(snapNumList,snapList,snapListRev,samplesFolder,\
-            snapname,snapnameRev,ahProps,sortMethod,snapSortList,hrList,\
-            verbose=verbose)
+        loadCatalogueData(snapList,snapListRev,ahProps,sortMethod,\
+            snapSortList,hrList,verbose=verbose)
     numCats = len(snapNumList)
     if verbose:
         print("Loading snapshots...")

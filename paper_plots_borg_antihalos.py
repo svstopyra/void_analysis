@@ -4620,6 +4620,7 @@ rSphere2 = 300
 muOpt = 0.925
 rSearchOpt = 0.5
 NWayMatch = False
+refineCentres = True
 [finalCat300,shortHaloList300,twoWayMatchList300,\
             finalCandidates300,finalRatios300,finalDistances300,\
             allCandidates300,candidateCounts300,allRatios300,\
@@ -4635,7 +4636,7 @@ NWayMatch = False
                 rSphere=rSphere2,massRange = [mLower1,mUpper1],\
                 NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
                 additionalFilters = snrFilter,verbose=False,\
-                _recomputeData=True)
+                refineCentres = refineCentres,_recomputeData=True)
 
 [finalCatRand,shortHaloListRand,twoWayMatchListRand,\
     finalCandidatesRand,finalRatiosRand,finalDistancesRand,\
@@ -4652,7 +4653,7 @@ NWayMatch = False
         rSphere=rSphere2,massRange = [mLower1,mUpper1],\
         NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
         additionalFilters = None,verbose=False,\
-        _recomputeData=True)
+        refineCentres = refineCentres,_recomputeData=True)
 
 # A few things needed for computing catalogue fractions:
 # For MCMC samples:

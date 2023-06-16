@@ -3584,11 +3584,16 @@ class test_catalogue_code(test_base):
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
     def test_loadCatalogueData(self):
+        if snapList is None:
+            snapList = constructSnapNameList(self.samplesFolder,\
+                self.snapNumList,self.snapname)
+        if snapListRev is None:
+            snapListRev = constructSnapNameList(self.samplesFolder,\
+                self.snapNumList,self.snapnameRev)
         [snapList,snapListRev,boxsize,ahProps,antihaloCentres,\
             antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList] = \
-            catalogue.loadCatalogueData(self.snapNumList,None,None,\
-                self.samplesFolder,self.snapname,self.snapnameRev,None,"mass",\
-                None,None,verbose=False)
+            catalogue.loadCatalogueData(snapList,snapListRev,\
+                None,"mass",None,None,verbose=False)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "loadCatalogueData_ref.p"
         computed = [boxsize,ahProps,antihaloCentres,antihaloMasses,\
