@@ -1553,7 +1553,8 @@ def computeQuantityRatio(otherQuantities,searchQuantity):
     quantRatio[bigger] = searchQuantity/otherQuantities[bigger]
     return quantRatio
 
-def sortQuantRatiosByRatio(quantRatio,distances,sortMethod,sortQuantity):
+def sortQuantRatiosByRatio(quantRatio,distances,candidates,sortMethod,\
+        sortQuantity):
     # sort the quantRatio from biggest to smallest, so we find
     # the most similar anti-halo within the search distance:
     if len(quantRatio.shape) > 1:
@@ -1566,9 +1567,9 @@ def sortQuantRatiosByRatio(quantRatio,distances,sortMethod,sortQuantity):
 
 def sortCandidatesByDistance(candidates,quantRatio,distances,otherQuantities,\
         searchQuantity):
-    indSort = np.flip(np.argsort(distances))
+    indSort = np.argsort(distances)
     sortedCandidates = np.array(candidates,dtype=int)[indSort]
-    quantRatio = quantRatio[sortedCandidates]
+    quantRatio = quantRatio[indSort]
     return [quantRatio,sortedCandidates,indSort]
 
 def sortCandidatesByVolumes(candidates,quantRatio,overlapForVoid):
@@ -1589,7 +1590,7 @@ def getSortedQuantRatio(sortMethod,candidates,quantRatio,distances,
         # sort the quantRatio from biggest to smallest, so we find
         # the most similar anti-halo within the search distance:
         [quantRatio,sortedCandidates,indSort] = sortQuantRatiosByRatio(\
-            quantRatio,distances,sortMethod,sortQuantity)
+            quantRatio,distances,candidates,sortMethod,sortQuantity)
     elif sortMethod == "volumes":
         [quantRatio,sortedCandidates,indSort] = sortCandidatesByVolumes(\
             candidates,quantRatio,overlapForVoid)
