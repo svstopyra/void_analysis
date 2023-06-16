@@ -3438,7 +3438,7 @@ class test_catalogue_code(test_base):
             snapList=None,snapListRev=None,ahProps=None,hrList=None,\
             rMin = 5,rMax = 30,mode="fractional",massRange = None,\
             snapSortList = None,overlapList = None,NWayMatch = False,\
-            additionalFilters = None)
+            additionalFilters = None,refineCentres=False)
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
     def test_constructAntihaloCatalogueNway(self):
@@ -3457,7 +3457,7 @@ class test_catalogue_code(test_base):
             snapList=None,snapListRev=None,ahProps=None,hrList=None,\
             rMin = 5,rMax = 30,mode="fractional",massRange = None,\
             snapSortList = None,overlapList = None,NWayMatch = True,\
-            additionalFilters = None)
+            additionalFilters = None,refineCentres=False)
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
     def test_getSNRFilterFromChainFile(self):
@@ -3716,7 +3716,7 @@ class test_catalogue_code(test_base):
             twoWayMatch,allCandidates,alreadyMatched,candidateCounts,\
             False,allRatios,allDistances,diffMap,finalCandidates,\
             finalCat,finalRatios,finalDistances,finalCombinatoricFrac,\
-            finalCatFrac)
+            finalCatFrac,False)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "matchVoidToOtherCatalogues_ref.p"
         reference = self.getReference(referenceFile,computed)
@@ -3797,7 +3797,7 @@ class test_catalogue_code(test_base):
         diffMap = [np.setdiff1d(np.arange(0,3),[k]) \
             for k in range(0,3)]
         computed = catalogue.getTotalNumberOfTwoWayMatches(\
-            0,3,diffMap,allCandidates,oneWayMatches)
+            3,diffMap,allCandidates,oneWayMatches[0])
         referenceFile = self.dataFolder + self.test_subfolder + \
             "getTotalNumberOfTwoWayMatches_ref.p"
         reference = self.getReference(referenceFile,computed)
@@ -3841,7 +3841,7 @@ class test_catalogue_code(test_base):
             "followAllMatchChains_ref.p"
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
-    def test_markCompanionsAsFound(self):
+    def test_gatherCandidatesRatiosAndDistances(self):
         [oneWayMatchesAllCatalogues,matchArrayList,allCandidates,\
             allRatios,allDistances] = tools.loadPickle(self.dataFolder + \
                 self.test_subfolder + "getOneWayMatchesAllCatalogues_ref.p")
@@ -3860,11 +3860,10 @@ class test_catalogue_code(test_base):
             candidateCounts[0][m,0] = len(allCandidates[0][m][0])
         diffMap = [np.setdiff1d(np.arange(0,3),[k]) \
             for k in range(0,3)]
-        computed = catalogue.markCompanionsAsFound(0,0,3,\
-            oneWayMatches,oneWayMatchesAllCatalogues,allCandidates,allRatios,\
-            allDistances,alreadyMatched,NWayMatch=False)
+        computed = gatherCandidatesRatiosAndDistances(\
+            3,0,0,allCandidates,allRatios,allDistances)
         referenceFile = self.dataFolder + self.test_subfolder + \
-            "markCompanionsAsFound_ref.p"
+            "gatherCandidatesRatiosAndDistances_ref.p"
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
     def test_checkIfVoidIsNeeded(self):

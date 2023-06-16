@@ -1683,6 +1683,29 @@ def findAndProcessCandidates(centre,otherCentres,searchQuantity,\
     return [selectedMatches,selectCandidates,selectedQuantRatios,\
         selectedDistances]
 
+# Get the candidates in all other catalogues:
+def getCandidatesForVoidInAllCatalogues(centre,radius,centresList,\
+        quantitiesList,boxsize,searchRadii,sortQuantity,sortMethod,
+        quantityThresh,distMax,mode,overlapForVoid=None,treeList=None):
+    newCatalogueRow = []
+    numCats = len(centresList)
+    if treeList is None:
+        treeList = [scipy.spatial.cKDTree(\
+                snapedit.wrap(centres,boxsize),boxsize=boxsize) \
+                for centres in centresList]
+    for ns in range(0,numCats):
+        [selectedMatches,selectCandidates,selectedQuantRatios,\
+            selectedDistances] = findAndProcessCandidates(\
+                centre,centresList[ns],radius,\
+                quantitiesList[l],boxsize,searchRadii,sortQuantity,\
+                candidates=None,sortMethod=sortMethod,\
+                overlapForVoid=overlapForVoid,\
+                quantityThresh=quantityThresh,distMax = distMax,mode=mode,\
+                treeOther=treeList[l])
+        newCatalogueRow.append(selectedMatches)
+    return np.array(newCatalogueRow)
+
+
 def getAllCandidatesFromTrees(centres1,quantity1,quantity2,quantityThresh,\
         distMax,tree1,tree2,boxsize,mode = "fractional"):
     if mode == "fractional":
@@ -1956,32 +1979,34 @@ def checkIfVoidIsNeeded(nVoid,nCat,alreadyMatched,twoWayMatch,otherColumns,
             and atLeastOneNewMatch
     return needed
 
-# Mark the two-way matches of a void as already found, so that we don't 
-# accidentally include them:
-def markCompanionsAsFound(nVoid,nCat,numCats,oneWayMatches,\
-        oneWayMatchesAllCatalogues,allCandidates,allRatios,allDistances,\
-        alreadyMatched,NWayMatch=False):
+def gatherCandidatesRatiosAndDistances(numCats,nCat,nVoid,allCandidates,\
+        allRatios,allDistances):
     candm = []
     ratiosm = []
     distancesm = []
     for m in range(0,numCats):
-        if (m != nCat) and (oneWayMatches[nVoid][m] > 0):
-            # Only deem something to be already matched
-            # if it maps back to this with a single unique 
-            # candidate
-            if not NWayMatch:
-                alreadyMatched[m][oneWayMatches[nVoid][m] - 1] = \
-                    (oneWayMatchesAllCatalogues[m]\
-                    [oneWayMatches[nVoid,m] - 1,nCat] == nVoid+1) \
-                    and (len(allCandidates[m][nCat]\
-                    [oneWayMatches[nVoid][m] - 1]) == 1)
         if (m != nCat):
             candm.append(allCandidates[nCat][m][nVoid])
             ratiosm.append(allRatios[nCat][m][nVoid])
             distancesm.append(allDistances[nCat][m][nVoid])
-        if m == nCat and not NWayMatch:
-            alreadyMatched[m][nVoid] = True
     return [candm,ratiosm,distancesm]
+
+# Mark the two-way matches of a void as already found, so that we don't 
+# accidentally include them:
+def markCompanionsAsFound(nVoid,nCat,numCats,voidMatches,\
+        oneWayMatchesAllCatalogues,allCandidates,alreadyMatched):
+    for m in range(0,numCats):
+        if (m != nCat) and (voidMatches[m] > 0):
+            # Only deem something to be already matched
+            # if it maps back to this with a single unique 
+            # candidate
+            alreadyMatched[m][voidMatches[m] - 1] = \
+                (oneWayMatchesAllCatalogues[m]\
+                [voidMatches[m] - 1,nCat] == nVoid+1) \
+                and (len(allCandidates[m][nCat]\
+                [voidMatches[m] - 1]) == 1)
+        if m == nCat:
+            alreadyMatched[m][nVoid] = True
 
 # Get all the possible matches of a given void by following chains of 
 # two way matches:
@@ -2057,15 +2082,15 @@ def getNumberOfTwoWayMatchesNway(numCats,allCands,allCandidates,diffMap):
 # Count the number of two way matches.
 # TODO - can we merge this with getNumberOfTwoWayMatchesNway? They are 
 # similar, but doing slightly different things:
-def getTotalNumberOfTwoWayMatches(nVoid,numCats,diffMap,\
-        allCandidates,oneWayMatches):
+def getTotalNumberOfTwoWayMatches(numCats,diffMap,\
+        allCandidates,voidMatches):
     twoWayMatchCounts = 0
     for m in range(0,numCats):
         for d in diffMap[m]:
             allCands = allCandidates[m][d][\
-                oneWayMatches[nVoid][m]-1]
+                voidMatches[m]-1]
             if len(allCands) > 0:
-                if allCands[0] == oneWayMatches[nVoid][d]-1:
+                if allCands[0] == voidMatches[d]-1:
                     twoWayMatchCounts += 1
     return twoWayMatchCounts
 
@@ -2148,20 +2173,72 @@ def applyNWayMatching(nVoid,nCat,numCats,oneWayMatches,alreadyMatched,\
         alreadyMatched[m,bestCandidates[m] - 1] = True
     return [bestCandidates,bestRatios,bestDistances,numberOfLinks]
 
+def getAllQuantityiesFromVoidMatches(voidMatches,numCats,quantitiesList):
+    quantitiesArray = []
+    for l in range(0,numCats):
+        if voidMatches[l] > -1:
+            quantitiesArray.append(quantitiesList[l][voidMatches[l] - 1])
+    return quantitiesArray
+
+def getStdCentreFromVoidMatches(voidMatches,numCats,centresList):
+    centresArray = getAllQuantityiesFromVoidMatches(voidMatches,numCats,\
+        centresList)
+    stdCentres = np.std(centresArray,0)
+    return stdCentres
+
+def getMeanCentreFromVoidMatches(voidMatches,numCats,centresList):
+    centresArray = getAllQuantityiesFromVoidMatches(voidMatches,numCats,\
+        centresList)
+    meanCentres = np.mean(centresArray,0)
+    return meanCentres
+
+def getMeanRadiusFromVoidMatches(voidMatches,numCats,radiusList):
+    radiusArray = getAllQuantityiesFromVoidMatches(voidMatches,numCats,\
+        radiusList)
+    meanRadius = np.mean(radiusArray)
+    return meanRadius
+
+# Code to iterate on the centres of a given void, so that we are less
+# dependent on matching to a particular void:
+def refineVoidCentres(voidMatches,ratiosm,distancesm,numCats,centresList,\
+        radiusList,iterMax = 100):
+    voidMatchesLast = np.array([-1 for k in range(0,numCats)])
+    voidMatchesNew = voidMatches
+    iterations = 0
+    while not np.all(voidMatchesLast == voidMatchesNew):
+        voidMatchesLast = voidMatchesNew
+        # First, compute the mean centre of the voids in this set:
+        meanCentres = getMeanCentreFromVoidMatches(\
+            voidMatchesNew,numCats,centresList)
+        meanRadius = getMeanRadiusFromVoidMatches(\
+            voidMatchesNew,numCats,radiusList)
+        # Get all the voids within the thresholds from this centre:
+        voidMatchesNew = getCandidatesForVoidInAllCatalogues(centre,radius,\
+            centresList,quantitiesList,boxsize,searchRadii,sortQuantity,\
+            sortMethod,quantityThresh,distMax,mode,overlapForVoid=None,\
+            treeList=None)
+        # Check that we didn't run completely out of voids, as this will
+        # make our centre meaningless.
+        if np.all(voidMatchesNew < 0):
+            break
+        iterations += 1
+        if iterations > iterMax:
+            raise Exception("Void centres refinining did not converge.")
+    return [voidMatchesNew,ratiosm,distancesm]
+
 # Add an entry to the catalogue:
 def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
         oneWayMatchesOther,oneWayMatchesAllCatalogues,twoWayMatch,\
         allCandidates,alreadyMatched,candidateCounts,NWayMatch,\
         allRatios,allDistances,diffMap,finalCandidates,\
         finalCat,finalRatios,finalDistances,finalCombinatoricFrac,\
-        finalCatFrac):
+        finalCatFrac,refineCentres):
     oneWayMatches = oneWayMatchesAllCatalogues[nCat]
     # Mark companions of this void as already found, to avoid duplication.
     # Additionally, store the candidates (candm), radius ratios (ratiosm) and 
     # distances to candidates (distancesm) of this void for output data:
-    [candm,ratiosm,distancesm] = markCompanionsAsFound(nVoid,nCat,numCats,\
-        oneWayMatches,oneWayMatchesAllCatalogues,allCandidates,allRatios,\
-        allDistances,alreadyMatched,NWayMatch=NWayMatch)
+    [candm,ratiosm,distancesm] = gatherCandidatesRatiosAndDistances(\
+        numCats,nCat,nVoid,allCandidates,allRatios,allDistances)
     finalCandidates.append(candm)
     if NWayMatch:
         # Get the best candidates using the N-way matching code:
@@ -2176,17 +2253,26 @@ def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
         finalCatFrac.append(float(\
             np.sum(bestCandidates > 0)/numCats))
     else:
-        finalCat.append(oneWayMatches[nVoid])
-        finalRatios.append(ratiosm)
-        finalDistances.append(distancesm)
-        finalCatFrac.append(\
-            float(len(np.where(oneWayMatches[nVoid] > 0)[0])/\
-            numCats))
-        # Compute the combinatoric fraction:
-        twoWayMatchCounts = getTotalNumberOfTwoWayMatches(nVoid,numCats,\
-            diffMap,allCandidates,oneWayMatches)
-        finalCombinatoricFrac.append(twoWayMatchCounts/\
-            (numCats*(numCats-1)))
+        if refineCentres:
+            [voidMatches,ratiosm,distancesm] = refineVoidCentres(\
+                oneWayMatches[nVoid],ratiosm,distancesm)
+        else:
+            voidMatches = oneWayMatches[nVoid]
+        # Block the voids we have identified from appearing again:
+        markCompanionsAsFound(nVoid,nCat,numCats,voidMatches,\
+            oneWayMatchesAllCatalogues,allCandidates,alreadyMatched)
+        # Provided we found at least two voids, then add it to the catalogue:
+        if np.sum(voidMatches > 0) > 1:
+            finalCat.append(oneWayMatches[nVoid])
+            finalRatios.append(ratiosm)
+            finalDistances.append(distancesm)
+            finalCatFrac.append(float(len(np.where(voidMatches > 0)[0])\
+                /numCats))
+            # Compute the combinatoric fraction:
+            twoWayMatchCounts = getTotalNumberOfTwoWayMatches(numCats,\
+                diffMap,allCandidates,voidMatches)
+            finalCombinatoricFrac.append(twoWayMatchCounts/\
+                (numCats*(numCats-1)))
 
 # Load simulations and catalogue data so that we can combine them. If these
 # are already loaded, this function won't reload them.
@@ -2380,7 +2466,7 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
         snapList=None,snapListRev=None,ahProps=None,hrList=None,\
         rMin = 5,rMax = 30,mode="fractional",massRange = None,\
         snapSortList = None,overlapList = None,NWayMatch = False,\
-        additionalFilters = None,sortBy="mass"):
+        additionalFilters = None,sortBy="mass",refineCentres=False):
     # Load snapshots:
     [snapList,snapListRev,boxsize,ahProps,antihaloCentres,\
         antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList] = \
@@ -2504,7 +2590,7 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
                 allCandidates,alreadyMatched,candidateCounts,NWayMatch,\
                 allRatios,allDistances,diffMap,finalCandidates,\
                 finalCat,finalRatios,finalDistances,finalCombinatoricFrac,\
-                finalCatFrac)
+                finalCatFrac,refineCentres)
     return [np.array(finalCat),shortHaloList,twoWayMatchLists,\
         finalCandidates,finalRatios,finalDistances,allCandidates,\
         candidateCounts,allRatios,np.array(finalCombinatoricFrac),\
@@ -2568,17 +2654,15 @@ def estimatePoissonRatioErrorbarMonteCarlo(n1,n2,errorVal = 0.67,seed = None,\
 def getMeanCentresFromCombinedCatalogue(combinedCat,centresList,\
         returnError=False,boxsize=None):
     meanCentresArray = np.zeros((len(combinedCat),3))
+    numCats = combinedCat.shape[1]
     if returnError:
         stdCentresArray = np.zeros((len(combinedCat),3))
     for nV in range(0,len(combinedCat)):
-        centresArray = []
-        for l in range(0,combinedCat.shape[1]):
-            if combinedCat[nV][l] > -1:
-                centresArray.append(centresList[l][combinedCat[nV,l] - 1])
-        meanCentresArray[nV,:] = np.mean(centresArray,0)
+        meanCentresArray[nV,:] = getMeanCentreFromVoidMatches(\
+            combinedCat[nV],numCats,centresList)
         if returnError:
-            stdCentresArray[nV,:] = np.std(centresArray,0)/\
-                np.sqrt(len(centresArray))
+            stdCentresArray[nV,:] = getStdCentreFromVoidMatches(\
+                combinedCat[nV],numCats,centresList)
     if returnError:
         return [meanCentresArray,stdCentresArray]
     else:
