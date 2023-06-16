@@ -1682,8 +1682,8 @@ def findAndProcessCandidates(centre,otherCentres,searchQuantity,\
     return [selectedMatches,selectCandidates,selectedQuantRatios,\
         selectedDistances]
 
-def getAllCandidatesFromTrees(quantity1,quantity2,quantityThresh,distMax,\
-        tree1,tree2,mode = "fractional"):
+def getAllCandidatesFromTrees(centres1,quantity1,quantity2,quantityThresh,\
+        distMax,tree1,tree2,mode = "fractional"):
     if mode == "fractional":
         # Interpret distMax as a fraction of the void radius, not the 
         # distance in Mpc/h.
