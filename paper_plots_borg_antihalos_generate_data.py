@@ -1545,6 +1545,14 @@ def getUnsortedRatios(candidates,searchQuantity,otherQuantities):
     return quantRatio
 
 # Sort the candidates in descending order of radius/mass ratio:
+
+def computeQuantityRatio(otherQuantities,searchQuantity):
+    bigger = np.where(\
+        otherQuantities > searchQuantity)[0]
+    quantRatio = otherQuantities/searchQuantity
+    quantRatio[bigger] = searchQuantity/otherQuantities[bigger]
+    return quantRatio
+
 def sortQuantRatiosByRatio(quantRatio,distances,sortMethod,sortQuantity):
     # sort the quantRatio from biggest to smallest, so we find
     # the most similar anti-halo within the search distance:
@@ -1554,18 +1562,94 @@ def sortQuantRatiosByRatio(quantRatio,distances,sortMethod,sortQuantity):
         indSort = np.flip(np.argsort(quantRatio))
     quantRatio = quantRatio[indSort]
     sortedCandidates = np.array(candidates,dtype=int)[indSort]
-    return [quantRatio,sortedCandidates]
+    return [quantRatio,sortedCandidates,indSort]
+
+def sortCandidatesByDistance(candidates,quantRatio,distances,otherQuantities,\
+        searchQuantity):
+    indSort = np.flip(np.argsort(distances))
+    sortedCandidates = np.array(candidates,dtype=int)[indSort]
+    quantRatio = quantRatio[sortedCandidates]
+    return [quantRatio,sortedCandidates,indSort]
+
+def sortCandidatesByVolumes(candidates,quantRatio,overlapForVoid):
+    volOverlapFrac = overlapForVoid[candidates]
+    indSort = np.flip(np.argsort(volOverlapFrac))
+    quantRatio = quantRatio[indSort]
+    sortedCandidates = np.array(candidates,dtype=int)[indSort]
+    return [quantRatio,sortedCandidates,indSort]
+
+def getSortedQuantRatio(sortMethod,candidates,quantRatio,distances,
+        otherQuantities,searchQuantiy,overlapForVoid):
+    if sortMethod == 'distance':
+        # Sort the antihalos by distance. Candidate is the closest
+        # halo which satisfies the threshold criterion:
+        [quantRatio,sortedCandidates,indSort] = sortCandidatesByDistance(\
+            candidates,quantRatio,distances,otherQuantities,searchQuantity)
+    elif sortMethod == 'ratio':
+        # sort the quantRatio from biggest to smallest, so we find
+        # the most similar anti-halo within the search distance:
+        [quantRatio,sortedCandidates,indSort] = sortQuantRatiosByRatio(\
+            quantRatio,distances,sortMethod,sortQuantity)
+    elif sortMethod == "volumes":
+        [quantRatio,sortedCandidates,indSort] = sortCandidatesByVolumes(\
+            candidates,quantRatio,overlapForVoid)
+    else:
+        raise Exception("Unrecognised sorting method")
+    return [quantRatio,sortedCandidates,indSort]
+
+def getVoidsAboveThresholds(quantRatio,distances,quantityThresh,\
+        distMax,searchQuantity,otherQuantities,sortedCandidates,nQuantLen,\
+        indSort,mode="fractional"):
+    if mode == "fractional":
+        if not np.isscalar(searchQuantity):
+            candRadii = otherQuantities[sortedCandidates,0]
+            # Geometric mean of radii, to ensure symmetry.
+            geometricRadii = np.sqrt(searchQuantity[0]*candRadii)
+            condition = (quantRatio[:,0] >= quantityThresh[0]) & \
+                (distances[indSort] <= geometricRadii*distMax)
+            for l in range(1,nQuantLen):
+                condition = condition & \
+                    (quantRatio[:,l] >= quantityThresh[l])
+            matchingVoids = np.where(condition)[0]
+        else:
+            candRadii = otherQuantities[sortedCandidates]
+            # Geometric mean of radii, to ensure symmetry.
+            geometricRadii = np.sqrt(searchQuantity*candRadii)
+            matchingVoids = np.where((quantRatio >= quantityThresh) & \
+                (distances[indSort] <= geometricRadii*distMax))[0]
+    else:
+        if not np.isscalar(searchQuantity):
+            condition = np.ones(quantRatio.shape[0],dtype=bool)
+            for l in range(0,nQuantLen):
+                condition = condition & \
+                    (quantRatio[:,l] >= quantityThresh[l])
+            matchingVoids = np.where(condition)[0]
+        else:
+            matchingVoids = np.where((quantRatio >= quantityThresh))[0]
+    return matchingVoids
 
 # Function to process candidates for a match to a given void. We compute their
 # radius ratio and distance ratio, to check whether they are within the
 # thresholds required:
-def processCandidates(candidates,centre,otherCentres,searchQuantity,\
-        otherQuantities):
+def findAndProcessCandidates(centre,otherCentres,searchQuantity,\
+        otherQuantities,boxsize,searchRadii,candidates=None,\
+        sortMethod='distance',overlapForVoid=None,quantityThresh=0.5,\
+        distMax = 20.0,mode="fractional",treeOther=None):
     # Number of search quantities (radius or mass) to process for this void:
     if np.isscalar(searchQuantity):
         nQuantLen = len(searchQuantity)
     else:
         nQuantLen = 1
+    # If we don't have candidates already, then we should find them:
+    if candidates is None:
+        if treeOther is None:
+            treeOther = scipy.spatial.cKDTree(\
+                snapedit.wrap(otherCentres,boxsize),boxsize=boxsize)
+        candidates = tree2.query_ball_point(snapedit.wrap(centre,boxsize),\
+            searchRadii,workers=-1)
+    # Check we have a sensible overlap map:
+    if (overlapForVoid is None) and (sortMethod == "volumes"):
+        raise Exception("overlap map required for volume sort method.")
     if len(candidates) > 0:
         # Sort indices:
         distances = np.sqrt(np.sum((\
@@ -1573,71 +1657,51 @@ def processCandidates(candidates,centre,otherCentres,searchQuantity,\
         # Unsorted radius (or mass) ratios:
         quantRatio = getUnsortedRatios(candidates,searchQuantity,\
             otherQuantities)
-        if sortMethod == 'distance':
-            # Sort the antihalos by distance. Candidate is the closest
-            # halo which satisfies the threshold criterion:
-            indSort = np.argsort(distances)
-            sortedCandidates = np.array(candidates,dtype=int)[indSort]
-            bigger = np.where(\
-                otherQuantities[sortedCandidates] > searchQuantity)[0]
-            quantRatio = otherQuantities[sortedCandidates]/searchQuantity
-            quantRatio[bigger] = searchQuantity/\
-                otherQuantities[sortedCandidates][bigger]
-        elif sortMethod == 'ratio':
-            # sort the quantRatio from biggest to smallest, so we find
-            # the most similar anti-halo within the search distance:
-            [quantRatio,sortedCandidates] = sortQuantRatiosByRatio(\
-                quantRatio,distances,sortMethod,sortQuantity)
-        elif sortMethod == "volumes":
-            volOverlapFrac = overlap[k,candidates]
-            indSort = np.flip(np.argsort(volOverlapFrac))
-            quantRatio = quantRatio[indSort]
-            sortedCandidates = np.array(candidates,dtype=int)[indSort]
-        else:
-            raise Exception("Unrecognised sorting method")
-        # Get thresholds for these candidates:
-        if mode == "fractional":
-            if not np.isscalar(searchQuantity):
-                candRadii = otherQuantities[sortedCandidates,0]
-                # Geometric mean of radii, to ensure symmetry.
-                geometricRadii = np.sqrt(searchQuantity[0]*candRadii)
-                condition = (quantRatio[:,0] >= quantityThresh[0]) & \
-                    (distances[indSort] <= geometricRadii*distMax)
-                for l in range(1,nQuantLen):
-                    condition = condition & \
-                        (quantRatio[:,l] >= quantityThresh[l])
-                candidates = np.where(condition)[0]
-            else:
-                candRadii = otherQuantities[sortedCandidates]
-                # Geometric mean of radii, to ensure symmetry.
-                geometricRadii = np.sqrt(searchQuantity*candRadii)
-                candidates = np.where((quantRatio >= quantityThresh) & \
-                    (distances[indSort] <= geometricRadii*distMax))[0]
-        else:
-            if not np.isscalar(searchQuantity):
-                condition = np.ones(quantityRatio.shape[0],dtype=bool)
-                for l in range(0,nQuantLen):
-                    condition = condition & \
-                        (quantRatio[:,l] >= quantityThresh[l])
-                candidates = np.where(condition)[0]
-            else:
-                candidates = np.where((quantRatio >= quantityThresh))[0]
-        candidatesList.append(np.array(candidates)[candidates])
-        ratioList.append(quantRatio[candidates])
-        distList.append(distances[candidates])
-        if len(candidates) > 0:
+        [quantRatio,sortedCandidates,indSort] = getSortedQuantRatio(\
+            sortMethod,candidates,quantRatio,distances,
+            otherQuantities,searchQuantiy,overlapForVoid)
+        # Get voids above the specified thresholds for these candidates:
+        matchingVoids = getVoidsAboveThresholds(\
+            quantRatio,distances,quantityThresh,\
+            distMax,searchQuantity,otherQuantities,sortedCandidates,nQuantLen,\
+            indSort,mode=mode)
+        selectCandidates = np.array(candidates)[matchingVoids])
+        selectedQuantRatios = quantRatio[matchingVoids])
+        selectedDistances = distances[matchingVoids]
+        if len(matchingVoids) > 0:
             # Add the most probable - remembering the +1 offset for 
             # pynbody halo catalogue IDs:
-            match.append(sortedCandidates[candidates[0]] + 1)
+            selectedMatches = sortedCandidates[matchingVoids[0]] + 1
         else:
-            match.append(-1)
+            selectedMatches = -1
     else:
-        match.append(-1)
-        candidatesList.append(np.array([]))
-        ratioList.append([])
-        distList.append([])
+        selectedMatches = -1
+        selectCandidates = np.array([])
+        selectedQuantRatios = []
+        selectedDistances = []
+    return [selectedMatches,selectCandidates,selectedQuantRatios,\
+        selectedDistances]
 
-
+def getAllCandidatesFromTrees(quantity1,quantity2,quantityThresh,distMax,\
+        tree1,tree2,mode = "fractional"):
+    if mode == "fractional":
+        # Interpret distMax as a fraction of the void radius, not the 
+        # distance in Mpc/h.
+        # Choose a search radius that is no greater than the void radius divided
+        # by the radius ratio. If the other anti-halo is further away than this
+        # then it wouldn't match to us anyway, so we don't need to consider it.
+        radii1 = quantity1/quantityThresh
+        radii2 = quantity2/quantityThresh
+        if len(radii1.shape) > 1:
+            searchRadii = radii1[:,0]
+        else:
+            searchRadii = radii1
+        searchOther = tree2.query_ball_point(snapedit.wrap(centres1,boxsize),\
+            searchRadii,workers=-1)
+    else:
+        searchOther = tree1.query_ball_tree(tree2,distMax)
+        searchRadii = distMax
+    return [searchRadii,searchOther]
 
 # Function to match all voids:
 def getMatchDistance(snap1,snap2,centres1,centres2,\
@@ -1658,115 +1722,32 @@ def getMatchDistance(snap1,snap2,centres1,centres2,\
     candidatesList = []
     ratioList = []
     distList = []
-    if mode == "fractional":
-        # Interpret distMax as a fraction of the void radius, not the 
-        # distance in Mpc/h.
-        # Choose a search radius that is no greater than the void radius divided
-        # by the radius ratio. If the other anti-halo is further away than this
-        # then it wouldn't match to us anyway, so we don't need to consider it.
-        radii1 = quantity1/quantityThresh
-        radii2 = quantity2/quantityThresh
-        if len(radii1.shape) > 1:
-            searchRadii = radii1[:,0]
-        else:
-            searchRadii = radii1
-        searchOther = tree2.query_ball_point(snapedit.wrap(centres1,boxsize),\
-            searchRadii,workers=-1)
-    else:
-        searchOther = tree1.query_ball_tree(tree2,distMax)
+    # Fina candidates for all anti-halos:
+    [searchRadii,searchOther] = getAllCandidatesFromTrees(\ 
+        quantity1,quantity2,quantityThresh,distMax,tree1,tree2,mode = mode)
+    # Build an overlap map, if we are using this method:
     if overlap is None and sortMethod == "volumes":
         if cat1 is None or cat2 is None or \
         volumes1 is None or volumes2 is None:
             raise Exception("Anti-halo catalogue required for " + \
                 "volumes based matching.")
         overlap = overlapMap(cat1,cat2,volumes1,volumes2)
+    # Process all the candidates, to find which are above the specified 
+    # thresholds:
     for k in range(0,np.min([len(centres1),max_index])):
-        if len(searchOther[k]) > 0:
-            # Sort indices:
-            distances = np.sqrt(np.sum((\
-                    centres2[searchOther[k],:] - centres1[k,:])**2,1))
-            if len(quantity1.shape) > 1:
-                quantRatio = np.zeros((len(searchOther[k]),\
-                    quantity1.shape[1]))
-                for l in range(0,quantity1.shape[1]):
-                    bigger = np.where(\
-                        quantity2[searchOther[k],l] > quantity1[k,l])[0]
-                    quantRatio[:,l] = quantity2[searchOther[k],l]/\
-                        quantity1[k,l]
-                    quantRatio[bigger,l] = quantity1[k,l]/\
-                        quantity2[searchOther[k],l][bigger]
-            else:
-                bigger = np.where(\
-                    quantity2[searchOther[k]] > quantity1[k])[0]
-                quantRatio = quantity2[searchOther[k]]/quantity1[k]
-                quantRatio[bigger] = quantity1[k]/\
-                    quantity2[searchOther[k]][bigger]
-            if sortMethod == 'distance':
-                # Sort the antihalos by distance. Candidate is the closest
-                # halo which satisfies the threshold criterion:
-                indSort = np.argsort(distances)
-                sortedCandidates = np.array(searchOther[k],dtype=int)[indSort]
-                bigger = np.where(quantity2[sortedCandidates] > quantity1[k])[0]
-                quantRatio = quantity2[sortedCandidates]/quantity1[k]
-                quantRatio[bigger] = quantity1[k]/\
-                    quantity2[sortedCandidates][bigger]
-            elif sortMethod == 'ratio':
-                # sort the quantRatio from biggest to smallest, so we find
-                # the most similar anti-halo within the search distance:
-                if len(quantity1.shape) > 1:
-                    indSort = np.flip(np.argsort(quantRatio[:,sortQuantity]))
-                else:
-                    indSort = np.flip(np.argsort(quantRatio))
-                quantRatio = quantRatio[indSort]
-                sortedCandidates = np.array(searchOther[k],dtype=int)[indSort]
-            elif sortMethod == "volumes":
-                volOverlapFrac = overlap[k,searchOther[k]]
-                indSort = np.flip(np.argsort(volOverlapFrac))
-                quantRatio = quantRatio[indSort]
-                sortedCandidates = np.array(searchOther[k],dtype=int)[indSort]
-            else:
-                raise Exception("Unrecognised sorting method")
-            # Get thresholds for these candidates:
-            if mode == "fractional":
-                if len(quantity1.shape) > 1:
-                    candRadii = quantity2[sortedCandidates,0]
-                    # Geometric mean of radii, to ensure symmetry.
-                    geometricRadii = np.sqrt(quantity1[k,0]*candRadii)
-                    condition = (quantRatio[:,0] >= quantityThresh[0]) & \
-                        (distances[indSort] <= geometricRadii*distMax)
-                    for l in range(1,quantity1.shape[1]):
-                        condition = condition & \
-                            (quantRatio[:,l] >= quantityThresh[l])
-                    candidates = np.where(condition)[0]
-                else:
-                    candRadii = quantity2[sortedCandidates]
-                    # Geometric mean of radii, to ensure symmetry.
-                    geometricRadii = np.sqrt(quantity1[k]*candRadii)
-                    candidates = np.where((quantRatio >= quantityThresh) & \
-                        (distances[indSort] <= geometricRadii*distMax))[0]
-            else:
-                if len(quantity1.shape) > 1:
-                    condition = np.ones(quantityRatio.shape[0],dtype=bool)
-                    for l in range(0,quantity1.shape[1]):
-                        condition = condition & \
-                            (quantRatio[:,l] >= quantityThresh[l])
-                    candidates = np.where(condition)[0]
-                else:
-                    candidates = np.where((quantRatio >= quantityThresh))[0]
-            candidatesList.append(np.array(searchOther[k])[candidates])
-            ratioList.append(quantRatio[candidates])
-            distList.append(distances[candidates])
-            if len(candidates) > 0:
-                # Add the most probable - remembering the +1 offset for 
-                # pynbody halo catalogue IDs:
-                match.append(sortedCandidates[candidates[0]] + 1)
-            else:
-                match.append(-1)
-        else:
-            match.append(-1)
-            candidatesList.append(np.array([]))
-            ratioList.append([])
-            distList.append([])
+        candidates = searchOther[k]
+        centre = centres1[k]
+        [selectedMatches,selectCandidates,selectedQuantRatios,\
+            selectedDistances] = findAndProcessCandidates(\
+            centre,centres2,quantity1[k],\
+            quantity2,boxsize,searchRadii,candidates=candidates,\
+            sortMethod=sortMethod,overlapForVoid=overlap[k],\
+            quantityThresh=quantityThresh,distMax = distMax,mode=mode,\
+            treeOther=tree2)
+        candidatesList.append(selectCandidates)
+        ratioList.append(selectedQuantRatios)
+        distList.append(selectedDistances)
+        match.append(selectedMatches)
     return [np.array(match,dtype=int),candidatesList,ratioList,distList]
 
 # Check if an antihalo centre lies in the ZoA:
