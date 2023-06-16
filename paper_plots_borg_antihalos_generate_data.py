@@ -1683,7 +1683,7 @@ def findAndProcessCandidates(centre,otherCentres,searchQuantity,\
         selectedDistances]
 
 def getAllCandidatesFromTrees(centres1,quantity1,quantity2,quantityThresh,\
-        distMax,tree1,tree2,mode = "fractional"):
+        distMax,tree1,tree2,boxsize,mode = "fractional"):
     if mode == "fractional":
         # Interpret distMax as a fraction of the void radius, not the 
         # distance in Mpc/h.
@@ -1724,7 +1724,8 @@ def getMatchDistance(snap1,snap2,centres1,centres2,\
     distList = []
     # Fina candidates for all anti-halos:
     [searchRadii,searchOther] = getAllCandidatesFromTrees(centres1,\
-        quantity1,quantity2,quantityThresh,distMax,tree1,tree2,mode = mode)
+        quantity1,quantity2,quantityThresh,distMax,tree1,tree2,boxsize,
+        mode = mode)
     # Build an overlap map, if we are using this method:
     if overlap is None and sortMethod == "volumes":
         if cat1 is None or cat2 is None or \
