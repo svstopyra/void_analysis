@@ -1659,7 +1659,7 @@ def findAndProcessCandidates(centre,otherCentres,searchQuantity,\
             otherQuantities)
         [quantRatio,sortedCandidates,indSort] = getSortedQuantRatio(\
             sortMethod,candidates,quantRatio,distances,
-            otherQuantities,searchQuantiy,overlapForVoid)
+            otherQuantities,searchQuantity,overlapForVoid)
         # Get voids above the specified thresholds for these candidates:
         matchingVoids = getVoidsAboveThresholds(\
             quantRatio,distances,quantityThresh,\
