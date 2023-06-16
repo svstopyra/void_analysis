@@ -3716,7 +3716,8 @@ class test_catalogue_code(test_base):
             twoWayMatch,allCandidates,alreadyMatched,candidateCounts,\
             False,allRatios,allDistances,diffMap,finalCandidates,\
             finalCat,finalRatios,finalDistances,finalCombinatoricFrac,\
-            finalCatFrac,False,None,None)
+            finalCatFrac,False,None,None,677.7,0,"distance",\
+            0.9,20.0,"fractional")
         referenceFile = self.dataFolder + self.test_subfolder + \
             "matchVoidToOtherCatalogues_ref.p"
         reference = self.getReference(referenceFile,computed)

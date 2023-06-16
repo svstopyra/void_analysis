@@ -1685,7 +1685,7 @@ def findAndProcessCandidates(centre,otherCentres,searchQuantity,\
 
 # Get the candidates in all other catalogues:
 def getCandidatesForVoidInAllCatalogues(centre,radius,centresList,\
-        quantitiesList,boxsize,searchRadii,sortQuantity,sortMethod,
+        quantitiesList,boxsize,sortQuantity,sortMethod,
         quantityThresh,distMax,mode,overlapForVoid=None,treeList=None):
     newCatalogueRow = []
     numCats = len(centresList)
@@ -1694,37 +1694,46 @@ def getCandidatesForVoidInAllCatalogues(centre,radius,centresList,\
                 snapedit.wrap(centres,boxsize),boxsize=boxsize) \
                 for centres in centresList]
     for ns in range(0,numCats):
+        searchRadii = getSearchRadii(radius,quantitiesList[ns],\
+            quantityThresh,distMax)
         [selectedMatches,selectCandidates,selectedQuantRatios,\
             selectedDistances] = findAndProcessCandidates(\
                 centre,centresList[ns],radius,\
-                quantitiesList[l],boxsize,searchRadii,sortQuantity,\
+                quantitiesList[ns],boxsize,searchRadii,sortQuantity,\
                 candidates=None,sortMethod=sortMethod,\
                 overlapForVoid=overlapForVoid,\
                 quantityThresh=quantityThresh,distMax = distMax,mode=mode,\
-                treeOther=treeList[l])
+                treeOther=treeList[ns])
         newCatalogueRow.append(selectedMatches)
     return np.array(newCatalogueRow)
 
+def getSearchRadii(quantity1,quantity2,quantityThresh,distMax):
+    if mode == "fractional":
+        radii1 = quantity1/quantityThresh
+        radii2 = quantity2/quantityThresh
+        if np.isscalar(radii1):
+            searchRadii = radii1
+        elif len(radii1.shape) > 1:
+            searchRadii = radii1[:,0]
+        else:
+            searchRadii = radii1
+    else:
+        searchRadii = distMax
+    return searchRadii
 
 def getAllCandidatesFromTrees(centres1,quantity1,quantity2,quantityThresh,\
         distMax,tree1,tree2,boxsize,mode = "fractional"):
+    searchRadii = getSearchRadii(quantity1,quantity2,quantityThresh,distMax)
     if mode == "fractional":
         # Interpret distMax as a fraction of the void radius, not the 
         # distance in Mpc/h.
         # Choose a search radius that is no greater than the void radius divided
         # by the radius ratio. If the other anti-halo is further away than this
         # then it wouldn't match to us anyway, so we don't need to consider it.
-        radii1 = quantity1/quantityThresh
-        radii2 = quantity2/quantityThresh
-        if len(radii1.shape) > 1:
-            searchRadii = radii1[:,0]
-        else:
-            searchRadii = radii1
         searchOther = tree2.query_ball_point(snapedit.wrap(centres1,boxsize),\
             searchRadii,workers=-1)
     else:
         searchOther = tree1.query_ball_tree(tree2,distMax)
-        searchRadii = distMax
     return [searchRadii,searchOther]
 
 # Function to match all voids:
@@ -2201,7 +2210,8 @@ def getMeanRadiusFromVoidMatches(voidMatches,numCats,radiusList):
 # Code to iterate on the centres of a given void, so that we are less
 # dependent on matching to a particular void:
 def refineVoidCentres(voidMatches,ratiosm,distancesm,numCats,centresList,\
-        radiusList,overlapForVoid=None,treeList = None,iterMax = 100):
+        radiusList,boxsize,sortQuantity,sortMethod,quantityThresh,\
+        distMax,mode,overlapForVoid=None,treeList = None,iterMax = 100):
     voidMatchesLast = np.array([-1 for k in range(0,numCats)])
     voidMatchesNew = voidMatches
     iterations = 0
@@ -2214,8 +2224,8 @@ def refineVoidCentres(voidMatches,ratiosm,distancesm,numCats,centresList,\
             voidMatchesNew,numCats,radiusList)
         # Get all the voids within the thresholds from this centre:
         voidMatchesNew = getCandidatesForVoidInAllCatalogues(
-            meanCentres,meanRadius,centresList,quantitiesList,boxsize,\
-            searchRadii,sortQuantity,sortMethod,quantityThresh,distMax,mode,\
+            meanCentres,meanRadius,centresList,radiusList,boxsize,\
+            sortQuantity,sortMethod,quantityThresh,distMax,mode,\
             overlapForVoid=overlapForVoid,treeList=treeList)
         # Check that we didn't run completely out of voids, as this will
         # make our centre meaningless.
@@ -2232,7 +2242,9 @@ def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
         allCandidates,alreadyMatched,candidateCounts,NWayMatch,\
         allRatios,allDistances,diffMap,finalCandidates,\
         finalCat,finalRatios,finalDistances,finalCombinatoricFrac,\
-        finalCatFrac,refineCentres,centresList,radiusList,treeList=None):
+        finalCatFrac,refineCentres,centresList,radiusList,\
+        boxsize,sortQuantity,sortMethod,quantityThresh,distMax,\
+        mode,treeList=None):
     oneWayMatches = oneWayMatchesAllCatalogues[nCat]
     # Mark companions of this void as already found, to avoid duplication.
     # Additionally, store the candidates (candm), radius ratios (ratiosm) and 
@@ -2256,7 +2268,9 @@ def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
         if refineCentres:
             [voidMatches,ratiosm,distancesm] = refineVoidCentres(\
                 oneWayMatches[nVoid],ratiosm,distancesm,numCats,centresList,\
-                radiusList,overlapForVoid = None,treeList = treeList)
+                radiusList,boxsize,sortQuantity,sortMethod,\
+                quantityThresh,distMax,mode,overlapForVoid=None,\
+                treeList = treeList,iterMax = 100)
         else:
             voidMatches = oneWayMatches[nVoid]
         # Block the voids we have identified from appearing again:
@@ -2467,7 +2481,8 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
         snapList=None,snapListRev=None,ahProps=None,hrList=None,\
         rMin = 5,rMax = 30,mode="fractional",massRange = None,\
         snapSortList = None,overlapList = None,NWayMatch = False,\
-        additionalFilters = None,sortBy="mass",refineCentres=False):
+        additionalFilters = None,sortBy="mass",refineCentres=False,\
+        sortQuantity = 0):
     # Load snapshots:
     [snapList,snapListRev,boxsize,ahProps,antihaloCentres,\
         antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList] = \
@@ -2592,7 +2607,8 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
                 allRatios,allDistances,diffMap,finalCandidates,\
                 finalCat,finalRatios,finalDistances,finalCombinatoricFrac,\
                 finalCatFrac,refineCentres,centresListShort,quantityListRad,\
-                treeList = treeList)
+                boxsize,sortQuantity,sortMethod,crossMatchThreshold,distMax,\
+                mode,treeList = treeList)
     return [np.array(finalCat),shortHaloList,twoWayMatchLists,\
         finalCandidates,finalRatios,finalDistances,allCandidates,\
         candidateCounts,allRatios,np.array(finalCombinatoricFrac),\
