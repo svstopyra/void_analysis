@@ -2232,7 +2232,7 @@ def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
         allCandidates,alreadyMatched,candidateCounts,NWayMatch,\
         allRatios,allDistances,diffMap,finalCandidates,\
         finalCat,finalRatios,finalDistances,finalCombinatoricFrac,\
-        finalCatFrac,refineCentres):
+        finalCatFrac,refineCentres,centresList,radiusList):
     oneWayMatches = oneWayMatchesAllCatalogues[nCat]
     # Mark companions of this void as already found, to avoid duplication.
     # Additionally, store the candidates (candm), radius ratios (ratiosm) and 
@@ -2255,7 +2255,8 @@ def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
     else:
         if refineCentres:
             [voidMatches,ratiosm,distancesm] = refineVoidCentres(\
-                oneWayMatches[nVoid],ratiosm,distancesm)
+                oneWayMatches[nVoid],ratiosm,distancesm,numCats,centresList,\
+                radiusList)
         else:
             voidMatches = oneWayMatches[nVoid]
         # Block the voids we have identified from appearing again:
@@ -2590,7 +2591,7 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
                 allCandidates,alreadyMatched,candidateCounts,NWayMatch,\
                 allRatios,allDistances,diffMap,finalCandidates,\
                 finalCat,finalRatios,finalDistances,finalCombinatoricFrac,\
-                finalCatFrac,refineCentres)
+                finalCatFrac,refineCentres,centresListShort,quantityListRad)
     return [np.array(finalCat),shortHaloList,twoWayMatchLists,\
         finalCandidates,finalRatios,finalDistances,allCandidates,\
         candidateCounts,allRatios,np.array(finalCombinatoricFrac),\

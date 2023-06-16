@@ -3716,7 +3716,7 @@ class test_catalogue_code(test_base):
             twoWayMatch,allCandidates,alreadyMatched,candidateCounts,\
             False,allRatios,allDistances,diffMap,finalCandidates,\
             finalCat,finalRatios,finalDistances,finalCombinatoricFrac,\
-            finalCatFrac,False)
+            finalCatFrac,False,None,None)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "matchVoidToOtherCatalogues_ref.p"
         reference = self.getReference(referenceFile,computed)
