@@ -1579,7 +1579,7 @@ def sortCandidatesByVolumes(candidates,quantRatio,overlapForVoid):
     return [quantRatio,sortedCandidates,indSort]
 
 def getSortedQuantRatio(sortMethod,candidates,quantRatio,distances,
-        otherQuantities,searchQuantiy,overlapForVoid):
+        otherQuantities,searchQuantiy,overlapForVoid,sortQuantity):
     if sortMethod == 'distance':
         # Sort the antihalos by distance. Candidate is the closest
         # halo which satisfies the threshold criterion:
@@ -1632,7 +1632,7 @@ def getVoidsAboveThresholds(quantRatio,distances,quantityThresh,\
 # radius ratio and distance ratio, to check whether they are within the
 # thresholds required:
 def findAndProcessCandidates(centre,otherCentres,searchQuantity,\
-        otherQuantities,boxsize,searchRadii,candidates=None,\
+        otherQuantities,boxsize,searchRadii,sortQuantity,candidates=None,\
         sortMethod='distance',overlapForVoid=None,quantityThresh=0.5,\
         distMax = 20.0,mode="fractional",treeOther=None):
     # Number of search quantities (radius or mass) to process for this void:
@@ -1659,7 +1659,7 @@ def findAndProcessCandidates(centre,otherCentres,searchQuantity,\
             otherQuantities)
         [quantRatio,sortedCandidates,indSort] = getSortedQuantRatio(\
             sortMethod,candidates,quantRatio,distances,
-            otherQuantities,searchQuantity,overlapForVoid)
+            otherQuantities,searchQuantity,overlapForVoid,sortQuantity)
         # Get voids above the specified thresholds for these candidates:
         matchingVoids = getVoidsAboveThresholds(\
             quantRatio,distances,quantityThresh,\
@@ -1745,7 +1745,7 @@ def getMatchDistance(snap1,snap2,centres1,centres2,\
         [selectedMatches,selectCandidates,selectedQuantRatios,\
             selectedDistances] = findAndProcessCandidates(\
             centre,centres2,quantity1[k],\
-            quantity2,boxsize,searchRadii,candidates=candidates,\
+            quantity2,boxsize,searchRadii,sortQuantity,candidates=candidates,\
             sortMethod=sortMethod,overlapForVoid=overlapForVoid,\
             quantityThresh=quantityThresh,distMax = distMax,mode=mode,\
             treeOther=tree2)
