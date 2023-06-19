@@ -2217,6 +2217,7 @@ def refineVoidCentres(voidMatches,ratiosm,distancesm,numCats,centresList,\
     voidMatchesLast = np.array([-1 for k in range(0,numCats)])
     voidMatchesNew = voidMatches
     iterations = 0
+    success = True
     while not np.all(voidMatchesLast == voidMatchesNew):
         voidMatchesLast = voidMatchesNew
         # First, compute the mean centre of the voids in this set:
@@ -2235,8 +2236,9 @@ def refineVoidCentres(voidMatches,ratiosm,distancesm,numCats,centresList,\
             break
         iterations += 1
         if iterations > iterMax:
-            raise Exception("Void centres refinining did not converge.")
-    return [voidMatchesNew,ratiosm,distancesm]
+            success = False
+            break
+    return [voidMatchesNew,ratiosm,distancesm,success]
 
 # Add an entry to the catalogue:
 def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
@@ -2268,28 +2270,33 @@ def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
             np.sum(bestCandidates > 0)/numCats))
     else:
         if refineCentres:
-            [voidMatches,ratiosm,distancesm] = refineVoidCentres(\
+            [voidMatches,ratiosm,distancesm,success] = refineVoidCentres(\
                 oneWayMatches[nVoid],ratiosm,distancesm,numCats,centresList,\
                 radiusList,boxsize,sortQuantity,sortMethod,\
                 quantityThresh,distMax,mode,overlapForVoid=None,\
                 treeList = treeList,iterMax = 100)
         else:
             voidMatches = oneWayMatches[nVoid]
-        # Block the voids we have identified from appearing again:
-        markCompanionsAsFound(nVoid,nCat,numCats,voidMatches,\
-            oneWayMatchesAllCatalogues,allCandidates,alreadyMatched)
-        # Provided we found at least two voids, then add it to the catalogue:
-        if np.sum(voidMatches > 0) > 1:
-            finalCat.append(oneWayMatches[nVoid])
-            finalRatios.append(ratiosm)
-            finalDistances.append(distancesm)
-            finalCatFrac.append(float(len(np.where(voidMatches > 0)[0])\
-                /numCats))
-            # Compute the combinatoric fraction:
-            twoWayMatchCounts = getTotalNumberOfTwoWayMatches(numCats,\
-                diffMap,allCandidates,voidMatches)
-            finalCombinatoricFrac.append(twoWayMatchCounts/\
-                (numCats*(numCats-1)))
+            success = True
+        if not success:
+            print("WARNING: void centre refinind did not converge.")
+            # Do nothing else - don't add a failed void to the catalogue!
+        else:
+            # Block the voids we have identified from appearing again:
+            markCompanionsAsFound(nVoid,nCat,numCats,voidMatches,\
+                oneWayMatchesAllCatalogues,allCandidates,alreadyMatched)
+            # Provided we found at least two voids, then add it to the catalogue:
+            if np.sum(voidMatches > 0) > 1:
+                finalCat.append(oneWayMatches[nVoid])
+                finalRatios.append(ratiosm)
+                finalDistances.append(distancesm)
+                finalCatFrac.append(float(len(np.where(voidMatches > 0)[0])\
+                    /numCats))
+                # Compute the combinatoric fraction:
+                twoWayMatchCounts = getTotalNumberOfTwoWayMatches(numCats,\
+                    diffMap,allCandidates,voidMatches)
+                finalCombinatoricFrac.append(twoWayMatchCounts/\
+                    (numCats*(numCats-1)))
 
 # Load simulations and catalogue data so that we can combine them. If these
 # are already loaded, this function won't reload them.

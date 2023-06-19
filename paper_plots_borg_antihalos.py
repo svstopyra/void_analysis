@@ -1043,6 +1043,8 @@ diffMapMCMCToRandom = [np.setdiff1d(\
     for k in range(0,len(snapList))]
 rebuildCatalogues  = False
 doCrossCatalogues = False
+refineCentres = True
+sortBy = 'radius'
 # Compute the catalogue with these settings:
 for k in range(0,len(distArr)):
     for l in range(0,len(threshList)):
@@ -1066,7 +1068,8 @@ for k in range(0,len(distArr)):
                     rSphere=rSphere1,massRange = [mLower1,mUpper1],\
                     NWayMatch = False,rMin=rMin,rMax=rMax,\
                     additionalFilters = None,verbose=False,\
-                    _recomputeData=rebuildCatalogues)
+                    _recomputeData=rebuildCatalogues,\
+                    refineCentres = refineCentres,sortBy = sortBy)
         [finalCatMCMC,shortHaloListMCMC,twoWayMatchListMCMC,\
             finalCandidatesMCMC,finalRatiosMCMC,finalDistancesMCMC,\
             allCandidatesMCMC,candidateCountsMCMC,allRatiosMCMC,\
@@ -1082,7 +1085,8 @@ for k in range(0,len(distArr)):
                 rSphere=rSphere1,massRange = [mLower1,mUpper1],\
                 NWayMatch = False,rMin=rMin,rMax=rMax,\
                 additionalFilters = snrFilter,verbose=False,\
-                _recomputeData=rebuildCatalogues)
+                _recomputeData=rebuildCatalogues,\
+                refineCentres = refineCentres,sortBy = sortBy)
         [finalCatRand,shortHaloListRand,twoWayMatchListRand,\
             finalCandidatesRand,finalRatiosRand,finalDistancesRand,\
             allCandidatesRand,candidateCountsRand,allRatiosRand,\
@@ -1098,7 +1102,8 @@ for k in range(0,len(distArr)):
                 rSphere=rSphere1,massRange = [mLower1,mUpper1],\
                 NWayMatch = False,rMin=rMin,rMax=rMax,\
                 additionalFilters = None,verbose=False,\
-                _recomputeData=rebuildCatalogues)
+                _recomputeData=rebuildCatalogues,\
+                refineCentres = refineCentres,sortBy = sortBy)
         # Compute percentiles:
         radiiListOpt = getPropertyFromCat(finalCatMCMC,radiiListShort)
         massListOpt = getPropertyFromCat(finalCatMCMC,massListShort)
@@ -4636,7 +4641,8 @@ refineCentres = True
                 rSphere=rSphere2,massRange = [mLower1,mUpper1],\
                 NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
                 additionalFilters = snrFilter,verbose=False,\
-                refineCentres = refineCentres,_recomputeData=True)
+                refineCentres = refineCentres,_recomputeData=True,\
+                sortBy = 'radius')
 
 [finalCatRand,shortHaloListRand,twoWayMatchListRand,\
     finalCandidatesRand,finalRatiosRand,finalDistancesRand,\
@@ -4653,7 +4659,7 @@ refineCentres = True
         rSphere=rSphere2,massRange = [mLower1,mUpper1],\
         NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
         additionalFilters = None,verbose=False,\
-        refineCentres = refineCentres,_recomputeData=True)
+        refineCentres = refineCentres,_recomputeData=True,sortBy = 'radius')
 
 # A few things needed for computing catalogue fractions:
 # For MCMC samples:
@@ -4689,7 +4695,7 @@ centralAntihaloMasses = [\
 #sortedList = [np.flip(np.argsort(centralAntihaloRadii[k])) \
 #                    for k in range(0,len(snapNumList))]
 
-sortedList = [np.flip(np.argsort(centralAntihaloMasses[k])) \
+sortedList = [np.flip(np.argsort(centralAntihaloRadii[k])) \
                     for k in range(0,len(snapNumList))]
 
 
@@ -4741,13 +4747,13 @@ radiiListCombUn = getPropertyFromCat(finalCatRand,radiiListShortUn)
 massListCombUn = getPropertyFromCat(finalCatRand,massListShortUn)
 [radiiListMeanUn,radiiListSigmaUn] = getMeanProperty(radiiListCombUn)
 [massListMeanUn,massListSigmaUn] = getMeanProperty(massListCombUn)
-#[percentilesCat300, percentilesComb300] = getThresholdsInBins(\
-#    nBinEdges-1,cutScale,massListMeanUn,radiiListMeanUn,\
-#    finalCombinatoricFracRand,finalCatFracRand,\
-#    rLower,rUpper,mLower1,mUpper1,percThresh,massBins=massBins,\
-#    radBins=radBins)
-percentilesCat300 = [0.0 for k in range(0,7)]
-percentilesComb300 = [0.0 for k in range(0,7)]
+[percentilesCat300, percentilesComb300] = getThresholdsInBins(\
+    nBinEdges-1,cutScale,massListMeanUn,radiiListMeanUn,\
+    finalCombinatoricFracRand,finalCatFracRand,\
+    rLower,rUpper,mLower1,mUpper1,percThresh,massBins=massBins,\
+    radBins=radBins)
+#percentilesCat300 = [0.0 for k in range(0,7)]
+#percentilesComb300 = [0.0 for k in range(0,7)]
 finalCentresOptList = np.array([getCentresFromCat(\
     finalCat300,centresListShort,ns) \
     for ns in range(0,len(snapNumList))])
@@ -4766,12 +4772,25 @@ snrList = np.array([np.mean(snrFieldLin[points]) \
 distances  = np.sqrt(np.sum(meanCentreOpt**2,1))
 distFilter135 = (distances < 135)
 
+
+def getAllThresholds(percentiles,radBins,radii):
+    scaleFilter = [(radii > radBins[k]) & \
+        (radii <= radBins[k+1]) \
+        for k in range(0,len(radBins) - 1)]
+    thresholds = np.zeros(radii.shape)
+    for filt, perc in zip(scaleFilter,percentiles):
+        thresholds[filt] = perc
+    return perc
+
+thresholds = getAllThresholds(percentilesCat300,radBins,radiiMeanOpt)
+
+
 #leftFilter = combinedFilter300 & distFilter135
 #rightFilter = combinedFilter300
 leftFilter = (radiiMeanOpt > 10) & (radiiMeanOpt <= 25) & distFilter135 & \
-    (finalCatFrac300 > 0.0) & (snrList > snrThresh)
+    (finalCatFrac300 > thresholds) & (snrList > snrThresh)
 rightFilter = (radiiMeanOpt > 10) & (radiiMeanOpt <= 25) & \
-    (finalCatFrac300 > 0.0) & (snrList > snrThresh)
+    (finalCatFrac300 > thresholds) & (snrList > snrThresh)
 
 
 if doCat:
@@ -5357,7 +5376,9 @@ ahProps = [tools.loadPickle(name + ".AHproperties.p")\
 rSphere2 = 300
 muOpt = 0.925
 rSearchOpt = 0.5
-NWayMatch = True
+NWayMatch = False
+refineCentres = True
+sortBy = "radius"
 [finalCat300,shortHaloList300,twoWayMatchList300,\
             finalCandidates300,finalRatios300,finalDistances300,\
             allCandidates300,candidateCounts300,allRatios300,\
@@ -5370,7 +5391,8 @@ NWayMatch = True
                 crossMatchThreshold = muOpt,distMax = rSearchOpt,\
                 rSphere=rSphere2,massRange = [mMin,mMax],\
                 NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
-                additionalFilters = snrFilter,verbose=False)
+                additionalFilters = snrFilter,verbose=False,\
+                refineCentres=refineCentres,sortBy=sortBy)
 
 finalCentres300List = np.array([getCentresFromCat(\
     finalCatOpt,centresListShort,ns) for ns in range(0,len(snapNumList))])
@@ -5403,7 +5425,7 @@ diffMap = [np.setdiff1d(np.arange(0,len(snapNumList)),[k]) \
     twoWayOnly=True,blockDuplicates=True,\
     crossMatchThreshold = muOpt,distMax = rSearchOpt,rSphere=rSphere,\
     massRange = [mMin,mMax],NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
-    additionalFilters = snrFilter)
+    additionalFilters = snrFilter,sortBy = 'radius')
 
 
 finalCentresOptList = np.array([getCentresFromCat(\
@@ -5417,9 +5439,28 @@ catFractionsOpt = finalCatFracOpt
 
 # Test for void splitting:
 nVTest = 0
-locator = [np.where(finalCat300[:,k] == finalCatOpt[nVTest][k]) \
+locator = [np.where((finalCat300[:,k] == finalCatOpt[nVTest][k]) & \
+    (finalCat300[:,k] != -1)) \
     for k in range(0,len(snapNumList))]
 splitEntries = np.unique(np.hstack(locator))
+
+splitList = []
+for nVTest in range(0,len(finalCatOpt)):
+    locator = [np.where((finalCat300[:,k] == finalCatOpt[nVTest][k]) & \
+        (finalCat300[:,k] != -1)) for k in range(0,len(snapNumList))]
+    splitEntries = np.unique(np.hstack(locator))
+    splitList.append(splitEntries)
+
+
+def lowestOrNothing(x):
+    if len(x) > 0:
+        return np.min(x)
+    else:
+        return -1
+
+
+lowestMatch = np.array([lowestOrNothing(x) for x in splitList],dtype=int)
+numberSplitBetween = np.array([len(x) for x in splitList])
 
 # Get SNR per catalogue:
 
