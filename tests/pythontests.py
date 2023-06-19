@@ -3410,6 +3410,9 @@ class test_catalogue_code(test_base):
         self.snapnameRev = "gadget_full_reverse/snapshot_001"
         self.snapNameList = [self.samplesFolder + "sample" + \
             str(snapNum) + "/" + self.snapname for snapNum in self.snapNumList]
+        self.snapNameListRev = [self.samplesFolder + "sample" + \
+            str(snapNum) + "/" + self.snapnameRev \
+            for snapNum in self.snapNumList]
         self.snapList =  [pynbody.load(self.samplesFolder + "sample" + \
             str(snapNum) + "/" + self.snapname) for snapNum in self.snapNumList]
         self.ahPropsConstrained = [tools.loadPickle(snap.filename + \
@@ -3584,15 +3587,9 @@ class test_catalogue_code(test_base):
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
     def test_loadCatalogueData(self):
-        if snapList is None:
-            snapList = constructSnapNameList(self.samplesFolder,\
-                self.snapNumList,self.snapname)
-        if snapListRev is None:
-            snapListRev = constructSnapNameList(self.samplesFolder,\
-                self.snapNumList,self.snapnameRev)
         [snapList,snapListRev,boxsize,ahProps,antihaloCentres,\
             antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList] = \
-            catalogue.loadCatalogueData(snapList,snapListRev,\
+            catalogue.loadCatalogueData(self.snapNameList,self.snapNameListRev,
                 None,"mass",None,None,verbose=False)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "loadCatalogueData_ref.p"
@@ -3603,9 +3600,8 @@ class test_catalogue_code(test_base):
     def test_constructShortenedCatalogues(self):
         [snapList,snapListRev,boxsize,ahProps,antihaloCentres,\
             antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList] = \
-            catalogue.loadCatalogueData(self.snapNumList,None,None,\
-                self.samplesFolder,self.snapname,self.snapnameRev,None,"mass",\
-                None,None,verbose=False)
+            catalogue.loadCatalogueData(self.snapNameList,self.snapNameListRev,
+                None,"mass",None,None,verbose=False)
         [centresListShort,centralAntihalos,sortedList,ahCounts,max_index] = \
             tools.loadPickle(self.dataFolder + \
             self.test_subfolder + "computeShortCentresList_ref.p")
@@ -3618,9 +3614,8 @@ class test_catalogue_code(test_base):
     def test_getOneWayMatchesAllCatalogues(self):
         [snapList,snapListRev,boxsize,ahProps,antihaloCentres,\
             antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList] = \
-            catalogue.loadCatalogueData(self.snapNumList,None,None,\
-                self.samplesFolder,self.snapname,self.snapnameRev,None,"mass",\
-                None,None,verbose=False)
+            catalogue.loadCatalogueData(self.snapNameList,self.snapNameListRev,
+                None,"mass",None,None,verbose=False)
         [centresListShort,centralAntihalos,sortedList,ahCounts,max_index] = \
             tools.loadPickle(self.dataFolder + \
             self.test_subfolder + "computeShortCentresList_ref.p")
@@ -3654,9 +3649,8 @@ class test_catalogue_code(test_base):
     def test_getMatchCandidatesTwoCatalogues(self):
         [snapList,snapListRev,boxsize,ahProps,antihaloCentres,\
             antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList] = \
-            catalogue.loadCatalogueData(self.snapNumList,None,None,\
-                self.samplesFolder,self.snapname,self.snapnameRev,None,"mass",\
-                None,None,verbose=False)
+            catalogue.loadCatalogueData(self.snapNameList,self.snapNameListRev,
+                None,"mass",None,None,verbose=False)
         hrListCentral = tools.loadPickle(self.dataFolder + \
             self.test_subfolder + "constructShortenedCatalogues_ref.p")
         [centresListShort,centralAntihalos,sortedList,ahCounts,max_index] = \
@@ -3681,9 +3675,8 @@ class test_catalogue_code(test_base):
     def test_getOverlapList(self):
         [snapList,snapListRev,boxsize,ahProps,antihaloCentres,\
             antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList] = \
-            catalogue.loadCatalogueData(self.snapNumList,None,None,\
-                self.samplesFolder,self.snapname,self.snapnameRev,None,"mass",\
-                None,None,verbose=False)
+            catalogue.loadCatalogueData(self.snapNameList,self.snapNameListRev,
+                None,"mass",None,None,verbose=False)
         hrListCentral = tools.loadPickle(self.dataFolder + \
             self.test_subfolder + "constructShortenedCatalogues_ref.p")
         computed = catalogue.getOverlapList(3,hrListCentral,volumesList)
