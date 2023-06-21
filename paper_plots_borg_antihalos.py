@@ -1287,6 +1287,16 @@ tools.savePickle([purity_1f,purity_2f,completeness_1f,completeness_2f,\
     catMeanMCMCCutNoBins]= tools.loadPickle(\
     data_folder + "purity_completeness_data.p")
 
+[catSizeRand,catSizeRandCut,catSizeRandNoBinsCut] = tools.loadPickle(\
+    data_folder + "randcat_counts_data.p")
+
+[combMeanRand,combMeanMCMC,combMeanMCMCCut,\
+    combMeanMCMCCutNoBins,combPercentileRand,combPercentileMaxRand,\
+    combPercentile99BinsRand,catSizeBinsMCMCCutComb,\
+    catSizeMCMCCutComb,combMeanMCMCCutComb,catMeanMCMCCutComb] = \
+    tools.loadPickle(data_folder + "combinatoric_fraction_data.p")
+
+
 [purity_1f,purity_2f,completeness_1f,completeness_2f] = tools.loadPickle(\
     "borg-antihalos_paper_figures/all_samples/" + \
     "purity_completeness_data_whole_range.p")
@@ -4622,8 +4632,10 @@ if doClusterMasses:
 
 # Get optimal catalogues:
 rSphere2 = 300
-muOpt = 0.925
-rSearchOpt = 0.5
+#muOpt = 0.925
+#rSearchOpt = 0.5
+muOpt = 0.95
+rSearchOpt = 0.15
 NWayMatch = False
 refineCentres = True
 [finalCat300,shortHaloList300,twoWayMatchList300,\
@@ -4780,10 +4792,10 @@ def getAllThresholds(percentiles,radBins,radii):
     thresholds = np.zeros(radii.shape)
     for filt, perc in zip(scaleFilter,percentiles):
         thresholds[filt] = perc
-    return perc
+    return thresholds
 
 thresholds = getAllThresholds(percentilesCat300,radBins,radiiMeanOpt)
-
+thresholds = 0.0
 
 #leftFilter = combinedFilter300 & distFilter135
 #rightFilter = combinedFilter300
@@ -5335,8 +5347,6 @@ def getMeanProperty(propertyList,stripNaN=True,lowerLimit=0,stdError=True):
     return [meanProperty,sigmaProperty]
 
 
-ahNumbers = [np.array(centralAntihalos[l][0],dtype=int)[sortedList[l]] \
-    for l in range(0,len(snapNumList))]
 
 def getSNRForVoidRealisations(finalCat,snrAllCatsList,ahNumbers):
     snrCat = np.zeros(finalCat.shape)
@@ -5374,8 +5384,8 @@ ahProps = [tools.loadPickle(name + ".AHproperties.p")\
             for name in snapNameList]
 # Get optimal catalogues:
 rSphere2 = 300
-muOpt = 0.925
-rSearchOpt = 0.5
+muOpt = 0.95
+rSearchOpt = 0.15
 NWayMatch = False
 refineCentres = True
 sortBy = "radius"
@@ -5394,9 +5404,21 @@ sortBy = "radius"
                 additionalFilters = snrFilter,verbose=False,\
                 refineCentres=refineCentres,sortBy=sortBy)
 
-finalCentres300List = np.array([getCentresFromCat(\
-    finalCatOpt,centresListShort,ns) for ns in range(0,len(snapNumList))])
 
+[centresListShort,centralAntihalos,sortedList,ahCounts,max_index] = \
+        computeShortCentresList(snapNumList,antihaloCentres,\
+            antihaloRadii,antihaloMasses,rSphere2,rMin,rMax,\
+            massRange=massRange,additionalFilters=snrFilter,\
+            sortBy = sortBy,max_index=None)
+
+ahNumbers = [np.array(centralAntihalos[l][0],dtype=int)[sortedList[l]] \
+    for l in range(0,len(snapNumList))]
+
+
+radiiListShort = getShortenedQuantity(antihaloRadii,centralAntihalos,\
+            centresListShort,sortedList,ahCounts,max_index)
+massListShort = getShortenedQuantity(antihaloMasses,centralAntihalos,\
+            centresListShort,sortedList,ahCounts,max_index)
 
 finalCentres300List = np.array([getCentresFromCat(\
     finalCat300,centresListShort,ns) for ns in range(0,len(snapNumList))])
@@ -5427,6 +5449,74 @@ diffMap = [np.setdiff1d(np.arange(0,len(snapNumList)),[k]) \
     massRange = [mMin,mMax],NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
     additionalFilters = snrFilter,sortBy = 'radius')
 
+# Random catalogue version:
+[finalCatOptRand,shortHaloListOptRand,twoWayMatchListOptRand,\
+    finalCandidatesOptRand,finalRatiosOptRand,finalDistancesOptRand,\
+    allCandidatesOptRand,candidateCountsOptRand,allRatiosOptRand,\
+    finalCombinatoricFracOptRand,finalCatFracOptRand,alreadyMatchedRand] = \
+    constructAntihaloCatalogue(snapNumList,snapList=snapListUn,\
+    snapListRev=snapListRevUn,ahProps=ahPropsUn,hrList=hrListUn,max_index=None,\
+    twoWayOnly=True,blockDuplicates=True,\
+    crossMatchThreshold = muOpt,distMax = rSearchOpt,rSphere=rSphere,\
+    massRange = [mMin,mMax],NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
+    additionalFilters = None,sortBy = 'radius')
+
+[centresListShortUn,centralAntihalosUn,sortedListUn,ahCountsUn,max_indexUn] = \
+        computeShortCentresList(snapNumListUncon,antihaloCentresUn,\
+            antihaloRadiiUn,antihaloMassesUn,rSphere2,rMin,rMax,\
+            massRange=massRange,additionalFilters=None,\
+            sortBy = 'radius',max_index=None)
+
+radiiListShortUn = getShortenedQuantity(antihaloRadiiUn,centralAntihalosUn,\
+            centresListShortUn,sortedListUn,ahCountsUn,max_indexUn)
+massListShortUn = getShortenedQuantity(antihaloMassesUn,centralAntihalosUn,\
+            centresListShortUn,sortedListUn,ahCountsUn,max_indexUn)
+
+
+# Percentiles:
+# Compute percentiles:
+radiiListOpt = getPropertyFromCat(finalCatOpt,radiiListShort)
+massListOpt = getPropertyFromCat(finalCatOpt,massListShort)
+[radiiMeanOpt, radiiSigmaOpt]  = getMeanProperty(radiiListOpt)
+[massMeanOpt, massSigmaOpt]  = getMeanProperty(massListOpt)
+scaleFilter = [(radiiMeanOpt > radBins[k]) & \
+    (radiiMeanOpt <= radBins[k+1]) \
+    for k in range(0,len(radBins) - 1)]
+radiiListCombUn = getPropertyFromCat(finalCatOptRand,radiiListShortUn)
+massListCombUn = getPropertyFromCat(finalCatOptRand,massListShortUn)
+[radiiListMeanUn,radiiListSigmaUn] = getMeanProperty(radiiListCombUn)
+[massListMeanUn,massListSigmaUn] = getMeanProperty(massListCombUn)
+[percentilesCat300, percentilesComb300] = getThresholdsInBins(\
+    nBinEdges-1,cutScale,massListMeanUn,radiiListMeanUn,\
+    finalCombinatoricFracOptRand,finalCatFracOptRand,\
+    rLower,rUpper,mLower1,mUpper1,percThresh,massBins=massBins,\
+    radBins=radBins)
+
+# Get SNR per catalogue:
+
+
+nV = np.where(finalCat300[:,5] == 2)[0][0]
+nV1 = np.where(finalCatOpt[:,5] == 2)[0][0]
+
+centreRat = mutualCentreRatio(radiiList300[nV],finalCentres300List[:,nV,:])
+centreRat1 = mutualCentreRatio(radiiListOpt[nV1],finalCentresOptList[:,nV1,:])
+radiiRat = mutualRadiusRatios(radiiList300[nV])
+radiiRat1 = mutualRadiusRatios(radiiListOpt[nV1])
+
+snrCat300 = getSNRForVoidRealisations(finalCat300,snrAllCatsList,ahNumbers)
+snrCatOpt = getSNRForVoidRealisations(finalCatOpt,snrAllCatsList,ahNumbers)
+haveVoids300 = np.where(finalCat300 >= 0)
+haveVoidsOpt = np.where(finalCatOpt >= 0)
+
+# Mean SNR:
+nearestPointsOpt = tree.query_ball_point(\
+        snapedit.wrap(meanCentreOpt + boxsize/2,boxsize),\
+        radiiMeanOpt,workers=-1)
+snrMeanOpt = np.sqrt(np.array([np.mean(snrFieldLin[points]) \
+        for points in nearestPointsOpt]))
+
+
+
 
 finalCentresOptList = np.array([getCentresFromCat(\
     finalCatOpt,centresListShort,ns) for ns in range(0,len(snapNumList))])
@@ -5437,32 +5527,6 @@ meanCentreOpt = np.nanmean(finalCentresOptList,0)
 catFractionsOpt = finalCatFracOpt
 #catFractionsOpt = finalCombinatoricFracOpt
 
-# Test for void splitting:
-nVTest = 0
-locator = [np.where((finalCat300[:,k] == finalCatOpt[nVTest][k]) & \
-    (finalCat300[:,k] != -1)) \
-    for k in range(0,len(snapNumList))]
-splitEntries = np.unique(np.hstack(locator))
-
-splitList = []
-for nVTest in range(0,len(finalCatOpt)):
-    locator = [np.where((finalCat300[:,k] == finalCatOpt[nVTest][k]) & \
-        (finalCat300[:,k] != -1)) for k in range(0,len(snapNumList))]
-    splitEntries = np.unique(np.hstack(locator))
-    splitList.append(splitEntries)
-
-
-def lowestOrNothing(x):
-    if len(x) > 0:
-        return np.min(x)
-    else:
-        return -1
-
-
-lowestMatch = np.array([lowestOrNothing(x) for x in splitList],dtype=int)
-numberSplitBetween = np.array([len(x) for x in splitList])
-
-# Get SNR per catalogue:
 
 
 radiiListOpt = getRadiiFromCat(finalCatOpt,radiiListShort)
@@ -5482,18 +5546,93 @@ massList300 = getRadiiFromCat(finalCat300,massListShort)
 
 
 
-nV = np.where(finalCat300[:,5] == 2)[0][0]
-nV1 = np.where(finalCatOpt[:,5] == 2)[0][0]
 
-centreRat = mutualCentreRatio(radiiList300[nV],finalCentres300List[:,nV,:])
-centreRat1 = mutualCentreRatio(radiiListOpt[nV1],finalCentresOptList[:,nV1,:])
-radiiRat = mutualRadiusRatios(radiiList300[nV])
-radiiRat1 = mutualRadiusRatios(radiiListOpt[nV1])
+# Test for void splitting:
+nVTest = 0
+locator = [np.where((finalCat300[:,k] == finalCatOpt[nVTest][k]) & \
+    (finalCat300[:,k] != -1)) \
+    for k in range(0,len(snapNumList))]
+splitEntries = np.unique(np.hstack(locator))
 
-snrCat300 = getSNRForVoidRealisations(finalCat300,snrAllCatsList,ahNumbers)
-snrCatOpt = getSNRForVoidRealisations(finalCatOpt,snrAllCatsList,ahNumbers)
-haveVoids300 = np.where(finalCat300 >= 0)
-haveVoidsOpt = np.where(finalCatOpt >= 0)
+splitList = []
+for nVTest in range(0,len(finalCatOpt)):
+    locator = [np.where((finalCat300[:,k] == finalCatOpt[nVTest][k]) & \
+        (finalCat300[:,k] != -1)) for k in range(0,len(snapNumList))]
+    splitEntries = np.unique(np.hstack(locator))
+    splitList.append(splitEntries)
+
+numSplit = np.array([len(x) for x in splitList],dtype=int)
+
+distancesOpt = np.sqrt(np.sum(meanCentreOpt**2,1))
+filterOpt = (radiiMeanOpt > 10) & (radiiMeanOpt <= 25) & (distancesOpt < 135)
+thresholdsOpt = getAllThresholds(percentilesCat300,radBins,radiiMeanOpt)
+filterOptGood = filterOpt & (finalCatFracOpt > thresholdsOpt) & \
+    (snrMeanOpt > 5) & (finalCatFracOpt > 0.7)
+
+distances300 = np.sqrt(np.sum(meanCentre300**2,1))
+filter300 = (radiiMean300 > 10) & (radiiMean300 <= 25) & (distances300 < 135)
+
+
+plt.clf()
+plt.hist(numSplit[filterOpt],\
+    bins = np.arange(np.min(numSplit)-0.5,np.max(numSplit)+1))
+plt.xlabel("Number of voids split between in new catalogue")
+plt.ylabel("Number of voids in old catalogue")
+plt.savefig(figuresFolder  + "numSplit_histogram.pdf")
+
+
+numSplitRefined = tools.loadPickle(figuresFolder + "numSplit_refined.p")
+numSplitUnrefined = tools.loadPickle(figuresFolder + "numSplit_unrefined.p")
+
+plt.clf()
+plt.hist(numSplitRefined[filterOpt],\
+    bins = np.arange(np.min(numSplit)-0.5,np.max(numSplit)+1),\
+    label="with iterative approach",alpha=0.5,color=seabornColormap[0])
+plt.hist(numSplitUnrefined[filterOpt],\
+    bins = np.arange(np.min(numSplit)-0.5,np.max(numSplit)+1),\
+    label="without iterative approach",alpha=0.5,color=seabornColormap[1])
+plt.xlabel("Number of voids split between in new catalogue")
+plt.ylabel("Number of voids in old catalogue")
+plt.legend()
+plt.savefig(figuresFolder  + "numSplit_histogram_compared.pdf")
+
+
+
+
+def lowestOrNothing(x):
+    if len(x) > 0:
+        return np.min(x)
+    else:
+        return -1
+
+def getSplitVoids(catRef,catTest,nVRef):
+    nCats = catRef.shape[1]
+    locator = [np.where((catRef[:,k] == catRef[nVRef][k]) & \
+        (catRef[:,k] != -1)) for k in range(0,nCats)]
+    splitEntries = np.unique(np.hstack(locator))
+    return splitEntries
+
+def compareVoids(voidRef,voidTest):
+    matching = np.where((voidTest == voidRef) & (voidRef > -1))[0]
+    notMatching = np.where((voidTest != voidRef) & (voidTest > -1))[0]
+    failed = np.where((voidTest == -1) & (voidRef > -1))[0]
+    return [matching,notMatching,failed]
+
+def analyseSplit(catRef,catTest,nVRef,nVTest):
+    return compareVoids(catRef[nVRef],catTest[nVTest])
+
+[matching,notMatching,failed] = analyseSplit(finalCatOpt,finalCat300,0,0)
+
+lowestMatch = np.array([lowestOrNothing(x) for x in splitList],dtype=int)
+numberSplitBetween = np.array([len(x) for x in splitList])
+
+# Scatter of SNR vs splitting:
+plt.clf()
+plt.scatter(snrMeanOpt,numSplitRefined)
+plt.xlabel('Signal/Noise')
+plt.ylabel('Number of voids split between')
+plt.savefig(figuresFolder + "snr_vs_split.pdf")
+
 
 # Void Filter:
 distance300 = np.sqrt(np.sum(meanCentre300**2,1))
@@ -5524,34 +5663,9 @@ title = "New run, void " + str(nV + 1) + \
 #
 #nV = 1
 
-for l in range(0,len(snapNumList)):
-    if catToPlot[nV][l] > -1:
-        indList.append(centralAntihalos[l][0][sortedList[l][catToPlot[nV][l]-1]])
-    else:
-        indList.append(-1)
-
-centresArray = []
-haveCentreCount = 0
-for l in range(0,len(snapNumList)):
-    if catToPlot[nV][l] > -1:
-        centresArray.append(centresListShort[l][catToPlot[nV,l] - 1])
-
-#meanCentre = np.flip(np.mean(centresArray,0)) + boxsize/2
-meanCentre = np.mean(centresArray,0)
-stdCentre = np.std(centresArray,0)
-
-# plot in a box around this void.
-Lbox = 100
-axis = 2
-Om0 = 0.3111
-rhoBar = Om0*2.7754e11
-nPix = 32
-ns = 0
-binEdgesX = np.linspace(meanCentre[0] - Lbox/2,meanCentre[0] + Lbox/2,nPix)
-binEdgesY = np.linspace(meanCentre[1] - Lbox/2,meanCentre[1] + Lbox/2,nPix)
 
 densitiesHR = [np.fromfile("new_chain/sample" + str(snap) + \
-    "/gadget_full_forward_512/snapshot_001.a_den",\
+        "/gadget_full_forward_512/snapshot_001.a_den",\
     dtype=np.float32) for snap in snapNumList]
 densities256 = [np.reshape(density,(256,256,256),order='C') \
     for density in densitiesHR]
@@ -5559,112 +5673,170 @@ densities256F = [np.reshape(density,(256,256,256),order='F') \
     for density in densitiesHR]
 
 
-cuboidVol = Lbox**3/(nPix**2)
-mUnit = snapList[0]['mass'][0]*1e10
-
-
-Lbox = 100
-zSlice = meanCentre[2]
-N = 256
-alphaVal = 0.2
-vmin = 1/1000
-vmax = 1000
-thickness = Lbox
-indLow = int((zSlice + boxsize/2)*N/boxsize) - int((thickness/2)*N/(boxsize))
-indUpp = int((zSlice + boxsize/2)*N/boxsize) + int((thickness/2)*N/(boxsize))
-
-indLowX = int((meanCentre[0] + boxsize/2)*N/boxsize) - int((thickness/2)*N/(boxsize))
-indUppX = int((meanCentre[0] + boxsize/2)*N/boxsize) + int((thickness/2)*N/(boxsize))
-indLowY = int((meanCentre[1] + boxsize/2)*N/boxsize) - int((thickness/2)*N/(boxsize))
-indUppY = int((meanCentre[1] + boxsize/2)*N/boxsize) + int((thickness/2)*N/(boxsize))
-
-sm = cm.ScalarMappable(colors.LogNorm(vmin=1/1000,vmax=1000),\
-            cmap='PuOr_r')
-
-phi = np.linspace(0,2*np.pi,1000)
-Xcirc = np.cos(phi)
-Ycirc = np.sin(phi)
-
-showOtherCentres = True
-ahNumbers = [np.array(centralAntihalos[l][0],dtype=int)[sortedList[l]] \
-    for l in range(0,len(snapNumList))]
-minMuR = 0.75
-
-plt.clf()
-for ns in range(0,len(snapNumList)):
+def plotVoidAnimation(nV,centralAntihalos,sortedList,catToPlot,radiiToPlot,\
+        snapNumList,centresListShort,radiiListShort,densities,snapList,\
+        hrList,snapSortList,\
+        Lbox = 100,axis=2,Om0=0.3111,nPix=32,N=256,alphaVal=0.2,vmin=1/1000,\
+        vmax=1000,thickness=None,cmap='PuOr_r',showOtherCentres = True,\
+        minMuR = 0.75,figuresFolder='./',title=None,namePrefix="",\
+        nameSuffix="",framePrefix=None,frameSuffix=None,rMin=10,rMax=25):
+    indList = []
+    numCats = len(snapList)
+    if framePrefix is None:
+        framePrefix = namePrefix
+    if frameSuffix is None:
+        frameSuffix = nameSuffix
+    for l in range(0,numCats):
+        if catToPlot[nV][l] > -1:
+            indList.append(centralAntihalos[l][0][sortedList[l][catToPlot[nV][l]-1]])
+        else:
+            indList.append(-1)
+    centresArray = []
+    haveCentreCount = 0
+    for l in range(0,numCats):
+        if catToPlot[nV][l] > -1:
+            centresArray.append(centresListShort[l][catToPlot[nV,l] - 1])
+    #meanCentre = np.flip(np.mean(centresArray,0)) + boxsize/2
+    meanCentre = np.mean(centresArray,0)
+    stdCentre = np.std(centresArray,0)
+    rhoBar = Om0*2.7754e11
+    binEdgesX = np.linspace(meanCentre[0] - Lbox/2,meanCentre[0] + Lbox/2,nPix)
+    binEdgesY = np.linspace(meanCentre[1] - Lbox/2,meanCentre[1] + Lbox/2,nPix)
+    cuboidVol = Lbox**3/(nPix**2)
+    mUnit = snapList[0]['mass'][0]*1e10
+    zSlice = meanCentre[axis]
+    N = 256
+    alphaVal = 0.2
+    vmin = 1/1000
+    vmax = 1000
+    boxsize = snapList[0].properties['boxsize'].ratio("Mpc a h**-1")
+    if thickness is None:
+        thickness = Lbox
+    indLow = int((zSlice + boxsize/2)*N/boxsize)\
+         - int((thickness/2)*N/(boxsize))
+    indUpp = int((zSlice + boxsize/2)*N/boxsize)\
+         + int((thickness/2)*N/(boxsize))
+    indLowX = int((meanCentre[0] + boxsize/2)*N/boxsize)\
+         - int((thickness/2)*N/(boxsize))
+    indUppX = int((meanCentre[0] + boxsize/2)*N/boxsize)\
+         + int((thickness/2)*N/(boxsize))
+    indLowY = int((meanCentre[1] + boxsize/2)*N/boxsize)\
+         - int((thickness/2)*N/(boxsize))
+    indUppY = int((meanCentre[1] + boxsize/2)*N/boxsize)\
+         + int((thickness/2)*N/(boxsize))
+    sm = cm.ScalarMappable(colors.LogNorm(vmin=vmin,vmax=vmax),\
+            cmap=cmap)
+    phi = np.linspace(0,2*np.pi,1000)
+    Xcirc = np.cos(phi)
+    Ycirc = np.sin(phi)
+    ahNumbers = [np.array(centralAntihalos[l][0],dtype=int)[sortedList[l]] \
+        for l in range(0,numCats)]
     plt.clf()
-    denToPlot = np.mean(densities256[ns][indLowX:indUppX,indLowY:indUppY,\
-        indLow:indUpp],2)
-    plt.imshow(denToPlot,norm=colors.LogNorm(vmin=vmin,vmax=vmax),\
-            cmap='PuOr_r',extent=(meanCentre[0] - Lbox/2,\
-            meanCentre[0] + Lbox/2,\
-            meanCentre[1] - Lbox/2,meanCentre[1] + Lbox/2))
-    # Alpha shape:
-    if indList[ns] > -1:
-        halo = hrList[ns][indList[ns]+1]
-        positions = tools.remapAntiHaloCentre(\
-            snapList[ns]['pos'][snapSortList[ns][halo['iord']],:],boxsize)
-        #alphaVal = alphashape.optimizealpha(\
-        #    np.array([positions[:,0],positions[:,1]]).T)
-        alphaShapeVoid = alphashape.alphashape(np.array([positions[:,0],\
-            positions[:,1]]).T,alphaVal)
-        ax = plt.gca()
-        ax.add_patch(PolygonPatch(alphaShapeVoid,fc=None,ec='b',alpha=0.5,\
-            fill = False))
-        sampleCentre = centresListShort[ns][catToPlot[nV,ns] - 1]
-        plt.scatter(sampleCentre[0],sampleCentre[1],marker='x',color='b',\
-            label='Sample Centre')
-        plt.plot(sampleCentre[0] + radiiToPlot[nV,ns]*Xcirc,\
-            sampleCentre[1] + radiiToPlot[nV,ns]*Ycirc,\
-            linestyle='--',color='b',label='Effective radius\n$' + \
-            ("%.2g" % radiiToPlot[nV,ns]) + "\\mathrm{Mpc}^{-1}$")
-    # Scatter plot of all voids in the region:
-    if showOtherCentres:
-        # Get all voids in this box:
-        centreFilter = getAllVoidsWithinBox(meanCentre,Lbox,\
-            centresListShort[ns])
-        centreNumbers = ahNumbers[ns][centreFilter]
-        # Remove the sample void so we don't double plot it:
-        centreFilter[centreFilter] = (centreNumbers != catToPlot[nV,ns] - 1)
-        # Filter based on radius:
-        radiusFilter = (radiiListShort[ns] >= minMuR*radiiToPlot[nV,ns]) & \
-            (radiiListShort[ns] <= radiiToPlot[nV,ns]/minMuR)
-        centreFilter = centreFilter & radiusFilter
-        centreNumbers = ahNumbers[ns][centreFilter]
-        # Now plot these:
-        plt.scatter(centresListShort[ns][centreFilter,0],\
-            centresListShort[ns][centreFilter,1],marker='x',color='k')
-        for k in range(0,len(centreNumbers)):
-            plt.annotate(str(centreNumbers[k]),\
-                (centresListShort[ns][centreFilter,0][k],\
-                centresListShort[ns][centreFilter,1][k]))
-    # Add in labelling:
-    plt.scatter(meanCentre[0],meanCentre[1],marker='x',color='r',\
-        label='Mean Centre')
-    plt.legend(frameon=False,loc="lower right")
-    plt.xlabel('x ($\\mathrm{Mpc}h^{-1}$)')
-    plt.ylabel('y ($\\mathrm{Mpc}h^{-1}$)')
-    plt.xlim([meanCentre[0] - Lbox/2,meanCentre[0] + Lbox/2])
-    plt.ylim([meanCentre[1] - Lbox/2,meanCentre[1] + Lbox/2])
-    plt.title(title + '\nSample ' + str(snapNumList[ns]))
-    cbar = plt.colorbar(sm, orientation="vertical")
-    plt.savefig(figuresFolder + "frame_" + str(ns) + ".png")
-    #plt.show()
+    if title is None:
+        title = "Void " + str(nV + 1)
+    for ns in range(0,numCats):
+        plt.clf()
+        denToPlot = np.mean(densities[ns][indLowX:indUppX,indLowY:indUppY,\
+            indLow:indUpp],axis)
+        plt.imshow(denToPlot,norm=colors.LogNorm(vmin=vmin,vmax=vmax),\
+                cmap=cmap,extent=(meanCentre[0] - Lbox/2,\
+                meanCentre[0] + Lbox/2,\
+                meanCentre[1] - Lbox/2,meanCentre[1] + Lbox/2))
+        # Alpha shape:
+        if indList[ns] > -1:
+            halo = hrList[ns][indList[ns]+1]
+            positions = tools.remapAntiHaloCentre(\
+                snapList[ns]['pos'][snapSortList[ns][halo['iord']],:],boxsize)
+            #alphaVal = alphashape.optimizealpha(\
+            #    np.array([positions[:,0],positions[:,1]]).T)
+            alphaShapeVoid = alphashape.alphashape(np.array([positions[:,0],\
+                positions[:,1]]).T,alphaVal)
+            ax = plt.gca()
+            ax.add_patch(PolygonPatch(alphaShapeVoid,fc=None,ec='b',alpha=0.5,\
+                fill = False))
+            sampleCentre = centresListShort[ns][catToPlot[nV,ns] - 1]
+            plt.scatter(sampleCentre[0],sampleCentre[1],marker='x',color='b',\
+                label='Sample Centre')
+            plt.plot(sampleCentre[0] + radiiToPlot[nV,ns]*Xcirc,\
+                sampleCentre[1] + radiiToPlot[nV,ns]*Ycirc,\
+                linestyle='--',color='b',label='Effective radius\n$' + \
+                ("%.2g" % radiiToPlot[nV,ns]) + "\\mathrm{Mpc}^{-1}$")
+        # Scatter plot of all voids in the region:
+        if showOtherCentres:
+            # Get all voids in this box:
+            centreFilter = getAllVoidsWithinBox(meanCentre,Lbox,\
+                centresListShort[ns])
+            centreNumbers = ahNumbers[ns][centreFilter]
+            # Remove the sample void so we don't double plot it:
+            centreFilter[centreFilter] = (centreNumbers != catToPlot[nV,ns] - 1)
+            # Filter based on radius:
+            radiusFilter = (radiiListShort[ns] >= \
+                np.max([rMin,minMuR*radiiToPlot[nV,ns]])) & \
+                (radiiListShort[ns] <= np.min([rMax,radiiToPlot[nV,ns]/minMuR]))
+            centreFilter = centreFilter & radiusFilter
+            centreNumbers = ahNumbers[ns][centreFilter]
+            # Now plot these:
+            plt.scatter(centresListShort[ns][centreFilter,0],\
+                centresListShort[ns][centreFilter,1],marker='x',color='k')
+            for k in range(0,len(centreNumbers)):
+                plt.annotate(str(centreNumbers[k]),\
+                    (centresListShort[ns][centreFilter,0][k],\
+                    centresListShort[ns][centreFilter,1][k]))
+        # Add in labelling:
+        plt.scatter(meanCentre[0],meanCentre[1],marker='x',color='r',\
+            label='Mean Centre')
+        plt.legend(frameon=False,loc="lower right")
+        plt.xlabel('x ($\\mathrm{Mpc}h^{-1}$)')
+        plt.ylabel('y ($\\mathrm{Mpc}h^{-1}$)')
+        plt.xlim([meanCentre[0] - Lbox/2,meanCentre[0] + Lbox/2])
+        plt.ylim([meanCentre[1] - Lbox/2,meanCentre[1] + Lbox/2])
+        plt.title(title + '\nSample ' + str(snapNumList[ns]))
+        cbar = plt.colorbar(sm, orientation="vertical")
+        plt.savefig(figuresFolder + framePrefix + "frame_" + \
+            str(ns) + frameSuffix + ".png")
+        #plt.show()
+    frames = []
+    #imgs = glob.glob(figuresFolder + "frame_*.png")
+    imgs = [figuresFolder + framePrefix + "frame_" + str(k) + frameSuffix + \
+        ".png" for k in range(0,numCats)]
+    for i in imgs:
+        new_frame = Image.open(i)
+        frames.append(new_frame)
+    # Save into a GIF file that loops forever
+    frames[0].save(figuresFolder + namePrefix + 'voids' + nameSuffix + \
+        '.gif', format='GIF',append_images=frames[1:],save_all=True,
+        duration=1000, loop=0)
+    plt.clf()
 
 
-frames = []
-#imgs = glob.glob(figuresFolder + "frame_*.png")
-imgs = [figuresFolder + "frame_" + str(k) + ".png" for k in range(0,len(snapNumList))]
-for i in imgs:
-    new_frame = Image.open(i)
-    frames.append(new_frame)
+#nVold = 113 # snr ~ 12, r = 10.2
+#nVold = 116 # snr ~ 2.9, r = 10.9
+#nVold = 0 # snr ~ 4.3, r  = 20.9
+#nVold = 4 # snr ~ 3.9, r = 17.4
+nVold= 61 # snr ~ 12.5, r = 14.1
+plotVoidAnimation(nVold,centralAntihalos,sortedList,finalCatOpt,radiiListOpt,\
+        snapNumList,centresListShort,radiiListShort,densities256,snapList,\
+        hrList,snapSortList,\
+        figuresFolder=figuresFolder,nameSuffix = "_nVold_" + str(nVold),\
+        minMuR=0.9)
 
-# Save into a GIF file that loops forever
-frames[0].save(figuresFolder + 'voids.gif', format='GIF',
-               append_images=frames[1:],
-               save_all=True,
-               duration=1000, loop=0)
-plt.clf()
+
+for nV in splitList[nVold]:
+    plotVoidAnimation(nV,centralAntihalos,sortedList,finalCat300,radiiList300,\
+        snapNumList,centresListShort,radiiListShort,densities256,snapList,\
+        hrList,snapSortList,\
+        figuresFolder=figuresFolder,nameSuffix = "_nV_" + str(nV) + \
+        "_nVold_" + str(nVold),minMuR=0.925)
+
+# Good voids sample:
+
+
+for nV in np.where(filterOptGood)[0]:
+    plotVoidAnimation(nV,centralAntihalos,sortedList,finalCatOpt,radiiListOpt,\
+        snapNumList,centresListShort,radiiListShort,densities256,snapList,\
+        hrList,snapSortList,\
+        figuresFolder=figuresFolder,nameSuffix = "_good_voids_nV_" + str(nV),\
+        minMuR=0.9,frameSuffix="",framePrefix="")
 
 
 

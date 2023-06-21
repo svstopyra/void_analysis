@@ -1990,6 +1990,16 @@ def checkIfVoidIsNeeded(nVoid,nCat,alreadyMatched,twoWayMatch,otherColumns,
             and atLeastOneNewMatch
     return needed
 
+def getUniqueEntriesInCatalogueRow(catalogueRow,alreadyMatched):
+    numCats = len(catalogueRow)
+    isNeededList = np.zeros(numCats,dtype=bool)
+    for ns in range(0,numCats):
+        if catalogueRow[ns] > -1:
+            # Missing voids automatically fail. For others, they pass
+            # only if they haven't been found:
+            isNeededList[ns] = (not alreadyMatched[ns,catalogueRow[ns]-1])
+    return isNeededList
+
 def gatherCandidatesRatiosAndDistances(numCats,nCat,nVoid,allCandidates,\
         allRatios,allDistances):
     candm = []
@@ -2275,11 +2285,17 @@ def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
                 radiusList,boxsize,sortQuantity,sortMethod,\
                 quantityThresh,distMax,mode,overlapForVoid=None,\
                 treeList = treeList,iterMax = 100)
+            # Check the new entry is still unique:
+            if success:
+                success = np.any(getUniqueEntriesInCatalogueRow(\
+                    voidMatches,alreadyMatched)) # Skip the void if it's just 
+                    # a duplicate of something that already existed, or
+                    # a subset.
         else:
             voidMatches = oneWayMatches[nVoid]
             success = True
         if not success:
-            print("WARNING: void centre refinind did not converge.")
+            print("WARNING: void centre refining did not converge.")
             # Do nothing else - don't add a failed void to the catalogue!
         else:
             # Block the voids we have identified from appearing again:
