@@ -5572,6 +5572,15 @@ filterOptGood = filterOpt & (finalCatFracOpt > thresholdsOpt) & \
 distances300 = np.sqrt(np.sum(meanCentre300**2,1))
 filter300 = (radiiMean300 > 10) & (radiiMean300 <= 25) & (distances300 < 135)
 
+# Save the high-confidence catalogue:
+tools.savePickle([meanCentreOpt,filterOptGood,radiiMeanOpt,finalCatOpt,\
+    centresListShort,radiiListShort,massListShort,sortedList],\
+    "high_confidence_voids.p")
+
+[meanCentreOpt,filterOptGood,radiiMeanOpt,finalCatOpt,\
+    centresListShort,radiiListShort,massListShort,sortedList] = \
+    tools.loadPickle("high_confidence_voids.p")
+
 
 plt.clf()
 plt.hist(numSplit[filterOpt],\
