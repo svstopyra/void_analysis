@@ -1941,7 +1941,8 @@ def getShortenedQuantity(quantity,centralAntihalos,shortenedList,sortedList,\
 
 # Get the two way matches of a void in other catalogues:
 def getTwoWayMatches(nVoid,nCat,otherColumns,numCats,\
-        oneWayMatchesAllCatalogues,oneWayMatchesOther=None):
+        oneWayMatchesAllCatalogues,alreadyMatched,oneWayMatchesOther=None,\
+        enforceExclusive=False):
     oneWayMatches = oneWayMatchesAllCatalogues[nCat]
     if oneWayMatchesOther is None:
         oneWayMatchesOther = oneWayMatches[:,otherColumns]
@@ -1955,6 +1956,9 @@ def getTwoWayMatches(nVoid,nCat,otherColumns,numCats,\
             twoWayMatch[m] = (\
                 oneWayMatchesAllCatalogues[otherColumns[m]][\
                 oneWayMatches[nVoid,otherColumns[m]] - 1,nCat] == nVoid+1)
+            if enforceExclusive:
+                twoWayMatch[m] = twoWayMatch[m] and \
+                    (not alreadyMatched[m,oneWayMatches[nVoid][m]-1])
     return twoWayMatch
 
 # Check which of a void's matches are new:
@@ -2303,7 +2307,7 @@ def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
                 oneWayMatchesAllCatalogues,allCandidates,alreadyMatched)
             # Provided we found at least two voids, then add it to the catalogue:
             if np.sum(voidMatches > 0) > 1:
-                finalCat.append(oneWayMatches[nVoid])
+                finalCat.append(voidMatches)
                 finalRatios.append(ratiosm)
                 finalDistances.append(distancesm)
                 finalCatFrac.append(float(len(np.where(voidMatches > 0)[0])\
@@ -2510,7 +2514,7 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
         rMin = 5,rMax = 30,mode="fractional",massRange = None,\
         snapSortList = None,overlapList = None,NWayMatch = False,\
         additionalFilters = None,sortBy="mass",refineCentres=False,\
-        sortQuantity = 0):
+        sortQuantity = 0,enforceExclusive=False):
     # Load snapshots:
     if snapList is None:
         snapList = constructSnapNameList(samplesFolder,snapNumList,snapname)
@@ -2622,8 +2626,9 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
         # Loop over all voids in this catalogue:
         for l in range(0,np.min([ahCounts[k],max_index])):
             twoWayMatch = getTwoWayMatches(l,k,otherColumns,numCats,\
-                oneWayMatchesAllCatalogues,\
-                oneWayMatchesOther=oneWayMatchesOther)
+                oneWayMatchesAllCatalogues,alreadyMatched,\
+                oneWayMatchesOther=oneWayMatchesOther,\
+                enforceExclusive=enforceExclusive)
             twoWayMatchLists[k].append(twoWayMatch)
             # Skip if the void has already beeen included, or just
             # doesn't have any two way matches:
