@@ -5500,6 +5500,7 @@ rSearchOpt = 0.5
 NWayMatch = False
 refineCentres = True
 sortBy = "radius"
+enforceExclusive = False
 [finalCat300,shortHaloList300,twoWayMatchList300,\
             finalCandidates300,finalRatios300,finalDistances300,\
             allCandidates300,candidateCounts300,allRatios300,\
@@ -5513,7 +5514,8 @@ sortBy = "radius"
                 rSphere=rSphere2,massRange = [mMin,mMax],\
                 NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
                 additionalFilters = snrFilter,verbose=False,\
-                refineCentres=refineCentres,sortBy=sortBy)
+                refineCentres=refineCentres,sortBy=sortBy,\
+                enforceExclusive=enforceExclusive)
 
 [finalCat300Rand,shortHaloList300Rand,twoWayMatchList300Rand,\
             finalCandidates300Rand,finalRatios300Rand,finalDistances300Rand,\
@@ -5529,7 +5531,8 @@ sortBy = "radius"
                 rSphere=rSphere2,massRange = [mMin,mMax],\
                 NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
                 additionalFilters = None,verbose=False,\
-                refineCentres=refineCentres,sortBy=sortBy)
+                refineCentres=refineCentres,sortBy=sortBy,\
+                enforceExclusive=enforceExclusive)
 
 [centresListShort,centralAntihalos,sortedList,ahCounts,max_index] = \
         computeShortCentresList(snapNumList,antihaloCentres,\
@@ -5839,8 +5842,19 @@ splitListGood = getSplitList(finalCatOpt[filterOptGood],finalCat300)
 splitListGoodFiltered = getSplitList(finalCatOpt[filterOptGood],\
     finalCat300[filter300])
 
+# Test post-processing:
+keepVoid = removeOverlappingVoids(finalCat300,radiiMean300,meanCentre300,\
+    0.75,0.5,boxsize)
+splitListGoodPostProcessed = getSplitList(finalCatOpt[filterOptGood],\
+    finalCat300[keepVoid])
+splitListGoodPostProcessedAndFiltered = getSplitList(\
+    finalCatOpt[filterOptGood],finalCat300[keepVoid & filter300])
+
 slCountGood = np.array([len(x) for x in splitListGood])
 slCountGoodFilt = np.array([len(x) for x in splitListGoodFiltered])
+slCountPP = np.array([len(x) for x in splitListGoodPostProcessed])
+slCountPPandF = np.array([len(x) \
+    for x in splitListGoodPostProcessedAndFiltered])
 
 # Histogram of distances:
 plt.clf()

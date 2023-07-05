@@ -2223,11 +2223,43 @@ def getMeanRadiusFromVoidMatches(voidMatches,numCats,radiusList):
     meanRadius = np.mean(radiusArray)
     return meanRadius
 
+# Go through a void list and remove anything that has previously been included
+# as part of a different void:
+def removeAlreadyIncludedVoids(voidMatches,alreadyMatched):
+    voidMatchesFiltered = np.array(voidMatches)
+    numCats = len(voidMatches)
+    for m in range(0,numCats):
+        if alreadyMatched[m,voidMatches[m]-1]:
+            voidMatchesFiltered[m] = -1
+    return voidMatchesFiltered
+
+# Remove overlapping voids:
+def removeOverlappingVoids(catalogue,radii,centres,muRad,muSearch,boxsize,\
+        criteria='both'):
+    tree = scipy.spatial.cKDTree(snapedit.wrap(centres,boxsize),\
+        boxsize=boxsize)
+    neighbours = tree.query_ball_point(snapedit.wrap(centres,boxsize),\
+        radii/muRad,workers=-1)
+    keepVoid = np.ones(len(neighbours),dtype=bool)
+    for k in range(0,len(neighbours)):
+        others = np.setdiff1d(neighbours[k],[k])
+        otherDistances = np.sqrt(np.sum((centres[others] - centres[k])**2,1))
+        distRatios = otherDistances/np.sqrt(radii[k]*radii[others])
+        others = others[distRatios < muSearch]
+        # Now get the voids for which are too close in radii:
+        radiusRatio = radii[others]/radii[k]
+        keepVoid[others[(radiusRatio >= muRad) & (radiusRatio <= 1.0)]] = False
+        if np.any((radiusRatio <= 1.0/muRad) & (radiusRatio > 1.0)):
+            keepVoid[k] = False
+    return keepVoid
+
 # Code to iterate on the centres of a given void, so that we are less
 # dependent on matching to a particular void:
 def refineVoidCentres(voidMatches,ratiosm,distancesm,numCats,centresList,\
         radiusList,boxsize,sortQuantity,sortMethod,quantityThresh,\
-        distMax,mode,overlapForVoid=None,treeList = None,iterMax = 100):
+        alreadyMatched,distMax,mode,\
+        overlapForVoid=None,treeList = None,iterMax = 100,\
+        enforceExclusive = False):
     voidMatchesLast = np.array([-1 for k in range(0,numCats)])
     voidMatchesNew = voidMatches
     iterations = 0
@@ -2244,6 +2276,11 @@ def refineVoidCentres(voidMatches,ratiosm,distancesm,numCats,centresList,\
             meanCentres,meanRadius,centresList,radiusList,boxsize,\
             sortQuantity,sortMethod,quantityThresh,distMax,mode,\
             overlapForVoid=overlapForVoid,treeList=treeList)
+        if enforceExclusive:
+            # Filter any already included voids so that they can't appear
+            # in multiple voids:
+            voidMatchesNew = removeAlreadyIncludedVoids(voidMatchesNew,\
+                alreadyMatched)
         # Check that we didn't run completely out of voids, as this will
         # make our centre meaningless.
         if np.all(voidMatchesNew < 0):
@@ -2262,7 +2299,7 @@ def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
         finalCat,finalRatios,finalDistances,finalCombinatoricFrac,\
         finalCatFrac,refineCentres,centresList,radiusList,\
         boxsize,sortQuantity,sortMethod,quantityThresh,distMax,\
-        mode,treeList=None):
+        mode,treeList=None,enforceExclusive=False):
     oneWayMatches = oneWayMatchesAllCatalogues[nCat]
     # Mark companions of this void as already found, to avoid duplication.
     # Additionally, store the candidates (candm), radius ratios (ratiosm) and 
@@ -2287,8 +2324,9 @@ def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
             [voidMatches,ratiosm,distancesm,success] = refineVoidCentres(\
                 oneWayMatches[nVoid],ratiosm,distancesm,numCats,centresList,\
                 radiusList,boxsize,sortQuantity,sortMethod,\
-                quantityThresh,distMax,mode,overlapForVoid=None,\
-                treeList = treeList,iterMax = 100)
+                quantityThresh,alreadyMatched,distMax,mode,overlapForVoid=None,\
+                treeList = treeList,iterMax = 100,\
+                enforceExclusive=enforceExclusive)
             # Check the new entry is still unique:
             if success:
                 success = np.any(getUniqueEntriesInCatalogueRow(\
@@ -2645,7 +2683,7 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
                 finalCat,finalRatios,finalDistances,finalCombinatoricFrac,\
                 finalCatFrac,refineCentres,centresListShort,quantityListRad,\
                 boxsize,sortQuantity,sortMethod,crossMatchThreshold,distMax,\
-                mode,treeList = treeList)
+                mode,treeList = treeList,enforceExclusive=enforceExclusive)
     return [np.array(finalCat),shortHaloList,twoWayMatchLists,\
         finalCandidates,finalRatios,finalDistances,allCandidates,\
         candidateCounts,allRatios,np.array(finalCombinatoricFrac),\
