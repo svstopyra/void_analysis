@@ -5500,11 +5500,12 @@ rSearchOpt = 0.5
 NWayMatch = False
 refineCentres = True
 sortBy = "radius"
-enforceExclusive = False
+enforceExclusive = True
 [finalCat300,shortHaloList300,twoWayMatchList300,\
             finalCandidates300,finalRatios300,finalDistances300,\
             allCandidates300,candidateCounts300,allRatios300,\
-            finalCombinatoricFrac300,finalCatFrac300,alreadyMatched300] = \
+            finalCombinatoricFrac300,finalCatFrac300,alreadyMatched300,\
+            iteratedCentresList,iteratedRadiiList] = \
             constructAntihaloCatalogue(\
                 snapNumList,snapList=snapList,\
                 snapListRev=snapListRev,\
@@ -5521,7 +5522,7 @@ enforceExclusive = False
             finalCandidates300Rand,finalRatios300Rand,finalDistances300Rand,\
             allCandidates300Rand,candidateCounts300Rand,allRatios300Rand,\
             finalCombinatoricFrac300Rand,finalCatFrac300Rand,
-            alreadyMatched300Rand] = \
+            alreadyMatched300Rand,_,_] = \
             constructAntihaloCatalogue(\
                 snapNumListUncon,snapList=snapListUn,\
                 snapListRev=snapListRevUn,\
@@ -5570,7 +5571,8 @@ diffMap = [np.setdiff1d(np.arange(0,len(snapNumList)),[k]) \
 
 [finalCatOpt,shortHaloListOpt,twoWayMatchListOpt,finalCandidatesOpt,\
     finalRatiosOpt,finalDistancesOpt,allCandidatesOpt,candidateCountsOpt,\
-    allRatiosOpt,finalCombinatoricFracOpt,finalCatFracOpt,alreadyMatched] = \
+    allRatiosOpt,finalCombinatoricFracOpt,finalCatFracOpt,alreadyMatched,\
+    _,_] = \
     constructAntihaloCatalogue(snapNumList,snapList=snapList,\
     snapListRev=snapListRev,ahProps=ahProps,hrList=hrList,max_index=None,\
     twoWayOnly=True,blockDuplicates=True,\
@@ -5582,7 +5584,8 @@ diffMap = [np.setdiff1d(np.arange(0,len(snapNumList)),[k]) \
 [finalCatOptRand,shortHaloListOptRand,twoWayMatchListOptRand,\
     finalCandidatesOptRand,finalRatiosOptRand,finalDistancesOptRand,\
     allCandidatesOptRand,candidateCountsOptRand,allRatiosOptRand,\
-    finalCombinatoricFracOptRand,finalCatFracOptRand,alreadyMatchedRand] = \
+    finalCombinatoricFracOptRand,finalCatFracOptRand,alreadyMatchedRand,\
+    _,_] = \
     constructAntihaloCatalogue(snapNumList,snapList=snapListUn,\
     snapListRev=snapListRevUn,ahProps=ahPropsUn,hrList=hrListUn,max_index=None,\
     twoWayOnly=True,blockDuplicates=True,\
@@ -5656,6 +5659,7 @@ meanCentreOpt = np.nanmean(finalCentresOptList,0)
 stdCentreOpt = np.nanstd(finalCentresOptList,0)
 dispCentreOpt = finalCentresOptList - meanCentreOpt
 distCentreOpt = np.sqrt(np.sum(dispCentreOpt**2,2))
+
 #catFractionsOpt = np.array([len(np.where(x > 0)[0])/len(snapNumList) \
 #    for x in finalCatOpt])
 catFractionsOpt = finalCatFracOpt
@@ -5673,6 +5677,10 @@ radiiListOpt = getRadiiFromCat(finalCatOpt,radiiListShort)
 massListOpt = getRadiiFromCat(finalCatOpt,massListShort)
 [radiiMeanOpt, radiiSigmaOpt]  = getMeanProperty(radiiListOpt)
 [massMeanOpt, massSigmaOpt]  = getMeanProperty(massListOpt)
+
+fractionalDistCentre = distCentreOpt/radiiMeanOpt
+meanFractionalDist = np.nanmean(fractionalDistCentre,0)
+
 
 
 
@@ -5722,7 +5730,7 @@ tools.savePickle([meanCentreOpt[filterOptGood],filterOptGood,\
     centresListShort,radiiListShort,massListShort,sortedList],\
     "high_confidence_voids.p")
 
-[meanCentreOptHC,filterOptGood,radiiMeanOptHC,finalCatOptHC,\
+[meanCentreOptHC,filterOptGoodHC,radiiMeanOptHC,finalCatOptHC,\
     centresListShort,radiiListShort,massListShort,sortedList] = \
     tools.loadPickle("high_confidence_voids.p")
 
@@ -6081,6 +6089,118 @@ def plotVoidAnimation(nV,centralAntihalos,sortedList,catToPlot,radiiToPlot,\
         duration=1000, loop=0)
     plt.clf()
 
+
+def plotShowVoidConvergence(iteratedCentres,iteratedRadii,density,\
+        boxsize,Lbox = 100,axis=2,thickness=None,vmin=1/1000,\
+        vmax=1000,cmap='PuOr_r',figuresFolder='./',\
+        filename = 'iterations.gif',colorList = ['b','g','r','c','m','y','k']):
+    if type(iteratedCentres) == np.ndarray:
+        numVoids = 1
+        numIterations = np.array([len(iteratedCentres)],dtype=int)
+        meanCentre = iteratedCentres[-1]
+    elif type(iteratedCentres) == list:
+        numVoids = len(iteratedCentres)
+        numIterations = np.array([len(x) for x in iteratedCentres],dtype=int)
+        meanCentre = np.mean(np.array([centre[-1] \
+            for centre in iteratedCentres]),0)
+    else:
+        raise Exception('Variable iteratedCentres has invalid format.')
+    if thickness is None:
+        thickness = Lbox
+    zSlice = meanCentre[axis]
+    indLow = int((zSlice + boxsize/2)*N/boxsize)\
+         - int((thickness/2)*N/(boxsize))
+    indUpp = int((zSlice + boxsize/2)*N/boxsize)\
+         + int((thickness/2)*N/(boxsize))
+    indLowX = int((meanCentre[0] + boxsize/2)*N/boxsize)\
+         - int((thickness/2)*N/(boxsize))
+    indUppX = int((meanCentre[0] + boxsize/2)*N/boxsize)\
+         + int((thickness/2)*N/(boxsize))
+    indLowY = int((meanCentre[1] + boxsize/2)*N/boxsize)\
+         - int((thickness/2)*N/(boxsize))
+    indUppY = int((meanCentre[1] + boxsize/2)*N/boxsize)\
+         + int((thickness/2)*N/(boxsize))
+    denToPlot = np.mean(density[indLowX:indUppX,indLowY:indUppY,\
+            indLow:indUpp],axis)
+    sm = cm.ScalarMappable(colors.LogNorm(vmin=vmin,vmax=vmax),\
+            cmap=cmap)
+    phi = np.linspace(0,2*np.pi,1000)
+    Xcirc = np.cos(phi)
+    Ycirc = np.sin(phi)
+    plt.clf()
+    numFrames = np.max(numIterations)
+    for k in range(0,numFrames):
+        plt.clf()
+        plt.imshow(denToPlot,norm=colors.LogNorm(vmin=vmin,vmax=vmax),\
+                cmap=cmap,extent=(meanCentre[0] - Lbox/2,\
+                meanCentre[0] + Lbox/2,\
+                meanCentre[1] - Lbox/2,meanCentre[1] + Lbox/2))
+        for l in range(0,numVoids):
+            if numVoids == 1:
+                centre = iteratedCentres[l][k]
+                radius = iteratedRadii[l][k]
+            else:
+                if k >= numIterations[l]:
+                    # Pause if we run out of iterations before the end:
+                    centre = iteratedCentres[l][numIterations[l]-1]
+                    radius = iteratedRadii[l][numIterations[l]-1]
+                else:
+                    centre = iteratedCentres[l][k]
+                    radius = iteratedRadii[l][k]
+            plt.scatter(centre[0],centre[1],marker='x',\
+                color=colorList[np.mod(l,len(colorList))],label='centre')
+            plt.plot(centre[0] + radius*Xcirc,centre[1] + radius*Ycirc,\
+                linestyle='--',color=colorList[np.mod(l,len(colorList))],\
+                label='Void ' + str(l+1) + ' radius\n$' + \
+                ("%.2g" % radius) + "\\mathrm{Mpc}^{-1}$")
+        plt.legend(frameon=False,loc="lower right")
+        plt.xlabel('x ($\\mathrm{Mpc}h^{-1}$)')
+        plt.ylabel('y ($\\mathrm{Mpc}h^{-1}$)')
+        plt.xlim([meanCentre[0] - Lbox/2,meanCentre[0] + Lbox/2])
+        plt.ylim([meanCentre[1] - Lbox/2,meanCentre[1] + Lbox/2])
+        plt.title('Iteration ' + str(k+1))
+        cbar = plt.colorbar(sm, orientation="vertical")
+        plt.savefig(figuresFolder + "iteration_frame_" + str(k) + ".png")
+    frames = []
+    #imgs = glob.glob(figuresFolder + "frame_*.png")
+    imgs = [figuresFolder + "iteration_frame_" + str(k) + \
+        ".png" for k in range(0,numFrames)]
+    for i in imgs:
+        new_frame = Image.open(i)
+        frames.append(new_frame)
+    # Save into a GIF file that loops forever
+    frames[0].save(figuresFolder + filename,\
+        format='GIF',append_images=frames[1:],save_all=True,
+        duration=1000, loop=0)
+    plt.clf()
+
+plotShowVoidConvergence(iteratedCentresList[1],iteratedRadiiList[1],\
+    densities256[0],boxsize,figuresFolder=figuresFolder)
+
+
+# Iterate over the good voids:
+
+iteratedCentres = [iteratedCentresList[filter300ind[x]] \
+    for x in splitListGoodFiltered[5]]
+iteratedRadii = [iteratedRadiiList[filter300ind[x]] \
+    for x in splitListGoodFiltered[5]]
+
+
+
+plotShowVoidConvergence(iteratedCentres,iteratedRadii,\
+    densities256[0],boxsize,figuresFolder=figuresFolder)
+
+# Loop over all the good voids:
+filter300ind = np.where(filter300)[0]
+for k in range(0,len(splitListGoodFiltered)):
+    iteratedCentres = [iteratedCentresList[filter300ind[x]] \
+        for x in splitListGoodFiltered[k]]
+    iteratedRadii = [iteratedRadiiList[filter300ind[x]] \
+        for x in splitListGoodFiltered[k]]
+    if len(iteratedCentres) > 0:
+        plotShowVoidConvergence(iteratedCentres,iteratedRadii,\
+            densities256[0],boxsize,figuresFolder=figuresFolder,\
+            filename = "curated_iterations_" + str(k) + ".gif")
 
 #nVold = 113 # snr ~ 12, r = 10.2
 #nVold = 116 # snr ~ 2.9, r = 10.9

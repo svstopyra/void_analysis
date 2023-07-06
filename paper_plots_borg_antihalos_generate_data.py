@@ -2264,6 +2264,9 @@ def refineVoidCentres(voidMatches,ratiosm,distancesm,numCats,centresList,\
     voidMatchesNew = voidMatches
     iterations = 0
     success = True
+    # For convergence diagnostics:
+    allCentres = []
+    allRadii = []
     while not np.all(voidMatchesLast == voidMatchesNew):
         voidMatchesLast = voidMatchesNew
         # First, compute the mean centre of the voids in this set:
@@ -2271,6 +2274,8 @@ def refineVoidCentres(voidMatches,ratiosm,distancesm,numCats,centresList,\
             voidMatchesNew,numCats,centresList)
         meanRadius = getMeanRadiusFromVoidMatches(\
             voidMatchesNew,numCats,radiusList)
+        allCentres.append(meanCentres)
+        allRadii.append(meanRadius)
         # Get all the voids within the thresholds from this centre:
         voidMatchesNew = getCandidatesForVoidInAllCatalogues(
             meanCentres,meanRadius,centresList,radiusList,boxsize,\
@@ -2289,7 +2294,7 @@ def refineVoidCentres(voidMatches,ratiosm,distancesm,numCats,centresList,\
         if iterations > iterMax:
             success = False
             break
-    return [voidMatchesNew,ratiosm,distancesm,success]
+    return [voidMatchesNew,ratiosm,distancesm,success,allCentres,allRadii]
 
 # Add an entry to the catalogue:
 def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
@@ -2299,7 +2304,8 @@ def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
         finalCat,finalRatios,finalDistances,finalCombinatoricFrac,\
         finalCatFrac,refineCentres,centresList,radiusList,\
         boxsize,sortQuantity,sortMethod,quantityThresh,distMax,\
-        mode,treeList=None,enforceExclusive=False):
+        mode,iteratedCentresList,iteratedRadiiList,\
+        treeList=None,enforceExclusive=False):
     oneWayMatches = oneWayMatchesAllCatalogues[nCat]
     # Mark companions of this void as already found, to avoid duplication.
     # Additionally, store the candidates (candm), radius ratios (ratiosm) and 
@@ -2309,30 +2315,34 @@ def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
     finalCandidates.append(candm)
     if NWayMatch:
         # Get the best candidates using the N-way matching code:
-        [bestCandidates,bestRatios,bestDistances,numberOfLinks] = \
+        [voidMatches,bestRatios,bestDistances,numberOfLinks] = \
             applyNWayMatching(nVoid,nCat,numCats,oneWayMatches,alreadyMatched,\
                 diffMap,allCandidates,allRatios,allDistances)
-        finalCat.append(bestCandidates)
+        finalCat.append(voidMatches)
         finalRatios.append(bestRatios)
         finalDistances.append(bestDistances)
         finalCombinatoricFrac.append(float(numberOfLinks/\
             (numCats*(numCats-1))))
         finalCatFrac.append(float(\
-            np.sum(bestCandidates > 0)/numCats))
+            np.sum(voidMatches > 0)/numCats))
     else:
         if refineCentres:
-            [voidMatches,ratiosm,distancesm,success] = refineVoidCentres(\
-                oneWayMatches[nVoid],ratiosm,distancesm,numCats,centresList,\
-                radiusList,boxsize,sortQuantity,sortMethod,\
-                quantityThresh,alreadyMatched,distMax,mode,overlapForVoid=None,\
-                treeList = treeList,iterMax = 100,\
-                enforceExclusive=enforceExclusive)
+            [voidMatches,ratiosm,distancesm,success,allCentres,allRadii] = \
+                refineVoidCentres(\
+                    oneWayMatches[nVoid],ratiosm,distancesm,numCats,\
+                    centresList,radiusList,boxsize,sortQuantity,sortMethod,\
+                    quantityThresh,alreadyMatched,distMax,mode,\
+                    overlapForVoid=None,treeList = treeList,iterMax = 100,\
+                    enforceExclusive=enforceExclusive)
             # Check the new entry is still unique:
             if success:
                 success = np.any(getUniqueEntriesInCatalogueRow(\
                     voidMatches,alreadyMatched)) # Skip the void if it's just 
                     # a duplicate of something that already existed, or
                     # a subset.
+            if success and (np.sum(voidMatches > 0) > 1):
+                iteratedCentresList.append(np.array(allCentres))
+                iteratedRadiiList.append(np.array(allRadii))
         else:
             voidMatches = oneWayMatches[nVoid]
             success = True
@@ -2355,6 +2365,7 @@ def matchVoidToOtherCatalogues(nVoid,nCat,numCats,otherColumns,\
                     diffMap,allCandidates,voidMatches)
                 finalCombinatoricFrac.append(twoWayMatchCounts/\
                     (numCats*(numCats-1)))
+    return voidMatches
 
 # Load simulations and catalogue data so that we can combine them. If these
 # are already loaded, this function won't reload them.
@@ -2644,6 +2655,8 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
         # catalogue
     candidateCounts = [np.zeros((numCats,ahCounts[l]),dtype=int) \
         for l in range(0,numCats)] # Number of candidates
+    iteratedCentresList = []
+    iteratedRadiiList = []
         # that each void could match to.
     # To avoid adding duplicates, we need to remember which voids we have
     # already added to the catalogue somehow. This is achieved using a 
@@ -2676,18 +2689,20 @@ def constructAntihaloCatalogue(snapNumList,samplesFolder="new_chain/",\
                     otherColumns,candidateCounts,oneWayMatches,\
                     twoWayOnly=twoWayOnly,blockDuplicates=blockDuplicates):
                 continue
-            matchVoidToOtherCatalogues(l,k,numCats,otherColumns,\
+            voidMatches = matchVoidToOtherCatalogues(l,k,numCats,otherColumns,\
                 oneWayMatchesOther,oneWayMatchesAllCatalogues,twoWayMatch,\
                 allCandidates,alreadyMatched,candidateCounts,NWayMatch,\
                 allRatios,allDistances,diffMap,finalCandidates,\
                 finalCat,finalRatios,finalDistances,finalCombinatoricFrac,\
                 finalCatFrac,refineCentres,centresListShort,quantityListRad,\
                 boxsize,sortQuantity,sortMethod,crossMatchThreshold,distMax,\
-                mode,treeList = treeList,enforceExclusive=enforceExclusive)
+                mode,iteratedCentresList,iteratedRadiiList,\
+                treeList = treeList,enforceExclusive=enforceExclusive)
     return [np.array(finalCat),shortHaloList,twoWayMatchLists,\
         finalCandidates,finalRatios,finalDistances,allCandidates,\
         candidateCounts,allRatios,np.array(finalCombinatoricFrac),\
-        np.array(finalCatFrac),alreadyMatched]
+        np.array(finalCatFrac),alreadyMatched,iteratedCentresList,\
+        iteratedRadiiList]
 
 
 # Do we even use this function any more?
