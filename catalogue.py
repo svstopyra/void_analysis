@@ -820,6 +820,10 @@ class combinedCatalogue:
         duplicates = np.any((np.array(self.finalCat) == voidMatches) & \
             (voidMatches > 0),1)
         return duplicates
+    def blockAllVoidsFromInclusion(self,voidMatches):
+        for ns, nv in zip(range(0,self.numCats),voidMatches):
+            if nv > 0:
+                self.alreadyMatched[ns,nv-1] = True
     # Add an entry to the catalogue:
     def matchVoidToOtherCatalogues(self,nVoid,nCat,twoWayMatch):
         otherColumns = self.diffMap[nCat]
@@ -867,6 +871,8 @@ class combinedCatalogue:
                 if success and (np.sum(voidMatches > 0) > 1):
                     self.iteratedCentresList.append(np.array(allCentres))
                     self.iteratedRadiiList.append(np.array(allRadii))
+                    # Important to prevent these voids being included again:
+                    self.blockAllVoidsFromInclusion(voidMatches)
             else:
                 voidMatches = oneWayMatches[nVoid]
                 success = True
@@ -875,7 +881,11 @@ class combinedCatalogue:
                 # Do nothing else - don't add a failed void to the catalogue!
             else:
                 # Block the voids we have identified from appearing again:
-                self.markCompanionsAsFound(nVoid,nCat,voidMatches)
+                if not self.refineCentres:
+                    # Default method of blocking future inclusion. 
+                    # refineCentres methods uses it's own approach, so
+                    # no need to do this.
+                    self.markCompanionsAsFound(nVoid,nCat,voidMatches)
                 # Provided we found at least two voids, then add it to the 
                 # catalogue
                 # Compute the combinatoric fraction:
