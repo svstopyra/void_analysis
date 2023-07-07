@@ -5523,7 +5523,7 @@ snapNameList = [samplesFolder + "sample" + str(k) + "/" + snapnameNew \
     for k in snapNumList]
 snapNameListRev = [samplesFolder + "sample" + str(k) + "/" + snapnameNewRev \
     for k in snapNumList]
-cat300Test = catalogue.combinedCatalogue(snapNameList,snapNameListRev,\
+cat300 = catalogue.combinedCatalogue(snapNameList,snapNameListRev,\
     muOpt,rSearchOpt,rSphere2,\
     ahProps=ahProps,hrList=hrList,max_index=None,\
     twoWayOnly=True,blockDuplicates=True,\
@@ -5532,7 +5532,7 @@ cat300Test = catalogue.combinedCatalogue(snapNameList,snapNameListRev,\
     additionalFilters = snrFilter,verbose=False,\
     refineCentres=refineCentres,sortBy=sortBy,\
     enforceExclusive=enforceExclusive)
-finalCat300Test = cat300Test.constructAntihaloCatalogue()
+finalCat300 = cat300.constructAntihaloCatalogue()
 
 [finalCat300Rand,shortHaloList300Rand,twoWayMatchList300Rand,\
             finalCandidates300Rand,finalRatios300Rand,finalDistances300Rand,\
@@ -5556,6 +5556,20 @@ finalCat300Test = cat300Test.constructAntihaloCatalogue()
             antihaloRadii,antihaloMasses,rSphere2,rMin,rMax,\
             massRange=massRange,additionalFilters=snrFilter,\
             sortBy = sortBy,max_index=None)
+
+snapNameListRand = [snap.filename for snap in snapListUn]
+snapNameListRandRev = [snap.filename for snap in snapListRevUn]
+
+cat300Rand = catalogue.combinedCatalogue(snapNameListRand,snapNameListRandRev,\
+    muOpt,rSearchOpt,rSphere2,\
+    ahProps=ahProps,hrList=hrList,max_index=None,\
+    twoWayOnly=True,blockDuplicates=True,\
+    massRange = [mMin,mMax],\
+    NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
+    additionalFilters = snrFilter,verbose=False,\
+    refineCentres=refineCentres,sortBy=sortBy,\
+    enforceExclusive=enforceExclusive)
+finalCat300Rand = cat300Rand.constructAntihaloCatalogue()
 
 ahNumbers = [np.array(centralAntihalos[l][0],dtype=int)[sortedList[l]] \
     for l in range(0,len(snapNumList))]

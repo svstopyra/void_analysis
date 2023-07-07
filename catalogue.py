@@ -140,7 +140,11 @@ class combinedCatalogue:
                 if not self.checkIfVoidIsNeeded(l,k,twoWayMatch,oneWayMatches):
                     continue
                 voidMatches = self.matchVoidToOtherCatalogues(l,k,twoWayMatch)
-        return np.array(self.finalCat)
+        # Convert to arrays:
+        self.finalCat = np.array(self.finalCat)
+        self.finalCombinatoricFrac = np.array(self.finalCombinatoricFrac)
+        self.finalCatFrac = np.array(self.finalCatFrac)
+        return finalCat
     def getMatchPynbody(self,n1,n2,fractionType='normal'):
         snap1 = self.snapListRev[n1]
         snap2 = self.snapListRev[n2]
