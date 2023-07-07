@@ -1,6 +1,6 @@
 #-------------------------------------------------------------------------------
 # CONFIGURATION
-from void_analysis import plot, tools, snapedit
+from void_analysis import plot, tools, snapedit, catalogue
 from void_analysis.paper_plots_borg_antihalos_generate_data import *
 from void_analysis.real_clusters import getClusterSkyPositions
 from void_analysis import massconstraintsplot
@@ -865,7 +865,8 @@ def imshowComparison(leftGrid,rightGrid,top=0.851,bottom=0.167,left=0.088,\
 #threshList =np.arange(0.0,1,0.10)
 #distArr = np.arange(0.0,1.3,0.1) # Catgrid 2
 distArr = np.linspace(0.0,0.75,16) # Catgrid 3
-threshList = np.linspace(0.75,1.0,11) # Catgrid 3
+#threshList = np.linspace(0.75,1.0,11) # Catgrid 3
+threshList = np.linspace(0.5,1.0,21) # Catgrid 3
 #threshList =np.arange(0.5,1.01,0.05) # Catgrid 2
 #distArr = np.arange(0.5,1.6,0.1) # On the 11 x 6 grid
 #threshList =np.arange(0.5,1.01,0.15) # On the 11 x 6 grid
@@ -954,6 +955,12 @@ snapListRevUn = [pynbody.load(\
     "new_chain/unconstrained_samples/sample" + \
     str(num) + "/gadget_full_reverse_512/snapshot_001") \
     for num in snapNumListUncon]
+
+snapNameList = [snap.filename for snap in snapList]
+snapNameListRev = [snap.filename for snap in snapListRev]
+snapNameListUn = [snap.filename for snap in snapListUn]
+snapNameListUnRev = [snap.filename for snap in snapListRevUn]
+
 hrListUn = [snap.halos() for snap in snapListRevUn]
 ahPropsUn = [pickle.load(\
             open(snap.filename + ".AHproperties.p","rb")) \
@@ -971,9 +978,6 @@ ahPropsComb = ahProps + ahPropsUn
 antihaloRadiiComb = antihaloRadii + antihaloRadiiUn
 antihaloMassesComb = antihaloMasses + antihaloMassesUn
 antihaloCentresComb = antihaloCentres + antihaloCentresUn
-
-
-
 
 # A few things needed for computing catalogue fractions:
 # For MCMC samples:
@@ -1049,10 +1053,12 @@ diffMapComb = [np.setdiff1d(np.arange(0,len(snapListCombined)),[k]) \
 diffMapMCMCToRandom = [np.setdiff1d(\
     np.arange(len(snapList),len(snapListCombined)),[k]) \
     for k in range(0,len(snapList))]
-rebuildCatalogues  = False
+rebuildCatalogues  = True
 doCrossCatalogues = False
 refineCentres = True
 sortBy = 'radius'
+enforceExclusive = True
+NWayMatch = False
 # Compute the catalogue with these settings:
 for k in range(0,len(distArr)):
     for l in range(0,len(threshList)):
@@ -1078,40 +1084,114 @@ for k in range(0,len(distArr)):
                     additionalFilters = None,verbose=False,\
                     _recomputeData=rebuildCatalogues,\
                     refineCentres = refineCentres,sortBy = sortBy)
-        [finalCatMCMC,shortHaloListMCMC,twoWayMatchListMCMC,\
+        #[finalCatMCMC,shortHaloListMCMC,twoWayMatchListMCMC,\
+        #    finalCandidatesMCMC,finalRatiosMCMC,finalDistancesMCMC,\
+        #    allCandidatesMCMC,candidateCountsMCMC,allRatiosMCMC,\
+        #    finalCombinatoricFracMCMC,finalCatFracMCMC,alreadyMatchedMCMC] = \
+        #    tools.loadOrRecompute(data_folder + "catalogue_grid/" + \
+        #        "mcmc_catalogue_" + str(k) + "_" + str(l) + ".p",\
+        #        constructAntihaloCatalogue,\
+        #        snapNumList,snapList=snapList,\
+        #        snapListRev=snapListRev,\
+        #        ahProps=ahProps,hrList=hrList,max_index=None,\
+        #        twoWayOnly=True,blockDuplicates=True,\
+        #        crossMatchThreshold = muR,distMax = rSearch,\
+        #        rSphere=rSphere1,massRange = [mLower1,mUpper1],\
+        #        NWayMatch = False,rMin=rMin,rMax=rMax,\
+        #        additionalFilters = snrFilter,verbose=False,\
+        #        _recomputeData=rebuildCatalogues,\
+        #        refineCentres = refineCentres,sortBy = sortBy)
+        #[finalCatRand,shortHaloListRand,twoWayMatchListRand,\
+        #    finalCandidatesRand,finalRatiosRand,finalDistancesRand,\
+        #    allCandidatesRand,candidateCountsRand,allRatiosRand,\
+        #    finalCombinatoricFracRand,finalCatFracRand,alreadyMatchedRand] = \
+        #    tools.loadOrRecompute(data_folder + "catalogue_grid/" + \
+        #        "random_catalogue_" + str(k) + "_" + str(l) + ".p",\
+        #        constructAntihaloCatalogue,\
+        #        snapNumListUncon,snapList=snapListUn,\
+        #        snapListRev=snapListRevUn,\
+        #        ahProps=ahPropsUn,hrList=hrListUn,max_index=None,\
+        #        twoWayOnly=True,blockDuplicates=True,\
+        #        crossMatchThreshold = muR,distMax = rSearch,\
+        #        rSphere=rSphere1,massRange = [mLower1,mUpper1],\
+        #        NWayMatch = False,rMin=rMin,rMax=rMax,\
+        #        additionalFilters = None,verbose=False,\
+        #        _recomputeData=rebuildCatalogues,\
+        #        refineCentres = refineCentres,sortBy = sortBy)
+        fileMCMC = data_folder + "catalogue_grid/" + \
+                "mcmc_catalogue_" + str(k) + "_" + str(l) + ".p"
+        fileRand = data_folder + "catalogue_grid/" + \
+                "random_catalogue_" + str(k) + "_" + str(l) + ".p"
+        # MCMC catalogues:
+        if os.path.isfile(fileMCMC) and (not rebuildCatalogues):
+            [finalCatMCMC,\
             finalCandidatesMCMC,finalRatiosMCMC,finalDistancesMCMC,\
             allCandidatesMCMC,candidateCountsMCMC,allRatiosMCMC,\
             finalCombinatoricFracMCMC,finalCatFracMCMC,alreadyMatchedMCMC] = \
-            tools.loadOrRecompute(data_folder + "catalogue_grid/" + \
-                "mcmc_catalogue_" + str(k) + "_" + str(l) + ".p",\
-                constructAntihaloCatalogue,\
-                snapNumList,snapList=snapList,\
-                snapListRev=snapListRev,\
+            tools.loadPickle(fileMCMC)
+        else:
+            catMCMC = catalogue.combinedCatalogue(\
+                snapNameList,snapNameListRev,muR,rSearch,rSphere1,\
                 ahProps=ahProps,hrList=hrList,max_index=None,\
                 twoWayOnly=True,blockDuplicates=True,\
-                crossMatchThreshold = muR,distMax = rSearch,\
-                rSphere=rSphere1,massRange = [mLower1,mUpper1],\
-                NWayMatch = False,rMin=rMin,rMax=rMax,\
+                massRange = [mLower1,mUpper1],\
+                NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
                 additionalFilters = snrFilter,verbose=False,\
-                _recomputeData=rebuildCatalogues,\
-                refineCentres = refineCentres,sortBy = sortBy)
-        [finalCatRand,shortHaloListRand,twoWayMatchListRand,\
+                refineCentres=refineCentres,sortBy=sortBy,\
+                enforceExclusive=enforceExclusive)
+            finalCatMCMC = catMCMC.constructAntihaloCatalogue()
+            [finalCatMCMC,\
+            finalCandidatesMCMC,finalRatiosMCMC,finalDistancesMCMC,\
+            allCandidatesMCMC,candidateCountsMCMC,allRatiosMCMC,\
+            finalCombinatoricFracMCMC,finalCatFracMCMC,alreadyMatchedMCMC] = \
+                [catMCMC.finalCat,\
+                catMCMC.finalCandidates,\
+                catMCMC.finalRatios,catMCMC.finalDistances,\
+                catMCMC.allCandidates,catMCMC.candidateCounts,\
+                catMCMC.allRatios,catMCMC.finalCombinatoricFrac,\
+                catMCMC.finalCatFrac,catMCMC.alreadyMatched]
+            if rebuildCatalogues:
+                tools.savePickle([catMCMC.finalCat,\
+                    catMCMC.finalCandidates,\
+                    catMCMC.finalRatios,catMCMC.finalDistances,\
+                    catMCMC.allCandidates,catMCMC.candidateCounts,\
+                    catMCMC.allRatios,catMCMC.finalCombinatoricFrac,\
+                    catMCMC.finalCatFrac,catMCMC.alreadyMatched],fileMCMC)
+        # Random catalogues:
+        if os.path.isfile(fileRand) and (not rebuildCatalogues):
+            [finalCatRand,\
             finalCandidatesRand,finalRatiosRand,finalDistancesRand,\
             allCandidatesRand,candidateCountsRand,allRatiosRand,\
             finalCombinatoricFracRand,finalCatFracRand,alreadyMatchedRand] = \
-            tools.loadOrRecompute(data_folder + "catalogue_grid/" + \
-                "random_catalogue_" + str(k) + "_" + str(l) + ".p",\
-                constructAntihaloCatalogue,\
-                snapNumListUncon,snapList=snapListUn,\
-                snapListRev=snapListRevUn,\
+            tools.loadPickle(fileRand)
+        else:
+            catRand = catalogue.combinedCatalogue(\
+                snapNameListUn,snapNameListUnRev,muR,rSearch,rSphere1,\
                 ahProps=ahPropsUn,hrList=hrListUn,max_index=None,\
                 twoWayOnly=True,blockDuplicates=True,\
-                crossMatchThreshold = muR,distMax = rSearch,\
-                rSphere=rSphere1,massRange = [mLower1,mUpper1],\
-                NWayMatch = False,rMin=rMin,rMax=rMax,\
+                massRange = [mLower1,mUpper1],\
+                NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
                 additionalFilters = None,verbose=False,\
-                _recomputeData=rebuildCatalogues,\
-                refineCentres = refineCentres,sortBy = sortBy)
+                refineCentres=refineCentres,sortBy=sortBy,\
+                enforceExclusive=enforceExclusive)
+            finalCatRand = catRand.constructAntihaloCatalogue()
+            [finalCatRand,\
+            finalCandidatesRand,finalRatiosRand,finalDistancesRand,\
+            allCandidatesRand,candidateCountsRand,allRatiosRand,\
+            finalCombinatoricFracRand,finalCatFracRand,alreadyMatchedRand] = \
+                [catRand.finalCat,\
+                catRand.finalCandidates,\
+                catRand.finalRatios,catRand.finalDistances,\
+                catRand.allCandidates,catRand.candidateCounts,\
+                catRand.allRatios,catRand.finalCombinatoricFrac,\
+                catRand.finalCatFrac,catRand.alreadyMatched]
+            if rebuildCatalogues:
+                tools.savePickle([catRand.finalCat,\
+                    catRand.finalCandidates,\
+                    catRand.finalRatios,catRand.finalDistances,\
+                    catRand.allCandidates,catRand.candidateCounts,\
+                    catRand.allRatios,catRand.finalCombinatoricFrac,\
+                    catRand.finalCatFrac,catRand.alreadyMatched],fileRand)
         # Splitting of the curated catalogue:
         if len(finalCatMCMC) > 0:
             longCatTest = shortCatalogueToLongCatalogue(finalCatMCMC,\
@@ -5517,8 +5597,6 @@ enforceExclusive = True
                 additionalFilters = snrFilter,verbose=False,\
                 refineCentres=refineCentres,sortBy=sortBy,\
                 enforceExclusive=enforceExclusive)
-
-from void_analysis import catalogue
 snapNameList = [samplesFolder + "sample" + str(k) + "/" + snapnameNew \
     for k in snapNumList]
 snapNameListRev = [samplesFolder + "sample" + str(k) + "/" + snapnameNewRev \
@@ -5562,11 +5640,11 @@ snapNameListRandRev = [snap.filename for snap in snapListRevUn]
 
 cat300Rand = catalogue.combinedCatalogue(snapNameListRand,snapNameListRandRev,\
     muOpt,rSearchOpt,rSphere2,\
-    ahProps=ahProps,hrList=hrList,max_index=None,\
+    ahProps=ahPropsUn,hrList=hrListUn,max_index=None,\
     twoWayOnly=True,blockDuplicates=True,\
     massRange = [mMin,mMax],\
     NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
-    additionalFilters = snrFilter,verbose=False,\
+    additionalFilters = None,verbose=False,\
     refineCentres=refineCentres,sortBy=sortBy,\
     enforceExclusive=enforceExclusive)
 finalCat300Rand = cat300Rand.constructAntihaloCatalogue()
@@ -5575,13 +5653,16 @@ ahNumbers = [np.array(centralAntihalos[l][0],dtype=int)[sortedList[l]] \
     for l in range(0,len(snapNumList))]
 
 
-radiiListShort = getShortenedQuantity(antihaloRadii,centralAntihalos,\
-            centresListShort,sortedList,ahCounts,max_index)
-massListShort = getShortenedQuantity(antihaloMasses,centralAntihalos,\
-            centresListShort,sortedList,ahCounts,max_index)
+#radiiListShort = getShortenedQuantity(antihaloRadii,centralAntihalos,\
+#            centresListShort,sortedList,ahCounts,max_index)
+#massListShort = getShortenedQuantity(antihaloMasses,centralAntihalos,\
+#            centresListShort,sortedList,ahCounts,max_index)
 
+radiiListShort = cat300.radiusListShort
+massListShort = cat300.massListShort
 finalCentres300List = np.array([getCentresFromCat(\
-    finalCat300,centresListShort,ns) for ns in range(0,len(snapNumList))])
+    cat300.finalCat,cat300.centresListShort,ns) \
+    for ns in range(0,len(snapNumList))])
 meanCentre300 = np.nanmean(finalCentres300List,0)
 #catFractionsOpt = np.array([len(np.where(x > 0)[0])/len(snapNumList) \
 #    for x in finalCatOpt])
@@ -5654,13 +5735,15 @@ massListCombUn = getPropertyFromCat(finalCatOptRand,massListShortUn)
     rLower,rUpper,mLower1,mUpper1,percThresh,massBins=massBins,\
     radBins=radBins)
 
-radiiListComb300Un = getPropertyFromCat(cat300Rand.finalCat,radiiListShortUn)
-massListComb300Un = getPropertyFromCat(cat300Rand.finalCat,massListShortUn)
+radiiListComb300Un = getPropertyFromCat(cat300Rand.finalCat,\
+    cat300Rand.radiusListShort)
+massListComb300Un = getPropertyFromCat(cat300Rand.finalCat,\
+    cat300Rand.massListShort)
 [radiiListMean300Un,radiiListSigma300Un] = getMeanProperty(radiiListComb300Un)
 [massListMean300Un,massListSigma300Un] = getMeanProperty(massListComb300Un)
 [percentilesCat300, percentilesComb300] = getThresholdsInBins(\
     nBinEdges-1,cutScale,massListMean300Un,radiiListMean300Un,\
-    finalCombinatoricFrac300Rand,cat300Rand.finalCatFrac,\
+    cat300Rand.finalCombinatoricFrac,cat300Rand.finalCatFrac,\
     rLower,rUpper,mLower1,mUpper1,percThresh,massBins=massBins,\
     radBins=radBins)
 
@@ -5717,8 +5800,8 @@ meanFractionalDist = np.nanmean(fractionalDistCentre,0)
 # Get SNR per catalogue:
 
 
-radiiList300 = getRadiiFromCat(finalCat300,radiiListShort)
-massList300 = getRadiiFromCat(finalCat300,massListShort)
+radiiList300 = getRadiiFromCat(cat300.finalCat,cat300.radiusListShort)
+massList300 = getRadiiFromCat(cat300.finalCat,cat300.massListShort)
 [radiiMean300, radiiSigma300]  = getMeanProperty(radiiList300)
 [massMean300, massSigma300]  = getMeanProperty(massList300)
 
@@ -5727,15 +5810,15 @@ massList300 = getRadiiFromCat(finalCat300,massListShort)
 
 # Test for void splitting:
 nVTest = 0
-locator = [np.where((finalCat300[:,k] == finalCatOpt[nVTest][k]) & \
-    (finalCat300[:,k] != -1)) \
+locator = [np.where((cat300.finalCat[:,k] == finalCatOpt[nVTest][k]) & \
+    (cat300.finalCat[:,k] != -1)) \
     for k in range(0,len(snapNumList))]
 splitEntries = np.unique(np.hstack(locator))
 
 splitList = []
 for nVTest in range(0,len(finalCatOpt)):
-    locator = [np.where((finalCat300[:,k] == finalCatOpt[nVTest][k]) & \
-        (finalCat300[:,k] != -1)) for k in range(0,len(snapNumList))]
+    locator = [np.where((cat300.finalCat[:,k] == finalCatOpt[nVTest][k]) & \
+        (cat300.finalCat[:,k] != -1)) for k in range(0,len(snapNumList))]
     splitEntries = np.unique(np.hstack(locator))
     splitList.append(splitEntries)
 
@@ -5752,7 +5835,7 @@ filterOptGood = filterOpt & (finalCatFracOpt > 0.45) & (meanFractionalDist < 0.3
 
 distances300 = np.sqrt(np.sum(meanCentre300**2,1))
 filter300 = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
-    (distances300 < 135) & (finalCatFrac300 > thresholds300)
+    (distances300 < 135) & (cat300.finalCatFrac > thresholds300)
 
 # Save the high-confidence catalogue:
 #tools.savePickle([meanCentreOpt[filterOptGood],filterOptGood,\
@@ -5877,9 +5960,12 @@ meanFractionalDist = np.nanmean(fractionalDistCentre,0)
 
 # Split list, looking only at significant voids:
 indFilter300 = np.where(filter300)[0]
-splitListGood = getSplitList(finalCatOpt[filterOptGood],finalCat300)
+splitListGood = getSplitList(finalCatOpt[filterOptGood],cat300.finalCat)
 splitListGoodFiltered = getSplitList(finalCatOpt[filterOptGood],\
-    finalCat300[filter300])
+    cat300.finalCat[filter300])
+
+splitListGoodFilteredInverse = getSplitList(finalCat300[filter300],finalCatOpt[filterOpt])
+
 
 # Test post-processing:
 keepVoid = removeOverlappingVoids(finalCat300,radiiMean300,meanCentre300,\
@@ -6124,7 +6210,8 @@ def plotVoidAnimation(nV,centralAntihalos,sortedList,catToPlot,radiiToPlot,\
 def plotShowVoidConvergence(iteratedCentres,iteratedRadii,density,\
         boxsize,Lbox = 100,axis=2,thickness=None,vmin=1/1000,\
         vmax=1000,cmap='PuOr_r',figuresFolder='./',\
-        filename = 'iterations.gif',colorList = ['b','g','r','c','m','y','k']):
+        filename = 'iterations.gif',colorList = ['b','g','r','c','m','y','k'],\
+        groundTruthCentre=None,groundTruthRadius=None):
     if type(iteratedCentres) == np.ndarray:
         numVoids = 1
         numIterations = np.array([len(iteratedCentres)],dtype=int)
@@ -6166,6 +6253,11 @@ def plotShowVoidConvergence(iteratedCentres,iteratedRadii,density,\
                 cmap=cmap,extent=(meanCentre[0] - Lbox/2,\
                 meanCentre[0] + Lbox/2,\
                 meanCentre[1] - Lbox/2,meanCentre[1] + Lbox/2))
+        if (groundTruthCentre is not None) and (groundTruthRadius is not None):
+            plt.plot(groundTruthCentre[0] + groundTruthRadius*Xcirc,\
+                groundTruthCentre[1] + groundTruthRadius*Ycirc,color='k',\
+                linestyle='--',label='Ground truth\n$R = ' + \
+                ("%.2g" % groundTruthRadius) + "\\mathrm{Mpc}^{-1}$")
         for l in range(0,numVoids):
             if numVoids == 1:
                 centre = iteratedCentres[l][k]
@@ -6224,14 +6316,16 @@ plotShowVoidConvergence(iteratedCentres,iteratedRadii,\
 # Loop over all the good voids:
 filter300ind = np.where(filter300)[0]
 for k in range(0,len(splitListGoodFiltered)):
-    iteratedCentres = [iteratedCentresList[filter300ind[x]] \
+    iteratedCentres = [cat300.iteratedCentresList[filter300ind[x]] \
         for x in splitListGoodFiltered[k]]
-    iteratedRadii = [iteratedRadiiList[filter300ind[x]] \
+    iteratedRadii = [cat300.iteratedRadiiList[filter300ind[x]] \
         for x in splitListGoodFiltered[k]]
     if len(iteratedCentres) > 0:
         plotShowVoidConvergence(iteratedCentres,iteratedRadii,\
             densities256[0],boxsize,figuresFolder=figuresFolder,\
-            filename = "curated_iterations_" + str(k) + ".gif")
+            filename = "curated_iterations_" + str(k) + ".gif",\
+            groundTruthCentre = meanCentreOptHC[k],\
+            groundTruthRadius = radiiMeanOptHC[k])
 
 #nVold = 113 # snr ~ 12, r = 10.2
 #nVold = 116 # snr ~ 2.9, r = 10.9
