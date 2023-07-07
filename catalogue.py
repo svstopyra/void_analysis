@@ -485,7 +485,7 @@ class combinedCatalogue:
                                 inOtherList = np.isin(\
                                         bestCand,allCands[d])
                                 alreadyIncluded = \
-                                    alreadyMatched[d,bestCand]
+                                    self.alreadyMatched[d,bestCand]
                                 if (not inOtherList) and \
                                         (not alreadyIncluded):
                                     allCands[d].append(bestCand)
@@ -543,7 +543,7 @@ class combinedCatalogue:
         distAverages = self.computeQuantityForCandidates(self.allDistances,\
             allCands)
         # Now figure out the best candidates to include:
-        bestCandidates = -np.ones(numCats,dtype=int)
+        bestCandidates = -np.ones(self.numCats,dtype=int)
         bestRatios = np.zeros(self.numCats)
         bestDistances = np.zeros(self.numCats)
         numberOfLinks = 0
@@ -792,9 +792,9 @@ class combinedCatalogue:
         while not np.all(voidMatchesLast == voidMatchesNew):
             voidMatchesLast = voidMatchesNew
             # First, compute the mean centre of the voids in this set:
-            meanCentres = getMeanCentreFromVoidMatches(\
+            meanCentres = self.getMeanCentreFromVoidMatches(\
                 voidMatchesNew,self.numCats,self.centresListShort)
-            meanRadius = getMeanRadiusFromVoidMatches(\
+            meanRadius = self.getMeanRadiusFromVoidMatches(\
                 voidMatchesNew,self.numCats,self.radiusList)
             allCentres.append(meanCentres)
             allRadii.append(meanRadius)
@@ -838,7 +838,7 @@ class combinedCatalogue:
                         distancesm)
                 # Check the new entry is still unique:
                 if success:
-                    success = np.any(getUniqueEntriesInCatalogueRow(\
+                    success = np.any(self.getUniqueEntriesInCatalogueRow(\
                         voidMatches)) # Skip the void if it's just 
                         # a duplicate of something that already existed, or
                         # a subset.

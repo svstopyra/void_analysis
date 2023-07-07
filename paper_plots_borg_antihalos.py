@@ -5518,6 +5518,22 @@ enforceExclusive = True
                 refineCentres=refineCentres,sortBy=sortBy,\
                 enforceExclusive=enforceExclusive)
 
+from void_analysis import catalogue
+snapNameList = [samplesFolder + "sample" + str(k) + "/" + snapnameNew \
+    for k in snapNumList]
+snapNameListRev = [samplesFolder + "sample" + str(k) + "/" + snapnameNewRev \
+    for k in snapNumList]
+cat300Test = catalogue.combinedCatalogue(snapNameList,snapNameListRev,\
+    muOpt,rSearchOpt,rSphere2,\
+    ahProps=ahProps,hrList=hrList,max_index=None,\
+    twoWayOnly=True,blockDuplicates=True,\
+    massRange = [mMin,mMax],\
+    NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
+    additionalFilters = snrFilter,verbose=False,\
+    refineCentres=refineCentres,sortBy=sortBy,\
+    enforceExclusive=enforceExclusive)
+
+
 [finalCat300Rand,shortHaloList300Rand,twoWayMatchList300Rand,\
             finalCandidates300Rand,finalRatios300Rand,finalDistances300Rand,\
             allCandidates300Rand,candidateCounts300Rand,allRatios300Rand,\
