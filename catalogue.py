@@ -842,20 +842,22 @@ class combinedCatalogue:
                 [voidMatches,ratiosm,distancesm,success,allCentres,allRadii] = \
                     self.refineVoidCentres(oneWayMatches[nVoid],ratiosm,\
                         distancesm)
-                duplicates = self.checkForDuplicates(voidMatches)
-                if np.any(duplicates):
-                    print("Found duplicates at " + str(np.where(duplicates)[0]))
-                    print("This match : " + str(voidMatches))
-                    print("Duplicates: ")
-                    for d in np.where(duplicates)[0]:
-                        print(str(d) + " : " + str(self.finalCat[d]))
-                    matchList = []
-                    for ns,nv in zip(range(0,self.numCats),voidMatches):
-                        if nv < 0:
-                            matchList.append(False)
-                        else:
-                            matchList.append(self.alreadyMatched[ns,nv-1])
-                    print("Already-Matched status:" + str(matchList))
+                if len(self.finalCat) > 0:
+                    duplicates = self.checkForDuplicates(voidMatches)
+                    if np.any(duplicates):
+                        print("Found duplicates at " + \
+                            str(np.where(duplicates)[0]))
+                        print("This match : " + str(voidMatches))
+                        print("Duplicates: ")
+                        for d in np.where(duplicates)[0]:
+                            print(str(d) + " : " + str(self.finalCat[d]))
+                        matchList = []
+                        for ns,nv in zip(range(0,self.numCats),voidMatches):
+                            if nv < 0:
+                                matchList.append(False)
+                            else:
+                                matchList.append(self.alreadyMatched[ns,nv-1])
+                        print("Already-Matched status:" + str(matchList))
                 # Check the new entry is still unique:
                 if success:
                     success = np.any(self.getUniqueEntriesInCatalogueRow(\

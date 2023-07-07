@@ -5862,6 +5862,7 @@ meanFractionalDist = np.nanmean(fractionalDistCentre,0)
 
 
 # Split list, looking only at significant voids:
+indFilter300 = np.where(filter300)[0]
 splitListGood = getSplitList(finalCatOpt[filterOptGood],finalCat300)
 splitListGoodFiltered = getSplitList(finalCatOpt[filterOptGood],\
     finalCat300[filter300])
