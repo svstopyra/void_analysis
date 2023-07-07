@@ -80,6 +80,8 @@ class combinedCatalogue:
         # List of the other catalogues, for each catalogue:
         self.diffMap = [np.setdiff1d(np.arange(0,self.numCats),[k]) \
             for k in range(0,self.numCats)]
+        self.iteratedCentresList = []
+        self.iteratedRadiiList = []
     # Construct an anti-halo catalogue from reversed snapshots
     def constructAntihaloCatalogue(self):
         # Load snapshots:
@@ -103,14 +105,14 @@ class combinedCatalogue:
         # Construct matches:
         # Create lists of the quantity to match voids with (mass or radius),
         # chosen to match centresListShort:
-        radiusListShort = self.getShortenedQuantity(self.antihaloRadii,\
+        self.radiusListShort = self.getShortenedQuantity(self.antihaloRadii,\
             self.centralAntihalos)
-        massListShort = self.getShortenedQuantity(self.antihaloMasses,\
+        self.massListShort = self.getShortenedQuantity(self.antihaloMasses,\
             self.centralAntihalos)
         if self.crossMatchQuantity == 'radius':
-            self.quantityList = radiusListShort
+            self.quantityList = self.radiusListShort
         elif self.crossMatchQuantity == 'mass':
-            self.quantityList = massListShort
+            self.quantityList = self.massListShort
         else:
             raise Exception('Unrecognised cross-match quantity.')
         if self.verbose:
@@ -599,12 +601,14 @@ class combinedCatalogue:
         centresArray = getAllQuantityiesFromVoidMatches(voidMatches,centresList)
         stdCentres = np.std(centresArray,0)
         return stdCentres
-    def getMeanCentreFromVoidMatches(self,voidMatches,centresList):
-        centresArray = getAllQuantityiesFromVoidMatches(voidMatches,centresList)
+    def getMeanCentreFromVoidMatches(self,voidMatches):
+        centresArray = self.getAllQuantityiesFromVoidMatches(voidMatches,\
+            self.centresListShort)
         meanCentres = np.mean(centresArray,0)
         return meanCentres
-    def getMeanRadiusFromVoidMatches(self,voidMatches,radiusList):
-        radiusArray = getAllQuantityiesFromVoidMatches(voidMatches,radiusList)
+    def getMeanRadiusFromVoidMatches(self,voidMatches):
+        radiusArray = self.getAllQuantityiesFromVoidMatches(voidMatches,\
+            self.radiusListShort)
         meanRadius = np.mean(radiusArray)
         return meanRadius
     # Go through a void list and remove anything that has previously been 
@@ -773,7 +777,7 @@ class combinedCatalogue:
                     snapedit.wrap(centres,self.boxsize),boxsize=self.boxsize) \
                     for centres in self.centresListShort]
         for ns in range(0,self.numCats):
-            searchRadii = getSearchRadii(radius,self.quantitiesList[ns])
+            searchRadii = self.getSearchRadii(radius,self.quantityList[ns])
             [selectedMatches,selectCandidates,selectedQuantRatios,\
                 selectedDistances] = self.findAndProcessCandidates(ns,centre,\
                     radius,searchRadii,candidates=None)
@@ -792,10 +796,8 @@ class combinedCatalogue:
         while not np.all(voidMatchesLast == voidMatchesNew):
             voidMatchesLast = voidMatchesNew
             # First, compute the mean centre of the voids in this set:
-            meanCentres = self.getMeanCentreFromVoidMatches(\
-                voidMatchesNew,self.numCats,self.centresListShort)
-            meanRadius = self.getMeanRadiusFromVoidMatches(\
-                voidMatchesNew,self.numCats,self.radiusList)
+            meanCentres = self.getMeanCentreFromVoidMatches(voidMatchesNew)
+            meanRadius = self.getMeanRadiusFromVoidMatches(voidMatchesNew)
             allCentres.append(meanCentres)
             allRadii.append(meanRadius)
             # Get all the voids within the thresholds from this centre:
