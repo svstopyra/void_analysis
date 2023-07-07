@@ -1,5 +1,8 @@
 # Code related to building a void catalogue
-
+import pynbody
+import numpy as np
+import scipy
+from void_analysis import tools, snapedit
 
 class combinedCatalogue:
     # Class to store and compute a combined catalogue
@@ -115,7 +118,7 @@ class combinedCatalogue:
         # Main loop to compute candidate matches:
         [self.oneWayMatchesAllCatalogues,self.matchArrayList,\
             self.allCandidates,self.allRatios,self.allDistances] = \
-            getOneWayMatchesAllCatalogues()
+            self.getOneWayMatchesAllCatalogues()
         # Combined to a single catalogue:
         if self.verbose:
             print("Combining to a single catalogue...")
@@ -124,7 +127,7 @@ class combinedCatalogue:
             # Matches for catalogue k to all other catalogues:
             oneWayMatches = self.oneWayMatchesAllCatalogues[k]
             # Loop over all voids in this catalogue:
-            for l in range(0,np.min([ahCounts[k],self.max_index])):
+            for l in range(0,np.min([self.ahCounts[k],self.max_index])):
                 twoWayMatch = self.getTwoWayMatches(l,k)
                 self.twoWayMatchLists[k].append(twoWayMatch)
                 # Skip if the void has already beeen included, or just
@@ -181,7 +184,7 @@ class combinedCatalogue:
         quantity2 = self.quantityList[n2]
         tree1 = self.treeList[n1]
         tree2 = self.treeList[n2]
-        searchRadii = getSearchRadii(quantity1,quantity2)
+        searchRadii = self.getSearchRadii(quantity1,quantity2)
         if self.mode == "fractional":
             # Interpret distMax as a fraction of the void radius, not the 
             # distance in Mpc/h.
@@ -202,8 +205,8 @@ class combinedCatalogue:
         centres2 = self.centresListShort[n2]
         quantity1 = self.quantityList[n1]
         quantity2 = self.quantityList[n2]
-        tree1 = treeList[n1]
-        tree2 = treeList[n2]
+        tree1 = self.treeList[n1]
+        tree2 = self.treeList[n2]
         cat1 = self.hrListCentral[n1]
         cat2 = self.hrListCentral[n2]
         volumes1 = self.volumesList[n1]
@@ -233,8 +236,9 @@ class combinedCatalogue:
             else:
                 overlapForVoid = overlap[k]
             [selectedMatches,selectCandidates,selectedQuantRatios,\
-                selectedDistances] = findAndProcessCandidates(self,\
-                    n2,centre,quantity1[k],searchRadii,candidates=candidates)
+                selectedDistances] = self.findAndProcessCandidates(\
+                    n2,centre,quantity1[k],searchRadii,candidates=candidates,\
+                    overlapForVoid=overlapForVoid)
             candidatesList.append(selectCandidates)
             ratioList.append(selectedQuantRatios)
             distList.append(selectedDistances)
@@ -335,7 +339,7 @@ class combinedCatalogue:
             self.snapList,self.antihaloCentres,\
             self.antihaloRadii,self.antihaloMasses,self.rSphere,\
             self.rMin,self.rMax,massRange = self.massRange,\
-            additionalFilter = self.additionalFilters,\
+            additionalFilters = self.additionalFilters,\
             sortBy = self.sortBy,max_index = self.max_index)
         # Build a KD tree with the centres in centresListShort for efficient 
         # matching:
@@ -420,7 +424,7 @@ class combinedCatalogue:
     # Mark the two-way matches of a void as already found, so that we don't 
     # accidentally include them:
     def markCompanionsAsFound(self,nVoid,nCat,voidMatches):
-        for m in range(0,numCats):
+        for m in range(0,self.numCats):
             if (m != nCat) and (voidMatches[m] > 0):
                 # Only deem something to be already matched
                 # if it maps back to this with a single unique 
@@ -612,7 +616,7 @@ class combinedCatalogue:
                 voidMatchesFiltered[m] = -1
         return voidMatchesFiltered
     # Get the radius/mass ratios of all candidates, without sorting:
-    def getUnsortedRatios(candidates,searchQuantity,otherQuantities):
+    def getUnsortedRatios(self,candidates,searchQuantity,otherQuantities):
         if not np.isscalar(searchQuantity):
             # This happens if we are checking multiple quantities, or possibly
             # multiple thresholds, simultaneously.
@@ -645,13 +649,14 @@ class combinedCatalogue:
         quantRatio = quantRatio[indSort]
         sortedCandidates = np.array(candidates,dtype=int)[indSort]
         return [quantRatio,sortedCandidates,indSort]
-    def sortCandidatesByVolumes(self,candidates,quantRatio):
-        volOverlapFrac = self.overlapForVoid[candidates]
+    def sortCandidatesByVolumes(self,candidates,quantRatio,overlapForVoid):
+        volOverlapFrac = overlapForVoid[candidates]
         indSort = np.flip(np.argsort(volOverlapFrac))
         quantRatio = quantRatio[indSort]
         sortedCandidates = np.array(candidates,dtype=int)[indSort]
         return [quantRatio,sortedCandidates,indSort]
-    def getSortedQuantRatio(self,candidates,quantRatio,distances):
+    def getSortedQuantRatio(self,candidates,quantRatio,distances,\
+            overlapForVoid):
         if self.sortMethod == 'distance':
             # Sort the antihalos by distance. Candidate is the closest
             # halo which satisfies the threshold criterion:
@@ -664,7 +669,8 @@ class combinedCatalogue:
                 self.sortQuantRatiosByRatio(candidates,quantRatio,distances)
         elif self.sortMethod == "volumes":
             [quantRatio,sortedCandidates,indSort] = \
-                self.sortCandidatesByVolumes(candidates,quantRatio)
+                self.sortCandidatesByVolumes(candidates,quantRatio,\
+                    overlapForVoid)
         else:
             raise Exception("Unrecognised sorting method")
         return [quantRatio,sortedCandidates,indSort]
@@ -680,42 +686,42 @@ class combinedCatalogue:
                 candRadii = otherQuantities[sortedCandidates,0]
                 # Geometric mean of radii, to ensure symmetry.
                 geometricRadii = np.sqrt(searchQuantity[0]*candRadii)
-                condition = (quantRatio[:,0] >= self.quantityThresh[0]) & \
+                condition = (quantRatio[:,0] >= self.muR) & \
                     (distances[indSort] <= geometricRadii*self.muS)
                 for l in range(1,nQuantLen):
                     condition = condition & \
-                        (quantRatio[:,l] >= self.quantityThresh[l])
+                        (quantRatio[:,l] >= self.muR)
                 matchingVoids = np.where(condition)[0]
             else:
                 candRadii = otherQuantities[sortedCandidates]
                 # Geometric mean of radii, to ensure symmetry.
                 geometricRadii = np.sqrt(searchQuantity*candRadii)
-                matchingVoids = np.where((quantRatio >= self.quantityThresh) & \
+                matchingVoids = np.where((quantRatio >= self.muR) & \
                     (distances[indSort] <= geometricRadii*self.muS))[0]
         else:
             if not np.isscalar(searchQuantity):
                 condition = np.ones(quantRatio.shape[0],dtype=bool)
                 for l in range(0,nQuantLen):
                     condition = condition & \
-                        (quantRatio[:,l] >= self.quantityThresh[l])
+                        (quantRatio[:,l] >= self.muR[l])
                 matchingVoids = np.where(condition)[0]
             else:
-                matchingVoids = np.where((quantRatio >= self.quantityThresh))[0]
+                matchingVoids = np.where((quantRatio >= self.muR))[0]
         return matchingVoids
     # Function to process candidates for a match to a given void. We compute 
     # their radius ratio and distance ratio, to check whether they are 
     # within the thresholds required:
     def findAndProcessCandidates(self,nCatTest,centre,searchQuantity,\
-            searchRadii,candidates=None):
+            searchRadii,candidates=None,overlapForVoid=None):
         otherCentres = self.centresListShort[nCatTest]
-        otherQuantities = self.quantitiesList[nCatTest]
+        otherQuantities = self.quantityList[nCatTest]
         treeOther = self.treeList[nCatTest]
         # If we don't have candidates already, then we should find them:
         if candidates is None:
             candidates = treeOther.query_ball_point(\
                 snapedit.wrap(centre,self.boxsize),searchRadii,workers=-1)
         # Check we have a sensible overlap map:
-        if (self.overlapForVoid is None) and (self.sortMethod == "volumes"):
+        if (overlapForVoid is None) and (self.sortMethod == "volumes"):
             raise Exception("overlap map required for volume sort method.")
         if len(candidates) > 0:
             # Sort indices:
@@ -725,7 +731,7 @@ class combinedCatalogue:
             quantRatio = self.getUnsortedRatios(candidates,searchQuantity,\
                 otherQuantities)
             [quantRatio,sortedCandidates,indSort] = self.getSortedQuantRatio(\
-                candidates,quantRatio,distances)
+                candidates,quantRatio,distances,overlapForVoid)
             # Get voids above the specified thresholds for these candidates:
             matchingVoids = self.getVoidsAboveThresholds(\
                 quantRatio,distances,searchQuantity,otherQuantities,\
@@ -746,10 +752,10 @@ class combinedCatalogue:
             selectedDistances = []
         return [selectedMatches,selectCandidates,selectedQuantRatios,\
             selectedDistances]
-    def getSearchRadii(quantity1,quantity2):
+    def getSearchRadii(self,quantity1,quantity2):
         if self.mode == "fractional":
-            radii1 = quantity1/self.quantityThresh
-            radii2 = quantity2/self.quantityThresh
+            radii1 = quantity1/self.muR
+            radii2 = quantity2/self.muR
             if np.isscalar(radii1):
                 searchRadii = radii1
             elif len(radii1.shape) > 1:
@@ -855,14 +861,14 @@ class combinedCatalogue:
                     voidMatches)
                 combFrac = twoWayMatchCounts/(self.numCats*(self.numCats-1))
         if (np.sum(voidMatches > 0) > 1) and success:
-            catFrac = float(len(np.where(voidMatches > 0)[0])/numCats)
+            catFrac = float(len(np.where(voidMatches > 0)[0])/self.numCats)
             self.finalCat.append(voidMatches)
             self.finalRatios.append(ratiosm)
             self.finalDistances.append(distancesm)
             self.finalCatFrac.append(catFrac)
             self.finalCombinatoricFrac.append(combFrac)
         return voidMatches
-    
+
 
 
 

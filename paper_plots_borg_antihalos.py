@@ -5725,10 +5725,10 @@ filter300 = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
     (distances300 < 135) & (finalCatFrac300 > thresholds300)
 
 # Save the high-confidence catalogue:
-tools.savePickle([meanCentreOpt[filterOptGood],filterOptGood,\
-    radiiMeanOpt[filterOptGood],finalCatOpt[filterOptGood],\
-    centresListShort,radiiListShort,massListShort,sortedList],\
-    "high_confidence_voids.p")
+#tools.savePickle([meanCentreOpt[filterOptGood],filterOptGood,\
+#    radiiMeanOpt[filterOptGood],finalCatOpt[filterOptGood],\
+#    centresListShort,radiiListShort,massListShort,sortedList],\
+#    "high_confidence_voids.p")
 
 [meanCentreOptHC,filterOptGoodHC,radiiMeanOptHC,finalCatOptHC,\
     centresListShort,radiiListShort,massListShort,sortedList] = \
