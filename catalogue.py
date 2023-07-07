@@ -844,7 +844,7 @@ class combinedCatalogue:
                         distancesm)
                 duplicates = self.checkForDuplicates(voidMatches)
                 if np.any(duplicates):
-                    print("Found duplicates at " + str(np.where(duplicates)[0])
+                    print("Found duplicates at " + str(np.where(duplicates)[0]))
                     print("This match : " + str(voidMatches))
                     print("Duplicates: ")
                     for d in np.where(duplicates)[0]:
