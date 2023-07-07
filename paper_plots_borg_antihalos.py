@@ -5532,7 +5532,7 @@ cat300Test = catalogue.combinedCatalogue(snapNameList,snapNameListRev,\
     additionalFilters = snrFilter,verbose=False,\
     refineCentres=refineCentres,sortBy=sortBy,\
     enforceExclusive=enforceExclusive)
-
+finalCat300Test = cat300Test.constructAntihaloCatalogue()
 
 [finalCat300Rand,shortHaloList300Rand,twoWayMatchList300Rand,\
             finalCandidates300Rand,finalRatios300Rand,finalDistances300Rand,\
