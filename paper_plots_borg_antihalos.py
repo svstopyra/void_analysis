@@ -5654,13 +5654,13 @@ massListCombUn = getPropertyFromCat(finalCatOptRand,massListShortUn)
     rLower,rUpper,mLower1,mUpper1,percThresh,massBins=massBins,\
     radBins=radBins)
 
-radiiListComb300Un = getPropertyFromCat(finalCat300Rand,radiiListShortUn)
-massListComb300Un = getPropertyFromCat(finalCat300Rand,massListShortUn)
+radiiListComb300Un = getPropertyFromCat(cat300Rand.finalCat,radiiListShortUn)
+massListComb300Un = getPropertyFromCat(cat300Rand.finalCat,massListShortUn)
 [radiiListMean300Un,radiiListSigma300Un] = getMeanProperty(radiiListComb300Un)
 [massListMean300Un,massListSigma300Un] = getMeanProperty(massListComb300Un)
 [percentilesCat300, percentilesComb300] = getThresholdsInBins(\
     nBinEdges-1,cutScale,massListMean300Un,radiiListMean300Un,\
-    finalCombinatoricFrac300Rand,finalCatFrac300Rand,\
+    finalCombinatoricFrac300Rand,cat300Rand.finalCatFrac,\
     rLower,rUpper,mLower1,mUpper1,percThresh,massBins=massBins,\
     radBins=radBins)
 

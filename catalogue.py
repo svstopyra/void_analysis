@@ -144,7 +144,7 @@ class combinedCatalogue:
         self.finalCat = np.array(self.finalCat)
         self.finalCombinatoricFrac = np.array(self.finalCombinatoricFrac)
         self.finalCatFrac = np.array(self.finalCatFrac)
-        return finalCat
+        return self.finalCat
     def getMatchPynbody(self,n1,n2,fractionType='normal'):
         snap1 = self.snapListRev[n1]
         snap2 = self.snapListRev[n2]
