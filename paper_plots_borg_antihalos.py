@@ -544,20 +544,20 @@ cosmo = astropy.cosmology.LambdaCDM(H0,Om0,Ode0)
 
 # 2M++ Data:
 catFile = "./2mpp_data/2m++.txt"
-catalogue = np.loadtxt(catFile,delimiter='|',skiprows=31,
+catalogueData = np.loadtxt(catFile,delimiter='|',skiprows=31,
     usecols=(1,2,3,4,5,6,7,8,10,11,12,13,14,15,16))
 # Filter useable galaxies:
-useGalaxy = (catalogue[:,10] == 0.0) & (catalogue[:,5] > 0)
+useGalaxy = (catalogueData[:,10] == 0.0) & (catalogueData[:,5] > 0)
 c = 299792.458 # Speed of light in km/s
-z = catalogue[:,5]/c # Redshift
+z = catalogueData[:,5]/c # Redshift
 # Cosmological parameters:
 
 # Comoving distance to all galaxies, in Mpc/h:
 dcz = cosmo.comoving_distance(z[useGalaxy]).value*cosmo.h
 # Co-ordinates of the galaxies (in Mpc/h):
 coord = astropy.coordinates.SkyCoord(\
-    ra = catalogue[useGalaxy,0]*astropy.units.degree,\
-    dec=catalogue[useGalaxy,1]*astropy.units.degree,\
+    ra = catalogueData[useGalaxy,0]*astropy.units.degree,\
+    dec=catalogueData[useGalaxy,1]*astropy.units.degree,\
     distance=dcz*astropy.units.Mpc)
 # Cartesian positions of galaxies in equatorial, comoving co-ordinates (Mpc/h):
 equatorialXYZ = np.vstack((coord.cartesian.x.value,\
@@ -859,6 +859,105 @@ def imshowComparison(leftGrid,rightGrid,top=0.851,bottom=0.167,left=0.088,\
     if show:
         plt.show()
 
+
+def getAllThresholds(percentiles,radBins,radii):
+    scaleFilter = [(radii > radBins[k]) & \
+        (radii <= radBins[k+1]) \
+        for k in range(0,len(radBins) - 1)]
+    thresholds = np.zeros(radii.shape)
+    for filt, perc in zip(scaleFilter,percentiles):
+        thresholds[filt] = perc
+    return thresholds
+
+
+def getCentresFromCat(catList,centresList,ns):
+    centresListOut = np.zeros((len(catList),3),dtype=float)
+    for k in range(0,len(catList)):
+        if catList[k,ns] > 0:
+            centresListOut[k,:] = centresList[ns][catList[k,ns]-1]
+        else:
+            centresListOut[k,:] = np.nan
+    return centresListOut
+
+
+def getSplitVoids(catRef,catTest,nVRef):
+    nCats = catRef.shape[1]
+    locator = [np.where((catTest[:,k] == catRef[nVRef][k]) & \
+        (catTest[:,k] != -1)) for k in range(0,nCats)]
+    splitEntries = np.unique(np.hstack(locator))
+    return splitEntries
+
+
+
+def getSplitList(catRef,catTest):
+    splitList = []
+    for nVRef in range(0,len(catRef)):
+        splitList.append(getSplitVoids(catRef,catTest,nVRef))
+    return splitList
+
+
+longCatOptGood = shortCatalogueToLongCatalogue(finalCatOpt[filterOptGood],\
+    centralAntihalos,sortedList)
+
+
+
+def getMeanProperty(propertyList,stripNaN=True,lowerLimit=0,stdError=True):
+    meanProperty = np.zeros(len(propertyList))
+    sigmaProperty = np.zeros(len(propertyList))
+    for k in range(0,len(propertyList)):
+        condition = propertyList[k,:] > lowerLimit
+        if stripNaN:
+            condition = condition & (np.isfinite(propertyList[k,:] > 0))
+        haveProperty = np.where(condition)[0]
+        meanProperty[k] = np.mean(propertyList[k,haveProperty])
+        sigmaProperty[k] = np.std(propertyList[k,haveProperty])
+        if stdError:
+            sigmaProperty[k] /= np.sqrt(len(haveProperty))
+    return [meanProperty,sigmaProperty]
+
+
+def getRadiiFromCat(catList,radiiList):
+    radiiListOut = -np.ones(catList.shape,dtype=float)
+    for k in range(0,len(catList)):
+        for l in range(0,len(catList[0])):
+            if catList[k,l] > 0:
+                radiiListOut[k,l] = radiiList[l][catList[k,l]-1]
+    return radiiListOut
+
+
+# Converts a short catalogue (listing halos only in the central region)
+# into a long catalogue (listing all halos in the simulation box)
+def shortCatalogueToLongCatalogue(catalogue,centralAntihalos,sortedList):
+    if catalogue.shape[1] != len(centralAntihalos):
+        raise Exception("Incompatible catalogue and centralAntihalos list.")
+    longCatalogue = -np.ones(catalogue.shape,dtype=int)
+    nCats = len(centralAntihalos)
+    for ns in range(0,nCats):
+        haveCandidates = np.where(catalogue[:,ns] >= 0)[0]
+        ahNumbersList = np.array(centralAntihalos[ns][0])[sortedList[ns]]
+        longCatalogue[haveCandidates,ns] = ahNumbersList\
+            [catalogue[haveCandidates,ns] - 1] + 1
+    return longCatalogue
+
+
+# Should be the inverse, if everything worked out:
+def longCatalogueToShortCatalogue(longCatalogue,centralAntihalos,sortedList):
+    if longCatalogue.shape[1] != len(centralAntihalos):
+        raise Exception("Incompatible catalogue and centralAntihalos list.")
+    catalogue = -np.ones(longCatalogue.shape,dtype=int)
+    nCats = len(centralAntihalos)
+    for ns in range(0,nCats):
+        haveCandidates = (longCatalogue[:,ns] >= 0)
+        ahNumbersList = np.array(centralAntihalos[ns][0])[sortedList[ns]]
+        inShortList = np.isin(longCatalogue[:,ns]-1,ahNumbersList)
+        canInvert = haveCandidates & inShortList
+        search = np.where(np.in1d(ahNumbersList,longCatalogue[:,ns]-1))[0]
+        catalogue[canInvert,ns] = search + 1
+    return catalogue
+
+
+
+
 #threshList = np.hstack((np.array([1e-2]),np.arange(0.1,1,0.10)))
 #distArr = np.hstack((np.array([1e-2]),np.arange(0.25,3,0.25)))
 #distArr = np.arange(0,3,0.25)
@@ -1002,8 +1101,8 @@ snrFilter = [snr > snrThresh for snr in snrAllCatsList]
 
 centralAntihalos = [tools.getAntiHalosInSphere(antihaloCentres[k],rSphere1,\
             filterCondition = (antihaloRadii[k] > rMin) & \
-            (antihaloRadii[k] <= rMax) & (antihaloMasses[k] > mMin) & \
-            (antihaloMasses[k] <= mMax) & snrFilter[k]) \
+            (antihaloRadii[k] <= rMax) & (antihaloMasses[k] > mLower1) & \
+            (antihaloMasses[k] <= mUpper1) & snrFilter[k]) \
             for k in range(0,len(snapNumList))]
 centralAntihaloRadii = [\
             antihaloRadii[k][centralAntihalos[k][0]] \
@@ -1027,8 +1126,8 @@ centresListShort = [np.array([antihaloCentres[l][\
 # For randoms:
 centralAntihalosUn = [tools.getAntiHalosInSphere(antihaloCentresUn[k],\
             rSphere1,filterCondition = (antihaloRadiiUn[k] > rMin) & \
-            (antihaloRadiiUn[k] <= rMax) & (antihaloMassesUn[k] > mMin) & \
-            (antihaloMassesUn[k] <= mMax)) \
+            (antihaloRadiiUn[k] <= rMax) & (antihaloMassesUn[k] > mLower1) & \
+            (antihaloMassesUn[k] <= mUpper1)) \
             for k in range(0,len(snapNumListUncon))]
 centralAntihaloRadiiUn = [\
             antihaloRadiiUn[k][centralAntihalosUn[k][0]] \
@@ -1053,7 +1152,7 @@ diffMapComb = [np.setdiff1d(np.arange(0,len(snapListCombined)),[k]) \
 diffMapMCMCToRandom = [np.setdiff1d(\
     np.arange(len(snapList),len(snapListCombined)),[k]) \
     for k in range(0,len(snapList))]
-rebuildCatalogues  = True
+rebuildCatalogues  = False
 doCrossCatalogues = False
 refineCentres = True
 sortBy = 'radius'
@@ -1192,13 +1291,6 @@ for k in range(0,len(distArr)):
                     catRand.allCandidates,catRand.candidateCounts,\
                     catRand.allRatios,catRand.finalCombinatoricFrac,\
                     catRand.finalCatFrac,catRand.alreadyMatched],fileRand)
-        # Splitting of the curated catalogue:
-        if len(finalCatMCMC) > 0:
-            longCatTest = shortCatalogueToLongCatalogue(finalCatMCMC,\
-                centralAntihalos,sortedList)
-            splitListGood = getSplitList(longCatOptGood,longCatTest)
-            numSplitGood = np.array([len(x) for x in splitListGood],dtype=int)
-            splittingCounts[k,l,:] = numSplitGood
         # Compute percentiles:
         radiiListOpt = getPropertyFromCat(finalCatMCMC,radiiListShort)
         massListOpt = getPropertyFromCat(finalCatMCMC,massListShort)
@@ -1235,6 +1327,24 @@ for k in range(0,len(distArr)):
             finalCatFracMCMC,finalCombinatoricFracMCMC,percentilesCatTest,\
             percentilesCombTest,scaleFilter,snrList,snrThresh,False,\
             True,snrCut)
+        # Splitting of the curated catalogue:
+        if len(finalCatMCMC) > 0:
+            longCatTest = shortCatalogueToLongCatalogue(finalCatMCMC,\
+                centralAntihalos,sortedList)
+            radiiListTest = getRadiiFromCat(finalCatMCMC,radiiListShort)
+            [radiiMeanTest, radiiSigmaTest]  = getMeanProperty(radiiListTest)
+            finalCentresTestList = np.array([getCentresFromCat(\
+                finalCatMCMC,centresListShort,ns) \
+                for ns in range(0,len(snapNumList))])
+            meanCentreTest = np.nanmean(finalCentresTestList,0)
+            distancesTest = np.sqrt(np.sum(meanCentreTest**2,1))
+            thresholdsTest = getAllThresholds(percentilesCatTest,radBins,\
+                radiiMeanTest)
+            filterTest = (radiiMeanTest > 10) & (radiiMeanTest <= 25) & \
+                (distancesTest < 135) & (finalCatFracMCMC > thresholdsTest)
+            splitListGood = getSplitList(longCatOptGood,longCatTest[filterTest])
+            numSplitGood = np.array([len(x) for x in splitListGood],dtype=int)
+            splittingCounts[k,l,:] = numSplitGood
         # Get the anti-halo properties used for filtering:
         centralAntihalosTest = [tools.getAntiHalosInSphere(\
             antihaloCentresComb[ns],rSphere1,\
@@ -1392,6 +1502,8 @@ tools.savePickle([purity_1f,purity_2f,completeness_1f,completeness_2f,\
     combPercentile99BinsRand,catSizeBinsMCMCCutComb,\
     catSizeMCMCCutComb,combMeanMCMCCutComb,catMeanMCMCCutComb] = \
     tools.loadPickle(data_folder + "combinatoric_fraction_data.p")
+
+[splittingCounts] = tools.loadPickle(data_folder + "splitting_counts.p")
 
 
 [purity_1f,purity_2f,completeness_1f,completeness_2f] = tools.loadPickle(\
@@ -1792,7 +1904,7 @@ ax2 = ax[1]
 ax1.imshow(catPercentile99Rand_Interp((X,Y)).T,vmin=0,vmax=1.0,\
     cmap=cmap,extent=(np.min(distArr),np.max(distArr),\
     np.min(threshList),np.max(threshList)),aspect='auto',origin='lower')
-ax2.imshow(curatedCount_Interp((X,Y)).T,vmin=0,vmax=20,cmap=cmap,\
+ax2.imshow(curatedCount_Interp((X,Y)).T,vmin=0,vmax=3,cmap=cmap,\
     extent=(np.min(distArr),np.max(distArr),\
     np.min(threshList),np.max(threshList)),aspect='auto',origin='lower')
 c1 = ax1.contour(X,Y,catPercentile99Rand_Interp((X,Y)),[0.1,0.2,0.3],\
@@ -1814,7 +1926,7 @@ ax1.set_title('99th Percentile \nCatalogue Fraction')
 ax2.set_xlabel('Search distance ratio, $\\mu_{S}$')
 ax2.set_ylabel('Radius ratio, $\\mu_{R}$')
 ax2.set_title('Curated Catalogue Average Split')
-sm = cm.ScalarMappable(colors.Normalize(vmin=0.0,vmax=20),cmap=cmap)
+sm = cm.ScalarMappable(colors.Normalize(vmin=0.0,vmax=3),cmap=cmap)
 plt.colorbar(sm,label='Number of Voids',ax=ax2)
 #cbar = plt.colorbar(sm, orientation="vertical",\
 #    label='Catalogue fraction',cax=cbax)
@@ -3973,6 +4085,18 @@ meanCentres = catData['centres'][combinedFilter135]
 meanCentresGadgetCoord = snapedit.wrap(np.fliplr(meanCentres) + boxsize/2,boxsize)
 meanRadii = catData['radii'][combinedFilter135]
 meanMasses = catData['mass'][combinedFilter135]
+
+meanCentres = meanCentre300[filter300]
+meanCentresGadgetCoord = snapedit.wrap(np.fliplr(meanCentres) + boxsize/2,boxsize)
+meanRadii = radiiMean300[filter300]
+meanMasses = massMean300[filter300]
+allCentres300Gadget = np.array([snapedit.wrap(\
+    np.fliplr(centre) + boxsize/2,boxsize) \
+    for centre in finalCentres300List[:,filter300,:]])
+allRadii300 = radiiList300[filter300,:]
+isnan = np.where(allRadii300 < 0)
+allRadii300[isnan] = np.nan
+
 pairsList = [None for snap in snapList]
 volumesList = [None for snap in snapList]
 conditionList = [None for snap in snapList]
@@ -3989,6 +4113,9 @@ massList = [meanMasses for snap in snapList]
 
 # Just get the pairs for each void, and sample:
 
+treeList = [scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize) \
+    for snap in snapList]
+
 allPairs = []
 allVolumes = []
 for k in range(0,len(snapNameList)):
@@ -4003,6 +4130,23 @@ tools.savePickle([allPairs,allVolumes],\
 [allPairs,allVolumes] = tools.loadPickle(\
     data_folder + "pair_counts_mcmc_cut.p")
 
+allPairsSample = np.zeros((len(snapList),len(allRadii300),\
+    len(rBinStackCentres)))
+allVolumesSample = np.zeros((len(snapList),len(allRadii300),\
+    len(rBinStackCentres)))
+for k in range(0,len(snapNameList)):
+    haveAntiHalo = np.isfinite(allRadii300[:,k])
+    noAntiHalo = np.logical_not(haveAntiHalo)
+    [nPairsList,volumesList] = stacking.getPairCounts(\
+        allCentres300Gadget[k,haveAntiHalo,:],\
+        allRadii300[haveAntiHalo,k],snapList[k],rBinStack,tree=treeList[k],\
+        method='poisson',vorVolumes=None)
+    allPairsSample[k,haveAntiHalo,:] = nPairsList
+    allPairsSample[k,noAntiHalo,:] = np.nan
+    allVolumesSample[k,haveAntiHalo,:] = volumesList
+    allVolumesSample[k,noAntiHalo,:] = np.nan
+
+
 # Mean profiles over all samples:
 flattenedPairs = np.array(allPairs)
 flattenedVols = np.array(allVolumes)
@@ -4010,9 +4154,20 @@ flattenedDen = flattenedPairs/flattenedVols
 meanVols = np.mean(flattenedVols,0)
 meanDensity = np.mean(flattenedPairs/flattenedVols,0)
 sigmaDensity = np.std(flattenedPairs/flattenedVols,0)/np.sqrt(len(snapNumList))
+allDensities = flattenedPairs/flattenedVols
+
+# Average over profiles centred on samples:
+flattenedPairs = allPairsSample
+flattenedVols = allVolumesSample
+flattenedDen = flattenedPairs/flattenedVols
+meanVols = np.nanmean(flattenedVols,0)
+meanDensity = np.nanmean(flattenedPairs/flattenedVols,0)
+sigmaDensity = np.nanstd(flattenedDen,0)/\
+    np.sqrt(np.sum(np.isfinite(flattenedDen),0))
 
 # Stacked mean profiles:
 rhoStacked = (np.sum(meanDensity*meanVols,0) + 1)/np.sum(meanVols,0)
+#allRhoStacked = (np.sum(meanDensity*meanVols,0) + 1)/np.sum(meanVols,0)
 varStacked = np.var(meanDensity,0)
 weights = meanVols/np.sum(meanVols,0)
 # Error accounting for profile uncertainty:
@@ -4030,11 +4185,13 @@ sigmaRhoStackedSep = np.sqrt(np.sum((varStackedSep[:,None,:])*weightsSep**2,1))
 # Now to repeat the analysis for unconstrained simulations, but sampling based
 # on the same size distribution:
 snapname = "gadget_full_forward_512/snapshot_001"
-snapNameListUncon = [unconstrainedFolderNew + "sample" \
-            + str(snapNum) + "/" + snapname for snapNum in snapNumListUncon]
-snapSample = pynbody.load(snapNameListUncon[0])
-ahPropsUnconstrained = [tools.loadPickle(name + ".AHproperties.p")\
-            for name in snapNameListUncon]
+#snapNameListUncon = [unconstrainedFolderNew + "sample" \
+#            + str(snapNum) + "/" + snapname for snapNum in snapNumListUncon]
+snapNameListUncon = []
+snapSample = snapListUn[0]
+#ahPropsUnconstrained = [tools.loadPickle(name + ".AHproperties.p")\
+#            for name in snapNameListUncon]
+ahPropsUnconstrained = ahPropsUn
 ahCentresListUn = [props[5] for props in ahPropsUnconstrained]
 antihaloRadiiUn = [props[7] for props in ahPropsUnconstrained]
 ahTreeCentres = [scipy.spatial.cKDTree(centres,boxsize) \
@@ -4052,8 +4209,8 @@ volSphere = 4*np.pi*rSphere**3/3
 rhoCrit = 2.7754e11
 Om0 = snapSample.properties['omegaM0']
 rhoMean = rhoCrit*Om0
-for k in range(0,len(snapNameListUncon)):
-    snap = pynbody.load(snapNameListUncon[k])
+for k in range(0,len(snapListUn)):
+    snap = snapListUn[k]
     gc.collect() # Clear memory of the previous snapshot
     tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
     gc.collect()
@@ -4064,7 +4221,7 @@ for k in range(0,len(snapNameListUncon)):
 
 tools.savePickle([randCentres,randOverDen],\
     data_folder + "random_centres_and_densities.p")
-[allPairs,allVolumes] = tools.loadPickle(\
+[randCentres,randOverDen] = tools.loadPickle(\
     data_folder + "random_centres_and_densities.p")
 
 # Get comparable density regions:
@@ -4081,8 +4238,8 @@ rEffBinEdges = np.linspace(10,25,6)
 allPairsUncon = []
 allVolumesUncon = []
 np.random.seed(1000)
-for ns in range(0,len(snapNameListUncon)):
-    snapLoaded = pynbody.load(snapNameListUncon[ns])
+for ns in range(0,len(snapListUn)):
+    snapLoaded = snapListUn[ns]
     tree = scipy.spatial.cKDTree(snapLoaded['pos'],boxsize=boxsize)
     for centre in centresToUse[ns]:
         # Get anti-halos:
@@ -4144,12 +4301,29 @@ ax.axhline(1.0,color='grey',linestyle=':')
 ax.set_xlabel('$R/R_{\\mathrm{eff}}$',fontsize=8)
 ax.set_ylabel('$\\rho/\\bar{\\rho}$',fontsize=8)
 ax.legend(prop={"size":fontsize,"family":"serif"},frameon=False)
-ax.set_xrange([0,10])
-ax.set_yrange([0,1.2])
+ax.set_xlim([0,10])
+ax.set_ylim([0,1.2])
 plt.tight_layout()
 plt.savefig(figuresFolder + "profiles_vs_random.pdf")
 plt.show()
 
+# Plot comparison:
+fig, ax = plt.subplots(figsize=(textwidth,0.5*textwidth))
+ax.fill_between(rBinStackCentres,(meanStackedUnAll - sigmaStackedUnAll)/nbar,\
+    (meanStackedUnAll + sigmaStackedUnAll)/nbar,alpha=0.5,color='grey',\
+    label='Random catalogue')
+ax.plot(rBinStackCentres,meanDensity.T/nbar,\
+    color='k',linestyle=':',label='Constrained Catalogue')
+ax.axvline(1.0,color='grey',linestyle=':')
+ax.axhline(1.0,color='grey',linestyle=':')
+ax.set_xlabel('$R/R_{\\mathrm{eff}}$',fontsize=8)
+ax.set_ylabel('$\\rho/\\bar{\\rho}$',fontsize=8)
+ax.legend(prop={"size":fontsize,"family":"serif"},frameon=False)
+ax.set_xlim([0,10])
+ax.set_ylim([0,1.2])
+plt.tight_layout()
+plt.savefig(figuresFolder + "profiles_vs_random_all.pdf")
+plt.show()
 
 
 
@@ -4930,16 +5104,6 @@ snrList = np.array([np.mean(snrFieldLin[points]) \
 distances  = np.sqrt(np.sum(meanCentreOpt**2,1))
 distFilter135 = (distances < 135)
 
-
-def getAllThresholds(percentiles,radBins,radii):
-    scaleFilter = [(radii > radBins[k]) & \
-        (radii <= radBins[k+1]) \
-        for k in range(0,len(radBins) - 1)]
-    thresholds = np.zeros(radii.shape)
-    for filt, perc in zip(scaleFilter,percentiles):
-        thresholds[filt] = perc
-    return thresholds
-
 thresholds = getAllThresholds(percentilesCat300,radBins,radiiMeanOpt)
 thresholds = 0.0
 
@@ -5503,40 +5667,6 @@ def getAllThresholds(percentiles,radBins,radii):
 
 
 
-def getRadiiFromCat(catList,radiiList):
-    radiiListOut = -np.ones(catList.shape,dtype=float)
-    for k in range(0,len(catList)):
-        for l in range(0,len(catList[0])):
-            if catList[k,l] > 0:
-                radiiListOut[k,l] = radiiList[l][catList[k,l]-1]
-    return radiiListOut
-
-def getCentresFromCat(catList,centresList,ns):
-    centresListOut = np.zeros((len(catList),3),dtype=float)
-    for k in range(0,len(catList)):
-        if catList[k,ns] > 0:
-            centresListOut[k,:] = centresList[ns][catList[k,ns]-1]
-        else:
-            centresListOut[k,:] = np.nan
-    return centresListOut
-
-
-def getMeanProperty(propertyList,stripNaN=True,lowerLimit=0,stdError=True):
-    meanProperty = np.zeros(len(propertyList))
-    sigmaProperty = np.zeros(len(propertyList))
-    for k in range(0,len(propertyList)):
-        condition = propertyList[k,:] > lowerLimit
-        if stripNaN:
-            condition = condition & (np.isfinite(propertyList[k,:] > 0))
-        haveProperty = np.where(condition)[0]
-        meanProperty[k] = np.mean(propertyList[k,haveProperty])
-        sigmaProperty[k] = np.std(propertyList[k,haveProperty])
-        if stdError:
-            sigmaProperty[k] /= np.sqrt(len(haveProperty))
-    return [meanProperty,sigmaProperty]
-
-
-
 def getSNRForVoidRealisations(finalCat,snrAllCatsList,ahNumbers):
     snrCat = np.zeros(finalCat.shape)
     for ns in range(0,len(snrAllCatsList)):
@@ -5581,22 +5711,22 @@ NWayMatch = False
 refineCentres = True
 sortBy = "radius"
 enforceExclusive = True
-[finalCat300,shortHaloList300,twoWayMatchList300,\
-            finalCandidates300,finalRatios300,finalDistances300,\
-            allCandidates300,candidateCounts300,allRatios300,\
-            finalCombinatoricFrac300,finalCatFrac300,alreadyMatched300,\
-            iteratedCentresList,iteratedRadiiList] = \
-            constructAntihaloCatalogue(\
-                snapNumList,snapList=snapList,\
-                snapListRev=snapListRev,\
-                ahProps=ahProps,hrList=hrList,max_index=None,\
-                twoWayOnly=True,blockDuplicates=True,\
-                crossMatchThreshold = muOpt,distMax = rSearchOpt,\
-                rSphere=rSphere2,massRange = [mMin,mMax],\
-                NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
-                additionalFilters = snrFilter,verbose=False,\
-                refineCentres=refineCentres,sortBy=sortBy,\
-                enforceExclusive=enforceExclusive)
+#[finalCat300,shortHaloList300,twoWayMatchList300,\
+#            finalCandidates300,finalRatios300,finalDistances300,\
+#            allCandidates300,candidateCounts300,allRatios300,\
+#            finalCombinatoricFrac300,finalCatFrac300,alreadyMatched300,\
+#            iteratedCentresList,iteratedRadiiList] = \
+#            constructAntihaloCatalogue(\
+#                snapNumList,snapList=snapList,\
+#                snapListRev=snapListRev,\
+#                ahProps=ahProps,hrList=hrList,max_index=None,\
+#                twoWayOnly=True,blockDuplicates=True,\
+#                crossMatchThreshold = muOpt,distMax = rSearchOpt,\
+#                rSphere=rSphere2,massRange = [mMin,mMax],\
+#                NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
+#                additionalFilters = snrFilter,verbose=False,\
+#                refineCentres=refineCentres,sortBy=sortBy,\
+#                enforceExclusive=enforceExclusive)
 snapNameList = [samplesFolder + "sample" + str(k) + "/" + snapnameNew \
     for k in snapNumList]
 snapNameListRev = [samplesFolder + "sample" + str(k) + "/" + snapnameNewRev \
@@ -5612,22 +5742,22 @@ cat300 = catalogue.combinedCatalogue(snapNameList,snapNameListRev,\
     enforceExclusive=enforceExclusive)
 finalCat300 = cat300.constructAntihaloCatalogue()
 
-[finalCat300Rand,shortHaloList300Rand,twoWayMatchList300Rand,\
-            finalCandidates300Rand,finalRatios300Rand,finalDistances300Rand,\
-            allCandidates300Rand,candidateCounts300Rand,allRatios300Rand,\
-            finalCombinatoricFrac300Rand,finalCatFrac300Rand,
-            alreadyMatched300Rand,_,_] = \
-            constructAntihaloCatalogue(\
-                snapNumListUncon,snapList=snapListUn,\
-                snapListRev=snapListRevUn,\
-                ahProps=ahPropsUn,hrList=hrListUn,max_index=None,\
-                twoWayOnly=True,blockDuplicates=True,\
-                crossMatchThreshold = muOpt,distMax = rSearchOpt,\
-                rSphere=rSphere2,massRange = [mMin,mMax],\
-                NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
-                additionalFilters = None,verbose=False,\
-                refineCentres=refineCentres,sortBy=sortBy,\
-                enforceExclusive=enforceExclusive)
+#[finalCat300Rand,shortHaloList300Rand,twoWayMatchList300Rand,\
+#            finalCandidates300Rand,finalRatios300Rand,finalDistances300Rand,\
+#            allCandidates300Rand,candidateCounts300Rand,allRatios300Rand,\
+#            finalCombinatoricFrac300Rand,finalCatFrac300Rand,
+#            alreadyMatched300Rand,_,_] = \
+#            constructAntihaloCatalogue(\
+#                snapNumListUncon,snapList=snapListUn,\
+#                snapListRev=snapListRevUn,\
+#                ahProps=ahPropsUn,hrList=hrListUn,max_index=None,\
+#                twoWayOnly=True,blockDuplicates=True,\
+#                crossMatchThreshold = muOpt,distMax = rSearchOpt,\
+#                rSphere=rSphere2,massRange = [mMin,mMax],\
+#                NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
+#                additionalFilters = None,verbose=False,\
+#                refineCentres=refineCentres,sortBy=sortBy,\
+#                enforceExclusive=enforceExclusive)
 
 [centresListShort,centralAntihalos,sortedList,ahCounts,max_index] = \
         computeShortCentresList(snapNumList,antihaloCentres,\
@@ -5652,6 +5782,8 @@ finalCat300Rand = cat300Rand.constructAntihaloCatalogue()
 ahNumbers = [np.array(centralAntihalos[l][0],dtype=int)[sortedList[l]] \
     for l in range(0,len(snapNumList))]
 
+
+# Mass functions:
 
 #radiiListShort = getShortenedQuantity(antihaloRadii,centralAntihalos,\
 #            centresListShort,sortedList,ahCounts,max_index)
@@ -5747,6 +5879,30 @@ massListComb300Un = getPropertyFromCat(cat300Rand.finalCat,\
     rLower,rUpper,mLower1,mUpper1,percThresh,massBins=massBins,\
     radBins=radBins)
 
+
+
+radiiList300 = getPropertyFromCat(cat300.finalCat,\
+    cat300Rand.radiusListShort)
+massList300 = getPropertyFromCat(cat300.finalCat,\
+    cat300.massListShort)
+[radiiListMean300,radiiListSigma300] = getMeanProperty(radiiList300)
+[massListMean300,massListSigma300] = getMeanProperty(massList300)
+[percentilesCat300mcmc, percentilesComb300mcmc] = getThresholdsInBins(\
+    nBinEdges-1,cutScale,massListMean300,radiiListMean300,\
+    cat300.finalCombinatoricFrac,cat300.finalCatFrac,\
+    rLower,rUpper,mLower1,mUpper1,percThresh,massBins=massBins,\
+    radBins=radBins)
+
+plt.clf()
+plt.plot(plot.binCentres(radBins),percentilesCat300,label='Random catalogues')
+plt.plot(plot.binCentres(radBins),percentilesCat300mcmc,label='MCMC catalogues')
+plt.xlabel('$R [\\mathrm{Mpc}h^{-1}]$')
+plt.ylabel('Catalogue fraction')
+plt.title('99th percentile catalogue fractions, $\\mu_R = 0.75, \\mu_S = 0.5$')
+plt.legend()
+plt.savefig(figuresFolder + "percentiles.pdf")
+
+
 # Get SNR per catalogue:
 
 
@@ -5794,17 +5950,48 @@ massListOpt = getRadiiFromCat(finalCatOpt,massListShort)
 fractionalDistCentre = distCentreOpt/radiiMeanOpt
 meanFractionalDist = np.nanmean(fractionalDistCentre,0)
 
-
-
-
 # Get SNR per catalogue:
-
 
 radiiList300 = getRadiiFromCat(cat300.finalCat,cat300.radiusListShort)
 massList300 = getRadiiFromCat(cat300.finalCat,cat300.massListShort)
 [radiiMean300, radiiSigma300]  = getMeanProperty(radiiList300)
 [massMean300, massSigma300]  = getMeanProperty(massList300)
+distances300 = np.sqrt(np.sum(meanCentre300**2,1))
+thresholds300 = getAllThresholds(percentilesCat300,radBins,radiiMean300)
 
+# Mass functions:
+leftFilter = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
+    (distances300 < 135) & (cat300.finalCatFrac > thresholds300)
+rightFilter = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
+    (distances300 < 300) & (cat300.finalCatFrac > thresholds300)
+
+plt.clf()
+if doCat:
+    nBins = 8
+    Om = referenceSnap.properties['omegaM0']
+    rhoc = 2.7754e11
+    boxsize = referenceSnap.properties['boxsize'].ratio("Mpc a h**-1")
+    N = int(np.cbrt(len(referenceSnap)))
+    mUnit = 8*Om*rhoc*(boxsize/N)**3
+    mLower = 100*mUnit
+    mUpper = 2e15
+    rSphere = 300
+    rSphereInner = 135
+    # Check mass functions:
+    volSphere135 = 4*np.pi*rSphereInner**3/3
+    volSphere = 4*np.pi*rSphere**3/3
+    plot.massFunctionComparison(massMean300[leftFilter],\
+        massMean300[rightFilter],4*np.pi*135**3/3,nBins=nBins,\
+        labelLeft = "Combined catalogue \n(well-constrained voids only)",\
+        labelRight  ="Combined catalogue \n(well-constrained voids only)",\
+        ylabel="Number of antihalos",savename=figuresFolder + \
+        "mass_function_combined_300vs135_test.pdf",massLower=mLower,\
+        ylim=[1,1000],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,\
+        fontsize=8,massUpper = mUpper,\
+        titleLeft = "Combined catalogue, $<135\\mathrm{Mpc}h^{-1}$",\
+        titleRight = "Combined catalogue, $<300\\mathrm{Mpc}h^{-1}$",\
+        volSimRight = 4*np.pi*300**3/3,ylimRight=[1,1000],\
+        legendLoc="upper right")
 
 
 
@@ -5827,13 +6014,13 @@ numSplit = np.array([len(x) for x in splitList],dtype=int)
 distancesOpt = np.sqrt(np.sum(meanCentreOpt**2,1))
 filterOpt = (radiiMeanOpt > 10) & (radiiMeanOpt <= 25) & (distancesOpt < 135)
 thresholdsOpt = getAllThresholds(percentilesCatOpt,radBins,radiiMeanOpt)
-thresholds300 = getAllThresholds(percentilesCat300,radBins,radiiMean300)
+
 #filterOptGood = filterOpt & (finalCatFracOpt > thresholdsOpt) & \
 #    (snrMeanOpt > 5) & (finalCatFracOpt > 0.7) & (meanFractionalDist < 0.5)
 filterOptGood = filterOpt & (finalCatFracOpt > 0.45) & (meanFractionalDist < 0.3)
 #filterOptGood = filterOpt & (meanFractionalDist < 0.15)
 
-distances300 = np.sqrt(np.sum(meanCentre300**2,1))
+
 filter300 = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
     (distances300 < 135) & (cat300.finalCatFrac > thresholds300)
 
@@ -5871,43 +6058,6 @@ plt.ylabel("Number of voids in old catalogue")
 plt.legend()
 plt.savefig(figuresFolder  + "numSplit_histogram_compared.pdf")
 
-def getSplitList(catRef,catTest):
-    splitList = []
-    for nVRef in range(0,len(catRef)):
-        splitList.append(getSplitVoids(catRef,catTest,nVRef))
-    return splitList
-
-# Converts a short catalogue (listing halos only in the central region)
-# into a long catalogue (listing all halos in the simulation box)
-def shortCatalogueToLongCatalogue(catalogue,centralAntihalos,sortedList):
-    if catalogue.shape[1] != len(centralAntihalos):
-        raise Exception("Incompatible catalogue and centralAntihalos list.")
-    longCatalogue = -np.ones(catalogue.shape,dtype=int)
-    nCats = len(centralAntihalos)
-    for ns in range(0,nCats):
-        haveCandidates = np.where(catalogue[:,ns] >= 0)[0]
-        ahNumbersList = np.array(centralAntihalos[ns][0])[sortedList[ns]]
-        longCatalogue[haveCandidates,ns] = ahNumbersList\
-            [catalogue[haveCandidates,ns] - 1] + 1
-    return longCatalogue
-
-longCatOptGood = shortCatalogueToLongCatalogue(finalCatOpt[filterOptGood],\
-    centralAntihalos,sortedList)
-
-# Should be the inverse, if everything worked out:
-def longCatalogueToShortCatalogue(longCatalogue,centralAntihalos,sortedList):
-    if longCatalogue.shape[1] != len(centralAntihalos):
-        raise Exception("Incompatible catalogue and centralAntihalos list.")
-    catalogue = -np.ones(longCatalogue.shape,dtype=int)
-    nCats = len(centralAntihalos)
-    for ns in range(0,nCats):
-        haveCandidates = (longCatalogue[:,ns] >= 0)
-        ahNumbersList = np.array(centralAntihalos[ns][0])[sortedList[ns]]
-        inShortList = np.isin(longCatalogue[:,ns]-1,ahNumbersList)
-        canInvert = haveCandidates & inShortList
-        search = np.where(np.in1d(ahNumbersList,longCatalogue[:,ns]-1))[0]
-        catalogue[canInvert,ns] = search + 1
-    return catalogue
 
 def lowestOrNothing(x):
     if len(x) > 0:
@@ -5918,12 +6068,6 @@ def lowestOrNothing(x):
 def getNumVoidsInCommon(voidRef,voidTest):
     return np.sum(voidRef == voidTest)
 
-def getSplitVoids(catRef,catTest,nVRef):
-    nCats = catRef.shape[1]
-    locator = [np.where((catTest[:,k] == catRef[nVRef][k]) & \
-        (catTest[:,k] != -1)) for k in range(0,nCats)]
-    splitEntries = np.unique(np.hstack(locator))
-    return splitEntries
 
 def compareVoids(voidRef,voidTest):
     matching = np.where((voidTest == voidRef) & (voidRef > -1))[0]
@@ -5980,6 +6124,98 @@ slCountGoodFilt = np.array([len(x) for x in splitListGoodFiltered])
 slCountPP = np.array([len(x) for x in splitListGoodPostProcessed])
 slCountPPandF = np.array([len(x) \
     for x in splitListGoodPostProcessedAndFiltered])
+
+
+# Testing void properties:
+nVground = 4
+nV1 = 5
+nV2 = 95
+groundTruth = finalCatOpt[filterOptGood][nVground]
+void1 = finalCat300[filter300][nV1]
+void2 = finalCat300[filter300][nV2]
+
+void1rad = radiiMean300[filter300][nV1]
+void2rad = radiiMean300[filter300][nV2]
+void1cen = meanCentre300[filter300][nV1]
+void2cen = meanCentre300[filter300][nV2]
+void1AllCentres = np.array([finalCentres300List[ns][indFilter300[nV1]] \
+    for ns in range(0,len(snapList))])
+void2AllCentres = np.array([finalCentres300List[ns][indFilter300[nV2]] \
+    for ns in range(0,len(snapList))])
+void1AllRadii = radiiList300[indFilter300[nV1]]
+void2AllRadii = radiiList300[indFilter300[nV2]]
+
+
+
+def getRatios(allRadii,allCentres,referenceRadius,referenceCentre):
+    numCats = len(allRadii)
+    if len(allCentres.shape) == 1:
+        distances = np.sqrt(np.sum((allCentres - referenceCentre)**2,1))
+    else:
+        distances = [np.sqrt(np.sum((centres - referenceCentre)**2,1)) \
+            for centres in allCentres]
+    # Get the radius ratio:
+    radiusRatio = np.zeros(allRadii.shape)
+    if len(allCentres.shape) == 1:
+        greaterRad = (allRadii >= referenceRadius)
+        lesserRad = (allRadii < referenceRadius) & (allRadii > 0)
+        radiusRatio[greaterRad] = \
+            referenceRadius/allRadii[greaterRad]
+        radiusRatio[lesserRad] = \
+            allRadii[lesserRad]/referenceRadius
+    else:
+        greaterRad = [(radii >= referenceRadius) \
+            for radii in allRadii]
+        lesserRad = [(radii < referenceRadius) & (radii > 0) \
+            for radii in allRadii]
+        for k in range(0,len(greaterRad)):
+            radiusRatio[]
+    # Get the distnace ratio:
+    distanceRatio = distances/np.sqrt(allRadii*referenceRadius)
+    return [radiusRatio,distanceRatio]
+
+
+[void2RadiusRatio1,void2DistanceRatio1] = getRatios(void2AllRadii,\
+    void2AllCentres,void1rad,void1cen)
+
+[void2RadiusRatioOpt4,void2DistanceRatioOpt4] = getRatios(void2AllRadii,\
+    void2AllCentres,radiiMeanOpt[filterOptGood][nVground],\
+    meanCentreOpt[filterOptGood][nVground])
+
+
+void2SuccessRadius1 = (void2RadiusRatio1 >= 0.75)
+void2SuccessDistance1 = (void2DistanceRatio1 <= 0.5)
+void2Success1 = (void2SuccessRadius1) & (void2SuccessDistance1)
+
+void2SuccessRadiusOpt4 = (void2RadiusRatioOpt4 >= 0.75)
+void2SuccessDistanceOpt4 = (void2DistanceRatioOpt4 <= 0.5)
+void2SuccessOpt4 = (void2SuccessRadiusOpt4) & (void2SuccessDistanceOpt4)
+
+splitAnalysis2 = compareVoids(groundTruth,void2)
+splitAnalysis1 = compareVoids(groundTruth,void1)
+
+# Success as a function of iterations:
+iteratedCentres = cat300.iteratedCentresList[indFilter300[nV1]]
+iteratedRadii = cat300.iteratedRadiiList[indFilter300[nV1]]
+
+radiusSuccess = np.zeros((len(iteratedCentres),len(splitAnalysis2[0])),\
+    dtype=bool)
+distanceSuccess = np.zeros((len(iteratedCentres),len(splitAnalysis2[0])),\
+    dtype=bool)
+muR = 0.75
+muS = 0.5
+for k in range(0,len(iteratedCentres)):
+    [radiusRatio,distanceRatio] = getRatios(void2AllRadii,\
+        void2AllCentres,iteratedRadii[k],iteratedCentres[k])
+    successRad = (radiusRatio >= muR)
+    successDist = (distanceRatio <= muS)
+    radiusSuccess[k,:] = successRad[splitAnalysis2[0]]
+    distanceSuccess[k,:] = successDist[splitAnalysis2[0]]
+
+totalSuccess = (radiusSuccess & distanceSuccess)
+
+
+[radiusRatioShort,distanceRatioShort] = getRatios(cat300.radiiListShort)
 
 # Histogram of distances:
 plt.clf()
@@ -6069,6 +6305,7 @@ densities256 = [np.reshape(density,(256,256,256),order='C') \
 densities256F = [np.reshape(density,(256,256,256),order='F') \
     for density in densitiesHR]
 
+meanDensity256 = np.mean(densities256,0)
 
 def plotVoidAnimation(nV,centralAntihalos,sortedList,catToPlot,radiiToPlot,\
         snapNumList,centresListShort,radiiListShort,densities,snapList,\
@@ -6211,7 +6448,7 @@ def plotShowVoidConvergence(iteratedCentres,iteratedRadii,density,\
         boxsize,Lbox = 100,axis=2,thickness=None,vmin=1/1000,\
         vmax=1000,cmap='PuOr_r',figuresFolder='./',\
         filename = 'iterations.gif',colorList = ['b','g','r','c','m','y','k'],\
-        groundTruthCentre=None,groundTruthRadius=None):
+        groundTruthCentre=None,groundTruthRadius=None,width=7.1014):
     if type(iteratedCentres) == np.ndarray:
         numVoids = 1
         numIterations = np.array([len(iteratedCentres)],dtype=int)
@@ -6231,13 +6468,13 @@ def plotShowVoidConvergence(iteratedCentres,iteratedRadii,density,\
     indUpp = int((zSlice + boxsize/2)*N/boxsize)\
          + int((thickness/2)*N/(boxsize))
     indLowX = int((meanCentre[0] + boxsize/2)*N/boxsize)\
-         - int((thickness/2)*N/(boxsize))
+         - int((Lbox/2)*N/(boxsize))
     indUppX = int((meanCentre[0] + boxsize/2)*N/boxsize)\
-         + int((thickness/2)*N/(boxsize))
+         + int((Lbox/2)*N/(boxsize))
     indLowY = int((meanCentre[1] + boxsize/2)*N/boxsize)\
-         - int((thickness/2)*N/(boxsize))
+         - int((Lbox/2)*N/(boxsize))
     indUppY = int((meanCentre[1] + boxsize/2)*N/boxsize)\
-         + int((thickness/2)*N/(boxsize))
+         + int((Lbox/2)*N/(boxsize))
     denToPlot = np.mean(density[indLowX:indUppX,indLowY:indUppY,\
             indLow:indUpp],axis)
     sm = cm.ScalarMappable(colors.LogNorm(vmin=vmin,vmax=vmax),\
@@ -6249,6 +6486,7 @@ def plotShowVoidConvergence(iteratedCentres,iteratedRadii,density,\
     numFrames = np.max(numIterations)
     for k in range(0,numFrames):
         plt.clf()
+        fig, ax = plt.subplots(figsize=(width,width))
         plt.imshow(denToPlot,norm=colors.LogNorm(vmin=vmin,vmax=vmax),\
                 cmap=cmap,extent=(meanCentre[0] - Lbox/2,\
                 meanCentre[0] + Lbox/2,\
@@ -6298,7 +6536,7 @@ def plotShowVoidConvergence(iteratedCentres,iteratedRadii,density,\
     plt.clf()
 
 plotShowVoidConvergence(iteratedCentresList[1],iteratedRadiiList[1],\
-    densities256[0],boxsize,figuresFolder=figuresFolder)
+    meanDensity256,boxsize,figuresFolder=figuresFolder)
 
 
 # Iterate over the good voids:
@@ -6311,7 +6549,7 @@ iteratedRadii = [iteratedRadiiList[filter300ind[x]] \
 
 
 plotShowVoidConvergence(iteratedCentres,iteratedRadii,\
-    densities256[0],boxsize,figuresFolder=figuresFolder)
+    meanDensity256,boxsize,figuresFolder=figuresFolder)
 
 # Loop over all the good voids:
 filter300ind = np.where(filter300)[0]
@@ -6322,10 +6560,10 @@ for k in range(0,len(splitListGoodFiltered)):
         for x in splitListGoodFiltered[k]]
     if len(iteratedCentres) > 0:
         plotShowVoidConvergence(iteratedCentres,iteratedRadii,\
-            densities256[0],boxsize,figuresFolder=figuresFolder,\
+            meanDensity256,boxsize,figuresFolder=figuresFolder,\
             filename = "curated_iterations_" + str(k) + ".gif",\
             groundTruthCentre = meanCentreOptHC[k],\
-            groundTruthRadius = radiiMeanOptHC[k])
+            groundTruthRadius = radiiMeanOptHC[k],thickness=20)
 
 #nVold = 113 # snr ~ 12, r = 10.2
 #nVold = 116 # snr ~ 2.9, r = 10.9
@@ -6355,6 +6593,129 @@ for nV in np.where(filterOptGood)[0]:
         hrList,snapSortList,\
         figuresFolder=figuresFolder,nameSuffix = "_good_voids_nV_" + str(nV),\
         minMuR=0.9,frameSuffix="",framePrefix="",namePrefix="good_voids/")
+
+
+# Central and average densities:
+deltaCentral300 = [props[11] for props in cat300.ahProps]
+deltaAverage300 = [props[12] for props in cat300.ahProps]
+shortedendDeltaCentral = cat300.getShortenedQuantity(deltaCentral300,\
+    cat300.centralAntihalos)
+shortedendDeltaAverage = cat300.getShortenedQuantity(deltaAverage300,\
+    cat300.centralAntihalos)
+deltaCentralList = getPropertyFromCat(cat300.finalCat,shortedendDeltaCentral)
+deltaAverageList = getPropertyFromCat(cat300.finalCat,shortedendDeltaAverage)
+[deltaCentralMean,deltaCentralSigma] = getMeanProperty(deltaCentralList,\
+    lowerLimit=-1)
+[deltaAverageMean,deltaAverageSigma] = getMeanProperty(deltaAverageList,\
+    lowerLimit=-1)
+
+
+# For curated voids:
+deltaCentralOpt = [props[11] for props in ahProps]
+deltaAverageOpt = [props[12] for props in ahProps]
+shortedendDeltaCentralOpt = getShortenedQuantity(deltaCentralOpt,\
+    cat300.centralAntihalos,cat300.centresListShort,cat300.sortedList,\
+    cat300.ahCounts,cat300.max_index)
+shortedendDeltaAverageOpt = getShortenedQuantity(deltaAverageOpt,\
+    cat300.centralAntihalos,cat300.centresListShort,cat300.sortedList,\
+    cat300.ahCounts,cat300.max_index)
+deltaCentralListOpt = getPropertyFromCat(finalCatOpt,shortedendDeltaCentralOpt)
+deltaAverageListOpt = getPropertyFromCat(finalCatOpt,shortedendDeltaAverageOpt)
+[deltaCentralMeanOpt,deltaCentralSigmaOpt] = \
+    getMeanProperty(deltaCentralListOpt,lowerLimit=-1)
+[deltaAverageMeanOpt,deltaAverageSigmaOpt] = \
+    getMeanProperty(deltaAverageListOpt,lowerLimit=-1)
+
+
+# Convergence of iterated centres:
+nV = 4
+iteratedCentres = [cat300.iteratedCentresList[filter300ind[x]] \
+    for x in splitListGoodFiltered[nV]]
+iteratedRadii = [cat300.iteratedRadiiList[filter300ind[x]] \
+    for x in splitListGoodFiltered[nV]]
+
+finalCentres = [x[-1] for x in iteratedCentres]
+finalRadii = [x[-1] for x in iteratedRadii]
+distances = [np.sqrt(np.sum((x - final)**2,1)) \
+    for x, final in zip(iteratedCentres,finalCentres)]
+radiiDistance = [x - final for x, final in zip(iteratedRadii,finalRadii)]
+
+plt.clf()
+colorList = ['b','g','r','c','m','y','k']
+for k in range(0,len(iteratedCentres)):
+    plt.plot(range(0,len(iteratedCentres[k])),distances[k],\
+        color=colorList[np.mod(k,len(colorList))],label="Void " + str(k+1))
+    plt.xlabel('Iteration')
+    plt.ylabel('Distance from final centres [$\\mathrm{Mpc}h^{-1}$]')
+
+plt.legend()
+plt.savefig(figuresFolder + "centre_convergence.svg")
+
+
+plt.clf()
+colorList = ['b','g','r','c','m','y','k']
+for k in range(0,len(iteratedRadii)):
+    plt.plot(range(0,len(iteratedRadii[k])),radiiDistance[k],\
+        color=colorList[np.mod(k,len(colorList))],label="Void " + str(k+1))
+    plt.xlabel('Iteration')
+    plt.ylabel('$R - R_{\\mathrm{final}}$ [$\\mathrm{Mpc}h^{-1}$]')
+
+plt.legend()
+plt.savefig(figuresFolder + "radius_convergence.svg")
+
+
+
+plt.clf()
+colorList = ['b','g','r','c','m','y','k']
+for nV in range(0,30):
+    iteratedCentres = [cat300.iteratedCentresList[filter300ind[x]] \
+        for x in splitListGoodFiltered[nV]]
+    iteratedRadii = [cat300.iteratedRadiiList[filter300ind[x]] \
+        for x in splitListGoodFiltered[nV]]
+    finalCentres = [x[-1] for x in iteratedCentres]
+    finalRadii = [x[-1] for x in iteratedRadii]
+    distances = [np.sqrt(np.sum((x - meanCentreOpt[filterOptGood][nV])**2,1)) \
+        for x in iteratedCentres]
+    radiiDistance = [x - final for x, final in zip(iteratedRadii,finalRadii)]
+    for k in range(0,1):
+        plt.plot(range(0,len(iteratedCentres[k])),distances[k]/\
+            radiiMeanOpt[filterOptGood][k],\
+            color=colorList[np.mod(k,len(colorList))],label="Void " + str(k+1))
+        plt.xlabel('Iteration')
+        plt.ylabel('(Distance from Ground Truth Centre)/$R_{\\mathrm{Ground Truth}}$')
+        plt.axhline(0.05,color='grey',linestyle=':')
+
+#plt.legend()
+plt.savefig(figuresFolder + "centre_convergence_all.svg")
+
+
+
+plt.clf()
+colorList = ['b','g','r','c','m','y','k']
+for nV in range(0,30):
+    iteratedCentres = [cat300.iteratedCentresList[filter300ind[x]] \
+        for x in splitListGoodFiltered[nV]]
+    iteratedRadii = [cat300.iteratedRadiiList[filter300ind[x]] \
+        for x in splitListGoodFiltered[nV]]
+    finalCentres = [x[-1] for x in iteratedCentres]
+    finalRadii = [x[-1] for x in iteratedRadii]
+    distances = [np.sqrt(np.sum((x - final)**2,1)) \
+        for x, final in zip(iteratedCentres,finalCentres)]
+    radiiDistance = [x - radiiMeanOpt[filterOptGood][nV] \
+        for x in iteratedRadii]
+    for k in range(0,1):
+        plt.plot(range(0,len(iteratedRadii[k])),radiiDistance[k]/\
+        radiiMeanOpt[filterOptGood][k],\
+        color=colorList[np.mod(k,len(colorList))],label="Void " + str(k+1))
+    plt.xlabel('Iteration')
+    plt.ylabel('$(R - R_{\\mathrm{Ground Truth}})/R_{\\mathrm{Ground Truth}}$')
+    plt.axhline(0.01,color='grey',linestyle=':')
+    plt.axhline(-0.01,color='grey',linestyle=':')
+
+#plt.legend()
+plt.savefig(figuresFolder + "radius_convergence_all.svg")
+
+
 
 
 

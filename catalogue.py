@@ -82,6 +82,9 @@ class combinedCatalogue:
             for k in range(0,self.numCats)]
         self.iteratedCentresList = []
         self.iteratedRadiiList = []
+        # Derived quantities:
+        self.radiiList = None
+        self.massList = None
     # Construct an anti-halo catalogue from reversed snapshots
     def constructAntihaloCatalogue(self):
         # Load snapshots:
@@ -904,8 +907,71 @@ class combinedCatalogue:
             self.finalCatFrac.append(catFrac)
             self.finalCombinatoricFrac.append(combFrac)
         return voidMatches
-
-
+    # Get the catalogue fraction thresholds for each void:
+    def getAllThresholds(percentiles,radBins):
+        if self.meanRadii is None:
+            self.
+        scaleFilter = [(radii > radBins[k]) & \
+            (radii <= radBins[k+1]) \
+            for k in range(0,len(radBins) - 1)]
+        thresholds = np.zeros(radii.shape)
+        for filt, perc in zip(scaleFilter,percentiles):
+            thresholds[filt] = perc
+        return thresholds
+    def getMeanProperty(prop,stdError=True,\
+            recompute=False):
+        if self.finalCat is None:
+            raise Exception("Final catalogue has not yet been computed.")
+        propertyDict = {"radii":self.radiiList,"mass":self.massList}
+        meanDict = {"radii":self.meanRadii,"mass":self.meanMass}
+        sigmaDict = {"radii":self.sigmaRadii,"mass":self.sigmaMass}
+        if type(prop) == str:
+            if prop in propertyDict:
+                propertyToProcess = propertyDict[prop]
+            else:
+                raise Exception("Property not implemented.")
+            cacheQuantity = True
+            if (propertyToProcess is not None) and (not recompute):
+                return propertyToProcess
+        elif type(prop) == list:
+            # Check it is sensible:
+            if len(prop) != self.numCats:
+                raise Exception("Property list has invalid length.")
+            if (not np.all(np.array([len(x) for x in prop]) == self.ahCounts)):
+                raise Exception("Property list lengths do not match " + \
+                    "supplied catalogue lengths.")
+            propertyToProcess = prop
+            cacheQuantity = False
+        # Begin computing the mean property:
+        meanProperty = np.zeros(len(self.finalCat))
+        sigmaProperty = np.zeros(len(self.finalCat))
+        for k in range(0,len(self.finalCat)):
+            condition = (np.isfinite(propertyToProcess[k,:]))
+            haveProperty = np.where(condition)[0]
+            meanProperty[k] = np.mean(propertyToProcess[k,haveProperty])
+            sigmaProperty[k] = np.std(propertyToProcess[k,haveProperty])
+            if stdError:
+                sigmaProperty[k] /= np.sqrt(len(haveProperty))
+        if cacheQuantity:
+            meanDict[prop] = meanProperty
+            sigmaDict[prop] = sigmaProperty
+        return [meanProperty,sigmaProperty]
+    def getAllRadii(recompute=False):
+        if (self.radiiList is None) or (recompute):
+            if self.finalCat is None:
+                raise Exception("Final catalogue has not yet been computed.")
+            else:
+                self.radiiList = np.zeros(self.finalCat.shape,dtype=float)
+                for k in range(0,len(self.finalCat)):
+                    for l in range(0,self.numCats):
+                        if self.finalCat[k,l] > 0:
+                            self.radiiList[k,l] = self.radiiListShort[l][\
+                                self.finalCat[k,l]-1]
+                        else:
+                            self.radiiList[k,l] = np.nan
+                return self.radiiList
+        else:
+            return self.radiiList
 
 
 # Load simulations and catalogue data so that we can combine them. If these
