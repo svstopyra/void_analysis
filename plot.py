@@ -143,7 +143,7 @@ def histWithErrors(p,sigma,bins,ax = None,label="Bin probabilities",\
             label=label,color=color)
     else:
         return ax.bar(x,p,width=width,yerr=sigma,alpha=alpha,\
-            label=label,color=color,error_kw=error_kw)
+            label=label,color=color)
 
 # Histogram of halo densities
 def haloHistogram(logrho,logrhoBins,masses,massBins,massBinList = None,

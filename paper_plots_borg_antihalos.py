@@ -4208,6 +4208,8 @@ snapSample = snapListUn[0]
 ahPropsUnconstrained = ahPropsUn
 ahCentresListUn = [props[5] for props in ahPropsUnconstrained]
 antihaloRadiiUn = [props[7] for props in ahPropsUnconstrained]
+centralDensityUn = [props[11] for props in ahPropsUnconstrained]
+averageDensityUn = [props[12] for props in ahPropsUnconstrained]
 ahTreeCentres = [scipy.spatial.cKDTree(centres,boxsize) \
     for centres in ahCentresListUn]
 
@@ -4284,6 +4286,7 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
     # Get pair counts in similar-density regions:
     allPairsUncon = []
     allVolumesUncon = []
+    allSelections = []
     np.random.seed(seed)
     [inRadBinsComb,noInRadBinsComb] = plot.binValues(meanRadiiMCMC,\
         rEffBinEdges)
@@ -4320,6 +4323,7 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
                 tree=tree,method='poisson',vorVolumes=None)
             allPairsUncon.append(nPairsList)
             allVolumesUncon.append(volumesList)
+            allSelections.append(selectArray)
             print("Done centre " + str(count+1) + " of " + \
                 str(len(centreListToTest[ns])))
         tools.savePickle([allPairsUncon,allVolumesUncon],"temp_sample_" + \
@@ -4328,20 +4332,42 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
         # Delete temporaries to save memory:
         #del snapLoaded, tree
         #gc.collect()
-    return [allPairsUncon,allVolumesUncon]
+    return [allPairsUncon,allVolumesUncon,allSelections]
 
-[allPairsUncon,allVolumesUncon] = tools.loadOrRecompute(\
+[allPairsUncon,allVolumesUncon,allSelectionsUncon] = tools.loadOrRecompute(\
     data_folder + "pair_counts_random_cut.p",getRandomCataloguePairCounts,\
     centresToUse,snapListUn,treeListUncon,ahCentresListUn,\
     antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,\
-    _recomputeData=False)
+    _recomputeData=True,start=7)
 
-[allPairsUnconNonOverlap,allVolumesUnconNonOverlap] = tools.loadOrRecompute(\
-    data_folder + "pair_counts_random_cut_non_overlapping.p",\
-    getRandomCataloguePairCounts,\
-    centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
-    antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,\
-    _recomputeData=False)
+[allPairsUnconNonOverlap,allVolumesUnconNonOverlap,\
+    allSelectionsUnconNonOverlap] = tools.loadOrRecompute(\
+        data_folder + "pair_counts_random_cut_non_overlapping.p",\
+        getRandomCataloguePairCounts,\
+        centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
+        antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,\
+        _recomputeData=False)
+
+[allPairsUncon,allVolumesUncon] = tools.loadPickle("temp_sample_13.p")
+
+
+# Central and average densities in similar regions:
+centralDensityUnconNonOverlap = []
+averageDensityUnconNonOverlap = []
+counter = 0
+for ns in range(0,len(snapListUn)):
+    centres = centresToUseNonOverlapping[ns]
+    numCentres = len(centres)
+    centralAntihalos = tools.getAntiHalosInSphere(ahCentresListUn[ns],\
+                rSphere,origin=centre)
+    for centre, count in zip(centres,range(0,numCentres)):
+        sphereCentralDensities = centralDensityUn[ns][centralAntihalos[1]]
+        sphereAverageDensities = averageDensityUn[ns][centralAntihalos[1]]
+        centralDensityUnconNonOverlap.append(\
+            sphereCentralDensities[allSelectionsUnconNonOverlap[counter]])
+        averageDensityUnconNonOverlap.append(\
+            sphereAverageDensities[allSelectionsUnconNonOverlap[counter]])
+        counter += 1
 
 
 
@@ -4436,13 +4462,19 @@ plt.show()
 
 # Plot comparison:
 fig, ax = plt.subplots(figsize=(textwidth,0.5*textwidth))
-ax.fill_between(rBinStackCentres,(meanStackedUnAll - sigmaStackedUnAll)/nbar,\
-    (meanStackedUnAll + sigmaStackedUnAll)/nbar,alpha=0.5,color='grey',\
-    label='Random catalogue')
-ax.plot(rBinStackCentres,meanDensity.T/nbar,\
-    color='k',linestyle=':',label='Constrained Catalogue')
+#ax.fill_between(rBinStackCentres,(meanStackedUnAll - sigmaStackedUnAll)/nbar,\
+#    (meanStackedUnAll + sigmaStackedUnAll)/nbar,alpha=0.5,color='grey',\
+#    label='Random catalogue')
+ax.plot(rBinStackCentres,rhoRandomToUse.T/nbar,color='grey',linestyle=':',\
+    zorder=1)
+ax.fill_between(rBinStackCentres,(rhoStacked - sigmaRhoStacked)/nbar,\
+    (rhoStacked + sigmaRhoStacked)/nbar,alpha=0.5,color='k',\
+    label='MCMC catalogue',zorder=3)
 ax.axvline(1.0,color='grey',linestyle=':')
 ax.axhline(1.0,color='grey',linestyle=':')
+ax.fill_between(rBinStackCentres,1 + deltaListMeanNew - deltaListErrorNew,\
+    1 + deltaListMeanNew + deltaListErrorNew,alpha=0.5,\
+    color=seabornColormap[1],label='Local super-volume density')
 ax.set_xlabel('$R/R_{\\mathrm{eff}}$',fontsize=8)
 ax.set_ylabel('$\\rho/\\bar{\\rho}$',fontsize=8)
 ax.legend(prop={"size":fontsize,"family":"serif"},frameon=False)
@@ -4491,6 +4523,8 @@ for i in range(0,2):
         ax[i,j].axvline(interval68[0],color='grey',linestyle='--',\
             label='68% interval')
         ax[i,j].axvline(interval68[1],color='grey',linestyle='-.')
+        ax[i,j].axvline(rhoStacked[ind]/nbar,color=seabornColormap[1],\
+            linestyle='-',label='MCMC catalogue')
         ax[i,j].set_xlabel('$\\rho/\\bar{\\rho}$')
         ax[i,j].set_ylabel('Probability Density')
         ax[i,j].set_title(titles[i][j])
@@ -4502,9 +4536,118 @@ plt.savefig(figuresFolder + "random_profiles_distribution.pdf")
 plt.show()
 
 # Density distribution:
-histMean = plt.hist2D()
+plt.clf()
+histMean = plt.hist2d(deltaAverageMean,deltaCentralMean,\
+    bins=np.linspace(-1,-0.5,21),density=True,cmap='blues')
+plt.xlabel('Average density contrast, $\\bar{\\delta}$')
+plt.ylabel('Central density contrast, $\\delta_c$')
+plt.colorbar(label='Probability density')
+plt.savefig(figuresFolder + "density_central_average_distribution.pdf")
+plt.show()
 
 
+# Binning in each random simulation region individually:
+numBins = 21
+bins=np.linspace(-1,-0.5,numBins)
+binCountsAverageUncon = np.zeros(\
+    (len(averageDensityUnconNonOverlap),numBins-1),dtype=int)
+for k in range(0,len(averageDensityUnconNonOverlap)):
+    [_,noInBins] = plot.binValues(averageDensityUnconNonOverlap[k],bins)
+    binCountsAverageUncon[k,:] = noInBins
+
+binWidths = bins[1:] - bins[0:-1]
+probAverageDensityUncon = (binCountsAverageUncon/\
+    np.sum(binCountsAverageUncon,1)[:,None])/binWidths
+sigmaAverageDensityUncon = np.std(probAverageDensityUncon,0)
+
+binCountsCentralUncon = np.zeros(\
+    (len(centralDensityUnconNonOverlap),numBins-1),dtype=int)
+for k in range(0,len(centralDensityUnconNonOverlap)):
+    [_,noInBins] = plot.binValues(centralDensityUnconNonOverlap[k],bins)
+    binCountsCentralUncon[k,:] = noInBins
+
+binWidths = bins[1:] - bins[0:-1]
+probCentralDensityUncon = (binCountsCentralUncon/\
+    np.sum(binCountsCentralUncon,1)[:,None])/binWidths
+sigmaCentralDensityUncon = np.std(probCentralDensityUncon,0)
+
+from void_analysis.plot import histWithErrors
+
+# Density histograms:
+plt.clf()
+fig, ax = plt.subplots(1,2,figsize=(textwidth,0.5*textwidth))
+ax[0].hist(deltaAverageMean[filter300],
+    bins=np.linspace(-1,-0.5,numBins),density=True,\
+    color=seabornColormap[1],label='MCMC \ncatalogue',alpha=0.5)
+#ax[0].hist(np.hstack(averageDensityUnconNonOverlap),\
+#    bins=np.linspace(-1,-0.5,21),density=True,\
+#    color=seabornColormap[1],label='Random simulations',alpha=0.5)
+#ax[0].hist(averageDensityUnconNonOverlap[0],\
+#    bins=np.linspace(-1,-0.5,numBins),density=True,\
+#    color=seabornColormap[1],label='Random simulations',alpha=0.5)
+histWithErrors(np.mean(probAverageDensityUncon,0),sigmaAverageDensityUncon,\
+    bins,ax=ax[0],color=seabornColormap[0],alpha=0.5,\
+    label='Random \nsimulations')
+ax[0].set_title('Average Density')
+ax[0].set_xlim([-1,-0.5])
+ax[0].set_xlabel('$\\bar{\\delta}$')
+ax[0].set_ylabel('Probability density')
+ax[0].set_ylim([0,30])
+
+ax[1].hist(deltaCentralMean[filter300],\
+    bins=np.linspace(-1,-0.5,numBins),density=True,\
+    color=seabornColormap[1],label='MCMC \ncatalogue',alpha=0.5)
+#ax[1].hist(np.hstack(centralDensityUnconNonOverlap),\
+#    bins=np.linspace(-1,-0.5,21),density=True,\
+#    color=seabornColormap[1],label='Random simulations',alpha=0.5)
+#ax[1].hist(centralDensityUnconNonOverlap[0],\
+#    bins=np.linspace(-1,-0.5,numBins),density=True,\
+#    color=seabornColormap[1],label='Random simulations',alpha=0.5)
+histWithErrors(np.mean(probCentralDensityUncon,0),sigmaCentralDensityUncon,\
+    bins,ax=ax[1],color=seabornColormap[0],alpha=0.5,\
+    label='Random \nsimulations')
+ax[1].set_title('Central Density')
+ax[1].set_xlim([-1,-0.5])
+ax[1].set_xlabel('$\\delta_c$')
+ax[1].set_ylabel('Probability density')
+ax[1].set_ylim([0,30])
+
+ax[1].legend()
+#plt.tight_layout()
+plt.subplots_adjust(bottom = 0.15,top=0.90,left = 0.15,right=0.95)
+plt.savefig(figuresFolder + "density_histograms.pdf")
+plt.show()
+
+# Comparison of means:
+stackedCentralRandom = np.hstack(centralDensityUnconNonOverlap)
+meansIndividualCentral = np.array([np.nanmean(x) \
+    for x in centralDensityUnconNonOverlap])
+isNotNanCentral = np.where(np.isfinite(stackedCentralRandom))[0]
+meanCentralRandom = np.mean(meansIndividualCentral)
+stdErrorCentralRandom = np.nanstd(meansIndividualCentral)
+
+stackedAverageRandom = np.hstack(averageDensityUnconNonOverlap)
+meansIndividualAverage = np.array([np.nanmean(x) \
+    for x in averageDensityUnconNonOverlap])
+isNotNanAverage = np.where(np.isfinite(stackedAverageRandom))[0]
+meanAverageRandom = np.nanmean(meansIndividualAverage)
+stdErrorAverageRandom = np.nanstd(meansIndividualAverage)
+
+
+meanCentral = np.mean(deltaCentralMean[filter300])
+meanAverage = np.mean(deltaAverageMean[filter300])
+stdErrorCentral = np.std(deltaAverageMean[filter300])/\
+    np.sqrt(np.sum(filter300))
+stdErrorAverage = np.std(deltaAverageMean[filter300])/\
+    np.sqrt(np.sum(filter300))
+
+[meanCentralRandom - stdErrorCentralRandom,meanCentralRandom + stdErrorCentralRandom]
+[meanAverageRandom - stdErrorAverageRandom,meanAverageRandom + stdErrorAverageRandom]
+[meanCentral - stdErrorCentral,meanCentral + stdErrorCentral]
+[meanAverage - stdErrorAverage,meanAverage + stdErrorAverage]
+
+averageSigmas = (meanAverage - meanAverageRandom)/stdErrorAverageRandom
+centralSigmas = (meanCentral - meanCentralRandom)/stdErrorCentralRandom
 
 #-------------------------------------------------------------------------------
 # BIAS FUNCTIONAL FORM
