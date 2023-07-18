@@ -35,9 +35,9 @@ class combinedCatalogue:
         self.crossMatchQuantity = crossMatchQuantity
         self.sortMethod = sortMethod
         self.mode = mode
-        [self.snapList,self.snapListRev,self.boxsize,self.ahProps,\
+        [_,_,self.boxsize,self.ahProps,\
             self.antihaloCentres,self.antihaloMasses,self.antihaloRadii,\
-            self.snapSortList,self.volumesList,self.hrList] = \
+            self.snapSortList,self.volumesList,_] = \
             loadCatalogueData(snapList,snapListRev,ahProps,sortMethod,\
                 snapSortList,hrList,verbose=verbose)
         self.numCats = len(snapList) # Number of catalogues
@@ -85,26 +85,6 @@ class combinedCatalogue:
         # Derived quantities:
         self.radiiList = None
         self.massList = None
-    # Construct an anti-halo catalogue from reversed snapshots
-    def constructAntihaloCatalogue(self):
-        # Load snapshots:
-        # Construct new antihalo catalogues from the filtered list:
-        if self.verbose:
-            print("Constructing constrained region catalogues...")
-        # For some methods, we need to create shortened anti-halo catalogues 
-        # first otherwise we end up matching a lot of useless halos and wasting 
-        # time:
-        self.hrListCentral = self.constructShortenedCatalogues()
-        # If we are using volume overlaps to match voids, then we need to 
-        # create an overlapMap between all pairs of anti-halos in all catalogues:
-        if self.sortMethod == "volumes":
-            if self.overLapList is None:
-                self.overlapList = getOverlapList()
-            else:
-                # Check that the supplied overlap list is the correct size. 
-                # If not this probably means that a bad overlap list was given:
-                if len(overlapList) != int(self.numCats*(self.numCats - 1)/2):
-                    raise Exception("Invalid overlapList!")
         # Construct matches:
         # Create lists of the quantity to match voids with (mass or radius),
         # chosen to match centresListShort:
@@ -118,8 +98,8 @@ class combinedCatalogue:
             self.quantityList = self.massListShort
         else:
             raise Exception('Unrecognised cross-match quantity.')
-        if self.verbose:
-            print("Computing matches...")
+    # Construct an anti-halo catalogue from reversed snapshots
+    def constructAntihaloCatalogue(self):
         # Main loop to compute candidate matches:
         [self.oneWayMatchesAllCatalogues,self.matchArrayList,\
             self.allCandidates,self.allRatios,self.allDistances] = \
@@ -148,45 +128,20 @@ class combinedCatalogue:
         self.finalCombinatoricFrac = np.array(self.finalCombinatoricFrac)
         self.finalCatFrac = np.array(self.finalCatFrac)
         return self.finalCat
-    def getMatchPynbody(self,n1,n2,fractionType='normal'):
-        snap1 = self.snapListRev[n1]
-        snap2 = self.snapListRev[n2]
-        cat1 = self.hrListCentral[n1]
-        cat2 = self.hrListCentral[n2]
-        quantity1 = self.quantityList[n1]
-        quantity2 = self.quantityList[n2]
-        bridge = pynbody.bridge.OrderBridge(snap1,snap2,monotonic=False)
-        # Ensure ratio is above the threshold:
-        match = [-2]
-        candidatesList = []
-        # get shared particle fractions:
-        catTransfer = bridge.catalog_transfer_matrix(groups_1 = cat1,\
-            groups_2 = cat2,max_index=self.max_index)
-        cat2Lengths = np.array([len(halo) for halo in cat2])
-        for k in range(0,np.min([len(cat1),self.max_index])):
-            # get quantity (mass or radius) ratio, defined as lower/highest
-            # so that it is always <= 1:
-            bigger = np.where(quantity2 > quantity1[k])[0]
-            quantRatio = quantity2/quantity1[k]
-            quantRatio[bigger] = quantity1[k]/quantity2[bigger]
-            if fractionType == 'normal':
-                fraction = catTransfer[k]/len(cat1[k+1])
-            elif fractionType == 'symmetric':
-                fraction = catTransfer[k]/np.sqrt(len(cat1[k+1]*cat2Lengths))
-            else:
-                raise Exception("Unrecognised fraction type requested.")
-            # Find candidates that satisfy the threshold requirements:
-            candidates = np.where((quantRatio >= self.muR) & \
-                (fraction > self.pynbodyThresh))[0]
-            candidatesList.append(candidates)
-            if len(candidates) < 1:
-                match.append(-1)
-            else:
-                # Select the match with the highest shared particle fraction
-                # as the most probable:
-                mostProbable = candidates[np.argmax(fraction[candidates])]
-                match.append(mostProbable + 1)
-            return [np.array(match,dtype=int),candidatesList]
+    def loadCatalogue(catalogue):
+        if type(catalogue) == str:
+            catalogue = tools.loadPickle(catalogue)
+        if type(catalogue) != np.array:
+            raise Exception("Invalid catalogue type.")
+        # Now check the catalogue is sensible:
+        if len(catalogue.shape) != 2:
+            raise Exception("Catalogue has invalid shape.")
+        if catalogue.shape[1] != self.numCats:
+            raise Exception("Number of catalogues is not valid.")
+        if catalogue.dtype != int:
+            raise Exception("Invalid array type for catalogue.")
+        # Setup required variables:
+        self.finalCat = catalogue
     def getAllCandidatesFromTrees(self,n1,n2):
         centres1 = self.centresListShort[n1]
         quantity1 = self.quantityList[n1]
@@ -208,18 +163,10 @@ class combinedCatalogue:
         return [searchRadii,searchOther]
     # Function to match all voids:
     def getMatchDistance(self,n1,n2,overlap = None):
-        snap1 = self.snapListRev[n1]
-        snap2 = self.snapListRev[n2]
         centres1 = self.centresListShort[n1]
         centres2 = self.centresListShort[n2]
         quantity1 = self.quantityList[n1]
-        quantity2 = self.quantityList[n2]
-        tree1 = self.treeList[n1]
-        tree2 = self.treeList[n2]
-        cat1 = self.hrListCentral[n1]
-        cat2 = self.hrListCentral[n2]
-        volumes1 = self.volumesList[n1]
-        volumes2 = self.volumesList[n2]
+        #quantity2 = self.quantityList[n2]
         # Our procedure here is to get the closest anti-halo that lies within the 
         # threshold:
         match = [-2] # Always include -2, for compatibility with pynbody output
@@ -228,13 +175,6 @@ class combinedCatalogue:
         distList = []
         # Fina candidates for all anti-halos:
         [searchRadii,searchOther] = self.getAllCandidatesFromTrees(n1,n2)
-        # Build an overlap map, if we are using this method:
-        if overlap is None and self.sortMethod == "volumes":
-            if cat1 is None or cat2 is None or \
-            volumes1 is None or volumes2 is None:
-                raise Exception("Anti-halo catalogue required for " + \
-                    "volumes based matching.")
-            overlap = overlapMap(cat1,cat2,volumes1,volumes2)
         # Process all the candidates, to find which are above the specified 
         # thresholds:
         for k in range(0,np.min([len(centres1),self.max_index])):
@@ -255,13 +195,7 @@ class combinedCatalogue:
         return [np.array(match,dtype=int),candidatesList,ratioList,distList]
     # Perform matching between two catalogues:
     def getMatchCandidatesTwoCatalogues(self,n1,n2):
-        if self.matchType == 'pynbody':
-            # Use pynbody's halo catalogue matching to identify likely
-            # matches:
-            [match, candidatesList] = self.getMatchPynbody(n1,n2)
-            ratioList = None
-            distList = None
-        elif self.matchType == 'distance':
+        if self.matchType == 'distance':
             # This is the conventional approach: matching on distance
             # radius criteria:
             [match, candidatesList,ratioList,distList] = \
@@ -311,37 +245,6 @@ class combinedCatalogue:
             for k in range(0,self.numCats)]
         return [oneWayMatchesAllCatalogues,matchArrayList,allCandidates,\
             allRatios,allDistances]
-    def getOverlapList(self):
-        overlapList = []
-        for k in range(0,self.numCats):
-            for l in range(0,self.numCats):
-                if k >= l:
-                    continue
-                overlapList.append(overlapMap(self.hrListCentral[k],\
-                    self.hrListCentral[l],self.volumesList[k],\
-                    self.volumesList[l],verbose=False))
-        return overlapList
-    def constructShortenedCatalogues(self):
-        if self.matchType == "pynbody" or self.sortMethod == "volumes":
-            # These methods need copies of the catalogues, which we will then
-            # filter below:
-            hrListCentral = [copy.deepcopy(halos) for halos in self.hrList]
-        else:
-            # Other methods don't need these catalogues, so we store \
-            # place-holders:
-            hrListCentral = [None for halos in self.hrList]
-        # List of the halo numbers (in pynbody convention) for all anti-halos
-        # being used for matching:
-        for l in range(0,self.numCats):
-            if self.matchType == "pynbody" or self.sortMethod == "volumes":
-                # Manually edit the pynbody anti-halo catalogues to
-                # only include the relevant anti-halos:
-                hrListCentral[l]._halos = dict([(k+1,\
-                    self.hrList[l][self.centralAntihalos[l][0][\
-                    self.sortedList[l][k]]+1]) \
-                    for k in range(0,len(self.centralAntihalos[l][0]))])
-                hrListCentral[l]._nhalos = len(self.centralAntihalos[l][0])
-        return hrListCentral
     def computeShortCentresList(self):
         [self.centresListShort,self.centralAntihalos,self.sortedList,\
             self.ahCounts,self.max_index]  = computeShortCentresList(\
@@ -973,22 +876,21 @@ class combinedCatalogue:
         else:
             return self.radiiList
 
+def loadSnapshots(snapList):
+    if type(snapList[0]) == str:
+        snapshotsList = [pynbody.load(snapname) for snapname in snapList]
+    elif type(snapList[0]) == pynbody.snapshot.gadget.GadgetSnap:
+        snapshotsList = snapList
+    else:
+        raise Exception("Snapshot type not supported.")
+    return snapList
 
 # Load simulations and catalogue data so that we can combine them. If these
 # are already loaded, this function won't reload them.
 def loadCatalogueData(snapList,snapListRev,ahProps,sortMethod,snapSortList,\
         hrList,verbose=False):
-    if snapList is None:
-        snapList =  [pynbody.load(samplesFolder + "sample" + \
-            str(snapNum) + "/" + snapname) for snapNum in snapNumList]
-    if snapListRev is None:
-        snapListRev =  [pynbody.load(samplesFolder + "sample" + \
-            str(snapNum) + "/" + snapnameRev) for snapNum in snapNumList]
-    # If snaplists are strings, then load them:
-    if type(snapList[0]) == str:
-        snapList = [pynbody.load(snap) for snap in snapList]
-    if type(snapListRev[0]) == str:
-        snapListRev = [pynbody.load(snap) for snap in snapListRev]
+    snapshotsList = loadSnapshots(snapList)
+    snapshotsListRev = loadSnapshots(snapListRev)
     # Load centres so that we can filter to the constrained region:
     boxsize = snapList[0].properties['boxsize'].ratio("Mpc a h**-1")
     if verbose:

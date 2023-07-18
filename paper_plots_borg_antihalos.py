@@ -4102,6 +4102,7 @@ volumesList = [None for snap in snapList]
 conditionList = [None for snap in snapList]
 rEffMin = 0.0
 rEffMax = 10.0
+rSphere = 135
 nRadiusBins = 101
 nbar = (512/boxsize)**3
 rBinStack = np.linspace(rEffMin,rEffMax,nRadiusBins)
@@ -4115,37 +4116,50 @@ massList = [meanMasses for snap in snapList]
 
 treeList = [scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize) \
     for snap in snapList]
+#treeList = [None for snap in snapList]
 
-allPairs = []
-allVolumes = []
-for k in range(0,len(snapNameList)):
-    [nPairsList,volumesList] = stacking.getPairCounts(meanCentresGadgetCoord,\
-            meanRadii,snapNameList[k],rBinStack,tree=None,\
+def getAllPairCountsMCMC(meanCentresGadgetCoord,meanRadii,rBinStack,\
+        treeList,snapNameList):
+    allPairs = []
+    allVolumes = []
+    for k in range(0,len(snapNameList)):
+        [nPairsList,volumesList] = stacking.getPairCounts(meanCentresGadgetCoord,\
+                meanRadii,snapNameList[k],rBinStack,tree=treeList[k],\
+                method='poisson',vorVolumes=None)
+        allPairs.append(nPairsList)
+        allVolumes.append(volumesList)
+    return [allPairs,allVolumes]
+
+[allPairs,allVolumes] = tools.loadOrRecompute(\
+    data_folder + "pair_counts_mcmc_cut.p",\
+    getAllPairCountsMCMC,meanCentresGadgetCoord,meanRadii,rBinStack,\
+    treeList,snapNameList,_recomputeData=False)
+
+
+
+def getAllPairCountsMCMCSamples(allCentres300Gadget,allRadii300,\
+        rBinStackCentres,snapNameList,snapList,treeList):
+    allPairsSample = np.zeros((len(snapList),len(allRadii300),\
+        len(rBinStackCentres)))
+    allVolumesSample = np.zeros((len(snapList),len(allRadii300),\
+        len(rBinStackCentres)))
+    for k in range(0,len(snapNameList)):
+        haveAntiHalo = np.isfinite(allRadii300[:,k])
+        noAntiHalo = np.logical_not(haveAntiHalo)
+        [nPairsList,volumesList] = stacking.getPairCounts(\
+            allCentres300Gadget[k,haveAntiHalo,:],\
+            allRadii300[haveAntiHalo,k],snapList[k],rBinStack,tree=treeList[k],\
             method='poisson',vorVolumes=None)
-    allPairs.append(nPairsList)
-    allVolumes.append(volumesList)
+        allPairsSample[k,haveAntiHalo,:] = nPairsList
+        allPairsSample[k,noAntiHalo,:] = np.nan
+        allVolumesSample[k,haveAntiHalo,:] = volumesList
+        allVolumesSample[k,noAntiHalo,:] = np.nan
+    return [allPairsSample,allVolumesSample]
 
-tools.savePickle([allPairs,allVolumes],\
-    data_folder + "pair_counts_mcmc_cut.p")
-[allPairs,allVolumes] = tools.loadPickle(\
-    data_folder + "pair_counts_mcmc_cut.p")
-
-allPairsSample = np.zeros((len(snapList),len(allRadii300),\
-    len(rBinStackCentres)))
-allVolumesSample = np.zeros((len(snapList),len(allRadii300),\
-    len(rBinStackCentres)))
-for k in range(0,len(snapNameList)):
-    haveAntiHalo = np.isfinite(allRadii300[:,k])
-    noAntiHalo = np.logical_not(haveAntiHalo)
-    [nPairsList,volumesList] = stacking.getPairCounts(\
-        allCentres300Gadget[k,haveAntiHalo,:],\
-        allRadii300[haveAntiHalo,k],snapList[k],rBinStack,tree=treeList[k],\
-        method='poisson',vorVolumes=None)
-    allPairsSample[k,haveAntiHalo,:] = nPairsList
-    allPairsSample[k,noAntiHalo,:] = np.nan
-    allVolumesSample[k,haveAntiHalo,:] = volumesList
-    allVolumesSample[k,noAntiHalo,:] = np.nan
-
+[allPairsSample,allVolumesSample] = tools.loadOrRecompute(\
+    data_folder + "pair_counts_mcmc_cut_samples.p",getAllPairCountsMCMCSamples,\
+    allCentres300Gadget,allRadii300,\
+    rBinStackCentres,snapNameList,snapList,treeList,_recomputeData=False)
 
 # Mean profiles over all samples:
 flattenedPairs = np.array(allPairs)
@@ -4198,81 +4212,141 @@ ahTreeCentres = [scipy.spatial.cKDTree(centres,boxsize) \
     for centres in ahCentresListUn]
 
 # Get a random selection of centres:
-np.random.seed(1000)
-# Get random selection of centres and their densities:
-nRandCentres = 10000
-randCentres = np.random.random((nRandCentres,3))*boxsize
-mUnit = snapSample['mass'][0]*1e10
-randOverDen = []
-rSphere = 135
-volSphere = 4*np.pi*rSphere**3/3
-rhoCrit = 2.7754e11
-Om0 = snapSample.properties['omegaM0']
-rhoMean = rhoCrit*Om0
-for k in range(0,len(snapListUn)):
-    snap = snapListUn[k]
-    gc.collect() # Clear memory of the previous snapshot
-    tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
-    gc.collect()
-    randOverDen.append(mUnit*tree.query_ball_point(randCentres,rSphere,\
-        workers=-1,return_length=True)/(volSphere*rhoMean) - 1.0)
-    del snap, tree
-    gc.collect()
+def getRandomCentresAndDensities(rSphere,snapListUn,\
+        seed=1000,nRandCentres = 10000):
+    # Get a random selection of centres:
+    np.random.seed(seed)
+    # Get random selection of centres and their densities:
+    randCentres = np.random.random((nRandCentres,3))*boxsize
+    randOverDen = []
+    snapSample = snapListUn[0]
+    mUnit = snapSample['mass'][0]*1e10
+    boxsize = snapSample.properties['boxsize'].ratio("Mpc a h**-1")
+    Om0 = snapSample.properties['omegaM0']
+    volSphere = 4*np.pi*rSphere**3/3
+    rhoCrit = 2.7754e11
+    rhoMean = rhoCrit*Om0
+    for k in range(0,len(snapListUn)):
+        snap = snapListUn[k]
+        gc.collect() # Clear memory of the previous snapshot
+        tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
+        gc.collect()
+        randOverDen.append(mUnit*tree.query_ball_point(randCentres,rSphere,\
+            workers=-1,return_length=True)/(volSphere*rhoMean) - 1.0)
+    return [randCentres,randOverDen]
 
-tools.savePickle([randCentres,randOverDen],\
-    data_folder + "random_centres_and_densities.p")
-[randCentres,randOverDen] = tools.loadPickle(\
-    data_folder + "random_centres_and_densities.p")
+
+[randCentres,randOverDen] = tools.loadOrRecompute(\
+    data_folder + "random_centres_and_densities.p",\
+    getRandomCentresAndDensities,rSphere,snapListUn,_recomputeData=False)
 
 # Get comparable density regions:
 comparableDensity = [(delta <= deltaListMeanNew + deltaListErrorNew) & \
     (delta > deltaListMeanNew - deltaListErrorNew) for delta in randOverDen]
 centresToUse = [randCentres[comp] for comp in comparableDensity]
 
+def getDistanceBetweenCentres(centre1,centre2,boxsize):
+    if (len(centre1.shape) == 1 and len(centre2.shape) == 1):
+        return np.sqrt(np.sum(snapedit.unwrap(centre1 - centre2,boxsize)**2))
+    else:
+        return np.sqrt(np.sum(snapedit.unwrap(centre1 - centre2,boxsize)**2,1))
+
+# Filter to ensure independence of centres:
+centresToUseNonOverlapping = []
+rSep = 2*135
+for ns in range(0,len(snapListUn)):
+    allCentresNS = centresToUse[ns]
+    allCentresNonOverlap = []
+    for k in range(0,len(allCentresNS)):
+        include = True
+        for l in range(0,len(allCentresNonOverlap)):
+            include = include and (getDistanceBetweenCentres(allCentresNS[k],\
+                allCentresNonOverlap[l],boxsize) > rSep)
+        if include:
+            allCentresNonOverlap.append(allCentresNS[k])
+    centresToUseNonOverlapping.append(allCentresNonOverlap)
+
+centresToUseNonOverlapping = [np.array(cen) for cen in centresToUseNonOverlapping]
+
 # Bins to use when building a catalogue similar to the constrained
 # catalogue:
 rEffBinEdges = np.linspace(10,25,6)
 [inRadBinsComb,noInRadBinsComb] = plot.binValues(meanRadii,rEffBinEdges)
 
-# Get pair counts in similar-density regions:
-allPairsUncon = []
-allVolumesUncon = []
-np.random.seed(1000)
-for ns in range(0,len(snapListUn)):
-    snapLoaded = snapListUn[ns]
-    tree = scipy.spatial.cKDTree(snapLoaded['pos'],boxsize=boxsize)
-    for centre in centresToUse[ns]:
-        # Get anti-halos:
-        centralAntihalos = tools.getAntiHalosInSphere(ahCentresListUn[ns],\
-            rSphere,origin=centre)
-        # Get radii and randomly select voids with the same
-        # radius distribution as the combined catalogue:
-        centralRadii = antihaloRadiiUn[ns][centralAntihalos[1]]
-        centralCentres = ahCentresListUn[ns][centralAntihalos[1]]
-        [inRadBins,noInRadBins] = plot.binValues(centralRadii,rEffBinEdges)
-        # Select voids with the same radius distribution as the combined 
-        # catalogue:
-        selection = []
-        for k in range(0,len(rEffBinEdges)-1):
-            if noInRadBinsComb[k] > 0:
-                selection.append(np.random.choice(inRadBins[k],\
-                    np.min([noInRadBinsComb[k],noInRadBins[k]]),replace=False))
-        selectArray = np.hstack(selection)
-        # Now get pair counts around these voids:
-        [nPairsList,volumesList] = stacking.getPairCounts(\
-            centralCentres[selectArray],\
-            centralRadii[selectArray],snapLoaded,rBinStack,\
-            tree=tree,method='poisson',vorVolumes=None)
-        allPairsUncon.append(nPairsList)
-        allVolumesUncon.append(volumesList)
-    # Delete temporaries to save memory:
-    del snapLoaded, tree
-    gc.collect()
+treeListUncon = [scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize) \
+    for snap in snapListUn]
+#treeListUncon = [None for snap in snapListUn]
 
-tools.savePickle([allPairsUncon,allVolumesUncon],\
-    data_folder + "pair_counts_random_cut.p")
-[allPairsUncon,allVolumesUncon] = tools.loadPickle(\
-    data_folder + "pair_counts_random_cut.p")
+
+def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
+        ahCentresListUn,antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,\
+        meanRadiiMCMC,seed=1000,start=0,end=-1):
+    # Get pair counts in similar-density regions:
+    allPairsUncon = []
+    allVolumesUncon = []
+    np.random.seed(seed)
+    [inRadBinsComb,noInRadBinsComb] = plot.binValues(meanRadiiMCMC,\
+        rEffBinEdges)
+    #centreListToTest = centresToUseNonOverlapping
+    if end == -1:
+        end = len(snapListUn)
+    for ns in range(start,end):
+        snapLoaded = snapListUn[ns]
+        #tree = scipy.spatial.cKDTree(snapLoaded['pos'],boxsize=boxsize)
+        tree = treeListUncon[ns]
+        for centre, count in zip(centreListToTest[ns],\
+            range(0,len(centreListToTest[ns]))):
+            # Get anti-halos:
+            centralAntihalos = tools.getAntiHalosInSphere(ahCentresListUn[ns],\
+                rSphere,origin=centre)
+            # Get radii and randomly select voids with the same
+            # radius distribution as the combined catalogue:
+            centralRadii = antihaloRadiiUn[ns][centralAntihalos[1]]
+            centralCentres = ahCentresListUn[ns][centralAntihalos[1]]
+            [inRadBins,noInRadBins] = plot.binValues(centralRadii,rEffBinEdges)
+            # Select voids with the same radius distribution as the combined 
+            # catalogue:
+            selection = []
+            for k in range(0,len(rEffBinEdges)-1):
+                if noInRadBinsComb[k] > 0:
+                    selection.append(np.random.choice(inRadBins[k],\
+                        np.min([noInRadBinsComb[k],noInRadBins[k]]),\
+                        replace=False))
+            selectArray = np.hstack(selection)
+            # Now get pair counts around these voids:
+            [nPairsList,volumesList] = stacking.getPairCounts(\
+                centralCentres[selectArray],\
+                centralRadii[selectArray],snapLoaded,rBinStack,\
+                tree=tree,method='poisson',vorVolumes=None)
+            allPairsUncon.append(nPairsList)
+            allVolumesUncon.append(volumesList)
+            print("Done centre " + str(count+1) + " of " + \
+                str(len(centreListToTest[ns])))
+        tools.savePickle([allPairsUncon,allVolumesUncon],"temp_sample_" + \
+            str(ns+1) + ".p")
+        print("Done sample " + str(ns + 1) + ".")
+        # Delete temporaries to save memory:
+        #del snapLoaded, tree
+        #gc.collect()
+    return [allPairsUncon,allVolumesUncon]
+
+[allPairsUncon,allVolumesUncon] = tools.loadOrRecompute(\
+    data_folder + "pair_counts_random_cut.p",getRandomCataloguePairCounts,\
+    centresToUse,snapListUn,treeListUncon,ahCentresListUn,\
+    antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,\
+    _recomputeData=False)
+
+[allPairsUnconNonOverlap,allVolumesUnconNonOverlap] = tools.loadOrRecompute(\
+    data_folder + "pair_counts_random_cut_non_overlapping.p",\
+    getRandomCataloguePairCounts,\
+    centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
+    antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,\
+    _recomputeData=False)
+
+
+
+
+#aupcd = tools.loadPickle(data_folder + "all_unconstrained_pair_counts_data.p")
 
 # Stacked profiles in each region:
 rhoStackedUnAll = np.array([(np.sum(allPairsUncon[k],0)+1)/\
@@ -4283,10 +4357,35 @@ weightsUnAll = [(allVolumesUncon[k])/np.sum(allVolumesUncon[k],0) \
     for k in range(0,len(allVolumesUncon))]
 sumSquareWeights = np.array([np.sum(wi**2,0) for wi in weightsUnAll])
 
+
+# Stacked profiles in each region:
+rhoStackedUnAllNonOverlap = np.array([(np.sum(allPairsUnconNonOverlap[k],0)+1)/\
+    np.sum(allVolumesUnconNonOverlap[k],0) \
+    for k in range(0,len(allVolumesUnconNonOverlap))])
+variancesUnAllNonOverlap = np.array([np.var(allPairsUnconNonOverlap[k]/\
+    allVolumesUnconNonOverlap[k],0) \
+    for k in range(0,len(allVolumesUnconNonOverlap))])
+weightsUnAllNonOverlap = [(allVolumesUnconNonOverlap[k])/\
+    np.sum(allVolumesUnconNonOverlap[k],0) \
+    for k in range(0,len(allVolumesUnconNonOverlap))]
+sumSquareWeightsNonOverlap = np.array([np.sum(wi**2,0) \
+    for wi in weightsUnAllNonOverlap])
+
+#rhoRandomToUse = rhoStackedUnAll
+rhoRandomToUse = rhoStackedUnAllNonOverlap
+
 # Filter to catch broken unconstrained sims during testing:
-filterCores = np.where(rhoStackedUnAll[:,0] < 0.15)[0]
-sigmaStackedUnAll = np.std(rhoStackedUnAll[filterCores],0)
-meanStackedUnAll = np.mean(rhoStackedUnAll[filterCores],0)
+filterCores = np.where(rhoRandomToUse[:,0] < 0.15)[0]
+sigmaStackedUnAll = np.std(rhoRandomToUse[filterCores],0)
+meanStackedUnAll = np.mean(rhoRandomToUse[filterCores],0)
+intervals = [68,95]
+intervalLimits = []
+for lim in intervals:
+    intervalLimits.append(50 - lim/2)
+    intervalLimits.append(50 + lim/2)
+
+credibleIntervals = np.percentile(rhoRandomToUse[filterCores],\
+    intervalLimits,axis=0)
 
 
 # Plot comparison:
@@ -4304,8 +4403,36 @@ ax.legend(prop={"size":fontsize,"family":"serif"},frameon=False)
 ax.set_xlim([0,10])
 ax.set_ylim([0,1.2])
 plt.tight_layout()
-plt.savefig(figuresFolder + "profiles_vs_random.pdf")
+plt.savefig(figuresFolder + "profiles_vs_random_sample.pdf")
 plt.show()
+
+# With shaded regions only:
+fig, ax = plt.subplots(figsize=(textwidth,0.5*textwidth))
+ax.fill_between(rBinStackCentres,credibleIntervals[0]/nbar,\
+    credibleIntervals[1]/nbar,alpha=0.75,color='grey',\
+    label='Random catalogue (68%)')
+ax.fill_between(rBinStackCentres,credibleIntervals[2]/nbar,\
+    credibleIntervals[3]/nbar,alpha=0.5,color='grey',\
+    label='Random catalogue (95%)')
+#ax.errorbar(rBinStackCentres,rhoStacked/nbar,yerr=sigmaRhoStacked/nbar,\
+#    color='k',linestyle='-',label='Constrained Catalogue')
+ax.fill_between(rBinStackCentres,(rhoStacked - sigmaRhoStacked)/nbar,\
+    (rhoStacked + sigmaRhoStacked)/nbar,alpha=0.5,color=seabornColormap[0],\
+    label='MCMC catalogue')
+ax.axvline(1.0,color='grey',linestyle=':')
+ax.axhline(1.0,color='grey',linestyle=':')
+ax.fill_between(rBinStackCentres,1 + deltaListMeanNew - deltaListErrorNew,\
+    1 + deltaListMeanNew + deltaListErrorNew,alpha=0.5,\
+    color=seabornColormap[1],label='Local super-volume density')
+ax.set_xlabel('$R/R_{\\mathrm{eff}}$',fontsize=8)
+ax.set_ylabel('$\\rho/\\bar{\\rho}$',fontsize=8)
+ax.legend(prop={"size":fontsize,"family":"serif"},frameon=False)
+ax.set_xlim([0,10])
+ax.set_ylim([0,1.2])
+plt.tight_layout()
+plt.savefig(figuresFolder + "profiles_mcmc_vs_random.pdf")
+plt.show()
+
 
 # Plot comparison:
 fig, ax = plt.subplots(figsize=(textwidth,0.5*textwidth))
@@ -4332,6 +4459,51 @@ plt.show()
         pairsList,volumesList,\
         snapList,nbar,rBinStack,rMin,rMax,mMin,mMax,\
         method="poisson",errorType = "Weighted",toInclude = "all")
+
+
+# Diagnostic plots:
+
+# Randoms distribution at specific points:
+titles = [["$R/R_{\\mathrm{eff}} = 0$","$R/R_{\\mathrm{eff}} = 1$"],\
+    ["$R/R_{\\mathrm{eff}} = 3$","$R/R_{\\mathrm{eff}} = 10$"]]
+indicesij = [[0,9],[29,99]]
+
+
+plt.clf()
+fig, ax = plt.subplots(2,2,figsize=(textwidth,textwidth))
+for i in range(0,2):
+    for j in range(0,2):
+        ind = indicesij[i][j]
+        minmax = tools.minmax(rhoRandomToUse[filterCores][:,ind]/nbar)
+        ax[i,j].hist(rhoRandomToUse[filterCores][:,ind]/nbar,\
+            bins=np.linspace(minmax[0],minmax[1],11),\
+            alpha=0.5,color=seabornColormap[0],density=True)
+        mean = np.mean(rhoRandomToUse[filterCores][:,ind]/nbar)
+        std = np.std(rhoRandomToUse[filterCores][:,ind]/nbar)
+        interval68 = np.percentile(\
+            rhoRandomToUse[filterCores][:,ind]/nbar,[16,84])
+        interval95 = np.percentile(\
+            rhoRandomToUse[filterCores][:,ind]/nbar,[2.5,97.5])
+        ax[i,j].axvline(mean,color='k',linestyle='-',label='Mean')
+        ax[i,j].axvline(mean - std,color='k',linestyle=':',\
+            label='standard deviation')
+        ax[i,j].axvline(mean + std,color='k',linestyle=':')
+        ax[i,j].axvline(interval68[0],color='grey',linestyle='--',\
+            label='68% interval')
+        ax[i,j].axvline(interval68[1],color='grey',linestyle='-.')
+        ax[i,j].set_xlabel('$\\rho/\\bar{\\rho}$')
+        ax[i,j].set_ylabel('Probability Density')
+        ax[i,j].set_title(titles[i][j])
+        #ax[i,j].set_xlim([0,1])
+
+ax[1,1].legend()
+plt.tight_layout()
+plt.savefig(figuresFolder + "random_profiles_distribution.pdf")
+plt.show()
+
+# Density distribution:
+histMean = plt.hist2D()
+
 
 
 #-------------------------------------------------------------------------------

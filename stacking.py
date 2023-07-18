@@ -103,8 +103,8 @@ def getAutoCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,rMin = 0,\
 
 
 
-def getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,\
-        tree=None,method="poisson",vorVolumes=None):
+def getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=-1,\
+        tree=None,method="poisson",vorVolumes=None,countMethod="ball"):
     if (vorVolumes is None) and (method == "VTFE"):
             raise Exception("Must provide voronoi volumes for VTFE.")
     # Generate KDTree
@@ -125,11 +125,20 @@ def getPairCounts(voidCentres,voidRadii,snap,rBins,nThreads=thread_count,\
     else:
         nPairsList = np.zeros((len(voidCentres),len(rBins[1:])))
     volumesList = np.outer(voidRadii**3,volumes)
+    numBins = len(rBins)
     if method == "poisson":
         for k in range(0,len(nPairsList)):
-            nPairsList[k,:] = tree.count_neighbors(\
-                scipy.spatial.cKDTree(voidCentres[[k],:],boxsize=boxsize),\
-                rBins*voidRadii[k],cumulative=False)[1:]
+            if countMethod == "tree":
+                nPairsList[k,:] = tree.count_neighbors(\
+                    scipy.spatial.cKDTree(voidCentres[[k],:],boxsize=boxsize),\
+                    rBins*voidRadii[k],cumulative=False)[1:]
+            elif countMethod == "ball":
+                lengths = tree.query_ball_point(\
+                    np.tile(voidCentres[k,:],(numBins,1)),\
+                    rBins*voidRadii[k],workers=-1,return_length=True)
+                nPairsList[k,:] = lengths[1:] - lengths[0:-1]
+            else:
+                raise Exception("Unrecognised count method")
     elif method == "volume":
         # Volume weighted density in each shell:
         for k in range(0,len(voidRadii)):
