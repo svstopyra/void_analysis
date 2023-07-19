@@ -812,8 +812,6 @@ class combinedCatalogue:
         return voidMatches
     # Get the catalogue fraction thresholds for each void:
     def getAllThresholds(percentiles,radBins):
-        if self.meanRadii is None:
-            self.
         scaleFilter = [(radii > radBins[k]) & \
             (radii <= radBins[k+1]) \
             for k in range(0,len(radBins) - 1)]

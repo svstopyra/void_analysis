@@ -4282,7 +4282,7 @@ treeListUncon = [scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize) \
 
 def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
         ahCentresListUn,antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,\
-        meanRadiiMCMC,seed=1000,start=0,end=-1):
+        meanRadiiMCMC,boxsize,seed=1000,start=0,end=-1):
     # Get pair counts in similar-density regions:
     allPairsUncon = []
     allVolumesUncon = []
@@ -4301,7 +4301,7 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
             range(0,len(centreListToTest[ns]))):
             # Get anti-halos:
             centralAntihalos = tools.getAntiHalosInSphere(ahCentresListUn[ns],\
-                rSphere,origin=centre)
+                rSphere,origin=centre,boxsize=boxsize)
             # Get radii and randomly select voids with the same
             # radius distribution as the combined catalogue:
             centralRadii = antihaloRadiiUn[ns][centralAntihalos[1]]
@@ -4337,7 +4337,7 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
 [allPairsUncon,allVolumesUncon,allSelectionsUncon] = tools.loadOrRecompute(\
     data_folder + "pair_counts_random_cut.p",getRandomCataloguePairCounts,\
     centresToUse,snapListUn,treeListUncon,ahCentresListUn,\
-    antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,\
+    antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
     _recomputeData=True,start=7)
 
 [allPairsUnconNonOverlap,allVolumesUnconNonOverlap,\
@@ -4345,7 +4345,7 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
         data_folder + "pair_counts_random_cut_non_overlapping.p",\
         getRandomCataloguePairCounts,\
         centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
-        antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,\
+        antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
         _recomputeData=False)
 
 [allPairsUncon,allVolumesUncon] = tools.loadPickle("temp_sample_13.p")
@@ -4358,11 +4358,11 @@ counter = 0
 for ns in range(0,len(snapListUn)):
     centres = centresToUseNonOverlapping[ns]
     numCentres = len(centres)
-    centralAntihalos = tools.getAntiHalosInSphere(ahCentresListUn[ns],\
-                rSphere,origin=centre)
     for centre, count in zip(centres,range(0,numCentres)):
-        sphereCentralDensities = centralDensityUn[ns][centralAntihalos[1]]
-        sphereAverageDensities = averageDensityUn[ns][centralAntihalos[1]]
+        centralAHs = tools.getAntiHalosInSphere(ahCentresListUn[ns],\
+                rSphere,origin=centre,boxsize=boxsize)
+        sphereCentralDensities = centralDensityUn[ns][centralAHs[1]]
+        sphereAverageDensities = averageDensityUn[ns][centralAHs[1]]
         centralDensityUnconNonOverlap.append(\
             sphereCentralDensities[allSelectionsUnconNonOverlap[counter]])
         averageDensityUnconNonOverlap.append(\
@@ -4534,6 +4534,27 @@ ax[1,1].legend()
 plt.tight_layout()
 plt.savefig(figuresFolder + "random_profiles_distribution.pdf")
 plt.show()
+
+
+# Analysis:
+densityReff1 = rhoRandomToUse[filterCores][:,ind]/nbar
+lowPop = np.where(densityReff1 < 0.36)[0]
+highPop = np.where(densityReff1 > 0.36)[0]
+
+regionSamples = np.zeros(len(rhoRandomToUse),dtype=int)
+regionLists = []
+count = 0
+for ns in range(0,len(snapList)):
+    for centre in centresToUseNonOverlapping[ns]:
+        regionSamples[count] = ns
+        centralAHs = tools.getAntiHalosInSphere(ahCentresListUn[ns],\
+                rSphere,origin=centre,boxsize=boxsize)
+        regionLists.append(centralAHs[1])
+        count += 1
+
+
+
+
 
 # Density distribution:
 plt.clf()

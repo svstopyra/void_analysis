@@ -49,11 +49,11 @@ if __name__ == "__main__":
 	if len(sys.argv) <= 3:
 		ndiv = 2
 	else:
-		ndiv = np.int(sys.argv[3])
+		ndiv = int(sys.argv[3])
 	if len(sys.argv) <= 4:
 		ncores = 1
 	else:
-		ncores = np.int(sys.argv[4])
+		ncores = int(sys.argv[4])
 	if len(sys.argv) <= 5:
 		buf = 0.1
 	else:
