@@ -37,7 +37,7 @@ class combinedCatalogue:
         self.mode = mode
         [_,_,self.boxsize,self.ahProps,\
             self.antihaloCentres,self.antihaloMasses,self.antihaloRadii,\
-            self.snapSortList,self.volumesList,_] = \
+            _,self.volumesList,_] = \
             loadCatalogueData(snapList,snapListRev,ahProps,sortMethod,\
                 snapSortList,hrList,verbose=verbose)
         self.numCats = len(snapList) # Number of catalogues
@@ -264,6 +264,9 @@ class combinedCatalogue:
         self.treeList = [scipy.spatial.cKDTree(\
             snapedit.wrap(centres,self.boxsize),boxsize=self.boxsize) \
             for centres in self.centresListShort]
+        # List of anti-halo numbers:
+        self.ahNumbers = [np.array(self.centralAntihalos[l][0],dtype=int)\
+            [self.sortedList[l]] for l in range(0,self.numCats)]
     def getShortenedQuantity(self,quantity,shortenedList):
         return [np.array([quantity[l][\
                 self.centralAntihalos[l][0][self.sortedList[l][k]]] \
@@ -817,7 +820,7 @@ class combinedCatalogue:
             self.finalCombinatoricFrac.append(combFrac)
         return voidMatches
     # Get the catalogue fraction thresholds for each void:
-    def getAllThresholds(percentiles,radBins):
+    def getAllThresholds(self,percentiles,radBins):
         if len(percentiles) != len(radBins) - 1:
             raise Exception("Bins not compatible with specified percentiles.")
         if self.meanRadii is None:
@@ -831,7 +834,7 @@ class combinedCatalogue:
         return thresholds
     # Compute mean properties for all voids, averaged over corresponding
     # anti-halos.
-    def getMeanProperty(prop,stdError=True,\
+    def getMeanProperty(self,prop,stdError=True,\
             recompute=False):
         if self.finalCat is None:
             raise Exception("Final catalogue has not yet been computed.")
@@ -869,7 +872,7 @@ class combinedCatalogue:
             meanDict[prop] = meanProperty
             sigmaDict[prop] = sigmaProperty
         return [meanProperty,sigmaProperty]
-    def getAllRadii(recompute=False):
+    def getAllRadii(self,recompute=False):
         if (self.radiiList is None) or (recompute):
             if self.finalCat is None:
                 raise Exception("Final catalogue has not yet been computed.")
@@ -885,13 +888,27 @@ class combinedCatalogue:
                 return self.radiiList
         else:
             return self.radiiList
-    def getSNRForVoidRealisations(finalCat,snrAllCatsList,ahNumbers):
-        snrCat = np.zeros(finalCat.shape)
+    def getSNRForVoidRealisations(self,snrAllCatsList):
+        if self.finalCat is None:
+            raise Exception("Final catalogue is not yet computed.")
+        snrCat = np.zeros(self.finalCat.shape)
         for ns in range(0,len(snrAllCatsList)):
-            haveVoids = np.where(finalCat[:,ns] >= 0)[0]
-            snrCat[haveVoids,ns] = snrAllCatsList[ns][ahNumbers[ns][\
+            haveVoids = np.where(self.finalCat[:,ns] >= 0)[0]
+            snrCat[haveVoids,ns] = snrAllCatsList[ns][self.ahNumbers[ns][\
                 finalCat[haveVoids,ns]-1]]
         return snrCat
+    def getAllCentres(self):
+        return np.array([self.getCentresInSample(ns) \
+            for ns in range(0,self.numCats)])
+    def getCentresInSample(self,ns):
+        centresListOut = np.zeros((len(self.finalCat),3),dtype=float)
+        for k in range(0,len(self.finalCat)):
+            if self.finalCat[k,ns] > 0:
+                centresListOut[k,:] = self.centresListShort[ns]\
+                    [self.finalCat[k,ns]-1]
+            else:
+                centresListOut[k,:] = np.nan
+        return centresListOut
 
 def loadSnapshots(snapList):
     if type(snapList[0]) == str:
@@ -1010,5 +1027,57 @@ def computeShortCentresList(snapNumList,antihaloCentres,antihaloRadii,\
         for k in range(0,np.min([ahCounts[l],max_index]))]) \
         for l in range(0,len(snapNumList))]
     return [centresListShort,centralAntihalos,sortedList,ahCounts,max_index]
+
+
+# Other utility functions:
+
+def getSplitVoids(catRef,catTest,nVRef):
+    nCats = catRef.shape[1]
+    locator = [np.where((catTest[:,k] == catRef[nVRef][k]) & \
+        (catTest[:,k] != -1)) for k in range(0,nCats)]
+    splitEntries = np.unique(np.hstack(locator))
+    return splitEntries
+
+def getSplitList(catRef,catTest):
+    splitList = []
+    for nVRef in range(0,len(catRef)):
+        splitList.append(getSplitVoids(catRef,catTest,nVRef))
+    return splitList
+
+# Converts a short catalogue (listing halos only in the central region)
+# into a long catalogue (listing all halos in the simulation box)
+def shortCatalogueToLongCatalogue(catalogue,centralAntihalos,sortedList):
+    if catalogue.shape[1] != len(centralAntihalos):
+        raise Exception("Incompatible catalogue and centralAntihalos list.")
+    longCatalogue = -np.ones(catalogue.shape,dtype=int)
+    nCats = len(centralAntihalos)
+    for ns in range(0,nCats):
+        haveCandidates = np.where(catalogue[:,ns] >= 0)[0]
+        ahNumbersList = np.array(centralAntihalos[ns][0])[sortedList[ns]]
+        longCatalogue[haveCandidates,ns] = ahNumbersList\
+            [catalogue[haveCandidates,ns] - 1] + 1
+    return longCatalogue
+
+
+# Should be the inverse, if everything worked out:
+def longCatalogueToShortCatalogue(longCatalogue,centralAntihalos,sortedList):
+    if longCatalogue.shape[1] != len(centralAntihalos):
+        raise Exception("Incompatible catalogue and centralAntihalos list.")
+    catalogue = -np.ones(longCatalogue.shape,dtype=int)
+    nCats = len(centralAntihalos)
+    for ns in range(0,nCats):
+        haveCandidates = (longCatalogue[:,ns] >= 0)
+        ahNumbersList = np.array(centralAntihalos[ns][0])[sortedList[ns]]
+        inShortList = np.isin(longCatalogue[:,ns]-1,ahNumbersList)
+        canInvert = haveCandidates & inShortList
+        search = np.where(np.in1d(ahNumbersList,longCatalogue[:,ns]-1))[0]
+        catalogue[canInvert,ns] = search + 1
+    return catalogue
+
+
+
+
+
+
 
 
