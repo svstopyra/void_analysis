@@ -812,13 +812,19 @@ class combinedCatalogue:
         return voidMatches
     # Get the catalogue fraction thresholds for each void:
     def getAllThresholds(percentiles,radBins):
-        scaleFilter = [(radii > radBins[k]) & \
-            (radii <= radBins[k+1]) \
+        if len(percentiles) != len(radBins) - 1:
+            raise Exception("Bins not compatible with specified percentiles.")
+        if self.meanRadii is None:
+            [self.meanRadii,self.sigmaRadii] = self.getMeanProperty('radii')
+        scaleFilter = [(self.meanRadii > radBins[k]) & \
+            (self.meanRadii <= radBins[k+1]) \
             for k in range(0,len(radBins) - 1)]
-        thresholds = np.zeros(radii.shape)
+        thresholds = np.zeros(self.meanRadii.shape)
         for filt, perc in zip(scaleFilter,percentiles):
             thresholds[filt] = perc
         return thresholds
+    # Compute mean properties for all voids, averaged over corresponding
+    # anti-halos.
     def getMeanProperty(prop,stdError=True,\
             recompute=False):
         if self.finalCat is None:
@@ -873,6 +879,13 @@ class combinedCatalogue:
                 return self.radiiList
         else:
             return self.radiiList
+    def getSNRForVoidRealisations(finalCat,snrAllCatsList,ahNumbers):
+        snrCat = np.zeros(finalCat.shape)
+        for ns in range(0,len(snrAllCatsList)):
+            haveVoids = np.where(finalCat[:,ns] >= 0)[0]
+            snrCat[haveVoids,ns] = snrAllCatsList[ns][ahNumbers[ns][\
+                finalCat[haveVoids,ns]-1]]
+        return snrCat
 
 def loadSnapshots(snapList):
     if type(snapList[0]) == str:
@@ -890,7 +903,7 @@ def loadCatalogueData(snapList,snapListRev,ahProps,sortMethod,snapSortList,\
     snapshotsList = loadSnapshots(snapList)
     snapshotsListRev = loadSnapshots(snapListRev)
     # Load centres so that we can filter to the constrained region:
-    boxsize = snapList[0].properties['boxsize'].ratio("Mpc a h**-1")
+    boxsize = snapshotsList[0].properties['boxsize'].ratio("Mpc a h**-1")
     if verbose:
         print("Extracting anti-halo properties...")
     if ahProps is None:
