@@ -44,6 +44,12 @@ class combinedCatalogue:
         self.enforceExclusive = enforceExclusive
         self.blockDuplicates = blockDuplicates
         self.verbose = verbose
+        if(type(snapList[0]) == str):
+            self.snapNameList = snapList
+        elif type(snapList[0]) == pynbody.snapshot.gadget.GadgetSnap:
+            self.snapNameList = [snap.filename for snap in snapList]
+        else:
+            raise Exception("snapList must be list of snapshots or strings.")
         # Precompute lists of other columns, so we don't have to do it 
         # every time:
         self.iterMax = iterMax # Maximum number of iterations for refining
@@ -248,7 +254,7 @@ class combinedCatalogue:
     def computeShortCentresList(self):
         [self.centresListShort,self.centralAntihalos,self.sortedList,\
             self.ahCounts,self.max_index]  = computeShortCentresList(\
-            self.snapList,self.antihaloCentres,\
+            self.snapNameList,self.antihaloCentres,\
             self.antihaloRadii,self.antihaloMasses,self.rSphere,\
             self.rMin,self.rMax,massRange = self.massRange,\
             additionalFilters = self.additionalFilters,\
