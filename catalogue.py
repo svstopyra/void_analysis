@@ -894,7 +894,7 @@ def loadSnapshots(snapList):
         snapshotsList = snapList
     else:
         raise Exception("Snapshot type not supported.")
-    return snapList
+    return snapshotsList
 
 # Load simulations and catalogue data so that we can combine them. If these
 # are already loaded, this function won't reload them.
