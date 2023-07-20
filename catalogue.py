@@ -35,9 +35,9 @@ class combinedCatalogue:
         self.crossMatchQuantity = crossMatchQuantity
         self.sortMethod = sortMethod
         self.mode = mode
-        [_,_,self.boxsize,self.ahProps,\
+        [_,_,self.boxsize,_,\
             self.antihaloCentres,self.antihaloMasses,self.antihaloRadii,\
-            _,self.volumesList,_] = \
+            _,self.volumesList,_,self.deltaCentral,self.deltaAverage] = \
             loadCatalogueData(snapList,snapListRev,ahProps,sortMethod,\
                 snapSortList,hrList,verbose=verbose)
         self.numCats = len(snapList) # Number of catalogues
@@ -91,6 +91,25 @@ class combinedCatalogue:
         # Derived quantities:
         self.radiiList = None
         self.massList = None
+        self.deltaCentralList = None
+        self.deltaAverageList = None
+        self.meanRadii = None
+        self.meanMass = None
+        self.meanDeltaCentral = None
+        self.meanDeltaAverage = None
+        self.sigmaRadii = None
+        self.sigmaMass = None
+        self.sigmaDeltaCentral = None
+        self.sigmaDeltaAverage = None
+        self.propertyDict = {"radii":self.radiiList,"mass":self.massList,\
+            "deltaCentral":self.deltaCentralList,\
+            "deltaAverage":self.deltaAverageList}
+        self.meanDict = {"radii":self.meanRadii,"mass":self.meanMass,\
+            "deltaCentral":self.meanDeltaCentral,\
+            "deltaAverage":self.meanDeltaAverage}
+        self.sigmaDict = {"radii":self.sigmaRadii,"mass":self.sigmaMass,\
+            "deltaCentral":self.sigmaDeltaCentral,\
+            "deltaAverage":self.sigmaDeltaAverage}
         # Construct matches:
         # Create lists of the quantity to match voids with (mass or radius),
         # chosen to match centresListShort:
@@ -98,6 +117,14 @@ class combinedCatalogue:
             self.centralAntihalos)
         self.massListShort = self.getShortenedQuantity(self.antihaloMasses,\
             self.centralAntihalos)
+        self.deltaCentralListShort = self.getShortenedQuantity(\
+            self.deltaCentral,self.centralAntihalos)
+        self.deltaAverageListShort = self.getShortenedQuantity(\
+            self.deltaAverage,self.centralAntihalos)
+        self.shortListDict = {"radii":self.radiusListShort,\
+            "mass":self.massListShort,\
+            "deltaCentral":self.deltaCentralListShort,\
+            "deltaAverage":self.deltaAverageListShort}
         if self.crossMatchQuantity == 'radius':
             self.quantityList = self.radiusListShort
         elif self.crossMatchQuantity == 'mass':
@@ -838,12 +865,11 @@ class combinedCatalogue:
             recompute=False):
         if self.finalCat is None:
             raise Exception("Final catalogue has not yet been computed.")
-        propertyDict = {"radii":self.radiiList,"mass":self.massList}
-        meanDict = {"radii":self.meanRadii,"mass":self.meanMass}
-        sigmaDict = {"radii":self.sigmaRadii,"mass":self.sigmaMass}
         if type(prop) == str:
-            if prop in propertyDict:
-                propertyToProcess = propertyDict[prop]
+            if prop in self.propertyDict:
+                propertyToProcess = self.propertyDict[prop]
+                if propertyToProcess is None:
+                    propertyToProcess = self.getAllProperties(prop)
             else:
                 raise Exception("Property not implemented.")
             cacheQuantity = True
@@ -869,25 +895,24 @@ class combinedCatalogue:
             if stdError:
                 sigmaProperty[k] /= np.sqrt(len(haveProperty))
         if cacheQuantity:
-            meanDict[prop] = meanProperty
-            sigmaDict[prop] = sigmaProperty
+            self.meanDict[prop] = meanProperty
+            self.sigmaDict[prop] = sigmaProperty
         return [meanProperty,sigmaProperty]
-    def getAllRadii(self,recompute=False):
-        if (self.radiiList is None) or (recompute):
-            if self.finalCat is None:
-                raise Exception("Final catalogue has not yet been computed.")
-            else:
-                self.radiiList = np.zeros(self.finalCat.shape,dtype=float)
-                for k in range(0,len(self.finalCat)):
-                    for l in range(0,self.numCats):
-                        if self.finalCat[k,l] > 0:
-                            self.radiiList[k,l] = self.radiiListShort[l][\
-                                self.finalCat[k,l]-1]
-                        else:
-                            self.radiiList[k,l] = np.nan
-                return self.radiiList
+    def getAllProperties(self,prop):
+        if prop not in self.propertyDict:
+            raise Exception("Property " + str(prop) + " not yet implemented.")
+        if self.finalCat is None:
+            raise Exception("Final catalogue has not yet been computed.")
         else:
-            return self.radiiList
+            self.propertyDict[prop] = np.zeros(self.finalCat.shape,dtype=float)
+            for k in range(0,len(self.finalCat)):
+                for l in range(0,self.numCats):
+                    if self.finalCat[k,l] > 0:
+                        self.propertyDict[prop][k,l] = \
+                            self.shortListDict[prop][l][self.finalCat[k,l]-1]
+                    else:
+                        self.propertyDict[prop][k,l] = np.nan
+            return self.propertyDict[prop]
     def getSNRForVoidRealisations(self,snrAllCatsList):
         if self.finalCat is None:
             raise Exception("Final catalogue is not yet computed.")
@@ -936,6 +961,8 @@ def loadCatalogueData(snapList,snapListRev,ahProps,sortMethod,snapSortList,\
         for props in ahProps]
     antihaloMasses = [props[3] for props in ahProps]
     antihaloRadii = [props[7] for props in ahProps]
+    deltaCentral = [props[11] for props in ahProps]
+    deltaAverage = [props[12] for props in ahProps]
     if sortMethod == "volumes":
         if snapSortList is None:
             snapSortList = [np.argsort(snap['iord']) for snap in snapList]
@@ -947,7 +974,8 @@ def loadCatalogueData(snapList,snapListRev,ahProps,sortMethod,snapSortList,\
     if hrList is None:
         hrList = [snap.halos() for snap in snapListRev]
     return [snapList,snapListRev,boxsize,ahProps,antihaloCentres,\
-        antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList]
+        antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList,\
+        deltaCentral,deltaAverage]
 
 
 def overlapMap(cat1,cat2,volumes1,volumes2,checkFirst = False,verbose=False):

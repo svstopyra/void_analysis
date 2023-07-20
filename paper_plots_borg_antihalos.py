@@ -880,22 +880,6 @@ def getCentresFromCat(catList,centresList,ns):
     return centresListOut
 
 
-def getSplitVoids(catRef,catTest,nVRef):
-    nCats = catRef.shape[1]
-    locator = [np.where((catTest[:,k] == catRef[nVRef][k]) & \
-        (catTest[:,k] != -1)) for k in range(0,nCats)]
-    splitEntries = np.unique(np.hstack(locator))
-    return splitEntries
-
-
-
-def getSplitList(catRef,catTest):
-    splitList = []
-    for nVRef in range(0,len(catRef)):
-        splitList.append(getSplitVoids(catRef,catTest,nVRef))
-    return splitList
-
-
 longCatOptGood = shortCatalogueToLongCatalogue(finalCatOpt[filterOptGood],\
     centralAntihalos,sortedList)
 
@@ -923,37 +907,6 @@ def getRadiiFromCat(catList,radiiList):
             if catList[k,l] > 0:
                 radiiListOut[k,l] = radiiList[l][catList[k,l]-1]
     return radiiListOut
-
-
-# Converts a short catalogue (listing halos only in the central region)
-# into a long catalogue (listing all halos in the simulation box)
-def shortCatalogueToLongCatalogue(catalogue,centralAntihalos,sortedList):
-    if catalogue.shape[1] != len(centralAntihalos):
-        raise Exception("Incompatible catalogue and centralAntihalos list.")
-    longCatalogue = -np.ones(catalogue.shape,dtype=int)
-    nCats = len(centralAntihalos)
-    for ns in range(0,nCats):
-        haveCandidates = np.where(catalogue[:,ns] >= 0)[0]
-        ahNumbersList = np.array(centralAntihalos[ns][0])[sortedList[ns]]
-        longCatalogue[haveCandidates,ns] = ahNumbersList\
-            [catalogue[haveCandidates,ns] - 1] + 1
-    return longCatalogue
-
-
-# Should be the inverse, if everything worked out:
-def longCatalogueToShortCatalogue(longCatalogue,centralAntihalos,sortedList):
-    if longCatalogue.shape[1] != len(centralAntihalos):
-        raise Exception("Incompatible catalogue and centralAntihalos list.")
-    catalogue = -np.ones(longCatalogue.shape,dtype=int)
-    nCats = len(centralAntihalos)
-    for ns in range(0,nCats):
-        haveCandidates = (longCatalogue[:,ns] >= 0)
-        ahNumbersList = np.array(centralAntihalos[ns][0])[sortedList[ns]]
-        inShortList = np.isin(longCatalogue[:,ns]-1,ahNumbersList)
-        canInvert = haveCandidates & inShortList
-        search = np.where(np.in1d(ahNumbersList,longCatalogue[:,ns]-1))[0]
-        catalogue[canInvert,ns] = search + 1
-    return catalogue
 
 
 
