@@ -1,6 +1,7 @@
 #-------------------------------------------------------------------------------
 # CONFIGURATION
 from void_analysis import plot, tools, snapedit, catalogue
+from void_analysis.catalogue import *
 from void_analysis.paper_plots_borg_antihalos_generate_data import *
 from void_analysis.real_clusters import getClusterSkyPositions
 from void_analysis import massconstraintsplot
@@ -4299,7 +4300,7 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
         getRandomCataloguePairCounts,\
         centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
         antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
-        _recomputeData=False)
+        _recomputeData=True)
 
 [allPairsUncon,allVolumesUncon] = tools.loadPickle("temp_sample_13.p")
 
@@ -6049,10 +6050,8 @@ finalCat300 = cat300.constructAntihaloCatalogue()
 #                enforceExclusive=enforceExclusive)
 
 [centresListShort,centralAntihalos,sortedList,ahCounts,max_index] = \
-        computeShortCentresList(snapNumList,antihaloCentres,\
-            antihaloRadii,antihaloMasses,rSphere2,rMin,rMax,\
-            massRange=massRange,additionalFilters=snrFilter,\
-            sortBy = sortBy,max_index=None)
+    [cat300.centresListShort,cat300.centralAntihalos,cat300.sortedList,\
+    cat300.ahCounts,cat300.max_index]
 
 snapNameListRand = [snap.filename for snap in snapListUn]
 snapNameListRandRev = [snap.filename for snap in snapListRevUn]
@@ -6068,8 +6067,7 @@ cat300Rand = catalogue.combinedCatalogue(snapNameListRand,snapNameListRandRev,\
     enforceExclusive=enforceExclusive)
 finalCat300Rand = cat300Rand.constructAntihaloCatalogue()
 
-ahNumbers = [np.array(centralAntihalos[l][0],dtype=int)[sortedList[l]] \
-    for l in range(0,len(snapNumList))]
+ahNumbers = cat300.ahNumbers
 
 
 # Mass functions:
@@ -6081,10 +6079,8 @@ ahNumbers = [np.array(centralAntihalos[l][0],dtype=int)[sortedList[l]] \
 
 radiiListShort = cat300.radiusListShort
 massListShort = cat300.massListShort
-finalCentres300List = np.array([getCentresFromCat(\
-    cat300.finalCat,cat300.centresListShort,ns) \
-    for ns in range(0,len(snapNumList))])
-meanCentre300 = np.nanmean(finalCentres300List,0)
+finalCentres300List = cat300.getAllCentres()
+meanCentre300 = cat300.getMeanCentres()
 #catFractionsOpt = np.array([len(np.where(x > 0)[0])/len(snapNumList) \
 #    for x in finalCatOpt])
 #catFractionsOpt = finalCombinatoricFracOpt
@@ -6156,12 +6152,10 @@ massListCombUn = getPropertyFromCat(finalCatOptRand,massListShortUn)
     rLower,rUpper,mLower1,mUpper1,percThresh,massBins=massBins,\
     radBins=radBins)
 
-radiiListComb300Un = getPropertyFromCat(cat300Rand.finalCat,\
-    cat300Rand.radiusListShort)
-massListComb300Un = getPropertyFromCat(cat300Rand.finalCat,\
-    cat300Rand.massListShort)
-[radiiListMean300Un,radiiListSigma300Un] = getMeanProperty(radiiListComb300Un)
-[massListMean300Un,massListSigma300Un] = getMeanProperty(massListComb300Un)
+radiiListComb300Un = cat300Rand.getAllProperties("radii")
+massListComb300Un = cat300Rand.getAllProperties("mass")
+[radiiListMean300Un,radiiListSigma300Un] = cat300Rand.getMeanProperty("radii")
+[massListMean300Un,massListSigma300Un] = cat300Rand.getMeanProperty("mass")
 [percentilesCat300, percentilesComb300] = getThresholdsInBins(\
     nBinEdges-1,cutScale,massListMean300Un,radiiListMean300Un,\
     cat300Rand.finalCombinatoricFrac,cat300Rand.finalCatFrac,\
@@ -6346,27 +6340,6 @@ plt.xlabel("Number of voids split between in new catalogue")
 plt.ylabel("Number of voids in old catalogue")
 plt.legend()
 plt.savefig(figuresFolder  + "numSplit_histogram_compared.pdf")
-
-
-def lowestOrNothing(x):
-    if len(x) > 0:
-        return np.min(x)
-    else:
-        return -1
-
-def getNumVoidsInCommon(voidRef,voidTest):
-    return np.sum(voidRef == voidTest)
-
-
-def compareVoids(voidRef,voidTest):
-    matching = np.where((voidTest == voidRef) & (voidRef > -1))[0]
-    notMatching = np.where((voidTest != voidRef) & (voidTest > -1))[0]
-    failed = np.where((voidTest == -1) & (voidRef > -1))[0]
-    return [matching,notMatching,failed]
-
-def analyseSplit(catRef,catTest,nVRef,nVTest):
-    return compareVoids(catRef[nVRef],catTest[nVTest])
-
 [matching,notMatching,failed] = analyseSplit(finalCatOpt,finalCat300,0,0)
 
 lowestMatch = np.array([lowestOrNothing(x) for x in splitList],dtype=int)

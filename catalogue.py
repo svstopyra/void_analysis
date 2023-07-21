@@ -872,9 +872,6 @@ class combinedCatalogue:
                     propertyToProcess = self.getAllProperties(prop)
             else:
                 raise Exception("Property not implemented.")
-            cacheQuantity = True
-            if (propertyToProcess is not None) and (not recompute):
-                return propertyToProcess
         elif type(prop) == list:
             # Check it is sensible:
             if len(prop) != self.numCats:
@@ -883,7 +880,6 @@ class combinedCatalogue:
                 raise Exception("Property list lengths do not match " + \
                     "supplied catalogue lengths.")
             propertyToProcess = prop
-            cacheQuantity = False
         # Begin computing the mean property:
         meanProperty = np.zeros(len(self.finalCat))
         sigmaProperty = np.zeros(len(self.finalCat))
@@ -894,9 +890,8 @@ class combinedCatalogue:
             sigmaProperty[k] = np.std(propertyToProcess[k,haveProperty])
             if stdError:
                 sigmaProperty[k] /= np.sqrt(len(haveProperty))
-        if cacheQuantity:
-            self.meanDict[prop] = meanProperty
-            self.sigmaDict[prop] = sigmaProperty
+        self.meanDict[prop] = meanProperty
+        self.sigmaDict[prop] = sigmaProperty
         return [meanProperty,sigmaProperty]
     def getAllProperties(self,prop):
         if prop not in self.propertyDict:
@@ -934,6 +929,34 @@ class combinedCatalogue:
             else:
                 centresListOut[k,:] = np.nan
         return centresListOut
+    def getMeanCentres(self):
+        return np.nanmean(self.getAllCentres(),0)
+    # Generate percentile thresholds (mostly used by random catalogues):
+    def getThresholdsInBins(bins,percThresh,binVariable="radius"):
+        if self.meanMass is None:
+            [self.meanMass,self.sigmaMass] = self.getMeanProperty('mass')
+        if self.meanRadii is None:
+            [self.meanRadii,self.sigmaRadii] = self.getMeanProperty('radii')
+        [inRadBins,noInRadBins] = plot.binValues(self.meanRadii,radBins)
+        percentilesComb = []
+        percentilesCat = []
+        for k in range(0,nBins):
+            if binVariable == "mass":
+                selection = inMassBins[k]
+                [selection,_] = plot.binValues(self.meanMass,bins)
+            elif binVariable == "radius":
+                [selection,_] = plot.binValues(self.meanRadii,bins)
+            else:
+                raise Exception("Unrecognised 'binVariable' value ")
+            if len(selection) > 0:
+                percentilesComb.append(np.percentile(\
+                    self.finalCombinatoricFrac[selection],percThresh))
+                percentilesCat.append(np.percentile(\
+                    self.finalCatFrac[selection],percThresh))
+            else:
+                percentilesComb.append(0.0)
+                percentilesCat.append(0.0)
+        return [np.array(percentilesCat),np.array(percentilesComb)]
 
 def loadSnapshots(snapList):
     if type(snapList[0]) == str:
@@ -1101,6 +1124,30 @@ def longCatalogueToShortCatalogue(longCatalogue,centralAntihalos,sortedList):
         search = np.where(np.in1d(ahNumbersList,longCatalogue[:,ns]-1))[0]
         catalogue[canInvert,ns] = search + 1
     return catalogue
+
+
+
+def lowestOrNothing(x):
+    if len(x) > 0:
+        return np.min(x)
+    else:
+        return -1
+
+
+# Count the number of voids that two final catalogue entries have in common:
+def getNumVoidsInCommon(voidRef,voidTest):
+    return np.sum(voidRef == voidTest)
+
+# Figure out how similar too voids are:
+def compareVoids(voidRef,voidTest):
+    matching = np.where((voidTest == voidRef) & (voidRef > -1))[0]
+    notMatching = np.where((voidTest != voidRef) & (voidTest > -1))[0]
+    failed = np.where((voidTest == -1) & (voidRef > -1))[0]
+    return [matching,notMatching,failed]
+
+# Compare voids from two different catalogues:
+def analyseSplit(catRef,catTest,nVRef,nVTest):
+    return compareVoids(catRef[nVRef],catTest[nVTest])
 
 
 
