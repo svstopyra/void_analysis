@@ -4181,6 +4181,20 @@ averageDensityUn = [props[12] for props in ahPropsUnconstrained]
 ahTreeCentres = [scipy.spatial.cKDTree(centres,boxsize) \
     for centres in ahCentresListUn]
 
+def densityFromSnapshot(snap,centre,radius,tree=None):
+    mUnit = snap['mass'][0]*1e10
+    boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+    Om0 = snap.properties['omegaM0']
+    rhoCrit = 2.7754e11
+    rhoMean = rhoCrit*Om0
+    volSphere = 4*np.pi*radius**3/3
+    if tree is None:
+        tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
+    return mUnit*tree.query_ball_point(centre,radius,\
+            workers=-1,return_length=True)/(volSphere*rhoMean) - 1.0
+
+
+
 # Get a random selection of centres:
 def getRandomCentresAndDensities(rSphere,snapListUn,\
         seed=1000,nRandCentres = 10000):
@@ -4190,19 +4204,14 @@ def getRandomCentresAndDensities(rSphere,snapListUn,\
     randCentres = np.random.random((nRandCentres,3))*boxsize
     randOverDen = []
     snapSample = snapListUn[0]
-    mUnit = snapSample['mass'][0]*1e10
     boxsize = snapSample.properties['boxsize'].ratio("Mpc a h**-1")
-    Om0 = snapSample.properties['omegaM0']
-    volSphere = 4*np.pi*rSphere**3/3
-    rhoCrit = 2.7754e11
-    rhoMean = rhoCrit*Om0
     for k in range(0,len(snapListUn)):
         snap = snapListUn[k]
         gc.collect() # Clear memory of the previous snapshot
         tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
         gc.collect()
-        randOverDen.append(mUnit*tree.query_ball_point(randCentres,rSphere,\
-            workers=-1,return_length=True)/(volSphere*rhoMean) - 1.0)
+        randOverDen.append(densityFromSnapshot(snap,randCentres,rSphere,
+            tree = tree))
     return [randCentres,randOverDen]
 
 
@@ -4210,10 +4219,22 @@ def getRandomCentresAndDensities(rSphere,snapListUn,\
     data_folder + "random_centres_and_densities.p",\
     getRandomCentresAndDensities,rSphere,snapListUn,_recomputeData=False)
 
+
+# Get MCMC densities:
+#deltaMCMCList = np.array(\
+#    [densityFromSnapshot(snap,np.array([boxsize/2]*3),135) \
+#    for snap in snapList])
+
+#tools.savePickle(deltaMCMCList,data_folder + "delta_list.p")
+deltaMCMCList = tools.loadPickle(data_folder + "delta_list.p")
+
+
 # Get comparable density regions:
 comparableDensity = [(delta <= deltaListMeanNew + deltaListErrorNew) & \
     (delta > deltaListMeanNew - deltaListErrorNew) for delta in randOverDen]
 centresToUse = [randCentres[comp] for comp in comparableDensity]
+deltaToUse = [randOverDen[ns][comp] \
+    for ns, comp in zip(range(0,len(snapList)),comparableDensity)]
 
 def getDistanceBetweenCentres(centre1,centre2,boxsize):
     if (len(centre1.shape) == 1 and len(centre2.shape) == 1):
@@ -4223,10 +4244,13 @@ def getDistanceBetweenCentres(centre1,centre2,boxsize):
 
 # Filter to ensure independence of centres:
 centresToUseNonOverlapping = []
+deltaToUseNonOverlapping = []
 rSep = 2*135
 for ns in range(0,len(snapListUn)):
     allCentresNS = centresToUse[ns]
+    allDeltasNS = deltaToUse[ns]
     allCentresNonOverlap = []
+    allDeltasNonOverlap = []
     for k in range(0,len(allCentresNS)):
         include = True
         for l in range(0,len(allCentresNonOverlap)):
@@ -4234,10 +4258,15 @@ for ns in range(0,len(snapListUn)):
                 allCentresNonOverlap[l],boxsize) > rSep)
         if include:
             allCentresNonOverlap.append(allCentresNS[k])
+            allDeltasNonOverlap.append(allDeltasNS[k])
     centresToUseNonOverlapping.append(allCentresNonOverlap)
+    deltaToUseNonOverlapping.append(allDeltasNonOverlap)
 
-centresToUseNonOverlapping = [np.array(cen) for cen in centresToUseNonOverlapping]
-
+centresToUseNonOverlapping = [np.array(cen) \
+    for cen in centresToUseNonOverlapping]
+deltaToUseNonOverlappingBySample = [np.array(cen) \
+    for cen in deltaToUseNonOverlapping]
+deltaToUseNonOverlapping = np.hstack(deltaToUseNonOverlappingBySample)
 # Bins to use when building a catalogue similar to the constrained
 # catalogue:
 rEffBinEdges = np.linspace(10,25,6)
@@ -4306,7 +4335,7 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
     data_folder + "pair_counts_random_cut.p",getRandomCataloguePairCounts,\
     centresToUse,snapListUn,treeListUncon,ahCentresListUn,\
     antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
-    _recomputeData=True,start=7)
+    _recomputeData=False)
 
 [allPairsUnconNonOverlap,allVolumesUnconNonOverlap,\
     allSelectionsUnconNonOverlap] = tools.loadOrRecompute(\
@@ -4314,7 +4343,7 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
         getRandomCataloguePairCounts,\
         centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
         antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
-        _recomputeData=True)
+        _recomputeData=False)
 
 [allPairsUncon,allVolumesUncon] = tools.loadPickle("temp_sample_13.p")
 
@@ -4351,29 +4380,33 @@ weightsUnAll = [(allVolumesUncon[k])/np.sum(allVolumesUncon[k],0) \
     for k in range(0,len(allVolumesUncon))]
 sumSquareWeights = np.array([np.sum(wi**2,0) for wi in weightsUnAll])
 
+#regionsFilter = range(0,len(allVolumesUnconNonOverlap))
+regionsFilter = np.where( \
+    (deltaToUseNonOverlapping > deltaListMeanNew - deltaListErrorNew/2) & \
+    (deltaToUseNonOverlapping <= deltaListMeanNew + deltaListErrorNew/2) )[0]
 
 # Stacked profiles in each region:
 rhoStackedUnAllNonOverlap = np.array([(np.sum(allPairsUnconNonOverlap[k],0)+1)/\
     np.sum(allVolumesUnconNonOverlap[k],0) \
-    for k in range(0,len(allVolumesUnconNonOverlap))])
+    for k in regionsFilter])
 rhoStackedUnAllNonOverlapCumulative = \
     np.array([(np.sum(np.cumsum(allPairsUnconNonOverlap[k],1),0)+1)/\
     np.sum(np.cumsum(allVolumesUnconNonOverlap[k],1),0) \
-    for k in range(0,len(allVolumesUnconNonOverlap))])
+    for k in regionsFilter])
 variancesUnAllNonOverlap = np.array([np.var(allPairsUnconNonOverlap[k]/\
     allVolumesUnconNonOverlap[k],0) \
-    for k in range(0,len(allVolumesUnconNonOverlap))])
+    for k in regionsFilter])
 variancesUnAllNonOverlapCumulative = \
     np.array([np.var(np.cumsum(allPairsUnconNonOverlap[k],1)/\
     np.cumsum(allVolumesUnconNonOverlap[k],1),0) \
-    for k in range(0,len(allVolumesUnconNonOverlap))])
+    for k in regionsFilter])
 weightsUnAllNonOverlap = [(allVolumesUnconNonOverlap[k])/\
     np.sum(allVolumesUnconNonOverlap[k],0) \
-    for k in range(0,len(allVolumesUnconNonOverlap))]
+    for k in regionsFilter]
 weightsUnAllNonOverlapCumulative = \
     [(np.cumsum(allVolumesUnconNonOverlap[k],1))/\
     np.sum(np.cumsum(allVolumesUnconNonOverlap[k],1),0) \
-    for k in range(0,len(allVolumesUnconNonOverlap))]
+    for k in regionsFilter]
 sumSquareWeightsNonOverlap = np.array([np.sum(wi**2,0) \
     for wi in weightsUnAllNonOverlap])
 sumSquareWeightsNonOverlapCumulative = np.array([np.sum(wi**2,0) \
@@ -4471,6 +4504,29 @@ plt.tight_layout()
 plt.savefig(figuresFolder + "profiles_vs_random_all.pdf")
 plt.show()
 
+
+# Distribution of densities:
+deltaMCMCMean = np.mean(deltaMCMCList)
+deltaMCMCSigma = np.std(deltaMCMCList)
+deltaMCMCStdErr = deltaMCMCSigma/np.sqrt(len(deltaMCMCList))
+
+plt.clf()
+plt.hist(deltaMCMCList,bins=np.linspace(-0.055,-0.035,5),\
+    color=seabornColormap[0],alpha=0.5,density=True,label='MCMC samples')
+plt.axvline(deltaMCMCMean-deltaMCMCStdErr,linestyle='--',color='k',\
+    label='Standard Error of the Mean')
+plt.axvline(deltaMCMCMean+deltaMCMCStdErr,linestyle='--',color='k')
+plt.axvline(deltaMCMCMean-deltaMCMCSigma,linestyle=':',color='k',\
+    label='Standard Deviation')
+plt.axvline(deltaMCMCMean+deltaMCMCSigma,linestyle=':',color='k')
+plt.hist(np.hstack(randOverDen),bins=np.arange(-0.1,0.1,0.005),\
+    color=seabornColormap[1],alpha=0.5,\
+    label='Random spheres \n(unconditioned)',density=True)
+plt.xlabel('Density contrast in $135\\,\\mathrm{Mpc}h^{-1}$')
+plt.ylabel('Probability Density')
+plt.legend()
+plt.savefig(figuresFolder + "mcmc_density_distribution_plot.pdf")
+plt.show()
 
 
 [nbarjStack,sigmaStack] = stacking.computeMeanStacks(centresList,radiiList,\
@@ -6095,6 +6151,142 @@ cat300 = catalogue.combinedCatalogue(snapNameList,snapNameListRev,\
     enforceExclusive=enforceExclusive)
 finalCat300 = cat300.constructAntihaloCatalogue()
 
+
+
+
+
+# Order testing:
+permutations = []
+randomlyOrderedCats = []
+goodVoidsPerm = []
+np.random.seed(1000)
+nPerms = 10
+numVoidsPerm = np.zeros(nPerms,dtype=int)
+for k in range(0,nPerms):
+    perm = np.random.permutation(len(snapList))
+    catPerm = catalogue.combinedCatalogue(\
+        [snapNameList[k] for k in perm],\
+        [snapNameListRev[k] for k in perm],\
+        muOpt,rSearchOpt,rSphere2,\
+        ahProps=[ahProps[k] for k in perm],\
+        hrList=[hrList[k] for k in perm],max_index=None,\
+        twoWayOnly=True,blockDuplicates=True,\
+        massRange = [mMin,mMax],\
+        NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
+        additionalFilters = [snrFilter[k] for k in perm],\
+        verbose=False,\
+        refineCentres=refineCentres,sortBy=sortBy,\
+        enforceExclusive=enforceExclusive)
+    finalCatPerm = catPerm.constructAntihaloCatalogue()
+    randomlyOrderedCats.append(catPerm)
+    [radiiPerm,sigmaRadiiPerm] = catPerm.getMeanProperty("radii")
+    meanCentrePerm = catPerm.getMeanCentres()
+    distancesPerm = np.sqrt(np.sum(meanCentrePerm**2,1))
+    thresholdsPerm = getAllThresholds(percentilesCat300,radBins,radiiPerm)
+    filterPerm = (radiiPerm > 10) & (radiiPerm <= 25) & \
+        (distancesPerm < 135) & (catPerm.finalCatFrac > thresholdsPerm)
+    numVoidsPerm[k] = np.sum(filterPerm)
+    goodVoidsPerm.append(filterPerm)
+    permutations.append(perm)
+
+splitLists = [catalogue.getSplitList(cat300.finalCat[filter300,:][:,perm],\
+    catTest.finalCat[filterTest,:]) \
+    for perm, catTest, filterTest \
+    in zip(permutations,randomlyOrderedCats,goodVoidsPerm)]
+
+def getBestCandidate(catRef,catTest,nVRef,allCands):
+    if len(allCands) > 0:
+        split = np.array([catalogue.getNumVoidsInCommon(\
+            catRef[nVRef,:],catTest[test,:]) for test in allCands])
+        return allCands[np.argmax(split)]
+    else:
+        return np.nan
+
+
+def getBestNumberOfVoidsInCommon(catRef,catTest,nVRef,allCands):
+    if len(allCands) > 0:
+        split = np.array([catalogue.getNumVoidsInCommon(\
+            catRef[nVRef,:],catTest[test,:]) for test in allCands])
+        return split[np.argmax(split)]
+    else:
+        return 0
+
+# Figure out the mapping between the catalogue and the permuted catalogues:
+bestCandidatesList = [np.array([\
+    getBestCandidate(cat300.finalCat[filter300,:][:,perm],\
+    catTest.finalCat[filterTest,:],nV,splitList[nV]) \
+    for nV in range(0,np.sum(filter300))]) \
+    for perm, catTest, filterTest, splitList in \
+    zip(permutations,randomlyOrderedCats,goodVoidsPerm,splitLists)]
+
+# Count the number of voids in common with the counterparts:
+inCommonFraction = [np.array([\
+    getBestNumberOfVoidsInCommon(cat300.finalCat[filter300,:][:,perm],\
+    catTest.finalCat[filterTest,:],nV,splitList[nV]) \
+    for nV in range(0,np.sum(filter300))]) \
+    for perm, catTest, filterTest, splitList in \
+    zip(permutations,randomlyOrderedCats,goodVoidsPerm,splitLists)]
+
+
+meanInCommon = np.array([np.mean(counts) for counts in inCommonFraction])
+meanInCommonExists = np.array([np.mean(counts[counts > 0]) \
+    for counts in inCommonFraction])
+fractionFound = np.array([np.sum(np.isfinite(x))/np.sum(filter300) \
+    for x in bestCandidatesList])
+isFound = np.vstack([np.isfinite(best) for best in bestCandidatesList]).T
+foundFraction = np.sum(isFound,1)/nPerms
+alwaysFound = np.all(isFound,1)
+alwaysFoundFraction = np.sum(alwaysFound)/np.sum(filter300)
+
+
+# Which voids are the problematic ones:
+binFilters = [(radiiMean300[filter300] >= radBins[k]) & \
+    (radiiMean300[filter300] < radBins[k+1]) for k in range(0,len(radBins)-1)]
+countsAlways = np.array([np.sum(alwaysFound & inBin) for inBin in binFilters])
+countsNotAlways = np.array([np.sum(np.logical_not(alwaysFound) & inBin) \
+    for inBin in binFilters])
+countsAll = np.array([np.sum(inBin) for inBin in binFilters])
+
+binWidths = (radBins[1:] - radBins[0:-1])
+binX = (radBins[1:] + radBins[0:-1])/2
+
+plt.clf()
+plt.bar(binX,countsNotAlways,width=binWidths,alpha=0.5,\
+    color=seabornColormap[0],label='Not in all catalogues')
+plt.bar(binX,countsAlways,width=binWidths,alpha=0.5,\
+    color=seabornColormap[1],label='In all catalogues',\
+    bottom = countsNotAlways)
+plt.xlabel('Radius, $\\mathrm{Mpc}h^{-1}$')
+plt.ylabel('Number of voids')
+plt.legend()
+plt.savefig(figuresFolder + "permutation_consistency.pdf")
+plt.show()
+
+# Scatter plot of found fraction vs catalogue fraction:
+
+plt.clf()
+fit = np.polyfit(cat300.finalCatFrac[filter300][np.logical_not(alwaysFound)],\
+    foundFraction[np.logical_not(alwaysFound)],1)
+plt.scatter(cat300.finalCatFrac[filter300][np.logical_not(alwaysFound)],\
+    foundFraction[np.logical_not(alwaysFound)])
+xpoints = np.linspace(0,1,100)
+plt.plot(xpoints,xpoints*fit[0] + fit[1],\
+    label="Fit, " + ("%.2g" % fit[0]) + "x + " + ("%.2g" % fit[1]))
+plt.legend()
+plt.xlabel('Catalogue fraction')
+plt.ylabel('Permutation fraction')
+plt.savefig(figuresFolder + "permutation_vs_catalogue_fraction.pdf")
+plt.show()
+
+
+
+
+snapNameTest = ["data_for_tests/reference_constrained/sample" + str(k) + \
+    "/gadget_full_forward/snapshot_001" for k in [2791,3250,5511]]
+snapNameRevTest = ["data_for_tests/reference_constrained/sample" + str(k) + \
+    "/gadget_full_reverse/snapshot_001" for k in [2791,3250,5511]]
+catTest = catalogue.combinedCatalogue(snapNameTest,snapNameRevTest,0.9,0.5,135)
+computed = catTest.constructAntihaloCatalogue()
 #[finalCat300Rand,shortHaloList300Rand,twoWayMatchList300Rand,\
 #            finalCandidates300Rand,finalRatios300Rand,finalDistances300Rand,\
 #            allCandidates300Rand,candidateCounts300Rand,allRatios300Rand,\

@@ -979,7 +979,7 @@ def loadCatalogueData(snapList,snapListRev,ahProps,sortMethod,snapSortList,\
         print("Extracting anti-halo properties...")
     if ahProps is None:
         ahProps = [tools.loadPickle(snap.filename + ".AHproperties.p") \
-            for snap in snapList]
+            for snap in snapshotsList]
     antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
         for props in ahProps]
     antihaloMasses = [props[3] for props in ahProps]
@@ -988,15 +988,15 @@ def loadCatalogueData(snapList,snapListRev,ahProps,sortMethod,snapSortList,\
     deltaAverage = [props[12] for props in ahProps]
     if sortMethod == "volumes":
         if snapSortList is None:
-            snapSortList = [np.argsort(snap['iord']) for snap in snapList]
+            snapSortList = [np.argsort(snap['iord']) for snap in snapshotsList]
         volumesList = [ahProps[k][4][snapSortList[k]] \
             for k in range(0,len(ahProps))]
     else:
         volumesList = [None for k in range(0,len(ahProps))]
     # Load anti-halo catalogues:
     if hrList is None:
-        hrList = [snap.halos() for snap in snapListRev]
-    return [snapList,snapListRev,boxsize,ahProps,antihaloCentres,\
+        hrList = [snap.halos() for snap in snapshotsListRev]
+    return [snapshotsList,snapshotsListRev,boxsize,ahProps,antihaloCentres,\
         antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList,\
         deltaCentral,deltaAverage]
 
@@ -1131,7 +1131,7 @@ def lowestOrNothing(x):
     if len(x) > 0:
         return np.min(x)
     else:
-        return -1
+        return np.nan
 
 
 # Count the number of voids that two final catalogue entries have in common:
