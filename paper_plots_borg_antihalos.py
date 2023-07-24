@@ -4120,7 +4120,10 @@ flattenedPairs = np.array(allPairs)
 flattenedVols = np.array(allVolumes)
 flattenedDen = flattenedPairs/flattenedVols
 meanVols = np.mean(flattenedVols,0)
+meanVolsCumulative = np.nanmean(np.cumsum(flattenedVols,2),0)
 meanDensity = np.mean(flattenedPairs/flattenedVols,0)
+meanDensityCumulative = np.nanmean(np.cumsum(flattenedPairs,2)/\
+    np.cumsum(flattenedVols,2),0)
 sigmaDensity = np.std(flattenedPairs/flattenedVols,0)/np.sqrt(len(snapNumList))
 allDensities = flattenedPairs/flattenedVols
 
@@ -4129,17 +4132,28 @@ flattenedPairs = allPairsSample
 flattenedVols = allVolumesSample
 flattenedDen = flattenedPairs/flattenedVols
 meanVols = np.nanmean(flattenedVols,0)
+meanVolsCumulative = np.nanmean(np.cumsum(flattenedVols,2),0)
 meanDensity = np.nanmean(flattenedPairs/flattenedVols,0)
+meanDensityCumulative = np.nanmean(np.cumsum(flattenedPairs,2)/\
+    np.cumsum(flattenedVols,2),0)
 sigmaDensity = np.nanstd(flattenedDen,0)/\
     np.sqrt(np.sum(np.isfinite(flattenedDen),0))
+sigmaDensityCumulative = np.nanstd(np.cumsum(flattenedPairs,2)/\
+    np.cumsum(flattenedVols,2),0)
 
 # Stacked mean profiles:
 rhoStacked = (np.sum(meanDensity*meanVols,0) + 1)/np.sum(meanVols,0)
+rhoStackedCumulative = (np.sum(meanDensityCumulative*meanVolsCumulative,0)+1)/\
+    np.sum(meanVolsCumulative,0)
 #allRhoStacked = (np.sum(meanDensity*meanVols,0) + 1)/np.sum(meanVols,0)
 varStacked = np.var(meanDensity,0)
 weights = meanVols/np.sum(meanVols,0)
+varStackedCumulative = np.var(meanDensityCumulative,0)
+weightsCumulative = meanVolsCumulative/np.sum(meanVolsCumulative,0)
 # Error accounting for profile uncertainty:
 sigmaRhoStacked = np.sqrt(np.sum((sigmaDensity**2 + varStacked)*weights**2,0))
+sigmaRhoStackedCumulative = np.sqrt(np.sum((sigmaDensityCumulative**2 + \
+    varStackedCumulative)*weightsCumulative**2,0))
 # Error ignoring the profile uncertainty:
 sigmaRhoStacked2 = np.sqrt(np.sum((varStacked)*weights**2,0))
 
@@ -4342,17 +4356,36 @@ sumSquareWeights = np.array([np.sum(wi**2,0) for wi in weightsUnAll])
 rhoStackedUnAllNonOverlap = np.array([(np.sum(allPairsUnconNonOverlap[k],0)+1)/\
     np.sum(allVolumesUnconNonOverlap[k],0) \
     for k in range(0,len(allVolumesUnconNonOverlap))])
+rhoStackedUnAllNonOverlapCumulative = \
+    np.array([(np.sum(np.cumsum(allPairsUnconNonOverlap[k],1),0)+1)/\
+    np.sum(np.cumsum(allVolumesUnconNonOverlap[k],1),0) \
+    for k in range(0,len(allVolumesUnconNonOverlap))])
 variancesUnAllNonOverlap = np.array([np.var(allPairsUnconNonOverlap[k]/\
     allVolumesUnconNonOverlap[k],0) \
+    for k in range(0,len(allVolumesUnconNonOverlap))])
+variancesUnAllNonOverlapCumulative = \
+    np.array([np.var(np.cumsum(allPairsUnconNonOverlap[k],1)/\
+    np.cumsum(allVolumesUnconNonOverlap[k],1),0) \
     for k in range(0,len(allVolumesUnconNonOverlap))])
 weightsUnAllNonOverlap = [(allVolumesUnconNonOverlap[k])/\
     np.sum(allVolumesUnconNonOverlap[k],0) \
     for k in range(0,len(allVolumesUnconNonOverlap))]
+weightsUnAllNonOverlapCumulative = \
+    [(np.cumsum(allVolumesUnconNonOverlap[k],1))/\
+    np.sum(np.cumsum(allVolumesUnconNonOverlap[k],1),0) \
+    for k in range(0,len(allVolumesUnconNonOverlap))]
 sumSquareWeightsNonOverlap = np.array([np.sum(wi**2,0) \
     for wi in weightsUnAllNonOverlap])
-
+sumSquareWeightsNonOverlapCumulative = np.array([np.sum(wi**2,0) \
+    for wi in weightsUnAllNonOverlapCumulative])
 #rhoRandomToUse = rhoStackedUnAll
+#rhoRandomToUse = rhoStackedUnAllNonOverlap
+#rhoRandomToUse = rhoStackedUnAllNonOverlapCumulative
+#rhoMCMCToUse = rhoStackedCumulative
+#sigmaRhoMCMCToUse = sigmaRhoStackedCumulative
 rhoRandomToUse = rhoStackedUnAllNonOverlap
+rhoMCMCToUse = rhoStacked
+sigmaRhoMCMCToUse = sigmaRhoStacked
 
 # Filter to catch broken unconstrained sims during testing:
 filterCores = np.where(rhoRandomToUse[:,0] < 0.15)[0]
@@ -4396,8 +4429,8 @@ ax.fill_between(rBinStackCentres,credibleIntervals[2]/nbar,\
     label='Random catalogue (95%)')
 #ax.errorbar(rBinStackCentres,rhoStacked/nbar,yerr=sigmaRhoStacked/nbar,\
 #    color='k',linestyle='-',label='Constrained Catalogue')
-ax.fill_between(rBinStackCentres,(rhoStacked - sigmaRhoStacked)/nbar,\
-    (rhoStacked + sigmaRhoStacked)/nbar,alpha=0.5,color=seabornColormap[0],\
+ax.fill_between(rBinStackCentres,(rhoMCMCToUse - sigmaRhoMCMCToUse)/nbar,\
+    (rhoMCMCToUse + sigmaRhoMCMCToUse)/nbar,alpha=0.5,color=seabornColormap[0],\
     label='MCMC catalogue')
 ax.axvline(1.0,color='grey',linestyle=':')
 ax.axhline(1.0,color='grey',linestyle=':')
@@ -4497,6 +4530,10 @@ highPop = np.where(densityReff1 > 0.36)[0]
 
 regionSamples = np.zeros(len(rhoRandomToUse),dtype=int)
 regionLists = []
+deltaAverageAll = [x[12] for x in ahPropsUn]
+deltaCentralAll = [x[11] for x in ahPropsUn]
+deltaAverageRandomList = []
+deltaCentralRandomList = []
 count = 0
 for ns in range(0,len(snapList)):
     for centre in centresToUseNonOverlapping[ns]:
@@ -4504,21 +4541,47 @@ for ns in range(0,len(snapList)):
         centralAHs = tools.getAntiHalosInSphere(ahCentresListUn[ns],\
                 rSphere,origin=centre,boxsize=boxsize)
         regionLists.append(centralAHs[1])
+        selectFilter = allSelectionsUnconNonOverlap[count]
+        deltaAverageRandomList.append(deltaAverageAll[ns][selectFilter])
+        deltaCentralRandomList.append(deltaCentralAll[ns][selectFilter])
         count += 1
 
 
-
-
+fit = np.polyfit(deltaAverageMean[filter300],deltaCentralMean[filter300],1)
+stackedAverageRandom = np.hstack(deltaAverageRandomList)
+stackedCentralRandom = np.hstack(deltaCentralRandomList)
+fitRand = np.polyfit(stackedAverageRandom,stackedCentralRandom,1)
 
 # Density distribution:
 plt.clf()
-histMean = plt.hist2d(deltaAverageMean,deltaCentralMean,\
-    bins=np.linspace(-1,-0.5,21),density=True,cmap='blues')
-plt.xlabel('Average density contrast, $\\bar{\\delta}$')
-plt.ylabel('Central density contrast, $\\delta_c$')
-plt.colorbar(label='Probability density')
+fig, ax = plt.subplots(1,2,figsize=(textwidth,0.5*textwidth))
+histMean = ax[0].hist2d(deltaAverageMean[filter300],\
+    deltaCentralMean[filter300],\
+    bins=np.array([np.linspace(-0.8,-0.6,21),\
+    np.linspace(-1.0,-0.8,21)]),density=True,cmap='Blues')
+plt.colorbar(histMean[3],label='Probability density')
+xpoints = np.linspace(-0.8,-0.6,21)
+ax[0].plot(xpoints,xpoints*fit[0] + fit[1],linestyle='--',color='k',\
+    label="\\delta_c = " + ("%.2g" % fit[0]) + " + " + ("%.2g" % fit[1]))
+ax[0].set_xlabel('Average density contrast, $\\bar{\\delta}$')
+ax[0].set_ylabel('Central density contrast, $\\delta_c$')
+ax[0].set_title("Local supervolume Catalogue")
+
+histMean = ax[1].hist2d(stackedAverageRandom,\
+    stackedCentralRandom,\
+    bins=np.array([np.linspace(-0.8,-0.6,21),\
+    np.linspace(-1.0,-0.8,21)]),density=True,cmap='Blues')
+plt.colorbar(histMean[3],label='Probability density')
+ax[1].plot(xpoints,xpoints*fitRand[0] + fitRand[1],linestyle='--',color='k',\
+    label="\\delta_c = " + ("%.2g" % fitRand[0]) + " + " + \
+    ("%.2g" % fitRand[1]))
+ax[1].set_xlabel('Average density contrast, $\\bar{\\delta}$')
+ax[1].set_ylabel('Central density contrast, $\\delta_c$')
+ax[1].set_title("146 Random Catalogues")
+plt.tight_layout()
 plt.savefig(figuresFolder + "density_central_average_distribution.pdf")
 plt.show()
+
 
 
 # Binning in each random simulation region individually:
@@ -6307,6 +6370,24 @@ filterOptGood = filterOpt & (finalCatFracOpt > 0.45) & (meanFractionalDist < 0.3
 filter300 = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
     (distances300 < 135) & (cat300.finalCatFrac > thresholds300)
 
+allInRadius = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
+    (distances300 < 135)
+allSignificantInRadius = filter300
+allInsignificantInRadius = allInRadius & \
+    (np.logical_not((cat300.finalCatFrac > thresholds300)))
+
+
+# Distribution of catalogue fraction:
+plt.clf()
+plt.hist(cat300.finalCatFrac[allInRadius],bins=np.arange(0.075,1.1,0.05),\
+    color=seabornColormap[0],alpha=0.5,density=False,label='MCMC catalogue')
+plt.xlabel('Catalogue fraction')
+#plt.ylabel('Probability Density')
+plt.ylabel('No. of voids')
+plt.savefig(figuresFolder + "catalogue_fraction_distribution.pdf")
+plt.show()
+
+
 # Save the high-confidence catalogue:
 #tools.savePickle([meanCentreOpt[filterOptGood],filterOptGood,\
 #    radiiMeanOpt[filterOptGood],finalCatOpt[filterOptGood],\
@@ -6858,8 +6939,8 @@ for nV in np.where(filterOptGood)[0]:
 
 
 # Central and average densities:
-deltaCentral300 = [props[11] for props in cat300.ahProps]
-deltaAverage300 = [props[12] for props in cat300.ahProps]
+deltaCentral300 = [props[11] for props in ahProps]
+deltaAverage300 = [props[12] for props in ahProps]
 shortedendDeltaCentral = cat300.getShortenedQuantity(deltaCentral300,\
     cat300.centralAntihalos)
 shortedendDeltaAverage = cat300.getShortenedQuantity(deltaAverage300,\
