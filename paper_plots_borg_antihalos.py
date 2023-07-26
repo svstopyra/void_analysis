@@ -601,8 +601,17 @@ massFilterUn = [(massListMeanUn > scaleBins[k]) & \
             for k in range(0,len(scaleBins) - 1)]
 
 
-meanRadii = np.array([np.mean(radiiListMean[inds]) for inds in scaleFilter])
+#meanRadii = np.array([np.mean(radiiListMean[inds]) for inds in scaleFilter])
 
+meanRadii = radiiMean300
+radiiBins = plot_utilities.binCentres(radBins)
+scaleFilter = [np.where((meanRadii > radBins[k]) & \
+    (meanRadii <= radBins[k+1]))[0] for k in range(0,len(radBins)-1)]
+[meanRadiiUn,_] = cat300Rand.getMeanProperty("radii")
+scaleFilterUn = [np.where((meanRadiiUn > radBins[k]) & \
+    (meanRadiiUn <= radBins[k+1]))[0] for k in range(0,len(radBins)-1)]
+meanCatFrac = np.array([np.mean(cat300.finalCatFrac[inds]) \
+    for inds in scaleFilter])
 
 plt.plot(meanRadii,meanCombFrac,linestyle='-',color=seabornColormap[0])
 plt.plot(meanRadii,percentilesComb,linestyle=':',color=seabornColormap[0])
@@ -626,8 +635,8 @@ plt.show()
 binNames = [str(x) for x in range(1,len(scaleFilter))]
 #violinData = [finalCombinatoricFracOpt[inds] for inds in scaleFilter]
 #violinDataUn = [finalCombinatoricFracUn[inds] for inds in massFilterUn]
-violinData = [finalCatFracOpt[inds] for inds in scaleFilter]
-violinDataUn = [finalCatFracUn[inds] for inds in massFilterUn]
+violinData = [cat300.finalCatFrac[inds] for inds in scaleFilter]
+violinDataUn = [cat300Rand.finalCatFrac[inds] for inds in scaleFilterUn]
 # New idea. Arrange things into a data frame with categories 'value', 'simtype'
 # and 'radius':
 combinedValues = np.hstack([np.hstack([violinData[ind],violinDataUn[ind]]) \
@@ -637,8 +646,8 @@ combinedLabels = np.hstack([np.hstack([\
     np.full(len(violinDataUn[ind]),'random')]) \
     for ind in range(0,len(violinData))])
 combinedRadii = np.hstack([np.hstack([\
-    np.full(len(violinData[ind]),meanRadii[ind]),\
-    np.full(len(violinDataUn[ind]),meanRadii[ind])]) \
+    np.full(len(violinData[ind]),radiiBins[ind]),\
+    np.full(len(violinDataUn[ind]),radiiBins[ind])]) \
     for ind in range(0,len(violinData))])
 combinedBins = np.hstack([np.hstack([\
     np.full(len(violinData[ind]),ind),\
@@ -651,27 +660,65 @@ combinedFrame = pandas.DataFrame(data=combinedData)
 dataCounts = [len(x) for x in violinData]
 dataCountsUn = [len(x) for x in violinDataUn]
 
+
 fig, ax = plt.subplots(figsize=(textwidth,textwidth))
 sns.violinplot(data=combinedFrame,x='radius',y='value',hue='simType',\
-    split=True,cut=0.0,scale='area',bw=1,ax=ax)
+    split=True,cut=0.0,bw="scott",ax=ax,scale='width',saturation=0.8)
 ax = plt.gca()
-ax.set_xticklabels([("%.3g" % r) for r in meanRadii[np.isfinite(meanRadii)]])
-ax.set_xlabel('Mean radius in bin [$\\mathrm{Mpc}h^{-1}$]')
+ax.set_xticklabels([("%.3g" % r) for r in radiiBins])
+ax.set_xlabel('Radius Bin [$\\mathrm{Mpc}h^{-1}$]')
 ax.set_ylabel('Catalogue Fraction')
 numViolins = len(ax.get_xticklabels())
-plt.plot(range(0,numViolins),percentilesCat[0:numViolins],'k:',\
+plt.plot(range(0,numViolins),percentilesCat300[0:numViolins],'k:',\
     label='99th \npercentile \nrandom \ncatalogue')
 plt.plot(range(0,numViolins),meanCatFrac[0:numViolins],'k-',\
     label='Mean of \nposterior \ncatalogue')
-plt.legend(frameon=False,loc='upper left')
+plt.legend(frameon=False,loc='upper right')
 plt.title('Catalogue fraction for ' + str(len(snapNumList)) + ' samples.')
+plt.ylim([0.0,1.0])
+plt.text(0,0.06,"($n_{\\mathrm{MCMC}}$,$n_{\\mathrm{random}}):$",\
+    horizontalalignment="center")
 for k in range(0,len(dataCounts)):
-    plt.text(k,0.05,"(" + str(dataCounts[k]) + "," + str(dataCountsUn[k]) + \
+    plt.text(k,0.02,"(" + str(dataCounts[k]) + "," + str(dataCountsUn[k]) + \
         ")",horizontalalignment = 'center')
 
 plt.savefig(figuresFolder + "catalogue_fraction_violins.pdf")
 plt.show()
 
+# Plots in each bin separately:
+numCols = 3
+numRows = 2
+catFracBins = np.arange(0.075,1.075,0.05)
+plt.clf()
+fig, ax = plt.subplots(numRows,numCols,figsize=(textwidth,0.6*textwidth))
+for k in range(0,6):
+    i = int(np.floor(k/numCols))
+    j = k - i*numCols
+    ax[i,j].hist(violinData[k],bins=catFracBins,alpha=0.5,\
+        color=seabornColormap[0],label='Posterior',density=True)
+    ax[i,j].hist(violinDataUn[k],bins=catFracBins,alpha=0.5,\
+        color=seabornColormap[1],label='Random',density=True)
+    ax[i,j].set_title(("%.3g" % radBins[k]) + \
+        " < $R/\\mathrm{Mpc}h^{-1}$ < " + ("%.3g" % radBins[k+1]),\
+        fontsize=10,fontfamily="serif")
+    plot.formatPlotGrid(ax,i,j,0,None,1,'Catalogue fraction',numRows,\
+        fontsize=8,fontfamily='serif',nCols = numCols,xlim=[0.1,1.0],\
+        ylim=[1e-1,20],logy=True)
+    ax[i,j].axvline(percentilesCat300[k],linestyle=':',color='k',\
+        label = '99th \npercentile\n randoms')
+    ax[i,j].text(0.8,10,"$n_{\\mathrm{MCMC}} = $" + str(dataCounts[k]),\
+        ha="center",va="center",fontsize=8,fontfamily="serif")
+    ax[i,j].text(0.8,6,"$n_{\\mathrm{rand}} = $" + str(dataCountsUn[k]),\
+        ha="center",va="center",fontsize=8,fontfamily="serif")
+
+ax[1,2].legend(frameon=False,loc="upper left")
+fig.text(0.03,0.5,"Probability density",fontsize=8,fontfamily="serif",\
+    rotation="vertical",horizontalalignment='center',\
+    verticalalignment="center")
+#plt.tight_layout()
+plt.subplots_adjust(wspace=0.0,bottom=0.15,top=0.92,left=0.1,right=0.95)
+plt.savefig(figuresFolder + "catfrac_distribution_random_vs_posterior.pdf")
+plt.show()
 
 textwidth=7.1014
 textheight=9.0971
