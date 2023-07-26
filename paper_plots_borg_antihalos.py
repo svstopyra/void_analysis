@@ -4279,13 +4279,36 @@ deltaMCMCList = tools.loadPickle(data_folder + "delta_list.p")
 kde = scipy.stats.gaussian_kde(deltaMCMCList,bw_method="scott")
 deltaMAP = scipy.optimize.minimize(lambda x: -kde.evaluate(x),\
     np.mean(deltaMCMCList)).x[0]
+kdeSamples = kde.resample(1000,seed=1000)
+
+def getMAPFromSample(sample):
+    kde = scipy.stats.gaussian_kde(sample,bw_method="scott")
+    return scipy.optimize.minimize(lambda x: -kde.evaluate(x),\
+        np.mean(sample)).x[0]
+
+deltaMAPBootstrap = scipy.stats.bootstrap((deltaMCMCList,),\
+    getMAPFromSample,confidence_level = 0.68,vectorized=False)
+
+deltaMAPInterval = deltaMAPBootstrap.confidence_interval
 
 # Get comparable density regions:
 comparableDensity = [(delta <= deltaListMeanNew + deltaListErrorNew) & \
     (delta > deltaListMeanNew - deltaListErrorNew) for delta in randOverDen]
-centresToUse = [randCentres[comp] for comp in comparableDensity]
+comparableDensityMAP = [(delta <= deltaMAPInterval[1]) & \
+    (delta > deltaMAPInterval[0]) for delta in randOverDen]
+#centresToUse = [randCentres[comp] for comp in comparableDensity]
+centresToUse = [randCentres[comp] for comp in comparableDensityMAP]
+
+maxRegions = 100
+
+
+#deltaToUse = [randOverDen[ns][comp] \
+#    for ns, comp in zip(range(0,len(snapList)),comparableDensity)]
+
 deltaToUse = [randOverDen[ns][comp] \
-    for ns, comp in zip(range(0,len(snapList)),comparableDensity)]
+    for ns, comp in zip(range(0,len(snapList)),comparableDensityMAP)]
+
+
 
 def getDistanceBetweenCentres(centre1,centre2,boxsize):
     if (len(centre1.shape) == 1 and len(centre2.shape) == 1):
@@ -4406,13 +4429,15 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
         antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
         _recomputeData=False)
 
+conBinEdges = np.linspace(-1,-0.5,21)
 [allPairsUnconNonOverlap,allVolumesUnconNonOverlap,\
     allSelectionsUnconNonOverlap] = tools.loadOrRecompute(\
         data_folder + "pair_counts_density_conditioning.p",\
         getRandomCataloguePairCounts,\
         centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
-        antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
-        _recomputeData=False,conditioningQuantityUn = ahPropsUn[11],\
+        antihaloRadiiUn,rSphere,conBinEdges,rBinStack,meanRadii,boxsize,\
+        _recomputeData=False,\
+        conditioningQuantityUn = [props[11] for props in ahPropsUn],\
         conditioningQuantityMCMC = deltaCentralMean[filter300])
 
 
@@ -6284,6 +6309,24 @@ for k in range(0,nPerms):
     goodVoidsPerm.append(filterPerm)
     permutations.append(perm)
 
+goodVoidsPerm300 = []
+for k in range(0,nPerms):
+    catPerm = randomlyOrderedCats[k]
+    [radiiPerm,sigmaRadiiPerm] = catPerm.getMeanProperty("radii")
+    meanCentrePerm = catPerm.getMeanCentres()
+    distancesPerm = np.sqrt(np.sum(meanCentrePerm**2,1))
+    thresholdsPerm = getAllThresholds(percentilesCat300,radBins,radiiPerm)
+    filterPerm = (radiiPerm > 10) & (radiiPerm <= 25) & \
+        (distancesPerm < 300) & (catPerm.finalCatFrac > thresholdsPerm)
+    goodVoidsPerm300.append(filterPerm)
+
+massFunctionsPerm135 = [cat.getMeanProperty("mass")[0][filt] \
+    for cat, filt in zip(randomlyOrderedCats,goodVoidsPerm)]
+massFunctionsPerm300 = [cat.getMeanProperty("mass")[0][filt] \
+    for cat, filt in zip(randomlyOrderedCats,goodVoidsPerm300)]
+
+
+
 splitLists = [catalogue.getSplitList(cat300.finalCat[filter300,:][:,perm],\
     catTest.finalCat[filterTest,:]) \
     for perm, catTest, filterTest \
@@ -6605,6 +6648,33 @@ if doCat:
         volSimRight = 4*np.pi*300**3/3,ylimRight=[1,1000],\
         legendLoc="upper right")
 
+# Mass functions showing only voids that are always found:
+if doCat:
+    nBins = 8
+    Om = referenceSnap.properties['omegaM0']
+    rhoc = 2.7754e11
+    boxsize = referenceSnap.properties['boxsize'].ratio("Mpc a h**-1")
+    N = int(np.cbrt(len(referenceSnap)))
+    mUnit = 8*Om*rhoc*(boxsize/N)**3
+    mLower = 100*mUnit
+    mUpper = 2e15
+    rSphere = 300
+    rSphereInner = 135
+    # Check mass functions:
+    volSphere135 = 4*np.pi*rSphereInner**3/3
+    volSphere = 4*np.pi*rSphere**3/3
+    plot.massFunctionComparison(massFunctionsPerm135,\
+        massFunctionsPerm300,4*np.pi*135**3/3,nBins=nBins,\
+        labelLeft = "Combined catalogue \n(well-constrained voids only)",\
+        labelRight  ="Combined catalogue \n(well-constrained voids only)",\
+        ylabel="Number of antihalos",savename=figuresFolder + \
+        "mass_function_permutations_300vs135_test.pdf",massLower=mLower,\
+        ylim=[1,1000],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,\
+        fontsize=8,massUpper = mUpper,\
+        titleLeft = "Combined catalogue, $<135\\mathrm{Mpc}h^{-1}$",\
+        titleRight = "Combined catalogue, $<300\\mathrm{Mpc}h^{-1}$",\
+        volSimRight = 4*np.pi*300**3/3,ylimRight=[1,1000],\
+        legendLoc="upper right",massErrors=True,)
 
 
 # Test for void splitting:

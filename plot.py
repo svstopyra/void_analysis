@@ -3265,7 +3265,7 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,\
         ylim=[1e1,2e4],title="Gadget Simulation",showLegend=True,\
         tickRight=False,tickLeft=True,savename=None,\
         linking_length=0.2,showTheory=True,returnHandles=False,\
-        massErrors=False):
+        massErrors=False,listMode="average",errorType="bar"):
     [dndm,m] = cosmology.TMF_from_hmf(massLower,massUpper,\
         h=h,Om0=Om0,Delta=Delta,delta_wrt=delta_wrt,\
         mass_function=mass_function,sigma8=sigma8,Ob0 = Ob0,\
@@ -3279,27 +3279,56 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,\
     alphaO2 = (1.0 - poisson_interval)/2.0
     massBinCentres = plot_utilities.binCentres(massBins)
     if type(masses) == list:
-        [noInBins,sigmaBins] = computeMeanHMF(masses,\
-            massLower=massLower,massUpper=massUpper,nBins = nBins)
+        if listMode == "average":
+            [noInBins,sigmaBins] = computeMeanHMF(masses,\
+                massLower=massLower,massUpper=massUpper,nBins = nBins)
+            noInBinsList = [noInBins]
+            sigmaBinsList = [sigmaBins]
+        elif listMode == "separate":
+            noInBinsList = []
+            sigmaBinsList = []
+            for massList in masses:
+                [noInBins,sigmaBins] = computeMeanHMF(massList,\
+                    massLower=massLower,massUpper=massUpper,nBins = nBins)
+                noInBinsList.append(noInBins)
+                sigmaBinsList.append(sigmaBins)
     else:
         noInBins = plot_utilities.binValues(masses,massBins)[1]
         sigmaBins = np.abs(np.array([scipy.stats.chi2.ppf(\
             alphaO2,2*noInBins)/2,\
             scipy.stats.chi2.ppf(1.0 - alphaO2,2*(noInBins+1))/2]) - \
             noInBins)
+        noInBinsList = [noInBins]
+        sigmaBinsList = [sigmaBins]
     if ax is None:
         fig, ax = plt.subplots(1,1,figsize=(8,4))
     if color is None:
         color = seabornColormap[0]
     handles = []
+    if type(label) != list:
+        labelList = [label for noInBins in noInBinsList]
+    else:
+        labelList = label
     if massErrors:
         # Plot with an error bar
-        handles.append(ax.errorbar(massBinCentres,noInBins,sigmaBins,\
-            marker=marker,linestyle=linestyle,label=label,color=color))
+        for noInBins, sigmaBins, lab in \
+            zip(noInBinsList,sigmaBinsList,labelList):
+            if errorType == "bar":
+                handles.append(ax.errorbar(massBinCentres,noInBins,sigmaBins,\
+                    marker=marker,linestyle=linestyle,label=lab,color=color))
+            elif errorType == "shaded":
+                handles.append(ax.fill_between(massBinCentres,\
+                    noInBins - sigmaBins,noInBins + sigmaBins,\
+                    marker=marker,linestyle=linestyle,label=lab,color=color,\
+                    alpha=0.5))
+            else:
+                raise Exception("Unrecognised plotting method for errors.")
     else:
         # Plot without an error bar
-        handles.append(ax.plot(massBinCentres,noInBins,\
-            marker=marker,linestyle=linestyle,label=label,color=color))
+        for noInBins, sigmaBins, lab in \
+            zip(noInBinsList,sigmaBinsList,labelList):
+            handles.append(ax.plot(massBinCentres,noInBins,\
+                marker=marker,linestyle=linestyle,label=lab,color=color))
     if showTheory:
         if colorTheory is None:
             colorTheory = colorTheory
@@ -3341,7 +3370,8 @@ def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
         ylim=[1e1,2e4],savename=None,show=True,transfer_model='EH',fname=None,\
         returnAx = False,ns=1.0,rows=1,cols=2,titleLeft = "Gadget Simulation",\
         titleRight = "Gadget Simulation",saveLeft=None,saveRight=None,\
-        ylimRight=None,volSimRight=None):
+        ylimRight=None,volSimRight=None,listMode="average",massErrors=False,\
+        errorType="shaded"):
     if ax is None:
         fig, ax = plt.subplots(rows,cols,figsize=(8,4))
     if volSimRight is None:
@@ -3357,7 +3387,8 @@ def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
         color=color,colorTheory = colorTheory,\
         nBins=nBins,poisson_interval = poisson_interval,legendLoc=legendLoc,\
         label=labelLeft,transfer_model=transfer_model,ylim=ylim,\
-        savename=saveLeft)
+        savename=saveLeft,listMode=listMode,massErrors=massErrors,\
+        errorType=errorType)
     plotMassFunction(massesRight,volSimRight,ax=ax[1],Om0=Om0,h=h,ns=ns,\
         Delta=Delta,sigma8=sigma8,fontsize=fontsize,\
         legendFontsize=legendFontsize,font="serif",\
@@ -3367,7 +3398,8 @@ def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
         color=color,colorTheory = colorTheory,\
         nBins=nBins,poisson_interval = poisson_interval,legendLoc=legendLoc,\
         label=labelRight,transfer_model=transfer_model,ylim=ylimRight,\
-        savename=saveRight)
+        savename=saveRight,listMode=listMode,massErrors=massErrors,\
+        errorType=errorType)
     plt.tight_layout()
     if savename is not None:
         plt.savefig(savename)
