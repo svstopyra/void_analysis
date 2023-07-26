@@ -4228,6 +4228,10 @@ def getRandomCentresAndDensities(rSphere,snapListUn,\
 #tools.savePickle(deltaMCMCList,data_folder + "delta_list.p")
 deltaMCMCList = tools.loadPickle(data_folder + "delta_list.p")
 
+# Get MAP density:
+kde = scipy.stats.gaussian_kde(deltaMCMCList,bw_method="scott")
+deltaMAP = scipy.optimize.minimize(lambda x: -kde.evaluate(x),\
+    np.mean(deltaMCMCList)).x[0]
 
 # Get comparable density regions:
 comparableDensity = [(delta <= deltaListMeanNew + deltaListErrorNew) & \
@@ -4278,15 +4282,22 @@ treeListUncon = [scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize) \
 
 
 def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
-        ahCentresListUn,antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,\
-        meanRadiiMCMC,boxsize,seed=1000,start=0,end=-1):
+        ahCentresListUn,antihaloRadiiUn,rSphere,conditionBinEdges,rBinStack,\
+        meanRadiiMCMC,boxsize,seed=1000,start=0,end=-1,\
+        conditioningQuantityUn=None,conditioningQuantityMCMC=None):
     # Get pair counts in similar-density regions:
     allPairsUncon = []
     allVolumesUncon = []
     allSelections = []
     np.random.seed(seed)
-    [inRadBinsComb,noInRadBinsComb] = plot.binValues(meanRadiiMCMC,\
-        rEffBinEdges)
+    if conditioningQuantityUn is None:
+        # Assume using the radius
+        conditioningQuantityUn = antihaloRadiiUn
+    if conditioningQuantityMCMC is None:
+        # Assume using the radius
+        conditioningQuantityMCMC = meanRadiiMCMC
+    [inConBinsComb,noInConBinsComb] = plot.binValues(conditioningQuantityMCMC,\
+        conditionBinEdges)
     #centreListToTest = centresToUseNonOverlapping
     if end == -1:
         end = len(snapListUn)
@@ -4303,14 +4314,17 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
             # radius distribution as the combined catalogue:
             centralRadii = antihaloRadiiUn[ns][centralAntihalos[1]]
             centralCentres = ahCentresListUn[ns][centralAntihalos[1]]
-            [inRadBins,noInRadBins] = plot.binValues(centralRadii,rEffBinEdges)
+            centralConditionVariable = conditioningQuantityUn[ns][\
+                centralAntihalos[1]]
+            [inConBins,noInConBins] = plot.binValues(centralConditionVariable,\
+                conditionBinEdges)
             # Select voids with the same radius distribution as the combined 
             # catalogue:
             selection = []
-            for k in range(0,len(rEffBinEdges)-1):
-                if noInRadBinsComb[k] > 0:
-                    selection.append(np.random.choice(inRadBins[k],\
-                        np.min([noInRadBinsComb[k],noInRadBins[k]]),\
+            for k in range(0,len(conditionBinEdges)-1):
+                if noInConBinsComb[k] > 0:
+                    selection.append(np.random.choice(inConBins[k],\
+                        np.min([noInConBinsComb[k],noInConBins[k]]),\
                         replace=False))
             selectArray = np.hstack(selection)
             # Now get pair counts around these voids:
@@ -4344,6 +4358,16 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
         centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
         antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
         _recomputeData=False)
+
+[allPairsUnconNonOverlap,allVolumesUnconNonOverlap,\
+    allSelectionsUnconNonOverlap] = tools.loadOrRecompute(\
+        data_folder + "pair_counts_density_conditioning.p",\
+        getRandomCataloguePairCounts,\
+        centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
+        antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
+        _recomputeData=False,conditioningQuantityUn = ahPropsUn[11],\
+        conditioningQuantityMCMC = deltaCentralMean[filter300])
+
 
 [allPairsUncon,allVolumesUncon] = tools.loadPickle("temp_sample_13.p")
 
@@ -4522,6 +4546,9 @@ plt.axvline(deltaMCMCMean+deltaMCMCSigma,linestyle=':',color='k')
 plt.hist(np.hstack(randOverDen),bins=np.arange(-0.1,0.1,0.005),\
     color=seabornColormap[1],alpha=0.5,\
     label='Random spheres \n(unconditioned)',density=True)
+deltaPoints = np.linspace(-0.055,-0.035,51)
+plt.plot(deltaPoints,kde.evaluate(deltaPoints),linestyle='-',color='k',\
+    label='KDE')
 plt.xlabel('Density contrast in $135\\,\\mathrm{Mpc}h^{-1}$')
 plt.ylabel('Probability Density')
 plt.legend()
@@ -6152,6 +6179,27 @@ cat300 = catalogue.combinedCatalogue(snapNameList,snapNameListRev,\
 finalCat300 = cat300.constructAntihaloCatalogue()
 
 
+[centresListShort,centralAntihalos,sortedList,ahCounts,max_index] = \
+    [cat300.centresListShort,cat300.centralAntihalos,cat300.sortedList,\
+    cat300.ahCounts,cat300.max_index]
+
+snapNameListRand = [snap.filename for snap in snapListUn]
+snapNameListRandRev = [snap.filename for snap in snapListRevUn]
+
+cat300Rand = catalogue.combinedCatalogue(snapNameListRand,snapNameListRandRev,\
+    muOpt,rSearchOpt,rSphere2,\
+    ahProps=ahPropsUn,hrList=hrListUn,max_index=None,\
+    twoWayOnly=True,blockDuplicates=True,\
+    massRange = [mMin,mMax],\
+    NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
+    additionalFilters = None,verbose=False,\
+    refineCentres=refineCentres,sortBy=sortBy,\
+    enforceExclusive=enforceExclusive)
+finalCat300Rand = cat300Rand.constructAntihaloCatalogue()
+
+ahNumbers = cat300.ahNumbers
+
+
 
 
 
@@ -6303,27 +6351,6 @@ computed = catTest.constructAntihaloCatalogue()
 #                additionalFilters = None,verbose=False,\
 #                refineCentres=refineCentres,sortBy=sortBy,\
 #                enforceExclusive=enforceExclusive)
-
-[centresListShort,centralAntihalos,sortedList,ahCounts,max_index] = \
-    [cat300.centresListShort,cat300.centralAntihalos,cat300.sortedList,\
-    cat300.ahCounts,cat300.max_index]
-
-snapNameListRand = [snap.filename for snap in snapListUn]
-snapNameListRandRev = [snap.filename for snap in snapListRevUn]
-
-cat300Rand = catalogue.combinedCatalogue(snapNameListRand,snapNameListRandRev,\
-    muOpt,rSearchOpt,rSphere2,\
-    ahProps=ahPropsUn,hrList=hrListUn,max_index=None,\
-    twoWayOnly=True,blockDuplicates=True,\
-    massRange = [mMin,mMax],\
-    NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
-    additionalFilters = None,verbose=False,\
-    refineCentres=refineCentres,sortBy=sortBy,\
-    enforceExclusive=enforceExclusive)
-finalCat300Rand = cat300Rand.constructAntihaloCatalogue()
-
-ahNumbers = cat300.ahNumbers
-
 
 # Mass functions:
 
