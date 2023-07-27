@@ -4223,6 +4223,7 @@ snapSample = snapListUn[0]
 ahPropsUnconstrained = ahPropsUn
 ahCentresListUn = [props[5] for props in ahPropsUnconstrained]
 antihaloRadiiUn = [props[7] for props in ahPropsUnconstrained]
+antihaloMassesUn = [props[3] for props in ahPropsUn]
 centralDensityUn = [props[11] for props in ahPropsUnconstrained]
 averageDensityUn = [props[12] for props in ahPropsUnconstrained]
 ahTreeCentres = [scipy.spatial.cKDTree(centres,boxsize) \
@@ -4352,22 +4353,17 @@ treeListUncon = [scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize) \
 
 
 def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
-        ahCentresListUn,antihaloRadiiUn,rSphere,conditionBinEdges,rBinStack,\
+        ahCentresListUn,antihaloRadiiUn,rSphere,radBinEdges,rBinStack,\
         meanRadiiMCMC,boxsize,seed=1000,start=0,end=-1,\
-        conditioningQuantityUn=None,conditioningQuantityMCMC=None):
+        conditioningQuantityUn=None,conditioningQuantityMCMC=None,\
+        conditionBinEdges=None):
     # Get pair counts in similar-density regions:
     allPairsUncon = []
     allVolumesUncon = []
     allSelections = []
     np.random.seed(seed)
-    if conditioningQuantityUn is None:
-        # Assume using the radius
-        conditioningQuantityUn = antihaloRadiiUn
-    if conditioningQuantityMCMC is None:
-        # Assume using the radius
-        conditioningQuantityMCMC = meanRadiiMCMC
-    [inConBinsComb,noInConBinsComb] = plot.binValues(conditioningQuantityMCMC,\
-        conditionBinEdges)
+    [inRadBinsComb,noInRadBinsComb] = plot.binValues(meanRadiiMCMC,\
+        radBinEdges)
     #centreListToTest = centresToUseNonOverlapping
     if end == -1:
         end = len(snapListUn)
@@ -4384,18 +4380,33 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
             # radius distribution as the combined catalogue:
             centralRadii = antihaloRadiiUn[ns][centralAntihalos[1]]
             centralCentres = ahCentresListUn[ns][centralAntihalos[1]]
-            centralConditionVariable = conditioningQuantityUn[ns][\
-                centralAntihalos[1]]
-            [inConBins,noInConBins] = plot.binValues(centralConditionVariable,\
-                conditionBinEdges)
+            if conditioningQuantityMCMC is not None:
+                centralConditionVariable = conditioningQuantityUn[ns][\
+                    centralAntihalos[1]]
+            [inRadBins,noInRadBins] = plot.binValues(centralRadii,\
+                radBinEdges)
             # Select voids with the same radius distribution as the combined 
             # catalogue:
             selection = []
-            for k in range(0,len(conditionBinEdges)-1):
-                if noInConBinsComb[k] > 0:
-                    selection.append(np.random.choice(inConBins[k],\
-                        np.min([noInConBinsComb[k],noInConBins[k]]),\
-                        replace=False))
+            for k in range(0,len(radBinEdges)-1):
+                if noInRadBinsComb[k] > 0:
+                    # If not using a second condition:
+                    if conditioningQuantityMCMC is None:
+                        selection.append(np.random.choice(inRadBins[k],\
+                            np.min([noInRadBinsComb[k],noInRadBins[k]]),\
+                            replace=False))
+                    else:
+                        [inConBinsComb,noInConBinsComb] = plot.binValues(\
+                            conditioningQuantityMCMC[inRadBinsComb[k]],\
+                            conditionBinEdges)
+                        [inConBins,noInConBins] = plot.binValues(\
+                            centralConditionVariable[inRadBins[k]],\
+                            conditionBinEdges)
+                        for l in range(0,len(conditionBinEdges)-1):
+                            selection.append(np.random.choice(\
+                                inRadBins[k][inConBins[l]],\
+                                np.min([noInConBinsComb[l],noInConBins[l]]),\
+                                replace=False))
             selectArray = np.hstack(selection)
             # Now get pair counts around these voids:
             [nPairsList,volumesList] = stacking.getPairCounts(\
@@ -4432,13 +4443,14 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
 conBinEdges = np.linspace(-1,-0.5,21)
 [allPairsUnconNonOverlap,allVolumesUnconNonOverlap,\
     allSelectionsUnconNonOverlap] = tools.loadOrRecompute(\
-        data_folder + "pair_counts_density_conditioning.p",\
+        data_folder + "pair_counts_density_and_radius_conditioning.p",\
         getRandomCataloguePairCounts,\
         centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
-        antihaloRadiiUn,rSphere,conBinEdges,rBinStack,meanRadii,boxsize,\
+        antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
         _recomputeData=False,\
         conditioningQuantityUn = [props[11] for props in ahPropsUn],\
-        conditioningQuantityMCMC = deltaCentralMean[filter300])
+        conditioningQuantityMCMC = deltaCentralMean[filter300],\
+        conditionBinEdges = conBinEdges)
 
 
 [allPairsUncon,allVolumesUncon] = tools.loadPickle("temp_sample_13.p")
@@ -4447,6 +4459,7 @@ conBinEdges = np.linspace(-1,-0.5,21)
 # Central and average densities in similar regions:
 centralDensityUnconNonOverlap = []
 averageDensityUnconNonOverlap = []
+massesUnconNonOverlap = []
 counter = 0
 for ns in range(0,len(snapListUn)):
     centres = centresToUseNonOverlapping[ns]
@@ -4456,10 +4469,12 @@ for ns in range(0,len(snapListUn)):
                 rSphere,origin=centre,boxsize=boxsize)
         sphereCentralDensities = centralDensityUn[ns][centralAHs[1]]
         sphereAverageDensities = averageDensityUn[ns][centralAHs[1]]
+        sphereMasses = antihaloMassesUn[ns][centralAHs[1]]
         centralDensityUnconNonOverlap.append(\
             sphereCentralDensities[allSelectionsUnconNonOverlap[counter]])
         averageDensityUnconNonOverlap.append(\
             sphereAverageDensities[allSelectionsUnconNonOverlap[counter]])
+        massesUnconNonOverlap.append(sphereMasses)
         counter += 1
 
 
@@ -4477,32 +4492,43 @@ weightsUnAll = [(allVolumesUncon[k])/np.sum(allVolumesUncon[k],0) \
 sumSquareWeights = np.array([np.sum(wi**2,0) for wi in weightsUnAll])
 
 #regionsFilter = range(0,len(allVolumesUnconNonOverlap))
+#regionsFilter = np.where( \
+#    (deltaToUseNonOverlapping > deltaListMeanNew - deltaListErrorNew/2) & \
+#    (deltaToUseNonOverlapping <= deltaListMeanNew + deltaListErrorNew/2) )[0]
 regionsFilter = np.where( \
-    (deltaToUseNonOverlapping > deltaListMeanNew - deltaListErrorNew/2) & \
-    (deltaToUseNonOverlapping <= deltaListMeanNew + deltaListErrorNew/2) )[0]
+    (deltaToUseNonOverlapping > deltaMAPInterval[0]) & \
+    (deltaToUseNonOverlapping <= deltaMAPInterval[1]) )[0]
+
+mUnitLowRes = 8*snapList[0]['mass'][0]*1e10
+#profileFilterUnconNonOverlap = [np.ones(selection.shape,dtype=bool) \
+#    for selection in allSelectionsUnconNonOverlap]
+profileFilterUnconNonOverlap = [massList[selection] >= mUnitLowRes*100 \
+    for massList, selection in \
+    zip(massesUnconNonOverlap,allSelectionsUnconNonOverlap)]
 
 # Stacked profiles in each region:
-rhoStackedUnAllNonOverlap = np.array([(np.sum(allPairsUnconNonOverlap[k],0)+1)/\
-    np.sum(allVolumesUnconNonOverlap[k],0) \
-    for k in regionsFilter])
+rhoStackedUnAllNonOverlap = np.array([\
+    (np.sum(allPairsUnconNonOverlap[k][filt],0)+1)/\
+    np.sum(allVolumesUnconNonOverlap[k][filt],0) \
+    for k, filt in zip(regionsFilter,profileFilterUnconNonOverlap)])
 rhoStackedUnAllNonOverlapCumulative = \
-    np.array([(np.sum(np.cumsum(allPairsUnconNonOverlap[k],1),0)+1)/\
-    np.sum(np.cumsum(allVolumesUnconNonOverlap[k],1),0) \
-    for k in regionsFilter])
-variancesUnAllNonOverlap = np.array([np.var(allPairsUnconNonOverlap[k]/\
-    allVolumesUnconNonOverlap[k],0) \
-    for k in regionsFilter])
+    np.array([(np.sum(np.cumsum(allPairsUnconNonOverlap[k][filt],1),0)+1)/\
+    np.sum(np.cumsum(allVolumesUnconNonOverlap[k][filt],1),0) \
+    for k, filt in zip(regionsFilter,profileFilterUnconNonOverlap)])
+variancesUnAllNonOverlap = np.array([np.var(allPairsUnconNonOverlap[k][filt]/\
+    allVolumesUnconNonOverlap[k][filt],0) \
+    for k, filt in zip(regionsFilter,profileFilterUnconNonOverlap)])
 variancesUnAllNonOverlapCumulative = \
-    np.array([np.var(np.cumsum(allPairsUnconNonOverlap[k],1)/\
-    np.cumsum(allVolumesUnconNonOverlap[k],1),0) \
-    for k in regionsFilter])
-weightsUnAllNonOverlap = [(allVolumesUnconNonOverlap[k])/\
-    np.sum(allVolumesUnconNonOverlap[k],0) \
-    for k in regionsFilter]
+    np.array([np.var(np.cumsum(allPairsUnconNonOverlap[k][filt],1)/\
+    np.cumsum(allVolumesUnconNonOverlap[k][filt],1),0) \
+    for k, filt in zip(regionsFilter,profileFilterUnconNonOverlap)])
+weightsUnAllNonOverlap = [(allVolumesUnconNonOverlap[k][filt])/\
+    np.sum(allVolumesUnconNonOverlap[k][filt],0) \
+    for k, filt in zip(regionsFilter,profileFilterUnconNonOverlap)]
 weightsUnAllNonOverlapCumulative = \
-    [(np.cumsum(allVolumesUnconNonOverlap[k],1))/\
-    np.sum(np.cumsum(allVolumesUnconNonOverlap[k],1),0) \
-    for k in regionsFilter]
+    [(np.cumsum(allVolumesUnconNonOverlap[k][filt],1))/\
+    np.sum(np.cumsum(allVolumesUnconNonOverlap[k][filt],1),0) \
+    for k, filt in zip(regionsFilter,profileFilterUnconNonOverlap)]
 sumSquareWeightsNonOverlap = np.array([np.sum(wi**2,0) \
     for wi in weightsUnAllNonOverlap])
 sumSquareWeightsNonOverlapCumulative = np.array([np.sum(wi**2,0) \
@@ -4732,7 +4758,7 @@ ax[1].plot(xpoints,xpoints*fitRand[0] + fitRand[1],linestyle='--',color='k',\
     ("%.2g" % fitRand[1]))
 ax[1].set_xlabel('Average density contrast, $\\bar{\\delta}$')
 ax[1].set_ylabel('Central density contrast, $\\delta_c$')
-ax[1].set_title("146 Random Catalogues")
+ax[1].set_title("144 Random Catalogues")
 plt.tight_layout()
 plt.savefig(figuresFolder + "density_central_average_distribution.pdf")
 plt.show()
@@ -6310,6 +6336,7 @@ for k in range(0,nPerms):
     permutations.append(perm)
 
 goodVoidsPerm300 = []
+radiiAllPerms = []
 for k in range(0,nPerms):
     catPerm = randomlyOrderedCats[k]
     [radiiPerm,sigmaRadiiPerm] = catPerm.getMeanProperty("radii")
@@ -6319,6 +6346,7 @@ for k in range(0,nPerms):
     filterPerm = (radiiPerm > 10) & (radiiPerm <= 25) & \
         (distancesPerm < 300) & (catPerm.finalCatFrac > thresholdsPerm)
     goodVoidsPerm300.append(filterPerm)
+    radiiAllPerms.append(radiiPerm)
 
 massFunctionsPerm135 = [cat.getMeanProperty("mass")[0][filt] \
     for cat, filt in zip(randomlyOrderedCats,goodVoidsPerm)]
@@ -6331,6 +6359,12 @@ splitLists = [catalogue.getSplitList(cat300.finalCat[filter300,:][:,perm],\
     catTest.finalCat[filterTest,:]) \
     for perm, catTest, filterTest \
     in zip(permutations,randomlyOrderedCats,goodVoidsPerm)]
+
+splitListsWide = [catalogue.getSplitList(\
+    cat300.finalCat[filter300Wide,:][:,perm],\
+    catTest.finalCat[filterTest,:]) \
+    for perm, catTest, filterTest \
+    in zip(permutations,randomlyOrderedCats,goodVoidsPerm300)]
 
 def getBestCandidate(catRef,catTest,nVRef,allCands):
     if len(allCands) > 0:
@@ -6357,6 +6391,16 @@ bestCandidatesList = [np.array([\
     for perm, catTest, filterTest, splitList in \
     zip(permutations,randomlyOrderedCats,goodVoidsPerm,splitLists)]
 
+# Figure out the mapping between the catalogue and the permuted catalogues:
+bestCandidatesListWide = [np.array([\
+    getBestCandidate(cat300.finalCat[filter300Wide,:][:,perm],\
+    catTest.finalCat[filterTest,:],nV,splitList[nV]) \
+    for nV in range(0,np.sum(filter300Wide))]) \
+    for perm, catTest, filterTest, splitList in \
+    zip(permutations,randomlyOrderedCats,goodVoidsPerm300,splitListsWide)]
+
+
+
 # Count the number of voids in common with the counterparts:
 inCommonFraction = [np.array([\
     getBestNumberOfVoidsInCommon(cat300.finalCat[filter300,:][:,perm],\
@@ -6364,7 +6408,12 @@ inCommonFraction = [np.array([\
     for nV in range(0,np.sum(filter300))]) \
     for perm, catTest, filterTest, splitList in \
     zip(permutations,randomlyOrderedCats,goodVoidsPerm,splitLists)]
-
+inCommonFractionWide = [np.array([\
+    getBestNumberOfVoidsInCommon(cat300.finalCat[filter300Wide,:][:,perm],\
+    catTest.finalCat[filterTest,:],nV,splitList[nV]) \
+    for nV in range(0,np.sum(filter300))]) \
+    for perm, catTest, filterTest, splitList in \
+    zip(permutations,randomlyOrderedCats,goodVoidsPerm300,splitListsWide)]
 
 meanInCommon = np.array([np.mean(counts) for counts in inCommonFraction])
 meanInCommonExists = np.array([np.mean(counts[counts > 0]) \
@@ -6372,18 +6421,35 @@ meanInCommonExists = np.array([np.mean(counts[counts > 0]) \
 fractionFound = np.array([np.sum(np.isfinite(x))/np.sum(filter300) \
     for x in bestCandidatesList])
 isFound = np.vstack([np.isfinite(best) for best in bestCandidatesList]).T
+isFoundWide = np.vstack([np.isfinite(best) \
+    for best in bestCandidatesListWide]).T
 foundFraction = np.sum(isFound,1)/nPerms
 alwaysFound = np.all(isFound,1)
+alwaysFoundWide = np.all(isFoundWide,1)
 alwaysFoundFraction = np.sum(alwaysFound)/np.sum(filter300)
 
 
+# Masses for objects which are always found:
+massAlwaysFound135 = cat300.getMeanProperty("mass")[0][\
+    np.where(filter300)[0][alwaysFound]]
+massAlwaysFound300 = cat300.getMeanProperty("mass")[0][\
+    np.where(filter300Wide)[0][alwaysFoundWide]]
+
+
 # Which voids are the problematic ones:
+binFiltersPerm = [[(radiiPerm[filt] >= radBins[k]) & \
+    (radiiPerm[filt] < radBins[k+1]) \
+    for k in range(0,len(radBins)-1)] \
+    for radiiPerm, filt in zip(radiiAllPerms,goodVoidsPerm)]
 binFilters = [(radiiMean300[filter300] >= radBins[k]) & \
     (radiiMean300[filter300] < radBins[k+1]) for k in range(0,len(radBins)-1)]
 countsAlways = np.array([np.sum(alwaysFound & inBin) for inBin in binFilters])
 countsNotAlways = np.array([np.sum(np.logical_not(alwaysFound) & inBin) \
     for inBin in binFilters])
 countsAll = np.array([np.sum(inBin) for inBin in binFilters])
+countsAllPerms = np.array([[np.sum(inBin) for inBin in binFilt] \
+    for binFilt in binFiltersPerm],dtype=int)
+countsAllMean = np.mean(countsAllPerms,0)
 
 binWidths = (radBins[1:] - radBins[0:-1])
 binX = (radBins[1:] + radBins[0:-1])/2
@@ -6399,6 +6465,27 @@ plt.ylabel('Number of voids')
 plt.legend()
 plt.savefig(figuresFolder + "permutation_consistency.pdf")
 plt.show()
+
+
+# Fraction of mean number of voids in each bin:
+plt.clf()
+countRange = np.array(scipy.stats.poisson.interval(0.68,countsNotAlways))
+countErrors = np.array([countsNotAlways - countRange[0],\
+    countRange[1] - countsNotAlways])
+
+plt.errorbar(binX,countsNotAlways/countsAllMean,\
+    yerr = countErrors/countsAllMean,\
+    color=seabornColormap[0],label='Not in all permutations',marker='x',\
+    linestyle='-')
+#plt.plot(binX,countsAlways/countsAllMean,\
+#    color=seabornColormap[1],label='In all permutations',marker='x',\
+#    linestyle='-')
+plt.xlabel('Radius, $\\mathrm{Mpc}h^{-1}$')
+plt.ylabel('Fraction of mean void count')
+plt.legend()
+plt.savefig(figuresFolder + "permutation_consistency_fractions.pdf")
+plt.show()
+
 
 # Scatter plot of found fraction vs catalogue fraction:
 
@@ -6674,8 +6761,19 @@ if doCat:
         titleLeft = "Combined catalogue, $<135\\mathrm{Mpc}h^{-1}$",\
         titleRight = "Combined catalogue, $<300\\mathrm{Mpc}h^{-1}$",\
         volSimRight = 4*np.pi*300**3/3,ylimRight=[1,1000],\
-        legendLoc="upper right",massErrors=True,)
-
+        legendLoc="upper right",massErrors=True)
+    plot.massFunctionComparison(massAlwaysFound135,\
+        massAlwaysFound300,4*np.pi*135**3/3,nBins=nBins,\
+        labelLeft = "Combined catalogue \n(well-constrained voids only)",\
+        labelRight  ="Combined catalogue \n(well-constrained voids only)",\
+        ylabel="Number of antihalos",savename=figuresFolder + \
+        "mass_function_always_found_300vs135_test.pdf",massLower=mLower,\
+        ylim=[1,1000],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,\
+        fontsize=8,massUpper = mUpper,\
+        titleLeft = "Combined catalogue, $<135\\mathrm{Mpc}h^{-1}$",\
+        titleRight = "Combined catalogue, $<300\\mathrm{Mpc}h^{-1}$",\
+        volSimRight = 4*np.pi*300**3/3,ylimRight=[1,1000],\
+        legendLoc="upper right",massErrors=False)
 
 # Test for void splitting:
 nVTest = 0
@@ -6705,7 +6803,8 @@ filterOptGood = filterOpt & (finalCatFracOpt > 0.45) & (meanFractionalDist < 0.3
 
 filter300 = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
     (distances300 < 135) & (cat300.finalCatFrac > thresholds300)
-
+filter300Wide = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
+    (distances300 < 300) & (cat300.finalCatFrac > thresholds300)
 allInRadius = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
     (distances300 < 135)
 allSignificantInRadius = filter300
