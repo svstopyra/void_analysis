@@ -1150,6 +1150,83 @@ def analyseSplit(catRef,catTest,nVRef,nVTest):
     return compareVoids(catRef[nVRef],catTest[nVTest])
 
 
+# Sampling a set of random catalogues while matching to an MCMC catalogue:
+
+
+def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
+        ahCentresListUn,antihaloRadiiUn,rSphere,radBinEdges,rBinStack,\
+        meanRadiiMCMC,boxsize,seed=1000,start=0,end=-1,\
+        conditioningQuantityUn=None,conditioningQuantityMCMC=None,\
+        conditionBinEdges=None):
+    # Get pair counts in similar-density regions:
+    allPairsUncon = []
+    allVolumesUncon = []
+    allSelections = []
+    np.random.seed(seed)
+    [inRadBinsComb,noInRadBinsComb] = plot.binValues(meanRadiiMCMC,\
+        radBinEdges)
+    #centreListToTest = centresToUseNonOverlapping
+    if end == -1:
+        end = len(snapListUn)
+    for ns in range(start,end):
+        snapLoaded = snapListUn[ns]
+        #tree = scipy.spatial.cKDTree(snapLoaded['pos'],boxsize=boxsize)
+        tree = treeListUncon[ns]
+        for centre, count in zip(centreListToTest[ns],\
+            range(0,len(centreListToTest[ns]))):
+            # Get anti-halos:
+            centralAntihalos = tools.getAntiHalosInSphere(ahCentresListUn[ns],\
+                rSphere,origin=centre,boxsize=boxsize)
+            # Get radii and randomly select voids with the same
+            # radius distribution as the combined catalogue:
+            centralRadii = antihaloRadiiUn[ns][centralAntihalos[1]]
+            centralCentres = ahCentresListUn[ns][centralAntihalos[1]]
+            if conditioningQuantityMCMC is not None:
+                centralConditionVariable = conditioningQuantityUn[ns][\
+                    centralAntihalos[1]]
+            [inRadBins,noInRadBins] = plot.binValues(centralRadii,\
+                radBinEdges)
+            # Select voids with the same radius distribution as the combined 
+            # catalogue:
+            selection = []
+            for k in range(0,len(radBinEdges)-1):
+                if noInRadBinsComb[k] > 0:
+                    # If not using a second condition:
+                    if conditioningQuantityMCMC is None:
+                        selection.append(np.random.choice(inRadBins[k],\
+                            np.min([noInRadBinsComb[k],noInRadBins[k]]),\
+                            replace=False))
+                    else:
+                        [inConBinsComb,noInConBinsComb] = plot.binValues(\
+                            conditioningQuantityMCMC[inRadBinsComb[k]],\
+                            conditionBinEdges)
+                        [inConBins,noInConBins] = plot.binValues(\
+                            centralConditionVariable[inRadBins[k]],\
+                            conditionBinEdges)
+                        for l in range(0,len(conditionBinEdges)-1):
+                            selection.append(np.random.choice(\
+                                inRadBins[k][inConBins[l]],\
+                                np.min([noInConBinsComb[l],noInConBins[l]]),\
+                                replace=False))
+            selectArray = np.hstack(selection)
+            # Now get pair counts around these voids:
+            [nPairsList,volumesList] = stacking.getPairCounts(\
+                centralCentres[selectArray],\
+                centralRadii[selectArray],snapLoaded,rBinStack,\
+                tree=tree,method='poisson',vorVolumes=None)
+            allPairsUncon.append(nPairsList)
+            allVolumesUncon.append(volumesList)
+            allSelections.append(selectArray)
+            print("Done centre " + str(count+1) + " of " + \
+                str(len(centreListToTest[ns])))
+        tools.savePickle([allPairsUncon,allVolumesUncon],"temp_sample_" + \
+            str(ns+1) + ".p")
+        print("Done sample " + str(ns + 1) + ".")
+        # Delete temporaries to save memory:
+        #del snapLoaded, tree
+        #gc.collect()
+    return [allPairsUncon,allVolumesUncon,allSelections]
+
 
 
 

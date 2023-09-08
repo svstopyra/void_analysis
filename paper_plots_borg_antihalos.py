@@ -2857,7 +2857,7 @@ else:
     error2MPPAll = interval2MPPBootstrap
     counts2MPP = galaxyNumberCountExp
 
-def plotPPTCurves(ncList,rBinCentres,posteriorCounts,dataCounts,ax,nonZero,\
+def plotPPTCurves(nc,rBinCentres,posteriorCounts,dataCounts,ax,nonZero,\
         nonZero2MPP,magBinInd,variancesRobust,errorCounts,mcmcCounts,\
         mcmcCountsAll,postCountsErrors,do2MPPerrors=True,errorType="bootstrap",\
         alpha1sigma=0.5,alpha2sigma=0.25,doMCMCerrors=False,\
@@ -2886,14 +2886,14 @@ def plotPPTCurves(ncList,rBinCentres,posteriorCounts,dataCounts,ax,nonZero,\
     if errorType == "poisson":
         bounds = scipy.stats.poisson(posteriorCounts[nonZero]).interval(0.95)
     elif errorType == "quadrature":
-        stdRobust = np.sqrt(variancesRobust[:,ncList[l],magBinInd])
+        stdRobust = np.sqrt(variancesRobust[:,nc,magBinInd])
         bounds = (posteriorCounts[nonZero] - 2*stdRobust[nonZero],\
             posteriorCounts[nonZero] + 2*stdRobust[nonZero])
     elif errorType == "bootstrap":
-        bounds = (errorCounts[nonZero,ncList[l],0,magBinInd],\
-            errorCounts[nonZero,ncList[l],1,magBinInd])
+        bounds = (errorCounts[nonZero,nc,0,magBinInd],\
+            errorCounts[nonZero,nc,1,magBinInd])
     elif errorType == "variance":
-        stdDeviation = np.std(mcmcCountsAll,2)[:,ncList[l],magBinInd]/\
+        stdDeviation = np.std(mcmcCountsAll,2)[:,nc,magBinInd]/\
             np.sqrt(nsamples)
         bounds = (posteriorCounts[nonZero] - 2*stdDeviation[nonZero],\
             posteriorCounts[nonZero] + 2*stdDeviation[nonZero])
@@ -2910,7 +2910,7 @@ def pptPlotsInBins(ncList,rBins,nCols = 2,fontfamily='serif',\
         powerRange = 2,nAbsBins=8,textwidth=7.1014,\
         alpha1sigma=0.5,alpha2sigma=0.25,widthFactor=1.0,heightFactor=0.7,\
         mLower = 2,swapXY = False,bottom = 0.105,top = 0.92,right = 0.980,\
-        left=None):
+        left=None,legloc=(0.02,0.3),xlabelOffset=-0.03):
     rBinCentres = plot.binCentres(rBins)
     # Scaling and y limits:
     if densityPlot:
@@ -2964,11 +2964,10 @@ def pptPlotsInBins(ncList,rBins,nCols = 2,fontfamily='serif',\
             nz22Mpp = np.where(dim2Mpp)[0]
             # Bright catalogue, cluster 1:
             if swapXY:
-                print((m,l,i,j))
                 axis = ax[j+nCols*l,i]
             else:
                 axis = ax[i,j+nCols*l]
-            plotPPTCurves(ncList,rBinCentres,bright,bright2Mpp,axis,\
+            plotPPTCurves(ncList[l],rBinCentres,bright,bright2Mpp,axis,\
                 nz1,nz12Mpp,2*m,variancesRobust,errorCounts,mcmcCounts,\
                 mcmcCountsAll,bright2MppError,do2MPPerrors=do2MPPerrors,\
                 errorType=errorType,alpha1sigma=alpha1sigma,\
@@ -2976,7 +2975,7 @@ def pptPlotsInBins(ncList,rBins,nCols = 2,fontfamily='serif',\
                 labelPosterior="Posterior ($m < 11.5$)",\
                 labelData = "2M++ ($m < 11.5$)",color=seabornColormap[1])
             # Dim Catalogue, cluster 1:
-            plotPPTCurves(ncList,rBinCentres,dim,dim2Mpp,axis,\
+            plotPPTCurves(ncList[l],rBinCentres,dim,dim2Mpp,axis,\
                 nz2,nz22Mpp,2*m,variancesRobust,errorCounts,mcmcCounts,\
                 mcmcCountsAll,dim2MppError,do2MPPerrors=do2MPPerrors,\
                 errorType=errorType,alpha1sigma=alpha1sigma,\
@@ -2985,23 +2984,29 @@ def pptPlotsInBins(ncList,rBins,nCols = 2,fontfamily='serif',\
                 labelData = "2M++ ($m > 11.5$)",color=seabornColormap[0])
             axis.set_ylim(ylim)
             axis.set_xlim(xlim)
-            if logscale:
-                axis.text(0.5*(xlim[1] + xlim[0]),\
-                    ylim[0] + 0.5*(ylim[1] - ylim[0]),magTitle,ha='center',\
-                    fontfamily=fontfamily,fontsize=7)
+            if swapXY:
+                if j+nCols*l == 0:
+                    axis.set_title(magTitle,fontfamily=fontfamily,fontsize=7)
             else:
-                axis.text(0.5*(xlim[1] + xlim[0]),\
-                    ylim[0] + 0.90*(ylim[1] - ylim[0]),magTitle,ha='center',\
-                    fontfamily=fontfamily,fontsize=7)
+                if logscale:
+                    axis.text(0.5*(xlim[1] + xlim[0]),\
+                        ylim[0] + 0.5*(ylim[1] - ylim[0]),magTitle,\
+                        ha='center',fontfamily=fontfamily,fontsize=7)
+                else:
+                    axis.text(0.5*(xlim[1] + xlim[0]),\
+                        ylim[0] + 0.90*(ylim[1] - ylim[0]),magTitle,\
+                        ha='center',fontfamily=fontfamily,fontsize=7)
             if logscale:
                 axis.set_yscale('log')
     # Formatting the axis:
     if swapXY:
         iRange = range(0,nCols*len(ncList))
         jRange = range(0,nRows)
+        numRows = nCols*len(ncList)
     else:
         iRange = range(0,nRows)
         jRange = range(0,nCols*len(ncList))
+        numRows = nRows
     for i in iRange:
         for j in jRange:
             axis = ax[i,j]
@@ -3029,7 +3034,7 @@ def pptPlotsInBins(ncList,rBins,nCols = 2,fontfamily='serif',\
                     plot.scientificNotation(tick,powerRange=powerRange) + "$" \
                     for tick in yticks]
                 axis.yaxis.set_ticklabels(ylabels)
-            if i != nRows - 1:
+            if i != numRows - 1:
                 # Remove x labels:
                 axis.xaxis.set_ticklabels([])
             else:
@@ -3058,11 +3063,11 @@ def pptPlotsInBins(ncList,rBins,nCols = 2,fontfamily='serif',\
             label='2M++ \n(95% CI)')
         ax[0,0].legend(handles = [fakeMCMC,fakeError1,fakeError2],\
             prop={"size":fontsize,"family":fontfamily},frameon=False,\
-            loc=(0.02,0.3))
+            loc=legloc)
     else:
         # Default legend
         ax[0,0].legend(prop={"size":fontsize,"family":fontfamily},\
-            frameon=False,loc=(0.02,0.3))
+            frameon=False,loc=legloc)
     if left is None:
         if len(ncList) > 1:
             left = 0.095
@@ -3071,8 +3076,9 @@ def pptPlotsInBins(ncList,rBins,nCols = 2,fontfamily='serif',\
     plt.subplots_adjust(top=top,bottom=bottom,left=left,right=right,\
         hspace=0.0,wspace=0.0)
     # Common axis labels:
-    fig.text((right+left)/2.0, 0.03,'$r\\,[\\mathrm{Mpc}h^{-1}]$',ha='center',\
-        fontsize=fontsize,fontfamily=fontfamily)
+    fig.text((right+left)/2.0, bottom + xlabelOffset,\
+        '$r\\,[\\mathrm{Mpc}h^{-1}]$',\
+        ha='center',fontsize=fontsize,fontfamily=fontfamily)
     if densityPlot:
         fig.text(left - 0.06,(top+bottom)/2.0,\
             'Galaxy number density [$h^3\\mathrm{Mpc}^{-3}$]',va='center',\
@@ -3100,8 +3106,9 @@ def pptPlotsInBins(ncList,rBins,nCols = 2,fontfamily='serif',\
     plt.show()
 
 #pptPlotsInBins(ncList,rBins)
-pptPlotsInBins([1,3,4,5,6,7,8],rBins,nCols=1,swapXY=True,heightFactor=1.5,\
-    bottom = 0.05,top=0.95,right=0.95,left=0.07)
+pptPlotsInBins([1,3,4,5,6,7,8],rBins,nCols=1,swapXY=True,heightFactor=1.3,\
+    bottom = 0.05,top=0.95,right=0.95,left=0.07,legloc=(0.02,0.1),\
+    xlabelOffset=-0.04)
 
 # Density profiles around each cluster:
 nRows = 3
