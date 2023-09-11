@@ -4005,9 +4005,11 @@ pairsList = [None for snap in snapList]
 volumesList = [None for snap in snapList]
 conditionList = [None for snap in snapList]
 rEffMin = 0.0
-rEffMax = 10.0
+#rEffMax = 10.0
+rEffMax = 3.0
 rSphere = 135
-nRadiusBins = 101
+#nRadiusBins = 101
+nRadiusBins = 31
 nbar = (512/boxsize)**3
 rBinStack = np.linspace(rEffMin,rEffMax,nRadiusBins)
 rBinStackCentres = plot.binCentres(rBinStack)
@@ -4021,6 +4023,11 @@ massList = [meanMasses for snap in snapList]
 treeList = [scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize) \
     for snap in snapList]
 #treeList = [None for snap in snapList]
+
+treeListUncon = [scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize) \
+    for snap in snapListUn]
+#treeListUncon = [None for snap in snapListUn]
+
 
 def getAllPairCountsMCMC(meanCentresGadgetCoord,meanRadii,rBinStack,\
         treeList,snapNameList):
@@ -4250,9 +4257,6 @@ deltaToUseNonOverlapping = np.hstack(deltaToUseNonOverlappingBySample)
 rEffBinEdges = np.linspace(10,25,6)
 [inRadBinsComb,noInRadBinsComb] = plot.binValues(meanRadii,rEffBinEdges)
 
-treeListUncon = [scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize) \
-    for snap in snapListUn]
-#treeListUncon = [None for snap in snapListUn]
 
 
 def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
@@ -4354,6 +4358,18 @@ conBinEdges = np.linspace(-1,-0.5,21)
         conditioningQuantityUn = [props[11] for props in ahPropsUn],\
         conditioningQuantityMCMC = deltaCentralMean[filter300],\
         conditionBinEdges = conBinEdges)
+
+[allPairsUnconNonOverlap,allVolumesUnconNonOverlap,\
+    allSelectionsUnconNonOverlap] = getRandomCataloguePairCounts(
+    centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
+    antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
+    conditioningQuantityUn = [np.vstack([antihaloRadiiUn[ns],\
+    ahPropsUn[ns][11],ahPropsUn[ns][12]]).T \
+    for ns in range(0,len(snapListUn))],\
+    conditioningQuantityMCMC = np.vstack([meanRadii,\
+    deltaCentralMean[filter300],deltaAverageMean[filter300]]).T,\
+    conditionBinEdges = [rEffBinEdges,conBinEdges,conBinEdges],\
+    combineRandomRegions=True)
 
 
 [allPairsUncon,allVolumesUncon] = tools.loadPickle("temp_sample_13.p")
