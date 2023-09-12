@@ -1165,15 +1165,15 @@ def getNumberOfConditions(conditionList):
 # Select random catalogue voids that match the distribution of properties
 # in the MCMC catalogue.
 def selectConditionedRandomVoids(conditioningQuantityMCMC,\
-        conditioningQuantityUn,conditionBinEdges):
+        conditioningVariable,conditionBinEdges):
     numCond = getNumberOfConditions(conditioningQuantityMCMC)
     if len(conditionBinEdges) != numCond:
         raise Exception("List of bins must match list of " + \
             "condition data")
     # Verify the same for the randoms:
-    numCondRand = getNumberOfConditions(conditioningQuantityUn)
-    if type(conditioningQuantityUn) is list:
-        conditioningQuantityUn = np.array(conditioningQuantityUn)
+    numCondRand = getNumberOfConditions(conditioningVariable)
+    if type(conditioningVariable) is list:
+        conditioningVariable = np.array(conditioningVariable)
     if type(conditioningQuantityMCMC) is list:
         conditioningQuantityMCMC = np.array(conditioningQuantityMCMC)
     if numCondRand != numCond:
@@ -1182,26 +1182,76 @@ def selectConditionedRandomVoids(conditioningQuantityMCMC,\
     # Having verified that the input is sane, now bin everything:
     [samplingMCMC,edges] = np.histogramdd(conditioningQuantityMCMC,\
         bins = conditionBinEdges)
-    samplingMCMCLin = samplingMCMC.flatten()
+    samplingMCMCLin = np.array(samplingMCMC.flatten(),dtype=int)
+    [samplingRand,edges] = np.histogramdd(conditioningVariable,\
+        bins = conditionBinEdges)
+    samplingRandLin = np.array(samplingRand.flatten(),dtype=int)
+    # Figure out how many times we can sample the random set, and retain
+    # the same distribution as the MCMC set. This is defined as the lowest 
+    # ratio between the counts in MCMC bins and in random bins.
+    nzMCMC = np.where(samplingMCMCLin > 0)
+    rat = np.zeros(samplingMCMCLin.shape,dtype=int)
+    rat[nzMCMC] = samplingRandLin[nzMCMC]/samplingMCMCLin[nzMCMC]
+    minRatio = np.min(rat[rat > 0])
     # Indices in each list of bins:
+    inAllRanges = np.ones(len(conditioningVariable),dtype = bool)
+    for n in range(0,numCond):
+        inAllRanges = (inAllRanges & \
+            (conditioningVariable[:,n] >= conditionBinEdges[n][0]) & \
+            (conditioningVariable[:,n] < conditionBinEdges[n][-1]) )
+    inAllRangesInd = np.where(inAllRanges)[0]
     indicesRand = []
     for n in range(0,numCond):
         indicesRand.append(np.digitize(\
-            conditioningQuantityUn[:,n],conditionBinEdges[n]))
+            conditioningVariable[inAllRanges,n],conditionBinEdges[n])-1)
     indicesRand = np.array(indicesRand)
-    dims = [len(x) for x in conditionBinEdges]
+    dims = [len(x) - 1 for x in conditionBinEdges]
     numBinsTot = np.prod(dims)
-    linearIndices = np.ravel_multi_index(indicesRand.T,\
-        tuple([len(x) for x in conditionBinEdges]))
+    linearIndices = np.ravel_multi_index(indicesRand,tuple(dims))
     # Now sample these to try and match the MCMC conditions:
     selection = []
     for k in range(0,numBinsTot):
         thisIndex = np.where((linearIndices == k))[0]
         selection.append(np.random.choice(thisIndex,\
-            np.min([samplingMCMCLin[k],len(thisIndex)]),\
+            np.min([minRatio*samplingMCMCLin[k],len(thisIndex)]),\
             replace=False))
     selectArray = np.hstack(selection)
-    return selectArray
+    return inAllRangesInd[selectArray]
+
+def getAllConditionVariables(centreListToTest,ahCentresListUn,\
+        antihaloRadiiUn,conditioningQuantityUn,start=0,end=-1):
+    numCond = getNumberOfConditions(conditioningQuantityUn[0])
+    centralConditionVariableAll = np.zeros((0,numCond))
+    centralCentresAll = np.zeros((0,3))
+    centralRadiiAll = np.zeros(0)
+    sampleIndices = np.zeros(0,dtype=int)
+    if end == -1:
+        end = len(centreListToTest)
+    for ns in range(start,end):
+        for centre, count in zip(centreListToTest[ns],\
+            range(0,len(centreListToTest[ns]))):
+            centralAntihalos = tools.getAntiHalosInSphere(\
+                ahCentresListUn[ns],rSphere,origin=centre,\
+                boxsize=boxsize)[1]
+            centralRadii = antihaloRadiiUn[ns][centralAntihalos]
+            centralCentres = ahCentresListUn[ns][centralAntihalos]
+            if numCond == 1:
+                centralConditionVariable = np.array(\
+                    conditioningQuantityUn[ns][centralAntihalos])
+            else:
+                centralConditionVariable = np.array(\
+                    conditioningQuantityUn[ns][centralAntihalos,:])
+            centralConditionVariableAll = \
+                np.vstack((centralConditionVariableAll,\
+                centralConditionVariable))
+            centralCentresAll = np.vstack((centralCentresAll,\
+                centralCentres))
+            centralRadiiAll = np.hstack((centralRadiiAll,\
+                centralRadii))
+            sampleIndices = np.hstack((sampleIndices,\
+                ns*np.ones(centralRadii.shape,dtype=int)))
+    return [centralConditionVariableAll,centralCentresAll,centralRadiiAll,\
+        sampleIndices]
 
 # Sampling a set of random catalogues while matching to an MCMC catalogue:
 def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
@@ -1226,31 +1276,10 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
         sampleIndices = np.zeros(0,dtype=int)
         if conditioningQuantityMCMC is not None:
             numCond = getNumberOfConditions(conditioningQuantityMCMC)
-            centralConditionVariableAll = np.array((0,numCond))
-        for ns in range(start,end):
-            for centre, count in zip(centreListToTest[ns],\
-                range(0,len(centreListToTest[ns]))):
-                centralAntihalos = tools.getAntiHalosInSphere(\
-                    ahCentresListUn[ns],rSphere,origin=centre,\
-                    boxsize=boxsize)[1]
-                centralRadii = antihaloRadiiUn[ns][centralAntihalos]
-                centralCentres = ahCentresListUn[ns][centralAntihalos]
-                if conditioningQuantityMCMC is not None:
-                    if numCond == 1:
-                        centralConditionVariable = np.array(\
-                            conditioningQuantityUn[ns][centralAntihalos])
-                    else:
-                        centralConditionVariable = np.array(\
-                            conditioningQuantityUn[ns][centralAntihalos,:])
-                    centralConditionVariableAll = \
-                        np.vstack((centralConditionVariableAll,\
-                        centralConditionVariable))
-                centralCentresAll = np.hstack((centralCentresAll,\
-                    centralCentres))
-                centralRadiiAll = np.hstack((centralRadiiAll,\
-                    centralRadii))
-                sampleIndices = np.hstack((sampleIndices,\
-                    ns*np.ones(centralRadii.shape,dtype=int)))
+            [centralConditionVariableAll,centralCentresAll,centralRadiiAll,\
+                sampleIndices] = getAllConditionVariables(\
+                centreListToTest,ahCentresListUn,\
+                antihaloRadiiUn,conditioningQuantityUn,start=start,end=end)
         numVoidsTotal = len(centralRadiiAll)
         if conditioningQuantityMCMC is not None:
             selectArray = selectConditionedRandomVoids(\

@@ -4005,11 +4005,11 @@ pairsList = [None for snap in snapList]
 volumesList = [None for snap in snapList]
 conditionList = [None for snap in snapList]
 rEffMin = 0.0
-#rEffMax = 10.0
-rEffMax = 3.0
+rEffMax = 10.0
+#rEffMax = 3.0
 rSphere = 135
-#nRadiusBins = 101
-nRadiusBins = 31
+nRadiusBins = 101
+#nRadiusBins = 31
 nbar = (512/boxsize)**3
 rBinStack = np.linspace(rEffMin,rEffMax,nRadiusBins)
 rBinStackCentres = plot.binCentres(rBinStack)
@@ -4348,8 +4348,8 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
         _recomputeData=False)
 
 conBinEdges = np.linspace(-1,-0.5,21)
-[allPairsUnconNonOverlap,allVolumesUnconNonOverlap,\
-    allSelectionsUnconNonOverlap] = tools.loadOrRecompute(\
+[allPairsUnconNonOverlapOld,allVolumesUnconNonOverlapOld,\
+    allSelectionsUnconNonOverlapOld] = tools.loadOrRecompute(\
         data_folder + "pair_counts_density_and_radius_conditioning.p",\
         getRandomCataloguePairCounts,\
         centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
@@ -4359,23 +4359,37 @@ conBinEdges = np.linspace(-1,-0.5,21)
         conditioningQuantityMCMC = deltaCentralMean[filter300],\
         conditionBinEdges = conBinEdges)
 
+conditioningQuantityUn = [np.vstack([antihaloRadiiUn[ns],\
+    ahPropsUn[ns][11],ahPropsUn[ns][12]]).T \
+    for ns in range(0,len(snapListUn))]
+conditioningQuantityMCMC = np.vstack([meanRadii,\
+    deltaCentralMean[filter300],deltaAverageMean[filter300]]).T
+
+[centralConditionVariableAll,centralCentresAll,centralRadiiAll,\
+                sampleIndices] = getAllConditionVariables(\
+                centreListToTest,ahCentresListUn,\
+                antihaloRadiiUn,conditioningQuantityUn)
+[_,_,centralMassesAll,_] = getAllConditionVariables(\
+                centreListToTest,ahCentresListUn,\
+                antihaloMassesUn,conditioningQuantityUn)
+
 [allPairsUnconNonOverlap,allVolumesUnconNonOverlap,\
-    allSelectionsUnconNonOverlap] = getRandomCataloguePairCounts(
+    allSelectionsUnconNonOverlap] = tools.loadOrRecompute(\
+    data_folder + "pair_counts_triple_conditioning.p",\
+    getRandomCataloguePairCounts,\
     centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
     antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
-    conditioningQuantityUn = [np.vstack([antihaloRadiiUn[ns],\
-    ahPropsUn[ns][11],ahPropsUn[ns][12]]).T \
-    for ns in range(0,len(snapListUn))],\
-    conditioningQuantityMCMC = np.vstack([meanRadii,\
-    deltaCentralMean[filter300],deltaAverageMean[filter300]]).T,\
+    conditioningQuantityUn = conditioningQuantityUn,\
+    conditioningQuantityMCMC = conditioningQuantityMCMC,\
     conditionBinEdges = [rEffBinEdges,conBinEdges,conBinEdges],\
-    combineRandomRegions=True)
+    combineRandomRegions=True,_recomputeData=True)
 
 
 [allPairsUncon,allVolumesUncon] = tools.loadPickle("temp_sample_13.p")
 
 
 # Central and average densities in similar regions:
+# For OLD conditioning:
 centralDensityUnconNonOverlap = []
 averageDensityUnconNonOverlap = []
 massesUnconNonOverlap = []
@@ -4396,7 +4410,15 @@ for ns in range(0,len(snapListUn)):
         massesUnconNonOverlap.append(sphereMasses)
         counter += 1
 
-
+# For NEW conditioning:
+centralDensityUnconNonOverlap = \
+    [centralConditionVariableAll[allSelectionsUnconNonOverlap[ns],1] \
+    for ns in range(0,len(snapListUn))]
+averageDensityUnconNonOverlap = \
+    [centralConditionVariableAll[allSelectionsUnconNonOverlap[ns],2] \
+    for ns in range(0,len(snapListUn))]
+massesUnconNonOverlap = [centralMassesAll[allSelectionsUnconNonOverlap[ns]] \
+    for ns in range(0,len(snapListUn))]
 
 
 #aupcd = tools.loadPickle(data_folder + "all_unconstrained_pair_counts_data.p")
@@ -4414,16 +4436,20 @@ sumSquareWeights = np.array([np.sum(wi**2,0) for wi in weightsUnAll])
 #regionsFilter = np.where( \
 #    (deltaToUseNonOverlapping > deltaListMeanNew - deltaListErrorNew/2) & \
 #    (deltaToUseNonOverlapping <= deltaListMeanNew + deltaListErrorNew/2) )[0]
-regionsFilter = np.where( \
-    (deltaToUseNonOverlapping > deltaMAPInterval[0]) & \
-    (deltaToUseNonOverlapping <= deltaMAPInterval[1]) )[0]
+#regionsFilter = np.where( \
+#    (deltaToUseNonOverlapping > deltaMAPInterval[0]) & \
+#    (deltaToUseNonOverlapping <= deltaMAPInterval[1]) )[0]
+regionsFilter = range(0,len(snapListUn))
 
 mUnitLowRes = 8*snapList[0]['mass'][0]*1e10
 #profileFilterUnconNonOverlap = [np.ones(selection.shape,dtype=bool) \
 #    for selection in allSelectionsUnconNonOverlap]
-profileFilterUnconNonOverlap = [massList[selection] >= mUnitLowRes*100 \
-    for massList, selection in \
-    zip(massesUnconNonOverlap,allSelectionsUnconNonOverlap)]
+# For use with the old selection:
+#profileFilterUnconNonOverlap = [massList[selection] >= mUnitLowRes*100 \
+#    for massList, selection in \
+#    zip(massesUnconNonOverlap,allSelectionsUnconNonOverlap)]
+profileFilterUnconNonOverlap = [massList >= mUnitLowRes*100 \
+    for massList in massesUnconNonOverlap]
 
 # Stacked profiles in each region:
 rhoStackedUnAllNonOverlap = np.array([\
