@@ -297,18 +297,65 @@ def matchClustersAndHalos(clusterPos,haloPos,haloMass,boxsize,catalogPos,\
                  descendingHalos[0:matchableNum]
     return [counterpartClusters,counterpartHalos]
 
-def getHaloCentresAndMassesFromCatalogue(h,boxsize=677.7,remap=True,\
+def getMassCalcMethod(halo):
+    # Figure out what kind of mass estimation method is available:
+    try:
+        mass = halo.properties['mass']
+        return "key"
+    except(KeyError):
+        print("No mass property found. Trying mass array...")
+    try:
+        allMasses = halo['mass'].in_units("Msol h**-1")
+        return "sum"
+    except(KeyError):
+        print("No mass array found. Try computing from length.")
+        return "length"
+
+# Figure out the mass of a single particle in a simulation, assuming
+# it is fixed resolution.
+def getMassUnit(snap):
+    omegaM0 = snap.properties['omegaM0']
+    boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+    rhoc = 2.7754e11
+    # Account for the fact that we might be dealing with a halo, rather than
+    # a full simulation snapshot:
+    if type(snap) == pynbody.halo.Halo:
+        N = len(snap.base)
+    else:
+        N = len(snap)
+    return omegaM0*rhoc*boxsize**3/N
+
+def getHaloMassByMethod(halo,method):
+    if(method == "key"):
+        # Read from the halo header.
+        return halo.properties['mass']
+    elif(method == "sum"):
+        # Directly sum the masses. This is slower than just reading it.
+        return np.sum(np.array(halo['mass'].in_units("Msol h**-1")))
+    elif(method == "length"):
+        # Only works if the simulation has fixed resolution (ie, is not a 
+        # zoom simulation) but if there is no mass array, we have to assume 
+        # this is the case or we won't have enough information to compute
+        # the mass:
+        mUnit = getMassUnit(halo)
+        return mUnit*len(halo)
+
+def getHaloCentresAndMassesFromCatalogue(h,remap=True,\
         inMpcs = True):
     hcentres = np.zeros((len(h),3))
     hmasses = np.zeros(len(h))
+    # Figure out what kind of method should work:
+    massCalcMethod = getMassCalcMethod(h[1])
     for k in range(0,len(h)):
         hcentres[k,0] = h[k+1].properties['Xc']
         hcentres[k,1] = h[k+1].properties['Yc']
         hcentres[k,2] = h[k+1].properties['Zc']
-        hmasses[k] = h[k+1].properties['mass']
+        #hmasses[k] = h[k+1].properties['mass']
+        hmasses[k] = getHaloMassByMethod(h[k+1],massCalcMethod)
     if inMpcs:
         hcentres /= 1000
     if remap:
+        boxsize = h[1].properties['boxsize'].ratio("Mpc a h**-1")
         hcentres = tools.remapAntiHaloCentre(hcentres,boxsize)
     return [hcentres,hmasses]
 
