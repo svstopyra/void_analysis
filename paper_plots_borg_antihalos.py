@@ -4359,6 +4359,7 @@ conBinEdges = np.linspace(-1,-0.5,21)
         conditioningQuantityMCMC = deltaCentralMean[filter300],\
         conditionBinEdges = conBinEdges)
 
+# Applying three conditions simultaneously:
 conditioningQuantityUn = [np.vstack([antihaloRadiiUn[ns],\
     ahPropsUn[ns][11],ahPropsUn[ns][12]]).T \
     for ns in range(0,len(snapListUn))]
@@ -4367,10 +4368,10 @@ conditioningQuantityMCMC = np.vstack([meanRadii,\
 
 [centralConditionVariableAll,centralCentresAll,centralRadiiAll,\
                 sampleIndices] = getAllConditionVariables(\
-                centreListToTest,ahCentresListUn,\
+                centresToUseNonOverlapping,ahCentresListUn,\
                 antihaloRadiiUn,conditioningQuantityUn)
 [_,_,centralMassesAll,_] = getAllConditionVariables(\
-                centreListToTest,ahCentresListUn,\
+                centresToUseNonOverlapping,ahCentresListUn,\
                 antihaloMassesUn,conditioningQuantityUn)
 
 [allPairsUnconNonOverlap,allVolumesUnconNonOverlap,\
@@ -4382,10 +4383,37 @@ conditioningQuantityMCMC = np.vstack([meanRadii,\
     conditioningQuantityUn = conditioningQuantityUn,\
     conditioningQuantityMCMC = conditioningQuantityMCMC,\
     conditionBinEdges = [rEffBinEdges,conBinEdges,conBinEdges],\
-    combineRandomRegions=True,_recomputeData=True)
+    combineRandomRegions=True,_recomputeData=False)
+
+# Only applying two conditions:
+conditioningQuantityUnDouble = [np.vstack([antihaloRadiiUn[ns],\
+    ahPropsUn[ns][11]]).T \
+    for ns in range(0,len(snapListUn))]
+conditioningQuantityMCMCDouble = np.vstack([meanRadii,\
+    deltaCentralMean[filter300]]).T
+
+[centralConditionVariableAll,centralCentresAll,centralRadiiAll,\
+                sampleIndices] = getAllConditionVariables(\
+                centresToUseNonOverlapping,ahCentresListUn,\
+                antihaloRadiiUn,conditioningQuantityUnDouble)
+[_,_,centralMassesAll,_] = getAllConditionVariables(\
+                centresToUseNonOverlapping,ahCentresListUn,\
+                antihaloMassesUn,conditioningQuantityUnDouble)
+
+[allPairsUnconNonOverlap,allVolumesUnconNonOverlap,\
+    allSelectionsUnconNonOverlap] = tools.loadOrRecompute(\
+    data_folder + "pair_counts_double_conditioning.p",\
+    getRandomCataloguePairCounts,\
+    centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
+    antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
+    conditioningQuantityUn = conditioningQuantityUnDouble,\
+    conditioningQuantityMCMC = conditioningQuantityMCMCDouble,\
+    conditionBinEdges = [rEffBinEdges,conBinEdges],\
+    combineRandomRegions=True,_recomputeData=False)
 
 
-[allPairsUncon,allVolumesUncon] = tools.loadPickle("temp_sample_13.p")
+
+#[allPairsUncon,allVolumesUncon] = tools.loadPickle("temp_sample_13.p")
 
 
 # Central and average densities in similar regions:
