@@ -1165,7 +1165,7 @@ def getNumberOfConditions(conditionList):
 # Select random catalogue voids that match the distribution of properties
 # in the MCMC catalogue.
 def selectConditionedRandomVoids(conditioningQuantityMCMC,\
-        conditioningVariable,conditionBinEdges):
+        conditioningVariable,conditionBinEdges,seed=1000):
     numCond = getNumberOfConditions(conditioningQuantityMCMC)
     if len(conditionBinEdges) != numCond:
         raise Exception("List of bins must match list of " + \
@@ -1210,6 +1210,7 @@ def selectConditionedRandomVoids(conditioningQuantityMCMC,\
     linearIndices = np.ravel_multi_index(indicesRand,tuple(dims))
     # Now sample these to try and match the MCMC conditions:
     selection = []
+    np.random.seed(seed)
     for k in range(0,numBinsTot):
         thisIndex = np.where((linearIndices == k))[0]
         selection.append(np.random.choice(thisIndex,\
@@ -1263,7 +1264,7 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
     allPairsUncon = []
     allVolumesUncon = []
     allSelections = []
-    np.random.seed(seed)
+    #np.random.seed(seed)
     [inRadBinsComb,noInRadBinsComb] = plot.binValues(meanRadiiMCMC,\
         radBinEdges)
     numCond = getNumberOfConditions(conditioningQuantityMCMC)
@@ -1284,7 +1285,7 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
         if conditioningQuantityMCMC is not None:
             selectArray = selectConditionedRandomVoids(\
                 conditioningQuantityMCMC,centralConditionVariableAll,\
-                conditionBinEdges)
+                conditionBinEdges,seed=seed)
         else:
             selectArray = np.range(0,numVoidsTotal)
         nPairsListAll = []
@@ -1324,7 +1325,7 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
                             conditioningQuantityUn[ns][centralAntihalos,:]
                     selectArray = selectConditionedRandomVoids(\
                         conditioningQuantityMCMC,centralConditionVariable,\
-                        conditionBinEdges)
+                        conditionBinEdges,seed=seed)
                 else:
                     selectArray = np.range(0,len(centralRadii))
                 # Now get pair counts around these voids:

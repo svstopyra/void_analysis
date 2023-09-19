@@ -4411,7 +4411,14 @@ conditioningQuantityMCMCDouble = np.vstack([meanRadii,\
     conditionBinEdges = [rEffBinEdges,conBinEdges],\
     combineRandomRegions=True,_recomputeData=False)
 
-
+[allPairsUnconNonOverlap1,allVolumesUnconNonOverlap1,\
+    allSelectionsUnconNonOverlap1] = getRandomCataloguePairCounts(\
+    centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
+    antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
+    conditioningQuantityUn = conditioningQuantityUnDouble,\
+    conditioningQuantityMCMC = conditioningQuantityMCMCDouble,\
+    conditionBinEdges = [rEffBinEdges,conBinEdges],\
+    combineRandomRegions=True)
 
 #[allPairsUncon,allVolumesUncon] = tools.loadPickle("temp_sample_13.p")
 
@@ -4706,7 +4713,7 @@ stackedAverageRandom = np.hstack(deltaAverageRandomList)
 stackedCentralRandom = np.hstack(deltaCentralRandomList)
 fitRand = np.polyfit(stackedAverageRandom,stackedCentralRandom,1)
 
-# Density distribution:
+# Density distribution (old version with separate voids):
 plt.clf()
 fig, ax = plt.subplots(1,2,figsize=(textwidth,0.5*textwidth))
 histMean = ax[0].hist2d(deltaAverageMean[filter300],\
@@ -4736,8 +4743,6 @@ plt.tight_layout()
 plt.savefig(figuresFolder + "density_central_average_distribution.pdf")
 plt.show()
 
-
-
 # Binning in each random simulation region individually:
 numBins = 21
 bins=np.linspace(-1,-0.5,numBins)
@@ -4765,6 +4770,13 @@ sigmaCentralDensityUncon = np.std(probCentralDensityUncon,0)
 
 from void_analysis.plot import histWithErrors
 
+# With the new approach:
+selectedVoidsAll = np.hstack(allSelectionsUnconNonOverlap)
+
+
+probAverageDensityUncon = centralConditionVariableAll[selectedVoidsAll,2]
+probCentralDensityUncon = centralConditionVariableAll[selectedVoidsAll,1]
+
 # Density histograms:
 plt.clf()
 fig, ax = plt.subplots(1,2,figsize=(textwidth,0.5*textwidth))
@@ -4777,9 +4789,12 @@ ax[0].hist(deltaAverageMean[filter300],
 #ax[0].hist(averageDensityUnconNonOverlap[0],\
 #    bins=np.linspace(-1,-0.5,numBins),density=True,\
 #    color=seabornColormap[1],label='Random simulations',alpha=0.5)
-histWithErrors(np.mean(probAverageDensityUncon,0),sigmaAverageDensityUncon,\
-    bins,ax=ax[0],color=seabornColormap[0],alpha=0.5,\
-    label='Random \nsimulations')
+#histWithErrors(np.mean(probAverageDensityUncon,0),sigmaAverageDensityUncon,\
+#    bins,ax=ax[0],color=seabornColormap[0],alpha=0.5,\
+#    label='Random \nsimulations')
+ax[0].hist(probAverageDensityUncon,\
+    bins=bins,color=seabornColormap[0],alpha=0.5,\
+    label='Random \nsimulations',density=True)
 ax[0].set_title('Average Density')
 ax[0].set_xlim([-1,-0.5])
 ax[0].set_xlabel('$\\bar{\\delta}$')
@@ -4795,9 +4810,12 @@ ax[1].hist(deltaCentralMean[filter300],\
 #ax[1].hist(centralDensityUnconNonOverlap[0],\
 #    bins=np.linspace(-1,-0.5,numBins),density=True,\
 #    color=seabornColormap[1],label='Random simulations',alpha=0.5)
-histWithErrors(np.mean(probCentralDensityUncon,0),sigmaCentralDensityUncon,\
-    bins,ax=ax[1],color=seabornColormap[0],alpha=0.5,\
-    label='Random \nsimulations')
+#histWithErrors(np.mean(probCentralDensityUncon,0),sigmaCentralDensityUncon,\
+#    bins,ax=ax[1],color=seabornColormap[0],alpha=0.5,\
+#    label='Random \nsimulations')
+ax[1].hist(probCentralDensityUncon,\
+    bins=bins,color=seabornColormap[0],alpha=0.5,\
+    label='Random \nsimulations',density=True)
 ax[1].set_title('Central Density')
 ax[1].set_xlim([-1,-0.5])
 ax[1].set_xlabel('$\\delta_c$')
