@@ -2910,7 +2910,7 @@ def pptPlotsInBins(ncList,rBins,nCols = 2,fontfamily='serif',\
         powerRange = 2,nAbsBins=8,textwidth=7.1014,\
         alpha1sigma=0.5,alpha2sigma=0.25,widthFactor=1.0,heightFactor=0.7,\
         mLower = 2,swapXY = False,bottom = 0.105,top = 0.92,right = 0.980,\
-        left=None,legloc=(0.02,0.3),xlabelOffset=-0.03):
+        left=None,legloc=(0.02,0.3),xlabelOffset=-0.03,filename=None):
     rBinCentres = plot.binCentres(rBins)
     # Scaling and y limits:
     if densityPlot:
@@ -3061,7 +3061,12 @@ def pptPlotsInBins(ncList,rBins,nCols = 2,fontfamily='serif',\
             label='2M++ \n(68% CI)')
         fakeError2 = matplotlib.patches.Patch(color='k',alpha=alpha2sigma,\
             label='2M++ \n(95% CI)')
-        ax[0,0].legend(handles = [fakeMCMC,fakeError1,fakeError2],\
+        fakeColor1 = matplotlib.patches.Patch(color=seabornColormap[1],\
+            alpha=alpha1sigma,label='$K \\leq 11.5$')
+        fakeColor2 = matplotlib.patches.Patch(color=seabornColormap[0],\
+            alpha=alpha1sigma,label='$K > 11.5$')
+        ax[0,0].legend(handles = [fakeMCMC,fakeError1,fakeError2,\
+            fakeColor1,fakeColor2],\
             prop={"size":fontsize,"family":fontfamily},frameon=False,\
             loc=legloc)
     else:
@@ -3099,16 +3104,23 @@ def pptPlotsInBins(ncList,rBins,nCols = 2,fontfamily='serif',\
             fig.text(left + (right - left)*(start + l*spacing),0.97,\
                 clusterNames[ncList[l]][0],\
                 fontsize=fontsize,fontfamily=fontfamily,ha='center')
-    filename = "_vs_".join([clusterNames[ncList[l]][0] \
-        for l in range(0,len(ncList))])
-    #plt.savefig(figuresFolder + "ppts_compared_" + filename + ".pdf")
-    plt.savefig(figuresFolder + "ppts_compared_all.pdf")
+    if filename is None:
+        filename = "_vs_".join([clusterNames[ncList[l]][0] \
+            for l in range(0,len(ncList))])
+        #plt.savefig(figuresFolder + "ppts_compared_" + filename + ".pdf")
+        plt.savefig(figuresFolder + "ppts_compared_all.pdf")
+    else:
+        plt.savefig(figuresFolder + filename)
     plt.show()
 
 #pptPlotsInBins(ncList,rBins)
 pptPlotsInBins([1,3,4,5,6,7,8],rBins,nCols=1,swapXY=True,heightFactor=1.3,\
-    bottom = 0.05,top=0.95,right=0.95,left=0.07,legloc=(0.02,0.1),\
+    bottom = 0.05,top=0.95,right=0.95,left=0.07,legloc=(0.02,-0.01),\
     xlabelOffset=-0.04)
+
+pptPlotsInBins([0,2],rBins,nCols=2,swapXY=False,heightFactor=0.7,\
+    bottom = 0.05,top=0.95,right=0.95,left=0.07,legloc=(0.02,0.02),\
+    xlabelOffset=-0.04,filename="ppts_compared.pdf")
 
 # Density profiles around each cluster:
 nRows = 3
@@ -4367,10 +4379,10 @@ conditioningQuantityMCMC = np.vstack([meanRadii,\
     deltaCentralMean[filter300],deltaAverageMean[filter300]]).T
 
 [centralConditionVariableAll,centralCentresAll,centralRadiiAll,\
-                sampleIndices] = getAllConditionVariables(\
+                sampleIndices,voidIndices] = getAllConditionVariables(\
                 centresToUseNonOverlapping,ahCentresListUn,\
                 antihaloRadiiUn,conditioningQuantityUn)
-[_,_,centralMassesAll,_] = getAllConditionVariables(\
+[_,_,centralMassesAll,_,_] = getAllConditionVariables(\
                 centresToUseNonOverlapping,ahCentresListUn,\
                 antihaloMassesUn,conditioningQuantityUn)
 
@@ -4385,6 +4397,120 @@ conditioningQuantityMCMC = np.vstack([meanRadii,\
     conditionBinEdges = [rEffBinEdges,conBinEdges,conBinEdges],\
     combineRandomRegions=True,_recomputeData=False)
 
+# Getting into the internals:
+centreListToTest = centresToUseNonOverlapping
+radBinEdges = rEffBinEdges
+meanRadiiMCMC = meanRadii
+conditionBinEdges = [rEffBinEdges,conBinEdges,conBinEdges]
+combineRandomRegions = True
+start = 0
+end = -1
+seed = 1000
+conditioningVariable = centralConditionVariableAll
+
+
+
+[samplingMCMC,edges] = np.histogramdd(conditioningQuantityMCMC,\
+    bins = conditionBinEdges)
+samplingMCMCLin = np.array(samplingMCMC.flatten(),dtype=int)
+[samplingRand,edges] = np.histogramdd(conditioningVariable,\
+    bins = conditionBinEdges)
+samplingRandLin = np.array(samplingRand.flatten(),dtype=int)
+
+[samplingRandSelected,edges] = np.histogramdd(\
+    conditioningVariable[selectArray],bins = conditionBinEdges)
+
+nzMCMC = np.where(samplingMCMCLin > 0)
+rat = np.zeros(samplingMCMCLin.shape,dtype=int)
+rat[nzMCMC] = samplingRandLin[nzMCMC]/samplingMCMCLin[nzMCMC]
+minRatio = np.min(rat[rat > 0])
+
+samplingRand0 = np.sum(samplingRand,(1,2))
+samplingRand1 = np.sum(samplingRand,(0,2))
+samplingRand2 = np.sum(samplingRand,(0,1))
+
+samplingMCMC0 = np.sum(samplingMCMC,(1,2))
+samplingMCMC1 = np.sum(samplingMCMC,(0,2))
+samplingMCMC2 = np.sum(samplingMCMC,(0,1))
+
+samplingRandSelected0 = np.sum(samplingRandSelected,(1,2))
+samplingRandSelected1 = np.sum(samplingRandSelected,(0,2))
+samplingRandSelected2 = np.sum(samplingRandSelected,(0,1))
+
+def getBarWidths(bins):
+    return (bins[1:] - bins[0:-1])
+
+def getBarHeights(counts,bins):
+    widths = getBarWidths(bins)
+    return counts/(np.sum(counts)*widths)
+
+def barAsHist(counts,bins,ax=None,density=True,**kwargs):
+    if ax is None:
+        fig, ax = plt.subplots()
+    centres = plot.binCentres(bins)
+    widths = (bins[1:] - bins[0:-1])
+    if density:
+        heights = getBarHeights(counts,bins)
+    else:
+        heights = counts
+    ax.bar(centres,heights,width=widths,**kwargs)
+
+# All distributions:
+nRows = 2
+nCols = 3
+
+randCounts = [[samplingRand0,samplingRand1,samplingRand2],\
+    [samplingRandSelected0,samplingRandSelected1,samplingRandSelected2]]
+
+mcmcCounts = [[samplingMCMC0,samplingMCMC1,samplingMCMC2],\
+    [samplingMCMC0,samplingMCMC1,samplingMCMC2]]
+
+xlabels = ['$R [\\mathrm{Mpc}h^{-1}]$','$\\delta_{\\mathrm{central}}$',\
+    '$\\bar{\\delta}$']
+ylims = [[0,0.3],[0,20],[0,20]]
+titlesList = [['Void radii, \nall samples','Central Density, \nall samples',\
+    'Average Density, \nall samples'],\
+    ['Void radii, \nconditioned samples',\
+    'Central Density, \nconditioned samples',\
+    'Average Density, \nconditioned samples']]
+
+plt.clf()
+fig, ax = plt.subplots(nRows,nCols,figsize=(textwidth,0.7*textwidth))
+for i in range(0,nRows):
+    for j in range(0,nCols):
+        barAsHist(randCounts[i][j],conditionBinEdges[j],ax=ax[i,j],\
+            alpha=0.5,color=seabornColormap[0],label="Randoms")
+        barAsHist(mcmcCounts[i][j],conditionBinEdges[j],ax=ax[i,j],\
+            alpha=0.5,color=seabornColormap[1],label="MCMC")
+        plot.formatPlotGrid(ax,i,j,None,None,None,None,nRows,ylims[j],\
+            fontsize=fontsize)
+        ax[i,j].set_xlabel(xlabels[j],fontsize=fontsize,fontfamily = "serif")
+        ax[i,j].set_ylabel('Probability Density',fontsize=fontsize,\
+            fontfamily = "serif")
+        ax[i,j].set_title(titlesList[i][j],fontsize = fontsize,\
+            fontfamily = "serif")
+
+ax[1,2].legend(prop={"size":fontsize,"family":"serif"},frameon=False)
+plt.savefig(figuresFolder + "all_condition_distributions.pdf")
+plt.show()
+
+
+# Distribution of counts in bins:
+plt.clf()
+fig, ax = plt.subplots()
+plt.hist(samplingRand.flatten(),density=True,bins=10**(np.linspace(0,4,11)),\
+    alpha=0.5,color=seabornColormap[0],label='Random samples')
+plt.hist(samplingMCMC.flatten(),density=True,bins=10**(np.linspace(0,4,11)),\
+    alpha=0.5,color=seabornColormap[1],label="MCMC samples")
+plt.xscale('log')
+plt.yscale('log')
+plt.xlabel('Counts in bins')
+plt.ylabel('Probablity Density')
+plt.legend()
+plt.savefig(figuresFolder + "counts_distribution.pdf")
+plt.show()
+
+
 # Only applying two conditions:
 conditioningQuantityUnDouble = [np.vstack([antihaloRadiiUn[ns],\
     ahPropsUn[ns][11]]).T \
@@ -4393,10 +4519,10 @@ conditioningQuantityMCMCDouble = np.vstack([meanRadii,\
     deltaCentralMean[filter300]]).T
 
 [centralConditionVariableAll,centralCentresAll,centralRadiiAll,\
-                sampleIndices] = getAllConditionVariables(\
+                sampleIndices,voidIndices] = getAllConditionVariables(\
                 centresToUseNonOverlapping,ahCentresListUn,\
                 antihaloRadiiUn,conditioningQuantityUnDouble)
-[_,_,centralMassesAll,_] = getAllConditionVariables(\
+[_,_,centralMassesAll,_,_] = getAllConditionVariables(\
                 centresToUseNonOverlapping,ahCentresListUn,\
                 antihaloMassesUn,conditioningQuantityUnDouble)
 
@@ -6287,7 +6413,6 @@ cat300Rand = catalogue.combinedCatalogue(snapNameListRand,snapNameListRandRev,\
 finalCat300Rand = cat300Rand.constructAntihaloCatalogue()
 
 ahNumbers = cat300.ahNumbers
-
 
 
 

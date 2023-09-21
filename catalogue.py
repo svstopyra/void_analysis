@@ -1226,6 +1226,7 @@ def getAllConditionVariables(centreListToTest,ahCentresListUn,\
     centralCentresAll = np.zeros((0,3))
     centralRadiiAll = np.zeros(0)
     sampleIndices = np.zeros(0,dtype=int)
+    voidIndices = np.zeros(0,dtype=int)
     if end == -1:
         end = len(centreListToTest)
     for ns in range(start,end):
@@ -1236,6 +1237,7 @@ def getAllConditionVariables(centreListToTest,ahCentresListUn,\
                 boxsize=boxsize)[1]
             centralRadii = antihaloRadiiUn[ns][centralAntihalos]
             centralCentres = ahCentresListUn[ns][centralAntihalos]
+            centralIndices = np.where(centralAntihalos)[0]
             if numCond == 1:
                 centralConditionVariable = np.array(\
                     conditioningQuantityUn[ns][centralAntihalos])
@@ -1251,8 +1253,9 @@ def getAllConditionVariables(centreListToTest,ahCentresListUn,\
                 centralRadii))
             sampleIndices = np.hstack((sampleIndices,\
                 ns*np.ones(centralRadii.shape,dtype=int)))
+            voidIndices = np.hstack((voidIndices,centralIndices))
     return [centralConditionVariableAll,centralCentresAll,centralRadiiAll,\
-        sampleIndices]
+        sampleIndices,voidIndices]
 
 # Sampling a set of random catalogues while matching to an MCMC catalogue:
 def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
@@ -1278,7 +1281,7 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
         if conditioningQuantityMCMC is not None:
             numCond = getNumberOfConditions(conditioningQuantityMCMC)
             [centralConditionVariableAll,centralCentresAll,centralRadiiAll,\
-                sampleIndices] = getAllConditionVariables(\
+                sampleIndices,voidIndices] = getAllConditionVariables(\
                 centreListToTest,ahCentresListUn,\
                 antihaloRadiiUn,conditioningQuantityUn,start=start,end=end)
         numVoidsTotal = len(centralRadiiAll)
