@@ -3916,7 +3916,8 @@ class test_catalogue_code(test_base):
             "getNewMatches_ref.p"
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
-
+    def test_getNumberOfConditions(self):
+        computed = catalogue.getNumberOfConditions(conditionList)
 
 
 
