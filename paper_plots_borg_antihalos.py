@@ -4408,6 +4408,17 @@ conditioningQuantityMCMC = np.vstack([meanRadii,\
     conditionBinEdges = [rEffBinEdges,conBinEdges,conBinEdges],\
     combineRandomRegions=True,_recomputeData=False)
 
+[allPairsUnconLocalised,allVolumesUnconLocalised,\
+    allSelectionsUnconLocalised] = tools.loadOrRecompute(\
+    data_folder + "pair_counts_triple_conditioning_localised.p",\
+    getRandomCataloguePairCounts,\
+    centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
+    antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
+    conditioningQuantityUn = conditioningQuantityUn,\
+    conditioningQuantityMCMC = conditioningQuantityMCMC,\
+    conditionBinEdges = [rEffBinEdges,conBinEdges,conBinEdges],\
+    combineRandomRegions=False,_recomputeData=False,replace=True)
+
 # Getting into the internals:
 centreListToTest = centresToUseNonOverlapping
 radBinEdges = rEffBinEdges

@@ -1165,7 +1165,7 @@ def getNumberOfConditions(conditionList):
 # Select random catalogue voids that match the distribution of properties
 # in the MCMC catalogue.
 def selectConditionedRandomVoids(conditioningQuantityMCMC,\
-        conditioningVariable,conditionBinEdges,seed=1000):
+        conditioningVariable,conditionBinEdges,seed=1000,replace=False):
     numCond = getNumberOfConditions(conditioningQuantityMCMC)
     if len(conditionBinEdges) != numCond:
         raise Exception("List of bins must match list of " + \
@@ -1213,9 +1213,16 @@ def selectConditionedRandomVoids(conditioningQuantityMCMC,\
     np.random.seed(seed)
     for k in range(0,numBinsTot):
         thisIndex = np.where((linearIndices == k))[0]
-        selection.append(np.random.choice(thisIndex,\
-            np.min([minRatio*samplingMCMCLin[k],len(thisIndex)]),\
-            replace=False))
+        if replace:
+            if len(thisIndex) > 0:
+                numSamplesToTake = minRatio*samplingMCMCLin[k]
+            else:
+                numSamplesToTake = 0
+        else:
+            numSamplesToTake = \
+                np.min([minRatio*samplingMCMCLin[k],len(thisIndex)])
+        selection.append(np.random.choice(thisIndex,numSamplesToTake,\
+            replace=replace))
     selectArray = np.hstack(selection)
     return inAllRangesInd[selectArray]
 
@@ -1262,7 +1269,7 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
         ahCentresListUn,antihaloRadiiUn,rSphere,radBinEdges,rBinStack,\
         meanRadiiMCMC,boxsize,seed=1000,start=0,end=-1,\
         conditioningQuantityUn=None,conditioningQuantityMCMC=None,\
-        conditionBinEdges=None,combineRandomRegions=False):
+        conditionBinEdges=None,combineRandomRegions=False,replace=False):
     # Get pair counts in similar-density regions:
     allPairsUncon = []
     allVolumesUncon = []
@@ -1288,7 +1295,7 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
         if conditioningQuantityMCMC is not None:
             selectArray = selectConditionedRandomVoids(\
                 conditioningQuantityMCMC,centralConditionVariableAll,\
-                conditionBinEdges,seed=seed)
+                conditionBinEdges,seed=seed,replace=replace)
         else:
             selectArray = np.range(0,numVoidsTotal)
         nPairsListAll = []
@@ -1328,7 +1335,7 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
                             conditioningQuantityUn[ns][centralAntihalos,:]
                     selectArray = selectConditionedRandomVoids(\
                         conditioningQuantityMCMC,centralConditionVariable,\
-                        conditionBinEdges,seed=seed)
+                        conditionBinEdges,seed=seed,replace=replace)
                 else:
                     selectArray = np.range(0,len(centralRadii))
                 # Now get pair counts around these voids:
