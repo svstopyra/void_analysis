@@ -4379,12 +4379,16 @@ conditioningQuantityMCMC = np.vstack([meanRadii,\
     deltaCentralMean[filter300],deltaAverageMean[filter300]]).T
 
 [centralConditionVariableAll,centralCentresAll,centralRadiiAll,\
-                sampleIndices,voidIndices] = getAllConditionVariables(\
-                centresToUseNonOverlapping,ahCentresListUn,\
-                antihaloRadiiUn,conditioningQuantityUn)
-[_,_,centralMassesAll,_,_] = getAllConditionVariables(\
-                centresToUseNonOverlapping,ahCentresListUn,\
-                antihaloMassesUn,conditioningQuantityUn)
+                sampleIndices,voidIndices] = tools.loadOrRecompute(\
+                    data_folder + "condition_variables_nonoverlapping.p",\
+                    getAllConditionVariables,\
+                    centresToUseNonOverlapping,ahCentresListUn,\
+                    antihaloRadiiUn,conditioningQuantityUn,_recomputeData=False)
+[_,_,centralMassesAll,_,_] = tools.loadOrRecompute(\
+                    data_folder + "condition_masses_nonoverlapping.p",\
+                    getAllConditionVariables,centresToUseNonOverlapping,\
+                    ahCentresListUn,antihaloMassesUn,\
+                    conditioningQuantityUn,_recomputeData=False)
 
 [allPairsUnconNonOverlap,allVolumesUnconNonOverlap,\
     allSelectionsUnconNonOverlap] = tools.loadOrRecompute(\
@@ -4396,6 +4400,25 @@ conditioningQuantityMCMC = np.vstack([meanRadii,\
     conditioningQuantityMCMC = conditioningQuantityMCMC,\
     conditionBinEdges = [rEffBinEdges,conBinEdges,conBinEdges],\
     combineRandomRegions=True,_recomputeData=False)
+
+# Applying three conditions simultaneously:
+conditioningQuantityUn = [np.vstack([antihaloRadiiUn[ns],\
+    ahPropsUn[ns][11],ahPropsUn[ns][12]]).T \
+    for ns in range(0,len(snapListUn))]
+conditioningQuantityMCMC = np.vstack([meanRadii,\
+    deltaCentralMean[filter300],deltaAverageMean[filter300]]).T
+
+[centralConditionVariableAll,centralCentresAll,centralRadiiAll,\
+                sampleIndices,voidIndices] = tools.loadOrRecompute(\
+                    data_folder + "condition_variables_overlapping.p",\
+                    getAllConditionVariables,\
+                    centresToUse,ahCentresListUn,\
+                    antihaloRadiiUn,conditioningQuantityUn,_recomputeData=False)
+[_,_,centralMassesAll,_,_] = tools.loadOrRecompute(\
+                    data_folder + "condition_masses_overlapping.p",\
+                    getAllConditionVariables,\
+                    centresToUse,ahCentresListUn,antihaloMassesUn,\
+                    conditioningQuantityUn,_recomputeData=False)
 
 [allPairsUnconOverlapping,allVolumesUnconOverlapping,\
     allSelectionsUnconOverlapping] = tools.loadOrRecompute(\
@@ -4429,7 +4452,7 @@ start = 0
 end = -1
 seed = 1000
 conditioningVariable = centralConditionVariableAll
-
+replace = False
 
 
 [samplingMCMC,edges] = np.histogramdd(conditioningQuantityMCMC,\
@@ -4439,8 +4462,10 @@ samplingMCMCLin = np.array(samplingMCMC.flatten(),dtype=int)
     bins = conditionBinEdges)
 samplingRandLin = np.array(samplingRand.flatten(),dtype=int)
 
+#[samplingRandSelected,edges] = np.histogramdd(\
+#    conditioningVariable[selectArray],bins = conditionBinEdges)
 [samplingRandSelected,edges] = np.histogramdd(\
-    conditioningVariable[selectArray],bins = conditionBinEdges)
+    allSelectedConditions,bins = conditionBinEdges)
 
 nzMCMC = np.where(samplingMCMCLin > 0)
 rat = np.zeros(samplingMCMCLin.shape,dtype=int)
@@ -4570,6 +4595,12 @@ conditioningQuantityMCMCDouble = np.vstack([meanRadii,\
 
 #[allPairsUncon,allVolumesUncon] = tools.loadPickle("temp_sample_13.p")
 
+#allPairsUncon = allPairsUnconNonOverlap
+#allVolumesUncon = allVolumesUnconNonOverlap
+#allSelectionsUncon = allSelectionsUnconNonOverlap
+allPairsUncon = allPairsUnconOverlapping
+allVolumesUncon = allVolumesUnconOverlapping
+allSelectionsUncon = allSelectionsUnconOverlapping
 
 # Central and average densities in similar regions:
 # For OLD conditioning:
@@ -4587,20 +4618,20 @@ for ns in range(0,len(snapListUn)):
         sphereAverageDensities = averageDensityUn[ns][centralAHs[1]]
         sphereMasses = antihaloMassesUn[ns][centralAHs[1]]
         centralDensityUnconNonOverlap.append(\
-            sphereCentralDensities[allSelectionsUnconNonOverlap[counter]])
+            sphereCentralDensities[allSelectionsUncon[counter]])
         averageDensityUnconNonOverlap.append(\
-            sphereAverageDensities[allSelectionsUnconNonOverlap[counter]])
+            sphereAverageDensities[allSelectionsUncon[counter]])
         massesUnconNonOverlap.append(sphereMasses)
         counter += 1
 
 # For NEW conditioning:
 centralDensityUnconNonOverlap = \
-    [centralConditionVariableAll[allSelectionsUnconNonOverlap[ns],1] \
+    [centralConditionVariableAll[allSelectionsUncon[ns],1] \
     for ns in range(0,len(snapListUn))]
 averageDensityUnconNonOverlap = \
-    [centralConditionVariableAll[allSelectionsUnconNonOverlap[ns],2] \
+    [centralConditionVariableAll[allSelectionsUncon[ns],2] \
     for ns in range(0,len(snapListUn))]
-massesUnconNonOverlap = [centralMassesAll[allSelectionsUnconNonOverlap[ns]] \
+massesUnconNonOverlap = [centralMassesAll[allSelectionsUncon[ns]] \
     for ns in range(0,len(snapListUn))]
 
 
@@ -4626,36 +4657,39 @@ regionsFilter = range(0,len(snapListUn))
 
 mUnitLowRes = 8*snapList[0]['mass'][0]*1e10
 #profileFilterUnconNonOverlap = [np.ones(selection.shape,dtype=bool) \
-#    for selection in allSelectionsUnconNonOverlap]
+#    for selection in allSelectionsUncon]
 # For use with the old selection:
 #profileFilterUnconNonOverlap = [massList[selection] >= mUnitLowRes*100 \
 #    for massList, selection in \
-#    zip(massesUnconNonOverlap,allSelectionsUnconNonOverlap)]
+#    zip(massesUnconNonOverlap,allSelectionsUncon)]
 profileFilterUnconNonOverlap = [massList >= mUnitLowRes*100 \
     for massList in massesUnconNonOverlap]
 
+
+
+
 # Stacked profiles in each region:
 rhoStackedUnAllNonOverlap = np.array([\
-    (np.sum(allPairsUnconNonOverlap[k][filt],0)+1)/\
-    np.sum(allVolumesUnconNonOverlap[k][filt],0) \
+    (np.sum(allPairsUncon[k][filt],0)+1)/\
+    np.sum(allVolumesUncon[k][filt],0) \
     for k, filt in zip(regionsFilter,profileFilterUnconNonOverlap)])
 rhoStackedUnAllNonOverlapCumulative = \
-    np.array([(np.sum(np.cumsum(allPairsUnconNonOverlap[k][filt],1),0)+1)/\
-    np.sum(np.cumsum(allVolumesUnconNonOverlap[k][filt],1),0) \
+    np.array([(np.sum(np.cumsum(allPairsUncon[k][filt],1),0)+1)/\
+    np.sum(np.cumsum(allVolumesUncon[k][filt],1),0) \
     for k, filt in zip(regionsFilter,profileFilterUnconNonOverlap)])
-variancesUnAllNonOverlap = np.array([np.var(allPairsUnconNonOverlap[k][filt]/\
-    allVolumesUnconNonOverlap[k][filt],0) \
+variancesUnAllNonOverlap = np.array([np.var(allPairsUncon[k][filt]/\
+    allVolumesUncon[k][filt],0) \
     for k, filt in zip(regionsFilter,profileFilterUnconNonOverlap)])
 variancesUnAllNonOverlapCumulative = \
-    np.array([np.var(np.cumsum(allPairsUnconNonOverlap[k][filt],1)/\
-    np.cumsum(allVolumesUnconNonOverlap[k][filt],1),0) \
+    np.array([np.var(np.cumsum(allPairsUncon[k][filt],1)/\
+    np.cumsum(allVolumesUncon[k][filt],1),0) \
     for k, filt in zip(regionsFilter,profileFilterUnconNonOverlap)])
-weightsUnAllNonOverlap = [(allVolumesUnconNonOverlap[k][filt])/\
-    np.sum(allVolumesUnconNonOverlap[k][filt],0) \
+weightsUnAllNonOverlap = [(allVolumesUncon[k][filt])/\
+    np.sum(allVolumesUncon[k][filt],0) \
     for k, filt in zip(regionsFilter,profileFilterUnconNonOverlap)]
 weightsUnAllNonOverlapCumulative = \
-    [(np.cumsum(allVolumesUnconNonOverlap[k][filt],1))/\
-    np.sum(np.cumsum(allVolumesUnconNonOverlap[k][filt],1),0) \
+    [(np.cumsum(allVolumesUncon[k][filt],1))/\
+    np.sum(np.cumsum(allVolumesUncon[k][filt],1),0) \
     for k, filt in zip(regionsFilter,profileFilterUnconNonOverlap)]
 sumSquareWeightsNonOverlap = np.array([np.sum(wi**2,0) \
     for wi in weightsUnAllNonOverlap])
@@ -4666,7 +4700,8 @@ sumSquareWeightsNonOverlapCumulative = np.array([np.sum(wi**2,0) \
 #rhoRandomToUse = rhoStackedUnAllNonOverlapCumulative
 #rhoMCMCToUse = rhoStackedCumulative
 #sigmaRhoMCMCToUse = sigmaRhoStackedCumulative
-rhoRandomToUse = rhoStackedUnAllNonOverlap
+#rhoRandomToUse = rhoStackedUnAllNonOverlap
+rhoRandomToUse = rhoStackedUnAll
 rhoMCMCToUse = rhoStacked
 sigmaRhoMCMCToUse = sigmaRhoStacked
 
@@ -4850,7 +4885,7 @@ for ns in range(0,len(snapList)):
         centralAHs = tools.getAntiHalosInSphere(ahCentresListUn[ns],\
                 rSphere,origin=centre,boxsize=boxsize)
         regionLists.append(centralAHs[1])
-        selectFilter = allSelectionsUnconNonOverlap[count]
+        selectFilter = allSelectionsUncon[count]
         deltaAverageRandomList.append(deltaAverageAll[ns][selectFilter])
         deltaCentralRandomList.append(deltaCentralAll[ns][selectFilter])
         count += 1
@@ -4919,7 +4954,7 @@ sigmaCentralDensityUncon = np.std(probCentralDensityUncon,0)
 from void_analysis.plot import histWithErrors
 
 # With the new approach:
-selectedVoidsAll = np.hstack(allSelectionsUnconNonOverlap)
+selectedVoidsAll = np.hstack(allSelectionsUncon)
 
 
 probAverageDensityUncon = centralConditionVariableAll[selectedVoidsAll,2]

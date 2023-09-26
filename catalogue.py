@@ -1227,7 +1227,7 @@ def selectConditionedRandomVoids(conditioningQuantityMCMC,\
     return inAllRangesInd[selectArray]
 
 def getAllConditionVariables(centreListToTest,ahCentresListUn,\
-        antihaloRadiiUn,conditioningQuantityUn,start=0,end=-1):
+        antihaloRadiiUn,conditioningQuantityUn,rSphere,start=0,end=-1):
     numCond = getNumberOfConditions(conditioningQuantityUn[0])
     centralConditionVariableAll = np.zeros((0,numCond))
     centralCentresAll = np.zeros((0,3))
@@ -1290,7 +1290,8 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
             [centralConditionVariableAll,centralCentresAll,centralRadiiAll,\
                 sampleIndices,voidIndices] = getAllConditionVariables(\
                 centreListToTest,ahCentresListUn,\
-                antihaloRadiiUn,conditioningQuantityUn,start=start,end=end)
+                antihaloRadiiUn,conditioningQuantityUn,rSphere,\
+                start=start,end=end)
         numVoidsTotal = len(centralRadiiAll)
         if conditioningQuantityMCMC is not None:
             selectArray = selectConditionedRandomVoids(\
@@ -1312,6 +1313,8 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
             allVolumesUncon.append(volumesList)
             allSelections.append(nsSelectArray)
     else:
+        allSelectedConditions = np.zeros((0,3))
+        lengthsArray = np.zeros(0,dtype=int)
         for ns in range(start,end):
             snapLoaded = snapListUn[ns]
             #tree = scipy.spatial.cKDTree(snapLoaded['pos'],boxsize=boxsize)
@@ -1339,12 +1342,16 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
                 else:
                     selectArray = np.range(0,len(centralRadii))
                 # Now get pair counts around these voids:
-                [nPairsList,volumesList] = stacking.getPairCounts(\
-                    centralCentres[selectArray],\
-                    centralRadii[selectArray],snapLoaded,rBinStack,\
-                    tree=tree,method='poisson',vorVolumes=None)
-                allPairsUncon.append(nPairsList)
-                allVolumesUncon.append(volumesList)
+                allSelectedConditions = np.vstack((allSelectedConditions,\
+                    centralConditionVariable[selectArray,:]))
+                lengthsArray = np.hstack((lengthsArray,\
+                    np.array([len(selectArray)])))
+                #[nPairsList,volumesList] = stacking.getPairCounts(\
+                #    centralCentres[selectArray],\
+                #    centralRadii[selectArray],snapLoaded,rBinStack,\
+                #    tree=tree,method='poisson',vorVolumes=None)
+                #allPairsUncon.append(nPairsList)
+                #allVolumesUncon.append(volumesList)
                 allSelections.append(selectArray)
                 print("Done centre " + str(count+1) + " of " + \
                     str(len(centreListToTest[ns])))
