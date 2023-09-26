@@ -4239,6 +4239,28 @@ def getDistanceBetweenCentres(centre1,centre2,boxsize):
     else:
         return np.sqrt(np.sum(snapedit.unwrap(centre1 - centre2,boxsize)**2,1))
 
+def getNonOverlappingCentres(centresList,rSep,boxsize,returnIndices=False):
+    centresNonOverlapping = []
+    indicesNonOverlapping = []
+    for ns in range(0,len(centresList)):
+        centresNS = centresList[ns]
+        centresNSNonOverlap = []
+        indicesNSNonOverlap = []
+        for k in range(0,len(centresNS)):
+            include = True
+            for l in range(0,len(centresNSNonOverlap)):
+                include = include and (getDistanceBetweenCentres(centresNS[k],\
+                    centresNSNonOverlap[l],boxsize) > rSep)
+            if include:
+                centresNSNonOverlap.append(centresNS[k])
+                indicesNSNonOverlap.append(k)
+        centresNonOverlapping.append(np.array(centresNSNonOverlap))
+        indicesNonOverlapping.append(np.array(indicesNSNonOverlap))
+    if returnIndices:
+        return indicesNonOverlapping
+    else:
+        return centresNonOverlapping
+
 # Filter to ensure independence of centres:
 centresToUseNonOverlapping = []
 deltaToUseNonOverlapping = []
@@ -4266,9 +4288,19 @@ deltaToUseNonOverlappingBySample = [np.array(cen) \
 deltaToUseNonOverlapping = np.hstack(deltaToUseNonOverlappingBySample)
 # Bins to use when building a catalogue similar to the constrained
 # catalogue:
-rEffBinEdges = np.linspace(10,25,6)
-[inRadBinsComb,noInRadBinsComb] = plot.binValues(meanRadii,rEffBinEdges)
+voidRadiusBinEdges = np.linspace(10,25,6)
+[inRadBinsComb,noInRadBinsComb] = plot.binValues(meanRadii,voidRadiusBinEdges)
 
+# Centres without a density condition:
+centresListAll = [randCentres for ns in range(0,len(snapListUn))]
+indicesAllDensityNonOverlapping = getNonOverlappingCentres(centresListAll,\
+    rSep,boxsize,returnIndices=True)
+centresAllDensityNonOverlapping = [centres[ind] \
+    for centres,ind in zip(centresListAll,indicesAllDensityNonOverlapping)]
+densityListNonOverlapping = [density[ind] \
+    for density, ind in zip(randOverDen,indicesAllDensityNonOverlapping)]
+
+densityAllNonOverlapping = np.hstack(densityListNonOverlapping)
 
 
 def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
@@ -4348,7 +4380,7 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
 [allPairsUncon,allVolumesUncon,allSelectionsUncon] = tools.loadOrRecompute(\
     data_folder + "pair_counts_random_cut.p",getRandomCataloguePairCounts,\
     centresToUse,snapListUn,treeListUncon,ahCentresListUn,\
-    antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
+    antihaloRadiiUn,rSphere,voidRadiusBinEdges,rBinStack,meanRadii,boxsize,\
     _recomputeData=False)
 
 [allPairsUnconNonOverlap,allVolumesUnconNonOverlap,\
@@ -4356,8 +4388,15 @@ def getRandomCataloguePairCounts(centreListToTest,snapListUn,treeListUncon,\
         data_folder + "pair_counts_random_cut_non_overlapping.p",\
         getRandomCataloguePairCounts,\
         centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
-        antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
+        antihaloRadiiUn,rSphere,voidRadiusBinEdges,rBinStack,meanRadii,boxsize,\
         _recomputeData=False)
+
+regionDensityOnlyStack = catalogue.profileStack(centresToUseNonOverlapping,\
+    snapListUn,ahPropsUnconstrained,rSphere,\
+            rBinStack,treeList=treeListUn,seed=1000,start=0,end=-1,\
+            conditioningQuantity=None,conditioningQuantityToMatch=None,\
+            conditionBinEdges=None,combineRandomRegions=False,replace=False)
+
 
 conBinEdges = np.linspace(-1,-0.5,21)
 [allPairsUnconNonOverlapOld,allVolumesUnconNonOverlapOld,\
@@ -4365,7 +4404,7 @@ conBinEdges = np.linspace(-1,-0.5,21)
         data_folder + "pair_counts_density_and_radius_conditioning.p",\
         getRandomCataloguePairCounts,\
         centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
-        antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
+        antihaloRadiiUn,rSphere,voidRadiusBinEdges,rBinStack,meanRadii,boxsize,\
         _recomputeData=False,\
         conditioningQuantityUn = [props[11] for props in ahPropsUn],\
         conditioningQuantityMCMC = deltaCentralMean[filter300],\
@@ -4395,11 +4434,22 @@ conditioningQuantityMCMC = np.vstack([meanRadii,\
     data_folder + "pair_counts_triple_conditioning.p",\
     getRandomCataloguePairCounts,\
     centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
-    antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
+    antihaloRadiiUn,rSphere,voidRadiusBinEdges,rBinStack,meanRadii,boxsize,\
     conditioningQuantityUn = conditioningQuantityUn,\
     conditioningQuantityMCMC = conditioningQuantityMCMC,\
-    conditionBinEdges = [rEffBinEdges,conBinEdges,conBinEdges],\
+    conditionBinEdges = [voidRadiusBinEdges,conBinEdges,conBinEdges],\
     combineRandomRegions=True,_recomputeData=False)
+
+from void_analysis.catalogue import profileStack
+
+regionDensityAndTripleConditionStack = profileStack(\
+    centresToUseNonOverlapping,\
+    snapListUn,ahPropsUnconstrained,rSphere,\
+    rBinStack,treeList=treeListUncon,seed=1000,start=0,end=-1,\
+    conditioningQuantity=conditioningQuantityUn,\
+    conditioningQuantityToMatch=conditioningQuantityMCMC,\
+    conditionBinEdges=[voidRadiusBinEdges,conBinEdges,conBinEdges],\
+    combineRandomRegions=True,replace=False)
 
 # Applying three conditions simultaneously:
 conditioningQuantityUn = [np.vstack([antihaloRadiiUn[ns],\
@@ -4425,10 +4475,10 @@ conditioningQuantityMCMC = np.vstack([meanRadii,\
     data_folder + "pair_counts_triple_conditioning_overlapping.p",\
     getRandomCataloguePairCounts,\
     centresToUse,snapListUn,treeListUncon,ahCentresListUn,\
-    antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
+    antihaloRadiiUn,rSphere,voidRadiusBinEdges,rBinStack,meanRadii,boxsize,\
     conditioningQuantityUn = conditioningQuantityUn,\
     conditioningQuantityMCMC = conditioningQuantityMCMC,\
-    conditionBinEdges = [rEffBinEdges,conBinEdges,conBinEdges],\
+    conditionBinEdges = [voidRadiusBinEdges,conBinEdges,conBinEdges],\
     combineRandomRegions=True,_recomputeData=False)
 
 [allPairsUnconLocalised,allVolumesUnconLocalised,\
@@ -4436,17 +4486,17 @@ conditioningQuantityMCMC = np.vstack([meanRadii,\
     data_folder + "pair_counts_triple_conditioning_localised.p",\
     getRandomCataloguePairCounts,\
     centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
-    antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
+    antihaloRadiiUn,rSphere,voidRadiusBinEdges,rBinStack,meanRadii,boxsize,\
     conditioningQuantityUn = conditioningQuantityUn,\
     conditioningQuantityMCMC = conditioningQuantityMCMC,\
-    conditionBinEdges = [rEffBinEdges,conBinEdges,conBinEdges],\
+    conditionBinEdges = [voidRadiusBinEdges,conBinEdges,conBinEdges],\
     combineRandomRegions=False,_recomputeData=False,replace=True)
 
 # Getting into the internals:
 centreListToTest = centresToUseNonOverlapping
-radBinEdges = rEffBinEdges
+radBinEdges = voidRadiusBinEdges
 meanRadiiMCMC = meanRadii
-conditionBinEdges = [rEffBinEdges,conBinEdges,conBinEdges]
+conditionBinEdges = [voidRadiusBinEdges,conBinEdges,conBinEdges]
 combineRandomRegions = True
 start = 0
 end = -1
@@ -4578,19 +4628,19 @@ conditioningQuantityMCMCDouble = np.vstack([meanRadii,\
     data_folder + "pair_counts_double_conditioning.p",\
     getRandomCataloguePairCounts,\
     centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
-    antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
+    antihaloRadiiUn,rSphere,voidRadiusBinEdges,rBinStack,meanRadii,boxsize,\
     conditioningQuantityUn = conditioningQuantityUnDouble,\
     conditioningQuantityMCMC = conditioningQuantityMCMCDouble,\
-    conditionBinEdges = [rEffBinEdges,conBinEdges],\
+    conditionBinEdges = [voidRadiusBinEdges,conBinEdges],\
     combineRandomRegions=True,_recomputeData=False)
 
 [allPairsUnconNonOverlap1,allVolumesUnconNonOverlap1,\
     allSelectionsUnconNonOverlap1] = getRandomCataloguePairCounts(\
     centresToUseNonOverlapping,snapListUn,treeListUncon,ahCentresListUn,\
-    antihaloRadiiUn,rSphere,rEffBinEdges,rBinStack,meanRadii,boxsize,\
+    antihaloRadiiUn,rSphere,voidRadiusBinEdges,rBinStack,meanRadii,boxsize,\
     conditioningQuantityUn = conditioningQuantityUnDouble,\
     conditioningQuantityMCMC = conditioningQuantityMCMCDouble,\
-    conditionBinEdges = [rEffBinEdges,conBinEdges],\
+    conditionBinEdges = [voidRadiusBinEdges,conBinEdges],\
     combineRandomRegions=True)
 
 #[allPairsUncon,allVolumesUncon] = tools.loadPickle("temp_sample_13.p")
