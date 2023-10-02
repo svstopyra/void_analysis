@@ -523,8 +523,8 @@ def cambTransferFunction(h = 0.67,Om0=0.315568,Ob0 = 0.059235,sigma8=0.830,\
     results = camb.get_results(pars)
     trans = results.get_matter_transfer_data()
     kh = trans.transfer_data[0,:,0]
-    t = delta = trans.transfer_data[camb.model.Transfer_cdm-1,:,0]
-    return [kh, t]
+    #t = trans.transfer_data[camb.model.Transfer_cdm-1,:,0]
+    return [kh, trans.transfer_data]
 
 # Estimate correlation function from power spectrum:
 def pkToxi(x,ki,pki):

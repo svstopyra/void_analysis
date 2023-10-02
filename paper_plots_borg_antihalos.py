@@ -4214,7 +4214,8 @@ def getMAPFromSample(sample):
         np.mean(sample)).x[0]
 
 deltaMAPBootstrap = scipy.stats.bootstrap((deltaMCMCList,),\
-    getMAPFromSample,confidence_level = 0.68,vectorized=False)
+    getMAPFromSample,confidence_level = 0.68,vectorized=False,\
+    random_state=1000)
 
 deltaMAPInterval = deltaMAPBootstrap.confidence_interval
 
@@ -4452,10 +4453,25 @@ noConstraintsStack = profileStack(\
     conditioningQuantityToMatch=None,\
     conditionBinEdges=None,\
     combineRandomRegions=False,replace=False,\
-    rMin = voidRadiusBinEdges[0],rMax = voidRadiusBinEdges[-1])
+    rMin = voidRadiusBinEdges[0],rMax = voidRadiusBinEdges[-1],\
+    computePairCounts=False)
+#noConstraintsDict2 = noConstraintsStack.getRandomCataloguePairCounts()
 noConstraintsDict = tools.loadOrRecompute(\
     data_folder + "no_constraints_stack.p",\
     noConstraintsStack.getRandomCataloguePairCounts,_recomputeData=False)
+
+# Reconstruct the pairs list:
+stackedPairs = np.vstack(noConstraintsDict['pairs'])
+stackedVolumes = np.vstack(noConstraintsDict['volumes'])
+selectionLengths = np.array([len(x) for x in noConstraintsDict2['selections']])
+cumulativeIndices = np.hstack((np.array([0]),np.cumsum(selectionLengths)))
+unstackedPairs = [stackedPairs[cumulativeIndices[k]:cumulativeIndices[k+1],:]\
+    for k in range(0,len(selectionLengths))]
+unstackedVolumes = [stackedVolumes[cumulativeIndices[k]:cumulativeIndices[k+1],:]\
+    for k in range(0,len(selectionLengths))]
+
+noConstraintsDict2['pairs'] = unstackedPairs
+noConstraintsDict2['volumes'] = unstackedVolumes
 
 # Density Constraint only:
 regionDensityStack = profileStack(\
@@ -4466,7 +4482,9 @@ regionDensityStack = profileStack(\
     conditioningQuantityToMatch=None,\
     conditionBinEdges=None,\
     combineRandomRegions=False,replace=False,\
-    rMin = voidRadiusBinEdges[0],rMax = voidRadiusBinEdges[-1])
+    rMin = voidRadiusBinEdges[0],rMax = voidRadiusBinEdges[-1],\
+    computePairCounts=False)
+#regionDensityDict2 = regionDensityStack.getRandomCataloguePairCounts()
 regionDensityDict = tools.loadOrRecompute(\
     data_folder + "regionDensity_stack.p",\
     regionDensityStack.getRandomCataloguePairCounts,_recomputeData=False)
@@ -4484,7 +4502,10 @@ regionDensityAndRadiusStack = profileStack(\
     conditioningQuantityToMatch=conditioningQuantityMCMC,\
     conditionBinEdges=[voidRadiusBinEdges],\
     combineRandomRegions=False,replace=False,\
-    rMin = voidRadiusBinEdges[0],rMax = voidRadiusBinEdges[-1])
+    rMin = voidRadiusBinEdges[0],rMax = voidRadiusBinEdges[-1],\
+    computePairCounts=False)
+#regionDensityAndRadiusDict2 = \
+#    regionDensityAndRadiusStack.getRandomCataloguePairCounts()
 regionDensityAndRadiusDict = tools.loadOrRecompute(\
     data_folder + "regionDensityAndRadius_stack.p",\
     regionDensityAndRadiusStack.getRandomCataloguePairCounts,\
@@ -4505,7 +4526,10 @@ regionDensityAndTripleConditionStack = profileStack(\
     conditioningQuantity=conditioningQuantityUn,\
     conditioningQuantityToMatch=conditioningQuantityMCMC,\
     conditionBinEdges=[voidRadiusBinEdges,conBinEdges,conBinEdges],\
-    combineRandomRegions=False,replace=False)
+    combineRandomRegions=False,replace=False,\
+    computePairCounts=False)
+#regionDensityAndTripleConditionDict2 = \
+#    regionDensityAndTripleConditionStack.getRandomCataloguePairCounts()
 regionDensityAndTripleConditionDict = tools.loadOrRecompute(\
     data_folder + "regionDensityAndTripleCondition_stack.p",\
     regionDensityAndTripleConditionStack.getRandomCataloguePairCounts,\
@@ -4722,9 +4746,16 @@ conditioningQuantityMCMCDouble = np.vstack([meanRadii,\
 #allPairsUncon = allPairsUnconNonOverlap
 #allVolumesUncon = allVolumesUnconNonOverlap
 #allSelectionsUncon = allSelectionsUnconNonOverlap
-allPairsUncon = regionDensityAndTripleConditionDict['pairs']
-allVolumesUncon = regionDensityAndTripleConditionDict['volumes']
-allSelectionsUncon = regionDensityAndTripleConditionDict['selections']
+
+profileDictionary = noConstraintsDict2
+profileDictionary = regionDensityDict
+profileDictionary = regionDensityAndRadiusDict
+profileDictionary = regionDensityAndTripleConditionDict
+
+
+allPairsUncon = profileDictionary['pairs']
+allVolumesUncon = profileDictionary['volumes']
+allSelectionsUncon = profileDictionary['selections']
 
 # Central and average densities in similar regions:
 # For OLD conditioning:
@@ -4758,6 +4789,10 @@ averageDensityUnconNonOverlap = \
 massesUnconNonOverlap = [centralMassesAll[allSelectionsUncon[ns]] \
     for ns in range(0,len(snapListUn))]
 
+# For un-pooled conditions:
+massesUnconNonOverlap = [antihaloMassesUn[ns][allSelectionsUncon[ns]] \
+    for ns in range(0,len(snapListUn))]
+
 
 #aupcd = tools.loadPickle(data_folder + "all_unconstrained_pair_counts_data.p")
 
@@ -4786,8 +4821,10 @@ mUnitLowRes = 8*snapList[0]['mass'][0]*1e10
 #profileFilterUnconNonOverlap = [massList[selection] >= mUnitLowRes*100 \
 #    for massList, selection in \
 #    zip(massesUnconNonOverlap,allSelectionsUncon)]
-profileFilterUnconNonOverlap = [massList >= mUnitLowRes*100 \
-    for massList in massesUnconNonOverlap]
+#profileFilterUnconNonOverlap = [massList >= mUnitLowRes*100 \
+#    for massList in massesUnconNonOverlap]
+
+profileFilterUnconNonOverlap = [range(0,len(x)) for x in allPairsUncon]
 
 
 
@@ -4882,7 +4919,7 @@ ax.fill_between(rBinStackCentres,1 + deltaListMeanNew - deltaListErrorNew,\
 ax.set_xlabel('$R/R_{\\mathrm{eff}}$',fontsize=8)
 ax.set_ylabel('$\\rho/\\bar{\\rho}$',fontsize=8)
 ax.legend(prop={"size":fontsize,"family":"serif"},frameon=False)
-ax.set_xlim([0,10])
+ax.set_xlim([0,3])
 ax.set_ylim([0,1.2])
 plt.tight_layout()
 plt.savefig(figuresFolder + "profiles_mcmc_vs_random.pdf")

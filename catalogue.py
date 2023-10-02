@@ -1332,6 +1332,7 @@ class profileStack:
         self.allPairs = []
         self.allVolumes = []
         self.allSelections = []
+        self.allConditions = []
         if self.combineRandomRegions:
             if self.conditioningQuantityToMatch is not None:
                 self.getAllConditionVariables()
@@ -1366,21 +1367,20 @@ class profileStack:
                     volumesList = np.outer(voidRadii**3,volumes)
                 self.allVolumes.append(volumesList)
                 self.allSelections.append(nsSelectArray)
+            self.allConditions.append(centralConditionVariableAll)
         else:
             allSelectedConditions = np.zeros((0,self.numCond))
             lengthsArray = np.zeros(0,dtype=int)
             for ns in range(self.start,self.end):
                 snapLoaded = self.snapList[ns]
                 tree = self.treeList[ns]
-                nsPairs = []
-                nsVolumes = []
-                nsSelections = []
                 for centre, count in zip(self.centreList[ns],\
                     range(0,len(self.centreList[ns]))):
                     # Get anti-halos:
                     centralAntihalos = tools.getAntiHalosInSphere(\
                         self.ahCentresList[ns],self.rSphere,origin=centre,\
                         boxsize=self.boxsize)[1]
+                    centralIndices = np.where(centralAntihalos)[0]
                     # Get radii and randomly select voids with the same
                     # radius distribution as the combined catalogue:
                     centralRadii = self.antihaloRadiiList[ns][centralAntihalos]
@@ -1396,6 +1396,7 @@ class profileStack:
                             centralConditionVariable = \
                                 self.conditioningQuantity[ns][\
                                 centralAntihalos,:]
+                        self.allConditions.append(centralConditionVariable)
                         self.selectArray = selectConditionedRandomVoids(\
                             self.conditioningQuantityToMatch,\
                             centralConditionVariable,\
@@ -1421,23 +1422,20 @@ class profileStack:
                             centralRadii[self.selectArray],snapLoaded,\
                             self.rEffBinEdges,tree=tree,method='poisson',\
                             vorVolumes=None)
-                        nsPairs.append(nPairsList)
                     else:
                         volumes = 4*np.pi*(self.rEffBinEdges[1:]**3 - \
                             self.rEffBinEdges[0:-1]**3)/3
                         voidRadii = centralRadii[self.selectArray]
                         volumesList = np.outer(voidRadii**3,volumes)
-                    nsVolumes.append(volumesList)
-                    nsSelections.append(self.selectArray)
                     print("Done centre " + str(count+1) + " of " + \
                         str(len(self.centreList[ns])))
-                if self.computePairCounts:
-                    self.allPairs.append(np.vstack(nsPairs))
-                self.allVolumes.append(np.vstack(nsVolumes))
-                self.allSelections.append(np.hstack(nsSelections))
+                    if self.computePairCounts:
+                        self.allPairs.append(nPairsList)
+                    self.allVolumes.append(volumesList)
+                    self.allSelections.append(centralIndices[self.selectArray])
                 print("Done sample " + str(ns + 1) + ".")
         return {'pairs':self.allPairs,'volumes':self.allVolumes,\
-            'selections':self.allSelections,'selectArray':self.selectArray}
+            'selections':self.allSelections,'conditions':self.allConditions}
 
 
 
