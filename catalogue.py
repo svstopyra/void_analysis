@@ -1198,7 +1198,7 @@ def selectConditionedRandomVoids(conditioningQuantityMCMC,\
     nzMCMC = np.where(samplingMCMCLin > 0)
     rat = np.zeros(samplingMCMCLin.shape,dtype=int)
     rat[nzMCMC] = samplingRandLin[nzMCMC]/samplingMCMCLin[nzMCMC]
-    minRatio = np.min(rat[rat > 0])
+    minRatio = np.min(np.hstack((rat[rat > 0],np.array([1]))))
     # Indices in each list of bins:
     inAllRanges = np.ones(len(conditioningVariable),dtype = bool)
     for n in range(0,numCond):
@@ -1242,7 +1242,7 @@ class profileStack:
             rEffBinEdges,treeList=None,seed=1000,start=0,end=-1,\
             conditioningQuantity=None,conditioningQuantityToMatch=None,\
             conditionBinEdges=None,combineRandomRegions=False,replace=False,\
-            rMin=None,rMax=None):
+            rMin=None,rMax=None,computePairCounts = True):
         self.centreList = centreList
         self.snapList = snapList
         if treeList is None:
@@ -1271,6 +1271,7 @@ class profileStack:
         self.conditionBinEdges = conditionBinEdges
         self.combineRandomRegions = combineRandomRegions
         self.replace = replace
+        self.computePairCounts = computePairCounts
         # Verify number of conditions matches the bins specified:
         self.numCond = getNumberOfConditions(self.conditioningQuantityToMatch)
         if self.conditionBinEdges is not None:
@@ -1351,16 +1352,22 @@ class profileStack:
                 tree = self.treeList[ns]
                 nsSelectArray = self.selectArray[\
                     self.sampleIndices[self.selectArray] == ns]
-                [nPairsList,volumesList] = stacking.getPairCounts(\
-                    self.centralCentresAll[nsSelectArray],\
-                    self.centralRadiiAll[nsSelectArray],snapLoaded,\
-                    self.rEffBinEdges,tree=tree,method='poisson',\
-                    vorVolumes=None)
-                self.allPairs.append(nPairsList)
+                if self.computePairCounts:
+                    [nPairsList,volumesList] = stacking.getPairCounts(\
+                        self.centralCentresAll[nsSelectArray],\
+                        self.centralRadiiAll[nsSelectArray],snapLoaded,\
+                        self.rEffBinEdges,tree=tree,method='poisson',\
+                        vorVolumes=None)
+                    self.allPairs.append(nPairsList)
+                else:
+                    volumes = 4*np.pi*(self.rEffBinEdges[1:]**3 - \
+                        self.rEffBinEdges[0:-1]**3)/3
+                    voidRadii = self.centralRadiiAll[nsSelectArray]
+                    volumesList = np.outer(voidRadii**3,volumes)
                 self.allVolumes.append(volumesList)
                 self.allSelections.append(nsSelectArray)
         else:
-            allSelectedConditions = np.zeros((0,3))
+            allSelectedConditions = np.zeros((0,self.numCond))
             lengthsArray = np.zeros(0,dtype=int)
             for ns in range(self.start,self.end):
                 snapLoaded = self.snapList[ns]
@@ -1380,8 +1387,11 @@ class profileStack:
                     centralCentres = self.ahCentresList[ns][centralAntihalos]
                     if self.conditioningQuantityToMatch is not None:
                         if self.numCond == 1:
+                            numCondVariables = \
+                                len(np.where(centralAntihalos)[0])
                             centralConditionVariable = \
-                                self.conditioningQuantity[ns][centralAntihalos]
+                                self.conditioningQuantity[ns]\
+                                [centralAntihalos].reshape(numCondVariables,1)
                         else:
                             centralConditionVariable = \
                                 self.conditioningQuantity[ns][\
@@ -1398,26 +1408,33 @@ class profileStack:
                     else:
                         condition = np.ones(centralRadii.shape,dtype=bool)
                         if self.rMin is not None:
-                            condition = condition & (centralRadii > rMin)
+                            condition = condition & (centralRadii > self.rMin)
                         if self.rMax is not None:
-                            condition = condition & (centralRadii < rMax)
+                            condition = condition & (centralRadii < self.rMax)
                         self.selectArray = np.where(condition)[0]
                     # Now get pair counts around these voids:
                     lengthsArray = np.hstack((lengthsArray,\
                         np.array([len(self.selectArray)])))
-                    [nPairsList,volumesList] = stacking.getPairCounts(\
-                        centralCentres[self.selectArray],\
-                        centralRadii[self.selectArray],snapLoaded,\
-                        self.rEffBinEdges,tree=tree,method='poisson',\
-                        vorVolumes=None)
-                    nsPairs.append(nPairsList)
+                    if self.computePairCounts:
+                        [nPairsList,volumesList] = stacking.getPairCounts(\
+                            centralCentres[self.selectArray],\
+                            centralRadii[self.selectArray],snapLoaded,\
+                            self.rEffBinEdges,tree=tree,method='poisson',\
+                            vorVolumes=None)
+                        nsPairs.append(nPairsList)
+                    else:
+                        volumes = 4*np.pi*(self.rEffBinEdges[1:]**3 - \
+                            self.rEffBinEdges[0:-1]**3)/3
+                        voidRadii = centralRadii[self.selectArray]
+                        volumesList = np.outer(voidRadii**3,volumes)
                     nsVolumes.append(volumesList)
                     nsSelections.append(self.selectArray)
                     print("Done centre " + str(count+1) + " of " + \
                         str(len(self.centreList[ns])))
-                self.allPairs.append(np.vstack(nsPairs))
-                self.allVolumes.append(np.vstack(volumesList))
-                self.allSelections.append(np.hstack(self.selectArray))
+                if self.computePairCounts:
+                    self.allPairs.append(np.vstack(nsPairs))
+                self.allVolumes.append(np.vstack(nsVolumes))
+                self.allSelections.append(np.hstack(nsSelections))
                 print("Done sample " + str(ns + 1) + ".")
         return {'pairs':self.allPairs,'volumes':self.allVolumes,\
             'selections':self.allSelections,'selectArray':self.selectArray}

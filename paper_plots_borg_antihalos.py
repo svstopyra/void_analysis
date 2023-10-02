@@ -4473,7 +4473,7 @@ regionDensityDict = tools.loadOrRecompute(\
 
 # Density and Radius constraints:
 conBinEdges = np.linspace(-1,-0.5,21)
-conditioningQuantityUn = [antihaloRadiiUn[ns]\
+conditioningQuantityUn = [antihaloRadiiUn[ns].T\
     for ns in range(0,len(snapListUn))]
 conditioningQuantityMCMC = meanRadii
 regionDensityAndRadiusStack = profileStack(\
@@ -4521,6 +4521,7 @@ tools.savePickle(regionDensityAndTripleConditionStack,\
 
 
 # Applying three conditions simultaneously:
+conBinEdges = np.linspace(-1,-0.5,21)
 conditioningQuantityUn = [np.vstack([antihaloRadiiUn[ns],\
     ahPropsUn[ns][11],ahPropsUn[ns][12]]).T \
     for ns in range(0,len(snapListUn))]
@@ -4721,9 +4722,9 @@ conditioningQuantityMCMCDouble = np.vstack([meanRadii,\
 #allPairsUncon = allPairsUnconNonOverlap
 #allVolumesUncon = allVolumesUnconNonOverlap
 #allSelectionsUncon = allSelectionsUnconNonOverlap
-allPairsUncon = allPairsUnconOverlapping
-allVolumesUncon = allVolumesUnconOverlapping
-allSelectionsUncon = allSelectionsUnconOverlapping
+allPairsUncon = regionDensityAndTripleConditionDict['pairs']
+allVolumesUncon = regionDensityAndTripleConditionDict['volumes']
+allSelectionsUncon = regionDensityAndTripleConditionDict['selections']
 
 # Central and average densities in similar regions:
 # For OLD conditioning:
