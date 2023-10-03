@@ -1171,7 +1171,7 @@ def getNumberOfConditions(conditionList):
 # in the MCMC catalogue.
 def selectConditionedRandomVoids(conditioningQuantityMCMC,\
         conditioningVariable,conditionBinEdges,voidRadii,\
-        seed=1000,replace=False,rMin = None,rMax=None):
+        seed=1000,replace=False,rMin = None,rMax=None,maxSampling=None):
     numCond = getNumberOfConditions(conditioningQuantityMCMC)
     if len(conditionBinEdges) != numCond:
         raise Exception("List of bins must match list of " + \
@@ -1198,7 +1198,10 @@ def selectConditionedRandomVoids(conditioningQuantityMCMC,\
     nzMCMC = np.where(samplingMCMCLin > 0)
     rat = np.zeros(samplingMCMCLin.shape,dtype=int)
     rat[nzMCMC] = samplingRandLin[nzMCMC]/samplingMCMCLin[nzMCMC]
-    minRatio = np.min(np.hstack((rat[rat > 0],np.array([1]))))
+    minRatio = np.max([np.min(np.hstack((rat[rat > 0],np.array([1])))),1])
+    # Impose an upper limit, to avoid taking forever...
+    if maxSampling is not None:
+        minRatio = np.min([minRatio,maxSampling])
     # Indices in each list of bins:
     inAllRanges = np.ones(len(conditioningVariable),dtype = bool)
     for n in range(0,numCond):
@@ -1242,7 +1245,7 @@ class profileStack:
             rEffBinEdges,treeList=None,seed=1000,start=0,end=-1,\
             conditioningQuantity=None,conditioningQuantityToMatch=None,\
             conditionBinEdges=None,combineRandomRegions=False,replace=False,\
-            rMin=None,rMax=None,computePairCounts = True):
+            rMin=None,rMax=None,computePairCounts = True,maxSampling=None):
         self.centreList = centreList
         self.snapList = snapList
         if treeList is None:
@@ -1262,6 +1265,7 @@ class profileStack:
         self.rMin = rMin
         self.rMax = rMax
         self.start=0
+        self.maxSampling = maxSampling
         if end == -1:
             self.end = len(snapList)
         else:
@@ -1302,6 +1306,7 @@ class profileStack:
                 centralAntihalos = tools.getAntiHalosInSphere(\
                     self.ahCentresList[ns],self.rSphere,origin=centre,\
                     boxsize=boxsize)[1]
+                numCentral = np.sum(centralAntihalos)
                 # Void radii:
                 centralRadii = self.antihaloRadiiList[ns][centralAntihalos]
                 # Void centres:
@@ -1312,6 +1317,9 @@ class profileStack:
                 if self.numCond == 1:
                     centralConditionVariable = np.array(\
                         self.conditioningQuantity[ns][centralAntihalos])
+                    centralConditionVariable = \
+                        centralConditionVariable.reshape(\
+                        (numCentral,self.numCond))
                 else:
                     centralConditionVariable = np.array(\
                         self.conditioningQuantity[ns][centralAntihalos,:])
@@ -1343,7 +1351,8 @@ class profileStack:
                 self.centralConditionVariableAll,\
                 self.conditionBinEdges,self.centralRadiiAll,\
                 rMin=self.rMin,rMax = self.rMax,\
-                seed=self.seed,replace=self.replace)
+                seed=self.seed,replace=self.replace,\
+                maxSampling = self.maxSampling)
             else:
                 self.selectArray = np.range(0,self.numVoidsTotal)
             nPairsListAll = []
@@ -1367,9 +1376,9 @@ class profileStack:
                     volumesList = np.outer(voidRadii**3,volumes)
                 self.allVolumes.append(volumesList)
                 self.allSelections.append(nsSelectArray)
-            self.allConditions.append(centralConditionVariableAll)
+            self.allConditions.append(self.centralConditionVariableAll)
         else:
-            allSelectedConditions = np.zeros((0,self.numCond))
+            self.allSelectedConditions = []
             lengthsArray = np.zeros(0,dtype=int)
             for ns in range(self.start,self.end):
                 snapLoaded = self.snapList[ns]
@@ -1402,10 +1411,10 @@ class profileStack:
                             centralConditionVariable,\
                             self.conditionBinEdges,centralRadii,\
                             rMin = self.rMin,rMax = self.rMax,
-                            seed=self.seed,replace=self.replace)
-                        allSelectedConditions = np.vstack((\
-                            allSelectedConditions,\
-                            centralConditionVariable[self.selectArray,:]))
+                            seed=self.seed,replace=self.replace,\
+                            maxSampling = self.maxSampling)
+                        self.allSelectedConditions.append(\
+                            centralConditionVariable[self.selectArray,:])
                     else:
                         condition = np.ones(centralRadii.shape,dtype=bool)
                         if self.rMin is not None:
@@ -1435,7 +1444,8 @@ class profileStack:
                     self.allSelections.append(centralIndices[self.selectArray])
                 print("Done sample " + str(ns + 1) + ".")
         return {'pairs':self.allPairs,'volumes':self.allVolumes,\
-            'selections':self.allSelections,'conditions':self.allConditions}
+            'selections':self.allSelections,'conditions':self.allConditions,\
+            'selectedConditions':self.allSelectedConditions}
 
 
 
