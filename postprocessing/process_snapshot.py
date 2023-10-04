@@ -31,11 +31,15 @@ if __name__ == "__main__":
     parser.add_argument('--output',nargs = 1,\
         help='Output filename (default: "<snap_filename>.AHproperties.p")',\
         type=str,default = None)
+    parser.add_argument('--rmax',default=3.0,type=float,\
+        help="Maximum effective radius out to which we compute profiles.")
+    parser.add_argument('--rmin',default=0.0,type=float,\
+        help="Minimum effective radius from which we compute profiles.")
     args = parser.parse_args()
     if args.output is None:
         args.output = args.forward + ".AHproperties.p"
     processSnapshot(args.forward,args.reverse,args.nBins,offset=args.offset,\
-        output = args.output)
+        output = args.output,rMax=args.rmax,rMin=args.rmin)
 
 
 

@@ -481,7 +481,8 @@ def getClusterCentres(approxCentre,snap=None,snapPath="snapshot_001",
 # Master function to process snapshots. Note, this assumes AHF or another 
 # halo finder has already been run, as well as ZOBOV, with the relevant 
 # volumes data file moved to be in the same place.
-def processSnapshot(standard,reverse,nBins,offset=4,output=None):
+def processSnapshot(standard,reverse,nBins,offset=4,output=None,rMax=3.0,\
+        rMin=0.0):
     if output is None:
         output = standard + ".AHproperties.p"
     # Load snapshots and halo catalogues.
@@ -525,7 +526,7 @@ def processSnapshot(standard,reverse,nBins,offset=4,output=None):
     antiHaloRadii = np.cbrt(3*antiHaloVolumes/(4*np.pi))
     # Perform pair counting (speeds up computing density profiles, 
     # but needs to be recomputed if we want different bins):
-    rBinStack = np.linspace(0,3.0,nBins)
+    rBinStack = np.linspace(rMin,rMax,nBins)
     tree = scipy.spatial.cKDTree(snapn['pos'],boxsize=boxsize)
     [pairCounts,volumesList] = stacking.getPairCounts(\
         antiHaloCentres,antiHaloRadii,snapn,rBinStack,\
