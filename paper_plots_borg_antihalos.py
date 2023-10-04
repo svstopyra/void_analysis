@@ -4454,11 +4454,15 @@ noConstraintsStack = profileStack(\
     conditionBinEdges=None,\
     combineRandomRegions=False,replace=False,\
     rMin = voidRadiusBinEdges[0],rMax = voidRadiusBinEdges[-1],\
-    computePairCounts=False)
+    computePairCounts=False,maxSampling = 1)
 #noConstraintsDict2 = noConstraintsStack.getRandomCataloguePairCounts()
 noConstraintsDict = tools.loadOrRecompute(\
     data_folder + "no_constraints_stack.p",\
     noConstraintsStack.getRandomCataloguePairCounts,_recomputeData=False)
+nsListNoConstraints = np.array([[k \
+    for centre in centresAllDensityNonOverlapping[k] ] \
+    for k in range(0,len(centresAllDensityNonOverlapping))]).flatten()
+
 
 # Reconstruct the pairs list:
 stackedPairs = np.vstack(noConstraintsDict['pairs'])
@@ -4483,7 +4487,7 @@ regionDensityStack = profileStack(\
     conditionBinEdges=None,\
     combineRandomRegions=False,replace=False,\
     rMin = voidRadiusBinEdges[0],rMax = voidRadiusBinEdges[-1],\
-    computePairCounts=False)
+    computePairCounts=False,maxSampling = 1)
 #regionDensityDict2 = regionDensityStack.getRandomCataloguePairCounts()
 regionDensityDict = tools.loadOrRecompute(\
     data_folder + "regionDensity_stack.p",\
@@ -4503,7 +4507,7 @@ regionDensityAndRadiusStack = profileStack(\
     conditionBinEdges=[voidRadiusBinEdges],\
     combineRandomRegions=False,replace=False,\
     rMin = voidRadiusBinEdges[0],rMax = voidRadiusBinEdges[-1],\
-    computePairCounts=False)
+    computePairCounts=False,maxSampling = 1)
 #regionDensityAndRadiusDict2 = \
 #    regionDensityAndRadiusStack.getRandomCataloguePairCounts()
 regionDensityAndRadiusDict = tools.loadOrRecompute(\
@@ -4527,12 +4531,58 @@ regionDensityAndTripleConditionStack = profileStack(\
     conditioningQuantityToMatch=conditioningQuantityMCMC,\
     conditionBinEdges=[voidRadiusBinEdges,conBinEdges,conBinEdges],\
     combineRandomRegions=False,replace=False,\
-    computePairCounts=False)
+    computePairCounts=False,maxSampling = 1)
 #regionDensityAndTripleConditionDict2 = \
 #    regionDensityAndTripleConditionStack.getRandomCataloguePairCounts()
 regionDensityAndTripleConditionDict = tools.loadOrRecompute(\
     data_folder + "regionDensityAndTripleCondition_stack.p",\
     regionDensityAndTripleConditionStack.getRandomCataloguePairCounts,\
+    _recomputeData=False)
+
+# Density, Radius, and Void Density constraints, with pooling:
+conBinEdges = np.linspace(-1,-0.5,21)
+conditioningQuantityUn = [np.vstack([antihaloRadiiUn[ns],\
+    ahPropsUn[ns][11],ahPropsUn[ns][12]]).T \
+    for ns in range(0,len(snapListUn))]
+conditioningQuantityMCMC = np.vstack([meanRadii,\
+    deltaCentralMean[filter300],deltaAverageMean[filter300]]).T
+
+regionDensityAndTripleConditionStackPooled = profileStack(\
+    centresUnderdenseNonOverlapping,\
+    snapListUn,ahPropsUnconstrained,rSphere,\
+    rBinStack,treeList=treeListUncon,seed=1000,start=0,end=-1,\
+    conditioningQuantity=conditioningQuantityUn,\
+    conditioningQuantityToMatch=conditioningQuantityMCMC,\
+    conditionBinEdges=[voidRadiusBinEdges,conBinEdges,conBinEdges],\
+    combineRandomRegions=True,replace=False,\
+    computePairCounts=True,maxSampling=10)
+#regionDensityAndTripleConditionDict2 = \
+#    regionDensityAndTripleConditionStack.getRandomCataloguePairCounts()
+regionDensityAndTripleConditionPooledDict = tools.loadOrRecompute(\
+    data_folder + "regionDensityAndTripleConditionPooled_stack.p",\
+    regionDensityAndTripleConditionStackPooled.getRandomCataloguePairCounts,\
+    _recomputeData=False)
+
+# Density and Radius constraints with pooling:
+conBinEdges = np.linspace(-1,-0.5,21)
+conditioningQuantityUn = [antihaloRadiiUn[ns].T\
+    for ns in range(0,len(snapListUn))]
+conditioningQuantityMCMC = meanRadii
+regionDensityAndRadiusStackPooled = profileStack(\
+    centresUnderdenseNonOverlapping,\
+    snapListUn,ahPropsUnconstrained,rSphere,\
+    rBinStack,treeList=treeListUncon,seed=1000,start=0,end=-1,\
+    conditioningQuantity=conditioningQuantityUn,\
+    conditioningQuantityToMatch=conditioningQuantityMCMC,\
+    conditionBinEdges=[voidRadiusBinEdges],\
+    combineRandomRegions=True,replace=False,\
+    rMin = voidRadiusBinEdges[0],rMax = voidRadiusBinEdges[-1],\
+    computePairCounts=True,maxSampling=10)
+#regionDensityAndRadiusDict2 = \
+#    regionDensityAndRadiusStack.getRandomCataloguePairCounts()
+regionDensityAndRadiusPooledDict = tools.loadOrRecompute(\
+    data_folder + "regionDensityAndRadiusPooled_stack.p",\
+    regionDensityAndRadiusStackPooled.getRandomCataloguePairCounts,\
     _recomputeData=False)
 
 
@@ -4599,7 +4649,11 @@ combineRandomRegions = True
 start = 0
 end = -1
 seed = 1000
-conditioningVariable = centralConditionVariableAll
+conditioningVariable = np.vstack([\
+    conditioningQuantityUn[ns][ind] \
+    for ns, ind in zip(nsListNoConstraints,noConstraintsDict['selections'])])
+allSelectedConditions = np.vstack(\
+    regionDensityAndTripleConditionDict['selectedConditions'])
 replace = False
 
 
@@ -4747,7 +4801,7 @@ conditioningQuantityMCMCDouble = np.vstack([meanRadii,\
 #allVolumesUncon = allVolumesUnconNonOverlap
 #allSelectionsUncon = allSelectionsUnconNonOverlap
 
-profileDictionary = noConstraintsDict2
+profileDictionary = noConstraintsDict
 profileDictionary = regionDensityDict
 profileDictionary = regionDensityAndRadiusDict
 profileDictionary = regionDensityAndTripleConditionDict
@@ -4879,6 +4933,86 @@ for lim in intervals:
 credibleIntervals = np.percentile(rhoRandomToUse[filterCores],\
     intervalLimits,axis=0)
 
+# Function to get credible intervals from a profile stack:
+
+def getProfileInterval(profileDictionary,intervals = [68,95],\
+        cumulative = False):
+    allPairsUncon = profileDictionary['pairs']
+    allVolumesUncon = profileDictionary['volumes']
+    allSelectionsUncon = profileDictionary['selections']
+    if cumulative:
+        rhoStackedUnAll = np.array([(np.sum(np.cumsum(allPairsUncon[k]),0)+1)/\
+            np.sum(np.cumsum(allVolumesUncon[k]),0) \
+            for k in range(0,len(allVolumesUncon))])
+    else:
+        rhoStackedUnAll = np.array([(np.sum(allPairsUncon[k],0)+1)/\
+            np.sum(allVolumesUncon[k],0) \
+            for k in range(0,len(allVolumesUncon))])
+    intervalLimits = []
+    for lim in intervals:
+        intervalLimits.append(50 - lim/2)
+        intervalLimits.append(50 + lim/2)
+    credibleIntervals = np.percentile(rhoStackedUnAll,\
+        intervalLimits,axis=0)
+    return credibleIntervals
+
+def plotConditionedProfile(rBinStackCentres,profileDictionary,nbar,\
+        intervals=[68,95],alphas = [0.75,0.5],ax = None,textwidth=7.1014,\
+        color='grey',xlim=[0,3],ylim=[0,1.2],cumulative=False,label=None):
+    credibleIntervals = getProfileInterval(profileDictionary,\
+        intervals = intervals,cumulative = cumulative)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(textwidth,0.5*textwidth))
+    for k in range(0,len(intervals)):
+        if type(color) == str:
+            shadeColor = color
+        elif type(color) == list:
+            shadeColor = color[k]
+        else:
+            raise Exception("Unknown colour")
+        if label is None:
+            labelText = 'Random catalogue (' + ("%.2g" % intervals[k]) + '%)'
+        else:
+            labelText = label
+        ax.fill_between(rBinStackCentres,credibleIntervals[2*k]/nbar,\
+            credibleIntervals[2*k+1]/nbar,alpha=alphas[k],color=shadeColor,\
+            label=labelText)
+
+def plotMCMCProfile(rBinStackCentres,rhoMCMCToUse,sigmaRhoMCMCToUse,nbar,\
+        ax = None,color=None,textwidth=7.1014):
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(textwidth,0.5*textwidth))
+    if color is None:
+        color = seabornColormap[0]
+    ax.fill_between(rBinStackCentres,(rhoMCMCToUse - sigmaRhoMCMCToUse)/nbar,\
+        (rhoMCMCToUse + sigmaRhoMCMCToUse)/nbar,alpha=0.5,color=color,\
+        label='MCMC catalogue')
+
+# Show all plots on one figure:
+colors = [seabornColormap[k] for k in range(1,5)]
+dictionaries = [noConstraintsDict,regionDensityDict,\
+    regionDensityAndRadiusDict,regionDensityAndTripleConditionDict]
+labels = ['No constraints','Region Density constraint',\
+    'Region Density + Void Radius',\
+    'Region Density + Void Radius + Void Density']
+fig, ax = plt.subplots(figsize=(textwidth,0.5*textwidth))
+for k in range(0,len(colors)):
+    plotConditionedProfile(rBinStackCentres,dictionaries[k],nbar,ax=ax,\
+        color=colors[k],intervals=[68],alphas=[0.75],label=labels[k])
+
+plotMCMCProfile(rBinStackCentres,rhoMCMCToUse,sigmaRhoMCMCToUse,nbar,ax = ax)
+ax.axvline(1.0,color='grey',linestyle=':')
+ax.axhline(1.0,color='grey',linestyle=':')
+ax.set_xlabel('$R/R_{\\mathrm{eff}}$',fontsize=8)
+ax.set_ylabel('$\\rho/\\bar{\\rho}$',fontsize=8)
+ax.legend(prop={"size":fontsize,"family":"serif"},frameon=False,\
+    loc="lower right")
+ax.set_xlim([0,3])
+ax.set_ylim([0,1.2])
+plt.tight_layout()
+plt.savefig(figuresFolder + "profile_constraint_progression.pdf")
+plt.show()
+
 
 # Plot comparison:
 fig, ax = plt.subplots(figsize=(textwidth,0.5*textwidth))
@@ -4900,17 +5034,8 @@ plt.show()
 
 # With shaded regions only:
 fig, ax = plt.subplots(figsize=(textwidth,0.5*textwidth))
-ax.fill_between(rBinStackCentres,credibleIntervals[0]/nbar,\
-    credibleIntervals[1]/nbar,alpha=0.75,color='grey',\
-    label='Random catalogue (68%)')
-ax.fill_between(rBinStackCentres,credibleIntervals[2]/nbar,\
-    credibleIntervals[3]/nbar,alpha=0.5,color='grey',\
-    label='Random catalogue (95%)')
-#ax.errorbar(rBinStackCentres,rhoStacked/nbar,yerr=sigmaRhoStacked/nbar,\
-#    color='k',linestyle='-',label='Constrained Catalogue')
-ax.fill_between(rBinStackCentres,(rhoMCMCToUse - sigmaRhoMCMCToUse)/nbar,\
-    (rhoMCMCToUse + sigmaRhoMCMCToUse)/nbar,alpha=0.5,color=seabornColormap[0],\
-    label='MCMC catalogue')
+plotConditionedProfile(rBinStackCentres,profileDictionary,nbar,ax=ax)
+plotMCMCProfile(rBinStackCentres,rhoMCMCToUse,sigmaRhoMCMCToUse,nbar,ax = ax)
 ax.axvline(1.0,color='grey',linestyle=':')
 ax.axhline(1.0,color='grey',linestyle=':')
 ax.fill_between(rBinStackCentres,1 + deltaListMeanNew - deltaListErrorNew,\
@@ -4918,7 +5043,8 @@ ax.fill_between(rBinStackCentres,1 + deltaListMeanNew - deltaListErrorNew,\
     color=seabornColormap[1],label='Local super-volume density')
 ax.set_xlabel('$R/R_{\\mathrm{eff}}$',fontsize=8)
 ax.set_ylabel('$\\rho/\\bar{\\rho}$',fontsize=8)
-ax.legend(prop={"size":fontsize,"family":"serif"},frameon=False)
+ax.legend(prop={"size":fontsize,"family":"serif"},frameon=False,\
+    loc="lower right")
 ax.set_xlim([0,3])
 ax.set_ylim([0,1.2])
 plt.tight_layout()
