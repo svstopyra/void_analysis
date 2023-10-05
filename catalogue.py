@@ -938,7 +938,7 @@ class combinedCatalogue:
         if self.meanRadii is None:
             [self.meanRadii,self.sigmaRadii] = self.getMeanProperty('radii')
         [inRadBins,noInRadBins] = \
-            plot_utilities.binValues(self.meanRadii,radBins)
+            plot_utilities.binValues(self.meanRadii,bins)
         percentilesComb = []
         percentilesCat = []
         for k in range(0,nBins):
