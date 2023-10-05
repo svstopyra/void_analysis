@@ -932,21 +932,25 @@ class combinedCatalogue:
     def getMeanCentres(self):
         return np.nanmean(self.getAllCentres(),0)
     # Generate percentile thresholds (mostly used by random catalogues):
-    def getThresholdsInBins(self,bins,percThresh,binVariable="radius"):
+    def getThresholdsInBins(self,binEdges,percThresh,binVariable="radius"):
         if self.meanMass is None:
             [self.meanMass,self.sigmaMass] = self.getMeanProperty('mass')
         if self.meanRadii is None:
             [self.meanRadii,self.sigmaRadii] = self.getMeanProperty('radii')
         [inRadBins,noInRadBins] = \
-            plot_utilities.binValues(self.meanRadii,bins)
+            plot_utilities.binValues(self.meanRadii,binEdges)
         percentilesComb = []
         percentilesCat = []
-        for k in range(0,nBins):
+        for k in range(0,len(binEdges)-1):
             if binVariable == "mass":
+                [inMassBins,noInMassBins] = \
+                    plot_utilities.binValues(self.meanMass,binEdges)
                 selection = inMassBins[k]
-                [selection,_] = plot_utilities.binValues(self.meanMass,bins)
+                [selection,_] = \
+                    plot_utilities.binValues(self.meanMass,binEdges)
             elif binVariable == "radius":
-                [selection,_] = plot_utilities.binValues(self.meanRadii,bins)
+                [selection,_] = \
+                    plot_utilities.binValues(self.meanRadii,binEdges)
             else:
                 raise Exception("Unrecognised 'binVariable' value ")
             if len(selection) > 0:
