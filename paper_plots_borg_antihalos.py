@@ -4488,7 +4488,9 @@ noConstraintsDict = tools.loadOrRecompute(\
 nsListNoConstraints = np.array([[k \
     for centre in centresAllDensityNonOverlapping[k] ] \
     for k in range(0,len(centresAllDensityNonOverlapping))]).flatten()
-
+nsListDensityConstraint = np.hstack([[k \
+    for centre in centresUnderdenseNonOverlapping[k] ] \
+    for k in range(0,len(centresUnderdenseNonOverlapping))])
 
 # Reconstruct the pairs list:
 stackedPairs = np.vstack(noConstraintsDict['pairs'])
@@ -4678,22 +4680,32 @@ seed = 1000
 conditioningVariable = np.vstack([\
     conditioningQuantityUn[ns][ind] \
     for ns, ind in zip(nsListNoConstraints,noConstraintsDict['selections'])])
+conditionedMasses = np.hstack([\
+    antihaloMassesUn[ns][ind] \
+    for ns, ind in zip(nsListNoConstraints,noConstraintsDict['selections'])])
 allSelectedConditions = np.vstack(\
     regionDensityAndTripleConditionDict['selectedConditions'])
+allSelectedMasses = np.hstack([antihaloMasses[ns][ind] \
+    for ns, ind in zip(nsListDensityConstraint,\
+    regionDensityAndTripleConditionDict['selections'])])
 replace = False
 
 
 [samplingMCMC,edges] = np.histogramdd(conditioningQuantityMCMC,\
     bins = conditionBinEdges)
+[samplingMCMCMasses,edges] = np.histogramdd(meanMasses,bins=[massBins])
 samplingMCMCLin = np.array(samplingMCMC.flatten(),dtype=int)
 [samplingRand,edges] = np.histogramdd(conditioningVariable,\
     bins = conditionBinEdges)
+[samplingRandMasses,edges] = np.histogramdd(conditionedMasses,bins=[massBins])
 samplingRandLin = np.array(samplingRand.flatten(),dtype=int)
 
 #[samplingRandSelected,edges] = np.histogramdd(\
 #    conditioningVariable[selectArray],bins = conditionBinEdges)
 [samplingRandSelected,edges] = np.histogramdd(\
     allSelectedConditions,bins = conditionBinEdges)
+[samplingRandSelectedMasses,edges] = np.histogramdd(\
+    allSelectedMasses,bins=[massBins])
 
 nzMCMC = np.where(samplingMCMCLin > 0)
 rat = np.zeros(samplingMCMCLin.shape,dtype=int)
@@ -4703,14 +4715,17 @@ minRatio = np.min(rat[rat > 0])
 samplingRand0 = np.sum(samplingRand,(1,2))
 samplingRand1 = np.sum(samplingRand,(0,2))
 samplingRand2 = np.sum(samplingRand,(0,1))
+samplingRand3 = samplingRandMasses
 
 samplingMCMC0 = np.sum(samplingMCMC,(1,2))
 samplingMCMC1 = np.sum(samplingMCMC,(0,2))
 samplingMCMC2 = np.sum(samplingMCMC,(0,1))
+samplingMCMC3 = samplingMCMCMasses
 
 samplingRandSelected0 = np.sum(samplingRandSelected,(1,2))
 samplingRandSelected1 = np.sum(samplingRandSelected,(0,2))
 samplingRandSelected2 = np.sum(samplingRandSelected,(0,1))
+samplingRandSelected3 = samplingRandSelectedMasses
 
 def getBarWidths(bins):
     return (bins[1:] - bins[0:-1])
@@ -4732,31 +4747,40 @@ def barAsHist(counts,bins,ax=None,density=True,**kwargs):
 
 # All distributions:
 nRows = 2
-nCols = 3
+nCols = 4
 
-randCounts = [[samplingRand0,samplingRand1,samplingRand2],\
-    [samplingRandSelected0,samplingRandSelected1,samplingRandSelected2]]
+randCounts = [[samplingRand0,samplingRand1,samplingRand2,samplingRand3],\
+    [samplingRandSelected0,samplingRandSelected1,samplingRandSelected2,\
+    samplingRandSelected3]]
 
-mcmcCounts = [[samplingMCMC0,samplingMCMC1,samplingMCMC2],\
-    [samplingMCMC0,samplingMCMC1,samplingMCMC2]]
+mcmcCounts = [[samplingMCMC0,samplingMCMC1,samplingMCMC2,samplingMCMC3],\
+    [samplingMCMC0,samplingMCMC1,samplingMCMC2,samplingMCMC3]]
+
+histBins = conditionBinEdges + [massBins]
 
 xlabels = ['$R [\\mathrm{Mpc}h^{-1}]$','$\\delta_{\\mathrm{central}}$',\
-    '$\\bar{\\delta}$']
-ylims = [[0,0.3],[0,20],[0,20]]
+    '$\\bar{\\delta}$','Mass [$M_{\\odot}h^{-1}$]']
+ylims = [[0,0.3],[0,20],[0,20],[0,7e-15]]
 titlesList = [['Void radii, \nall samples','Central Density, \nall samples',\
-    'Average Density, \nall samples'],\
+    'Average Density, \nall samples','Void mass, \nall samples'],\
     ['Void radii, \nconditioned samples',\
     'Central Density, \nconditioned samples',\
-    'Average Density, \nconditioned samples']]
+    'Average Density, \nconditioned samples',\
+    'Void mass, \nconditioned samples']]
+
+
 
 plt.clf()
 fig, ax = plt.subplots(nRows,nCols,figsize=(textwidth,0.7*textwidth))
 for i in range(0,nRows):
     for j in range(0,nCols):
-        barAsHist(randCounts[i][j],conditionBinEdges[j],ax=ax[i,j],\
+        barAsHist(randCounts[i][j],histBins[j],ax=ax[i,j],\
             alpha=0.5,color=seabornColormap[0],label="Randoms")
-        barAsHist(mcmcCounts[i][j],conditionBinEdges[j],ax=ax[i,j],\
+        barAsHist(mcmcCounts[i][j],histBins[j],ax=ax[i,j],\
             alpha=0.5,color=seabornColormap[1],label="MCMC")
+        if j == 3:
+            ax[i,j].set_xscale('log')
+            ax[i,j].set_xlim([1e13,1e15])
         plot.formatPlotGrid(ax,i,j,None,None,None,None,nRows,ylims[j],\
             fontsize=fontsize)
         ax[i,j].set_xlabel(xlabels[j],fontsize=fontsize,fontfamily = "serif")
@@ -4784,6 +4808,7 @@ plt.ylabel('Probablity Density')
 plt.legend()
 plt.savefig(figuresFolder + "counts_distribution.pdf")
 plt.show()
+
 
 
 # Only applying two conditions:
@@ -4960,20 +4985,30 @@ credibleIntervals = np.percentile(rhoRandomToUse[filterCores],\
     intervalLimits,axis=0)
 
 # Function to get credible intervals from a profile stack:
+def getProfiles(allPairs,allVolumes,cumulative=False):
+    if cumulative:
+        rhoStacked = np.array([(np.sum(np.cumsum(allPairs[k]),0)+1)/\
+            np.sum(np.cumsum(allVolumes[k]),0) \
+            for k in range(0,len(allVolumes))])
+    else:
+        rhoStacked = np.array([(np.sum(allPairs[k],0)+1)/\
+            np.sum(allVolumes[k],0) \
+            for k in range(0,len(allVolumes))])
+    return rhoStacked
+
+def getAllVoidProfiles(profileDictionary):
+    allProfiles = []
+    for pairs, volumes in zip(profileDictionary['pairs'],\
+            profileDictionary['volumes']):
+        allProfiles.append((pairs + 1)/volumes)
+    return np.vstack(allProfiles)
 
 def getProfileInterval(profileDictionary,intervals = [68,95],\
         cumulative = False):
-    allPairsUncon = profileDictionary['pairs']
-    allVolumesUncon = profileDictionary['volumes']
-    allSelectionsUncon = profileDictionary['selections']
-    if cumulative:
-        rhoStackedUnAll = np.array([(np.sum(np.cumsum(allPairsUncon[k]),0)+1)/\
-            np.sum(np.cumsum(allVolumesUncon[k]),0) \
-            for k in range(0,len(allVolumesUncon))])
-    else:
-        rhoStackedUnAll = np.array([(np.sum(allPairsUncon[k],0)+1)/\
-            np.sum(allVolumesUncon[k],0) \
-            for k in range(0,len(allVolumesUncon))])
+    allPairs = profileDictionary['pairs']
+    allVolumes = profileDictionary['volumes']
+    #allSelectionsUncon = profileDictionary['selections']
+    rhoStackedUnAll = getProfiles(allPairs,allVolumes,cumulative=cumulative)
     intervalLimits = []
     for lim in intervals:
         intervalLimits.append(50 - lim/2)
@@ -5094,6 +5129,76 @@ for i in imgs:
 frames[0].save(figuresFolder + 'profiles_constraint_progression_animation.gif',\
     format='GIF', append_images=frames[1:],save_all=True,duration=1000,\
     loop=0)
+
+
+# Plot of profile distributions:
+
+rhoStacks = [getProfiles(profileDictionary['pairs'],\
+    profileDictionary['volumes']) for profileDictionary in dictionaries]
+rhoVoidsAll = [getAllVoidProfiles(profileDictionary) \
+    for profileDictionary in dictionaries]
+rhoIntervals = [getProfileInterval(profileDictionary) \
+    for profileDictionary in dictionaries]
+
+# plot the distributions at Reff = 1.5:
+def plotProfileDistribution(rhoVoids,nBin,rhoBins,ax=None,textwidth=7.1014,\
+        color=None,density=True,alpha=0.5,label = "profile distribution",\
+        savename = None):
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(0.5*textwidth,0.5*textwidth))
+    if color is None:
+        color = seabornColormap[0]
+    ax.hist(rhoVoids[:,nBin],bins=rhoBins,color=color,density=density,\
+        alpha=alpha,label=label)
+    ax.set_xlabel('$\\rho/\\bar{\\rho}$')
+    if density:
+        ax.set_ylabel('Probability density')
+    else:
+        ax.set_ylabel('Number of profiles')
+    if savename is not None:
+        plt.savefig(savename)
+
+nBin = 16
+fig, ax = plt.subplots(figsize=(0.5*textwidth,0.5*textwidth))
+plotProfileDistribution(rhoVoidsAll[1]/nbar,nBin,np.linspace(0,2,51),\
+    label = "Region Density \nConstraint Only",color=seabornColormap[0],ax=ax)
+plotProfileDistribution(rhoVoidsAll[3]/nbar,nBin,np.linspace(0,2,51),\
+    label = "Region Density + \nVoid Radius + Void Density",\
+    color=seabornColormap[1],ax=ax)
+plt.legend(prop={"size":fontsize,"family":"serif"},frameon=False)
+plt.title("Profile distribution at $R_{\\mathrm{eff}} = 1.5$")
+plt.tight_layout()
+plt.savefig(figuresFolder + "profile_distribution.pdf")
+plt.show()
+
+
+nBin = 16
+fig, ax = plt.subplots(figsize=(0.5*textwidth,0.5*textwidth))
+plotProfileDistribution(rhoStacks[1]/nbar,nBin,np.linspace(0.5,1,11),\
+    label = "Region Density \nConstraint Only",color=seabornColormap[0],ax=ax)
+plotProfileDistribution(rhoStacks[3]/nbar,nBin,np.linspace(0.5,1,11),\
+    label = "Region Density + \nVoid Radius + Void Density",\
+    color=seabornColormap[1],ax=ax)
+for k, style in zip(range(0,4),['--','--',':',':']):
+    ax.axvline(rhoIntervals[1][k][nBin]/nbar,linestyle=style,\
+        color=seabornColormap[0])
+    ax.axvline(rhoIntervals[3][k][nBin]/nbar,linestyle=style,\
+        color=seabornColormap[1])
+
+handles, lab = ax.get_legend_handles_labels()
+
+line68 = mlines.Line2D([],[],linestyle='--',color='k',\
+    label='68% interval')
+line95 = mlines.Line2D([],[],linestyle=':',color='k',\
+    label='95% interval')
+handles = handles + [line68,line95]
+
+plt.legend(handles=handles,prop={"size":fontsize,"family":"serif"},\
+    frameon=False)
+plt.title("Mean profile distribution at $R_{\\mathrm{eff}} = 1.5$")
+plt.tight_layout()
+plt.savefig(figuresFolder + "mean_profile_distribution.pdf")
+plt.show()
 
 
 
