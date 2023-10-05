@@ -4988,6 +4988,41 @@ def plotMCMCProfile(rBinStackCentres,rhoMCMCToUse,sigmaRhoMCMCToUse,nbar,\
         (rhoMCMCToUse + sigmaRhoMCMCToUse)/nbar,alpha=0.5,color=color,\
         label='MCMC catalogue')
 
+deltaRange = np.array([1 + deltaListMeanNew - deltaListErrorNew,\
+    1 + deltaListMeanNew + deltaListErrorNew])
+
+def plotStackedProfileVsRandoms(rBinStackCentres,profileDictionary,nbar,\
+        rhoMCMCToUse,sigmaRhoMCMCToUse,deltaRange=None,\
+        textwidth=7.1014,fontsize = 8,legloc="lower right",\
+        deltaLabel = "Local super-volume density",\
+        xlabel='$R/R_{\\mathrm{eff}}$',ylabel='$\\rho/\\bar{\\rho}$',\
+        xlim=[0,3],ylim=[0,1.2],savename = None,title=None):
+    fig, ax = plt.subplots(figsize=(textwidth,0.5*textwidth))
+    plotConditionedProfile(rBinStackCentres,profileDictionary,nbar,ax=ax)
+    plotMCMCProfile(rBinStackCentres,rhoMCMCToUse,sigmaRhoMCMCToUse,nbar,ax=ax)
+    ax.axvline(1.0,color='grey',linestyle=':')
+    ax.axhline(1.0,color='grey',linestyle=':')
+    if deltaRange is not None:
+        ax.fill_between(rBinStackCentres,deltaRange[0],deltaRange[1],alpha=0.5,\
+            color=seabornColormap[1],label='Local super-volume density')
+    ax.set_xlabel(xlabel,fontsize=fontsize)
+    ax.set_ylabel(ylabel,fontsize=fontsize)
+    ax.legend(prop={"size":fontsize,"family":"serif"},frameon=False,\
+        loc=legloc)
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    if title is not None:
+        ax.set_title(title,fontsize=fontsize)
+    plt.tight_layout()
+    if savename is not None:
+        plt.savefig(savename)
+    plt.show()
+
+
+
+
+
+
 # Show all plots on one figure:
 colors = [seabornColormap[k] for k in range(1,5)]
 dictionaries = [noConstraintsDict,regionDensityDict,\
@@ -5012,6 +5047,28 @@ ax.set_ylim([0,1.2])
 plt.tight_layout()
 plt.savefig(figuresFolder + "profile_constraint_progression.pdf")
 plt.show()
+
+# As a gif:
+from PIL import Image
+frames = []
+filenames = ["profiles_no_constraints.png","profiles_regionDensity.png",\
+    "profiles_regionDensity_and_voidRadius.png",\
+    "profiles_regionDensity_voidRadius_and_voidDensity.png"]
+for profileDictionary, savename, label in zip(dictionaries,filenames,labels):
+    plotStackedProfileVsRandoms(rBinStackCentres,profileDictionary,nbar,\
+        rhoMCMCToUse,sigmaRhoMCMCToUse,deltaRange=deltaRange,\
+        savename = figuresFolder + savename,title=label)
+
+imgs = [figuresFolder + savename for savename in filenames]
+for i in imgs:
+    new_frame = Image.open(i)
+    frames.append(new_frame)
+
+# Save into a GIF file that loops forever
+frames[0].save(figuresFolder + 'profiles_constraint_progression_animation.gif',\
+    format='GIF', append_images=frames[1:],save_all=True,duration=1000,\
+    loop=0)
+
 
 
 # Plot comparison:

@@ -1245,7 +1245,8 @@ class profileStack:
             rEffBinEdges,treeList=None,seed=1000,start=0,end=-1,\
             conditioningQuantity=None,conditioningQuantityToMatch=None,\
             conditionBinEdges=None,combineRandomRegions=False,replace=False,\
-            rMin=None,rMax=None,computePairCounts = True,maxSampling=None):
+            rMin=None,rMax=None,computePairCounts = True,maxSampling=None,\
+            pairCounts=None):
         self.centreList = centreList
         self.snapList = snapList
         if treeList is None:
@@ -1276,6 +1277,7 @@ class profileStack:
         self.combineRandomRegions = combineRandomRegions
         self.replace = replace
         self.computePairCounts = computePairCounts
+        self.pairCounts = pairCounts
         # Verify number of conditions matches the bins specified:
         self.numCond = getNumberOfConditions(self.conditioningQuantityToMatch)
         if self.conditionBinEdges is not None:
@@ -1334,6 +1336,22 @@ class profileStack:
                 self.sampleIndices = np.hstack((self.sampleIndices,\
                     ns*np.ones(centralRadii.shape,dtype=int)))
                 self.voidIndices = np.hstack((self.voidIndices,centralIndices))
+    def getVolumesOfRadialBins(self,centralRadii,selectArray):
+        volumes = 4*np.pi*(self.rEffBinEdges[1:]**3 - \
+            self.rEffBinEdges[0:-1]**3)/3
+        voidRadii = centralRadii[selectArray]
+        volumesList = np.outer(voidRadii**3,volumes)
+        return volumesList
+    def restoreFromDictionary(self,dictionary):
+        self.allPairs = dictionary['pairs']
+        self.allVolumes = dictionary['volumes']
+        self.allSelections = dictionary['selections']
+        self.allConditions = dictionary['conditions']
+        self.allSelectedConditions = dictionary['selectedConditions']
+        if self.combineRandomRegions and \
+                (self.conditioningQuantityToMatch is not None):
+            self.getAllConditionVariables()
+            self.numVoidsTotal = len(self.centralRadiiAll)
     # Sampling a set of random catalogues while matching to an MCMC catalogue:
     def getRandomCataloguePairCounts(self):
         # Get pair counts in similar-density regions:
@@ -1346,7 +1364,7 @@ class profileStack:
                 self.getAllConditionVariables()
             self.numVoidsTotal = len(self.centralRadiiAll)
             if self.conditioningQuantityToMatch is not None:
-                self.selectArray = selectConditionedRandomVoids(\
+                selectArray = selectConditionedRandomVoids(\
                 self.conditioningQuantityToMatch,\
                 self.centralConditionVariableAll,\
                 self.conditionBinEdges,self.centralRadiiAll,\
@@ -1354,14 +1372,14 @@ class profileStack:
                 seed=self.seed,replace=self.replace,\
                 maxSampling = self.maxSampling)
             else:
-                self.selectArray = np.range(0,self.numVoidsTotal)
+                selectArray = np.range(0,self.numVoidsTotal)
             nPairsListAll = []
             volumesListAll = []
             for ns in range(self.start,self.end):
                 snapLoaded = self.snapList[ns]
                 tree = self.treeList[ns]
-                nsSelectArray = self.selectArray[\
-                    self.sampleIndices[self.selectArray] == ns]
+                nsSelectArray = selectArray[\
+                    self.sampleIndices[selectArray] == ns]
                 if self.computePairCounts:
                     [nPairsList,volumesList] = stacking.getPairCounts(\
                         self.centralCentresAll[nsSelectArray],\
@@ -1406,7 +1424,7 @@ class profileStack:
                                 self.conditioningQuantity[ns][\
                                 centralAntihalos,:]
                         self.allConditions.append(centralConditionVariable)
-                        self.selectArray = selectConditionedRandomVoids(\
+                        selectArray = selectConditionedRandomVoids(\
                             self.conditioningQuantityToMatch,\
                             centralConditionVariable,\
                             self.conditionBinEdges,centralRadii,\
@@ -1414,34 +1432,42 @@ class profileStack:
                             seed=self.seed,replace=self.replace,\
                             maxSampling = self.maxSampling)
                         self.allSelectedConditions.append(\
-                            centralConditionVariable[self.selectArray,:])
+                            centralConditionVariable[selectArray,:])
                     else:
                         condition = np.ones(centralRadii.shape,dtype=bool)
                         if self.rMin is not None:
                             condition = condition & (centralRadii > self.rMin)
                         if self.rMax is not None:
                             condition = condition & (centralRadii < self.rMax)
-                        self.selectArray = np.where(condition)[0]
+                        selectArray = np.where(condition)[0]
                     # Now get pair counts around these voids:
                     lengthsArray = np.hstack((lengthsArray,\
-                        np.array([len(self.selectArray)])))
+                        np.array([len(selectArray)])))
                     if self.computePairCounts:
-                        [nPairsList,volumesList] = stacking.getPairCounts(\
-                            centralCentres[self.selectArray],\
-                            centralRadii[self.selectArray],snapLoaded,\
-                            self.rEffBinEdges,tree=tree,method='poisson',\
-                            vorVolumes=None)
+                        if self.pairCounts is None:
+                            # Regenerate pair counts from scratch:
+                            [nPairsList,volumesList] = stacking.getPairCounts(\
+                                centralCentres[selectArray],\
+                                centralRadii[selectArray],snapLoaded,\
+                                self.rEffBinEdges,tree=tree,method='poisson',\
+                                vorVolumes=None)
+                        else:
+                            # Use a pre-computed list:
+                            nPairsList = self.pairCounts[ns][\
+                                centralIndices[selectArray],:]
+                            volumesList = \
+                                self.getVolumesOfRadialBins(centralRadii,\
+                                    selectArray)
                     else:
-                        volumes = 4*np.pi*(self.rEffBinEdges[1:]**3 - \
-                            self.rEffBinEdges[0:-1]**3)/3
-                        voidRadii = centralRadii[self.selectArray]
-                        volumesList = np.outer(voidRadii**3,volumes)
+                        volumesList = \
+                            self.getVolumesOfRadialBins(centralRadii,\
+                                    selectArray)
                     print("Done centre " + str(count+1) + " of " + \
                         str(len(self.centreList[ns])))
                     if self.computePairCounts:
                         self.allPairs.append(nPairsList)
                     self.allVolumes.append(volumesList)
-                    self.allSelections.append(centralIndices[self.selectArray])
+                    self.allSelections.append(centralIndices[selectArray])
                 print("Done sample " + str(ns + 1) + ".")
         return {'pairs':self.allPairs,'volumes':self.allVolumes,\
             'selections':self.allSelections,'conditions':self.allConditions,\
