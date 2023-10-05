@@ -2,7 +2,7 @@
 import pynbody
 import numpy as np
 import scipy
-from void_analysis import tools, snapedit
+from void_analysis import tools, snapedit, plot_utilities
 
 class combinedCatalogue:
     # Class to store and compute a combined catalogue
@@ -937,15 +937,16 @@ class combinedCatalogue:
             [self.meanMass,self.sigmaMass] = self.getMeanProperty('mass')
         if self.meanRadii is None:
             [self.meanRadii,self.sigmaRadii] = self.getMeanProperty('radii')
-        [inRadBins,noInRadBins] = plot.binValues(self.meanRadii,radBins)
+        [inRadBins,noInRadBins] = \
+            plot_utilities.binValues(self.meanRadii,radBins)
         percentilesComb = []
         percentilesCat = []
         for k in range(0,nBins):
             if binVariable == "mass":
                 selection = inMassBins[k]
-                [selection,_] = plot.binValues(self.meanMass,bins)
+                [selection,_] = plot_utilities.binValues(self.meanMass,bins)
             elif binVariable == "radius":
-                [selection,_] = plot.binValues(self.meanRadii,bins)
+                [selection,_] = plot_utilities.binValues(self.meanRadii,bins)
             else:
                 raise Exception("Unrecognised 'binVariable' value ")
             if len(selection) > 0:
