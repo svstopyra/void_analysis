@@ -932,7 +932,7 @@ class combinedCatalogue:
     def getMeanCentres(self):
         return np.nanmean(self.getAllCentres(),0)
     # Generate percentile thresholds (mostly used by random catalogues):
-    def getThresholdsInBins(bins,percThresh,binVariable="radius"):
+    def getThresholdsInBins(self,bins,percThresh,binVariable="radius"):
         if self.meanMass is None:
             [self.meanMass,self.sigmaMass] = self.getMeanProperty('mass')
         if self.meanRadii is None:

@@ -3995,6 +3995,32 @@ snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
 snapNameList = [samplesFolder + "sample" + str(snapNum) + "/" \
         + "gadget_full_forward_512/snapshot_001" for snapNum in snapNumList]
 
+
+# Load the catalogues:
+
+cat300 = tools.loadPickle(data_folder + "cat300.p")
+cat300Rand = tools.loadPickle(data_folder + "cat300Rand.p")
+radiiListShort = cat300.radiusListShort
+massListShort = cat300.massListShort
+finalCentres300List = cat300.getAllCentres()
+meanCentre300 = cat300.getMeanCentres()
+#distArr = np.arange(0,3,0.1)
+nBinEdges = 8
+rLower = 10
+rUpper = 20
+radBins = np.linspace(rLower,rUpper,nBinEdges)
+# Filter:
+
+radiiList300 = cat300.getAllProperties('radii')
+massList300 = cat300.getAllProperties('mass')
+[radiiMean300, radiiSigma300]  = cat300.getMeanProperty('radii')
+[massMean300, massSigma300]  = cat300.getMeanProperty('mass')
+distances300 = np.sqrt(np.sum(meanCentre300**2,1))
+percentilesCat300 = cat300Rand.getThresholdsInBins(radBins,99)
+thresholds300 = cat300.getAllThresholds(percentilesCat300,radBins)
+filter300 = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
+    (distances300 < 135) & (cat300.finalCatFrac > thresholds300)
+
 # These aren't going to be correct though, relative to the simulations.
 # Need to re-do this to get the correct centres.
 meanCentres = catData['centres'][combinedFilter135]
@@ -6783,7 +6809,10 @@ snapNameList = [samplesFolder + "sample" + str(k) + "/" + snapnameNew \
     for k in snapNumList]
 snapNameListRev = [samplesFolder + "sample" + str(k) + "/" + snapnameNewRev \
     for k in snapNumList]
-cat300 = catalogue.combinedCatalogue(snapNameList,snapNameListRev,\
+
+recomputeCatalogues = False
+cat300 = tools.loadOrRecompute(data_folder + "cat300.p",\
+    catalogue.combinedCatalogue,snapNameList,snapNameListRev,\
     muOpt,rSearchOpt,rSphere2,\
     ahProps=ahProps,hrList=hrList,max_index=None,\
     twoWayOnly=True,blockDuplicates=True,\
@@ -6791,8 +6820,9 @@ cat300 = catalogue.combinedCatalogue(snapNameList,snapNameListRev,\
     NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
     additionalFilters = snrFilter,verbose=False,\
     refineCentres=refineCentres,sortBy=sortBy,\
-    enforceExclusive=enforceExclusive)
-finalCat300 = cat300.constructAntihaloCatalogue()
+    enforceExclusive=enforceExclusive,_recomputeData = recomputeCatalogues)
+if recomputeCatalogues:
+    finalCat300 = cat300.constructAntihaloCatalogue()
 
 
 [centresListShort,centralAntihalos,sortedList,ahCounts,max_index] = \
@@ -6802,7 +6832,9 @@ finalCat300 = cat300.constructAntihaloCatalogue()
 snapNameListRand = [snap.filename for snap in snapListUn]
 snapNameListRandRev = [snap.filename for snap in snapListRevUn]
 
-cat300Rand = catalogue.combinedCatalogue(snapNameListRand,snapNameListRandRev,\
+
+cat300Rand = tools.loadOrRecompute(data_folder + "cat300Rand.p",\
+    catalogue.combinedCatalogue,snapNameListRand,snapNameListRandRev,\
     muOpt,rSearchOpt,rSphere2,\
     ahProps=ahPropsUn,hrList=hrListUn,max_index=None,\
     twoWayOnly=True,blockDuplicates=True,\
@@ -6810,8 +6842,11 @@ cat300Rand = catalogue.combinedCatalogue(snapNameListRand,snapNameListRandRev,\
     NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
     additionalFilters = None,verbose=False,\
     refineCentres=refineCentres,sortBy=sortBy,\
-    enforceExclusive=enforceExclusive)
-finalCat300Rand = cat300Rand.constructAntihaloCatalogue()
+    enforceExclusive=enforceExclusive,_recomputeData = recomputeCatalogues)
+if recomputeCatalogues:
+    finalCat300Rand = cat300Rand.constructAntihaloCatalogue()
+
+
 
 ahNumbers = cat300.ahNumbers
 
