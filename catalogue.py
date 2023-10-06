@@ -1312,7 +1312,7 @@ class profileStack:
                 # Get all voids within this region:
                 centralAntihalos = tools.getAntiHalosInSphere(\
                     self.ahCentresList[ns],self.rSphere,origin=centre,\
-                    boxsize=boxsize)[1]
+                    boxsize=self.boxsize)[1]
                 numCentral = np.sum(centralAntihalos)
                 # Void radii:
                 centralRadii = self.antihaloRadiiList[ns][centralAntihalos]
