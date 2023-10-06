@@ -941,23 +941,23 @@ class combinedCatalogue:
             plot_utilities.binValues(self.meanRadii,binEdges)
         percentilesComb = []
         percentilesCat = []
+        if binVariable == "mass":
+            [inMassBins,noInMassBins] = \
+                plot_utilities.binValues(self.meanMass,binEdges)
+            selection = inMassBins[k]
+            [selection,_] = \
+                plot_utilities.binValues(self.meanMass,binEdges)
+        elif binVariable == "radius":
+            [selection,_] = \
+                plot_utilities.binValues(self.meanRadii,binEdges)
+        else:
+            raise Exception("Unrecognised 'binVariable' value ")
         for k in range(0,len(binEdges)-1):
-            if binVariable == "mass":
-                [inMassBins,noInMassBins] = \
-                    plot_utilities.binValues(self.meanMass,binEdges)
-                selection = inMassBins[k]
-                [selection,_] = \
-                    plot_utilities.binValues(self.meanMass,binEdges)
-            elif binVariable == "radius":
-                [selection,_] = \
-                    plot_utilities.binValues(self.meanRadii,binEdges)
-            else:
-                raise Exception("Unrecognised 'binVariable' value ")
-            if len(selection) > 0:
+            if len(selection[k]) > 0:
                 percentilesComb.append(np.percentile(\
-                    self.finalCombinatoricFrac[selection],percThresh))
+                    self.finalCombinatoricFrac[selection[k]],percThresh))
                 percentilesCat.append(np.percentile(\
-                    self.finalCatFrac[selection],percThresh))
+                    self.finalCatFrac[selection[k]],percThresh))
             else:
                 percentilesComb.append(0.0)
                 percentilesCat.append(0.0)
