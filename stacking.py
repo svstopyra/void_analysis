@@ -754,7 +754,7 @@ def get_all_pair_counts_MCMC(mean_centres_gadget_coord,mean_radii,r_bin_stack,\
 # Get pair counts from the MCMC samples, using the MCMC sample centres for 
 # all pair counts:
 def get_all_pair_counts_MCMC_samples(all_centres_300_gadget,all_radii_300,
-                                     r_bin_stack_centres,snap_list,tree_list
+                                     r_bin_stack_centres,snap_list,tree_list,
                                      r_bin_stack):
     all_pairs_sample = np.zeros((len(snap_list),len(all_radii_300),\
                                len(r_bin_stack_centres)))
