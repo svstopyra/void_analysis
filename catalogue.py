@@ -1364,6 +1364,7 @@ class profileStack:
         self.allVolumes = []
         self.allSelections = []
         self.allConditions = []
+        self.allSelectedConditions = []
         if self.combineRandomRegions:
             if self.conditioningQuantityToMatch is not None:
                 self.getAllConditionVariables()
@@ -1401,7 +1402,6 @@ class profileStack:
                 self.allSelections.append(nsSelectArray)
             self.allConditions.append(self.centralConditionVariableAll)
         else:
-            self.allSelectedConditions = []
             lengthsArray = np.zeros(0,dtype=int)
             for ns in range(self.start,self.end):
                 snapLoaded = self.snapList[ns]
