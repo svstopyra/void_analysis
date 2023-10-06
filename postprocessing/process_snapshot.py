@@ -24,7 +24,7 @@ if __name__ == "__main__":
     parser.add_argument('reverse',\
         help = "Name of the reverse snapshot to process.")
     parser.add_argument('--nBins',\
-        nargs = 1,help='Number of bins to use',type=int,default=31)
+        help='Number of bins to use',type=int,default=31)
     parser.add_argument('--offset',\
         nargs = 1,help='Skip this number of bytes in the volumes file',\
         type=int,default=4)
