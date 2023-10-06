@@ -2,7 +2,7 @@
 import pynbody
 import numpy as np
 import scipy
-from void_analysis import tools, snapedit, plot_utilities
+from void_analysis import tools, snapedit, plot_utilities, stacking
 
 class combinedCatalogue:
     # Class to store and compute a combined catalogue

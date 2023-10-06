@@ -4018,7 +4018,10 @@ antihaloCentresUn = [tools.remapAntiHaloCentre(props[5],boxsize) \
 antihaloMassesUn = [props[3] for props in ahPropsUn]
 antihaloRadiiUn = [props[7] for props in ahPropsUn]
 
-
+antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
+            for props in ahProps]
+antihaloMasses = [props[3] for props in ahProps]
+antihaloRadii = [props[7] for props in ahProps]
 
 # Load the catalogues:
 
@@ -4289,19 +4292,8 @@ deltaToUse = [randOverDen[ns][comp] \
     for ns, comp in zip(range(0,len(snapList)),comparableDensityMAP)]
 
 # Central and average densities:
-deltaCentral300 = [props[11] for props in ahProps]
-deltaAverage300 = [props[12] for props in ahProps]
-shortedendDeltaCentral = cat300.getShortenedQuantity(deltaCentral300,\
-    cat300.centralAntihalos)
-shortedendDeltaAverage = cat300.getShortenedQuantity(deltaAverage300,\
-    cat300.centralAntihalos)
-deltaCentralList = getPropertyFromCat(cat300.finalCat,shortedendDeltaCentral)
-deltaAverageList = getPropertyFromCat(cat300.finalCat,shortedendDeltaAverage)
-[deltaCentralMean,deltaCentralSigma] = getMeanProperty(deltaCentralList,\
-    lowerLimit=-1)
-[deltaAverageMean,deltaAverageSigma] = getMeanProperty(deltaAverageList,\
-    lowerLimit=-1)
-
+[deltaCentralMean,deltaCentralSigma] = cat300.getMeanProperty('deltaCentral')
+[deltaAverageMean,deltaAverageSigma] = cat300.getMeanProperty('deltaAverage')
 
 
 
@@ -4456,13 +4448,13 @@ regionDensityAndTripleConditionStack = profileStack(\
     conditioningQuantityToMatch=conditioningQuantityMCMC,\
     conditionBinEdges=[voidRadiusBinEdges,conBinEdges,conBinEdges],\
     combineRandomRegions=False,replace=False,\
-    computePairCounts=False,maxSampling = 1)
+    computePairCounts=True,maxSampling = 1)
 #regionDensityAndTripleConditionDict2 = \
 #    regionDensityAndTripleConditionStack.getRandomCataloguePairCounts()
 regionDensityAndTripleConditionDict = tools.loadOrRecompute(\
     data_folder + "regionDensityAndTripleCondition_stack.p",\
     regionDensityAndTripleConditionStack.getRandomCataloguePairCounts,\
-    _recomputeData=False)
+    _recomputeData=True)
 
 # Density, Radius, and Void Density constraints, with pooling:
 conBinEdges = np.linspace(-1,-0.5,21)
@@ -4486,7 +4478,7 @@ regionDensityAndTripleConditionStackPooled = profileStack(\
 regionDensityAndTripleConditionPooledDict = tools.loadOrRecompute(\
     data_folder + "regionDensityAndTripleConditionPooled_stack.p",\
     regionDensityAndTripleConditionStackPooled.getRandomCataloguePairCounts,\
-    _recomputeData=False)
+    _recomputeData=True)
 
 # Density and Radius constraints with pooling:
 conBinEdges = np.linspace(-1,-0.5,21)
