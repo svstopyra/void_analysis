@@ -4100,97 +4100,19 @@ treeListUncon = [tools.loadOrRecompute(\
 #treeListUncon = [None for snap in snapListUn]
 
 
-def getAllPairCountsMCMC(meanCentresGadgetCoord,meanRadii,rBinStack,\
-        treeList,snapNameList):
-    allPairs = []
-    allVolumes = []
-    for k in range(0,len(snapNameList)):
-        [nPairsList,volumesList] = stacking.getPairCounts(meanCentresGadgetCoord,\
-                meanRadii,snapNameList[k],rBinStack,tree=treeList[k],\
-                method='poisson',vorVolumes=None)
-        allPairs.append(nPairsList)
-        allVolumes.append(volumesList)
-    return [allPairs,allVolumes]
+# MCMC profiles, about a single average centre:
+[allPairs,allVolumes] = tools.loadOrRecompute(
+    data_folder + "pair_counts_mcmc_cut.p",
+    stacking.get_all_pair_counts_MCMC,meanCentresGadgetCoord,meanRadii,
+    rBinStack,treeList,snapNameList,_recomputeData=False)
 
-[allPairs,allVolumes] = tools.loadOrRecompute(\
-    data_folder + "pair_counts_mcmc_cut.p",\
-    getAllPairCountsMCMC,meanCentresGadgetCoord,meanRadii,rBinStack,\
-    treeList,snapNameList,_recomputeData=False)
+# MCMC profiles, about a centre specific to each sample:
+[allPairsSample,allVolumesSample] = tools.loadOrRecompute(
+    data_folder + "pair_counts_mcmc_cut_samples.p",
+    stacking.get_all_pair_counts_MCMC_samples,
+    allCentres300Gadget,allRadii300,
+    rBinStackCentres,snapList,treeList,rBinStack,_recomputeData=False)
 
-
-
-def getAllPairCountsMCMCSamples(allCentres300Gadget,allRadii300,\
-        rBinStackCentres,snapNameList,snapList,treeList):
-    allPairsSample = np.zeros((len(snapList),len(allRadii300),\
-        len(rBinStackCentres)))
-    allVolumesSample = np.zeros((len(snapList),len(allRadii300),\
-        len(rBinStackCentres)))
-    for k in range(0,len(snapNameList)):
-        haveAntiHalo = np.isfinite(allRadii300[:,k])
-        noAntiHalo = np.logical_not(haveAntiHalo)
-        [nPairsList,volumesList] = stacking.getPairCounts(\
-            allCentres300Gadget[k,haveAntiHalo,:],\
-            allRadii300[haveAntiHalo,k],snapList[k],rBinStack,tree=treeList[k],\
-            method='poisson',vorVolumes=None)
-        allPairsSample[k,haveAntiHalo,:] = nPairsList
-        allPairsSample[k,noAntiHalo,:] = np.nan
-        allVolumesSample[k,haveAntiHalo,:] = volumesList
-        allVolumesSample[k,noAntiHalo,:] = np.nan
-    return [allPairsSample,allVolumesSample]
-
-[allPairsSample,allVolumesSample] = tools.loadOrRecompute(\
-    data_folder + "pair_counts_mcmc_cut_samples.p",getAllPairCountsMCMCSamples,\
-    allCentres300Gadget,allRadii300,\
-    rBinStackCentres,snapNameList,snapList,treeList,_recomputeData=False)
-
-# Mean profiles over all samples:
-flattenedPairs = np.array(allPairs)
-flattenedVols = np.array(allVolumes)
-flattenedDen = flattenedPairs/flattenedVols
-meanVols = np.mean(flattenedVols,0)
-meanVolsCumulative = np.nanmean(np.cumsum(flattenedVols,2),0)
-meanDensity = np.mean(flattenedPairs/flattenedVols,0)
-meanDensityCumulative = np.nanmean(np.cumsum(flattenedPairs,2)/\
-    np.cumsum(flattenedVols,2),0)
-sigmaDensity = np.std(flattenedPairs/flattenedVols,0)/np.sqrt(len(snapNumList))
-allDensities = flattenedPairs/flattenedVols
-
-# Average over profiles centred on samples:
-flattenedPairs = allPairsSample
-flattenedVols = allVolumesSample
-flattenedDen = flattenedPairs/flattenedVols
-meanVols = np.nanmean(flattenedVols,0)
-meanVolsCumulative = np.nanmean(np.cumsum(flattenedVols,2),0)
-meanDensity = np.nanmean(flattenedPairs/flattenedVols,0)
-meanDensityCumulative = np.nanmean(np.cumsum(flattenedPairs,2)/\
-    np.cumsum(flattenedVols,2),0)
-sigmaDensity = np.nanstd(flattenedDen,0)/\
-    np.sqrt(np.sum(np.isfinite(flattenedDen),0))
-sigmaDensityCumulative = np.nanstd(np.cumsum(flattenedPairs,2)/\
-    np.cumsum(flattenedVols,2),0)
-
-# Stacked mean profiles:
-rhoStacked = (np.sum(meanDensity*meanVols,0) + 1)/np.sum(meanVols,0)
-rhoStackedCumulative = (np.sum(meanDensityCumulative*meanVolsCumulative,0)+1)/\
-    np.sum(meanVolsCumulative,0)
-#allRhoStacked = (np.sum(meanDensity*meanVols,0) + 1)/np.sum(meanVols,0)
-varStacked = np.var(meanDensity,0)
-weights = meanVols/np.sum(meanVols,0)
-varStackedCumulative = np.var(meanDensityCumulative,0)
-weightsCumulative = meanVolsCumulative/np.sum(meanVolsCumulative,0)
-# Error accounting for profile uncertainty:
-sigmaRhoStacked = np.sqrt(np.sum((sigmaDensity**2 + varStacked)*weights**2,0))
-sigmaRhoStackedCumulative = np.sqrt(np.sum((sigmaDensityCumulative**2 + \
-    varStackedCumulative)*weightsCumulative**2,0))
-# Error ignoring the profile uncertainty:
-sigmaRhoStacked2 = np.sqrt(np.sum((varStacked)*weights**2,0))
-
-# Profile and errors for each sample:
-rhoStackedSep = (np.sum(flattenedDen*flattenedVols,1) + 1)/\
-    np.sum(flattenedVols,1)
-varStackedSep = np.var(flattenedDen,1)
-weightsSep = flattenedVols/(np.sum(flattenedVols,1)[:,None,:])
-sigmaRhoStackedSep = np.sqrt(np.sum((varStackedSep[:,None,:])*weightsSep**2,1))
 
 # Now to repeat the analysis for unconstrained simulations, but sampling based
 # on the same size distribution:
@@ -4788,129 +4710,16 @@ massesUnconNonOverlap = [antihaloMassesUn[ns][allSelectionsUncon[ns]] \
     for ns in range(0,len(snapListUn))]
 
 
-#aupcd = tools.loadPickle(data_folder + "all_unconstrained_pair_counts_data.p")
+# MCMC profiles:
+[rhoMCMCToUse, sigmaRhoMCMCToUse] = stacking.get_mean_mcmc_profile(
+    allPairsSample,allVolumesSample,cumulative = False)
 
-# Stacked profiles in each region:
-rhoStackedUnAll = np.array([(np.sum(allPairsUncon[k],0)+1)/\
-    np.sum(allVolumesUncon[k],0) for k in range(0,len(allVolumesUncon))])
-variancesUnAll = np.array([np.var(allPairsUncon[k]/allVolumesUncon[k],0) \
-    for k in range(0,len(allVolumesUncon))])
-weightsUnAll = [(allVolumesUncon[k])/np.sum(allVolumesUncon[k],0) \
-    for k in range(0,len(allVolumesUncon))]
-sumSquareWeights = np.array([np.sum(wi**2,0) for wi in weightsUnAll])
-
-#regionsFilter = range(0,len(allVolumesUnconNonOverlap))
-#regionsFilter = np.where( \
-#    (deltaToUseNonOverlapping > deltaListMeanNew - deltaListErrorNew/2) & \
-#    (deltaToUseNonOverlapping <= deltaListMeanNew + deltaListErrorNew/2) )[0]
-#regionsFilter = np.where( \
-#    (deltaToUseNonOverlapping > deltaMAPInterval[0]) & \
-#    (deltaToUseNonOverlapping <= deltaMAPInterval[1]) )[0]
-regionsFilter = range(0,len(snapListUn))
-
-mUnitLowRes = 8*snapList[0]['mass'][0]*1e10
-#profileFilterUnconNonOverlap = [np.ones(selection.shape,dtype=bool) \
-#    for selection in allSelectionsUncon]
-# For use with the old selection:
-#profileFilterUnconNonOverlap = [massList[selection] >= mUnitLowRes*100 \
-#    for massList, selection in \
-#    zip(massesUnconNonOverlap,allSelectionsUncon)]
-#profileFilterUnconNonOverlap = [massList >= mUnitLowRes*100 \
-#    for massList in massesUnconNonOverlap]
-
-profileFilterUnconNonOverlap = [range(0,len(x)) for x in allPairsUncon]
-
-
-
-
-# Stacked profiles in each region:
-rhoStackedUnAllNonOverlap = np.array([\
-    (np.sum(allPairsUncon[k][filt],0)+1)/\
-    np.sum(allVolumesUncon[k][filt],0) \
-    for k, filt in zip(regionsFilter,profileFilterUnconNonOverlap)])
-rhoStackedUnAllNonOverlapCumulative = \
-    np.array([(np.sum(np.cumsum(allPairsUncon[k][filt],1),0)+1)/\
-    np.sum(np.cumsum(allVolumesUncon[k][filt],1),0) \
-    for k, filt in zip(regionsFilter,profileFilterUnconNonOverlap)])
-variancesUnAllNonOverlap = np.array([np.var(allPairsUncon[k][filt]/\
-    allVolumesUncon[k][filt],0) \
-    for k, filt in zip(regionsFilter,profileFilterUnconNonOverlap)])
-variancesUnAllNonOverlapCumulative = \
-    np.array([np.var(np.cumsum(allPairsUncon[k][filt],1)/\
-    np.cumsum(allVolumesUncon[k][filt],1),0) \
-    for k, filt in zip(regionsFilter,profileFilterUnconNonOverlap)])
-weightsUnAllNonOverlap = [(allVolumesUncon[k][filt])/\
-    np.sum(allVolumesUncon[k][filt],0) \
-    for k, filt in zip(regionsFilter,profileFilterUnconNonOverlap)]
-weightsUnAllNonOverlapCumulative = \
-    [(np.cumsum(allVolumesUncon[k][filt],1))/\
-    np.sum(np.cumsum(allVolumesUncon[k][filt],1),0) \
-    for k, filt in zip(regionsFilter,profileFilterUnconNonOverlap)]
-sumSquareWeightsNonOverlap = np.array([np.sum(wi**2,0) \
-    for wi in weightsUnAllNonOverlap])
-sumSquareWeightsNonOverlapCumulative = np.array([np.sum(wi**2,0) \
-    for wi in weightsUnAllNonOverlapCumulative])
-#rhoRandomToUse = rhoStackedUnAll
-#rhoRandomToUse = rhoStackedUnAllNonOverlap
-#rhoRandomToUse = rhoStackedUnAllNonOverlapCumulative
-#rhoMCMCToUse = rhoStackedCumulative
-#sigmaRhoMCMCToUse = sigmaRhoStackedCumulative
-#rhoRandomToUse = rhoStackedUnAllNonOverlap
-rhoRandomToUse = rhoStackedUnAll
-rhoMCMCToUse = rhoStacked
-sigmaRhoMCMCToUse = sigmaRhoStacked
-
-# Filter to catch broken unconstrained sims during testing:
-filterCores = np.where(rhoRandomToUse[:,0] < 0.15)[0]
-sigmaStackedUnAll = np.std(rhoRandomToUse[filterCores],0)
-meanStackedUnAll = np.mean(rhoRandomToUse[filterCores],0)
-intervals = [68,95]
-intervalLimits = []
-for lim in intervals:
-    intervalLimits.append(50 - lim/2)
-    intervalLimits.append(50 + lim/2)
-
-credibleIntervals = np.percentile(rhoRandomToUse[filterCores],\
-    intervalLimits,axis=0)
-
-# Function to get credible intervals from a profile stack:
-def getProfiles(allPairs,allVolumes,cumulative=False):
-    if cumulative:
-        rhoStacked = np.array([(np.sum(np.cumsum(allPairs[k]),0)+1)/\
-            np.sum(np.cumsum(allVolumes[k]),0) \
-            for k in range(0,len(allVolumes))])
-    else:
-        rhoStacked = np.array([(np.sum(allPairs[k],0)+1)/\
-            np.sum(allVolumes[k],0) \
-            for k in range(0,len(allVolumes))])
-    return rhoStacked
-
-def getAllVoidProfiles(profileDictionary):
-    allProfiles = []
-    for pairs, volumes in zip(profileDictionary['pairs'],\
-            profileDictionary['volumes']):
-        allProfiles.append((pairs + 1)/volumes)
-    return np.vstack(allProfiles)
-
-def getProfileInterval(profileDictionary,intervals = [68,95],\
-        cumulative = False):
-    allPairs = profileDictionary['pairs']
-    allVolumes = profileDictionary['volumes']
-    #allSelectionsUncon = profileDictionary['selections']
-    rhoStackedUnAll = getProfiles(allPairs,allVolumes,cumulative=cumulative)
-    intervalLimits = []
-    for lim in intervals:
-        intervalLimits.append(50 - lim/2)
-        intervalLimits.append(50 + lim/2)
-    credibleIntervals = np.percentile(rhoStackedUnAll,\
-        intervalLimits,axis=0)
-    return credibleIntervals
-
+# Plotting functions:
 def plotConditionedProfile(rBinStackCentres,profileDictionary,nbar,\
         intervals=[68,95],alphas = [0.75,0.5],ax = None,textwidth=7.1014,\
         color='grey',xlim=[0,3],ylim=[0,1.2],cumulative=False,label=None):
-    credibleIntervals = getProfileInterval(profileDictionary,\
-        intervals = intervals,cumulative = cumulative)
+    credibleIntervals = stacking.get_profile_interval_in_regions(
+        profileDictionary,intervals = intervals,cumulative = cumulative)
     if ax is None:
         fig, ax = plt.subplots(figsize=(textwidth,0.5*textwidth))
     for k in range(0,len(intervals)):
@@ -4937,9 +4746,6 @@ def plotMCMCProfile(rBinStackCentres,rhoMCMCToUse,sigmaRhoMCMCToUse,nbar,\
     ax.fill_between(rBinStackCentres,(rhoMCMCToUse - sigmaRhoMCMCToUse)/nbar,\
         (rhoMCMCToUse + sigmaRhoMCMCToUse)/nbar,alpha=0.5,color=color,\
         label='MCMC catalogue')
-
-deltaRange = np.array([1 + deltaListMeanNew - deltaListErrorNew,\
-    1 + deltaListMeanNew + deltaListErrorNew])
 
 def plotStackedProfileVsRandoms(rBinStackCentres,profileDictionary,nbar,\
         rhoMCMCToUse,sigmaRhoMCMCToUse,deltaRange=None,\
@@ -5004,6 +4810,8 @@ frames = []
 filenames = ["profiles_no_constraints.png","profiles_regionDensity.png",\
     "profiles_regionDensity_and_voidRadius.png",\
     "profiles_regionDensity_voidRadius_and_voidDensity.png"]
+deltaRange = np.array([1 + deltaListMeanNew - deltaListErrorNew,\
+    1 + deltaListMeanNew + deltaListErrorNew])
 for profileDictionary, savename, label in zip(dictionaries,filenames,labels):
     plotStackedProfileVsRandoms(rBinStackCentres,profileDictionary,nbar,\
         rhoMCMCToUse,sigmaRhoMCMCToUse,deltaRange=deltaRange,\
@@ -5022,11 +4830,11 @@ frames[0].save(figuresFolder + 'profiles_constraint_progression_animation.gif',\
 
 # Plot of profile distributions:
 
-rhoStacks = [getProfiles(profileDictionary['pairs'],\
+rhoStacks = [stacking.get_profiles_in_regions(profileDictionary['pairs'],\
     profileDictionary['volumes']) for profileDictionary in dictionaries]
-rhoVoidsAll = [getAllVoidProfiles(profileDictionary) \
+rhoVoidsAll = [stacking.get_individual_void_profiles(profileDictionary) \
     for profileDictionary in dictionaries]
-rhoIntervals = [getProfileInterval(profileDictionary) \
+rhoIntervals = [stacking.get_profile_interval_in_regions(profileDictionary) \
     for profileDictionary in dictionaries]
 
 # plot the distributions at Reff = 1.5:

@@ -1244,6 +1244,7 @@ def selectConditionedRandomVoids(conditioningQuantityMCMC,\
     selectArray = np.hstack(selection)
     return inAllRangesInd[selectArray]
 
+
 # Class to store information about a void stack:
 class profileStack:
     def __init__(self,centreList,snapList,propsList,rSphere,\

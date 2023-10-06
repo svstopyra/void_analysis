@@ -736,3 +736,103 @@ def computeMeanStacks(centresList,radiiList,massesList,conditionList,\
         sigmaStack[k,:] = sigma
     return [nbarjStack,sigmaStack]
 
+
+# Get pair counts from the MCMC samples, using a single fixed centre for
+# all samples:
+def get_all_pair_counts_MCMC(mean_centres_gadget_coord,mean_radii,r_bin_stack,\
+                             tree_list,snap_name_list):
+    all_pairs = []
+    all_volumes = []
+    for k in range(0,len(snap_name_list)):
+        [pairs_list,volumes_list] = stacking.getPairCounts(
+            mean_centres_gadget_coord,mean_radii,snap_name_list[k],
+            r_bin_stack,tree=tree_list[k],method='poisson',vorVolumes=None)
+        all_pairs.append(pairs_list)
+        all_volumes.append(volumes_list)
+    return [all_pairs,all_volumes]
+
+# Get pair counts from the MCMC samples, using the MCMC sample centres for 
+# all pair counts:
+def get_all_pair_counts_MCMC_samples(all_centres_300_gadget,all_radii_300,
+                                     r_bin_stack_centres,snap_list,tree_list
+                                     r_bin_stack):
+    all_pairs_sample = np.zeros((len(snap_list),len(all_radii_300),\
+                               len(r_bin_stack_centres)))
+    all_volumes_sample = np.zeros((len(snap_list),len(all_radii_300),\
+                                 len(r_bin_stack_centres)))
+    for k in range(0,len(snap_list)):
+        have_anti_halo = np.isfinite(all_radii_300[:,k])
+        no_anti_halo = np.logical_not(have_anti_halo)
+        [pairs_list,volumes_list] = getPairCounts(\
+            all_centres_300_gadget[k,have_anti_halo,:],\
+            all_radii_300[have_anti_halo,k],snap_list[k],r_bin_stack,
+            tree=tree_list[k],method='poisson',vorVolumes=None)
+        all_pairs_sample[k,have_anti_halo,:] = pairs_list
+        all_pairs_sample[k,no_anti_halo,:] = np.nan
+        all_volumes_sample[k,have_anti_halo,:] = volumes_list
+        all_volumes_sample[k,no_anti_halo,:] = np.nan
+    return [all_pairs_sample,all_volumes_sample]
+
+# Comptue the mean mcmc profile and it's error:
+def get_mean_mcmc_profile(all_pairs,all_volumes,cumulative=False):
+    # Average the profiles over all MCMC samples:
+    if cumulative:
+        mean_density = np.nanmean(
+            np.cumsum(all_pairs,2)/np.cumsum(all_volumes,2),0)
+        mean_vols = np.nanmean(np.cumsum(all_volumes,2),0)
+    else:
+        mean_density = np.nanmean(all_pairs/all_volumes,0)
+        mean_vols = np.nanmean(all_volumes,0)
+    # Stacked profile:
+    rho_stacked = (
+        (np.sum(mean_density*mean_vols,0) + 1)/np.sum(mean_vols,0))
+    # Error in stacked profile:
+    # Individual profile error bars:
+    var_stacked = np.var(mean_density,0)
+    weights = mean_vols/np.sum(mean_vols,0)
+    # Standard error in the mean:
+    num_samples = np.sum(np.isfinite(mean_density),0)
+    sigma_density = np.nanstd(mean_density,0)/np.sqrt(num_samples)
+    # Combination in quadrature:
+    sigma_rho_stacked = np.sqrt(
+        np.sum((sigma_density**2 + var_stacked)*weights**2,0))
+    return [rho_stacked, sigma_rho_stacked]
+
+# Get the profiles in different regions from random simulations:
+def get_profiles_in_regions(all_pairs,all_volumes,cumulative=False):
+    if cumulative:
+        rho_stacked = np.array([(np.sum(np.cumsum(all_pairs[k]),0)+1)/\
+            np.sum(np.cumsum(all_volumes[k]),0) \
+            for k in range(0,len(all_volumes))])
+    else:
+        rho_stacked = np.array([(np.sum(all_pairs[k],0)+1)/\
+            np.sum(all_volumes[k],0) \
+            for k in range(0,len(all_volumes))])
+    return rho_stacked
+
+# Get the credible intervals for a set of void profiles in regions:
+def get_profile_interval_in_regions(
+        profile_dictionary,intervals = [68,95],
+        cumulative = False):
+    all_pairs = profile_dictionary['pairs']
+    all_volumes = profile_dictionary['volumes']
+    rho_stacked_un_all = get_profiles_in_regions(
+        all_pairs,all_volumes,cumulative=cumulative)
+    interval_limits = []
+    for lim in intervals:
+        interval_limits.append(50 - lim/2)
+        interval_limits.append(50 + lim/2)
+    credible_intervals = np.percentile(rho_stacked_un_all,\
+        interval_limits,axis=0)
+    return credible_intervals
+
+# Get void profiles for all voids, regardless of region:
+def get_individual_void_profiles(profile_dictionary):
+    all_profiles = []
+    for pairs, volumes in zip(profile_dictionary['pairs'],\
+            profile_dictionary['volumes']):
+        all_profiles.append((pairs + 1)/volumes)
+    return np.vstack(all_profiles)
+
+
+
