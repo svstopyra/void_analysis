@@ -4301,12 +4301,12 @@ noConstraintsStack = profileStack(\
 noConstraintsDict = tools.loadOrRecompute(\
     data_folder + "no_constraints_stack.p",\
     noConstraintsStack.getRandomCataloguePairCounts,_recomputeData=False)
-#nsListNoConstraints = np.array([[k \
-#    for centre in centresAllDensityNonOverlapping[k] ] \
-#    for k in range(0,len(centresAllDensityNonOverlapping))]).flatten()
-#nsListDensityConstraint = np.hstack([[k \
-#    for centre in centresUnderdenseNonOverlapping[k] ] \
-#    for k in range(0,len(centresUnderdenseNonOverlapping))])
+nsListNoConstraints = np.array([[k \
+    for centre in centresAllDensityNonOverlapping[k] ] \
+    for k in range(0,len(centresAllDensityNonOverlapping))]).flatten()
+nsListDensityConstraint = np.hstack([[k \
+    for centre in centresUnderdenseNonOverlapping[k] ] \
+    for k in range(0,len(centresUnderdenseNonOverlapping))])
 
 # Reconstruct the pairs list:
 stackedPairs = np.vstack(noConstraintsDict['pairs'])
@@ -4375,6 +4375,7 @@ regionDensityAndTripleConditionStack = profileStack(\
     conditioningQuantityToMatch=conditioningQuantityMCMC,\
     conditionBinEdges=[voidRadiusBinEdges,conBinEdges,conBinEdges],\
     combineRandomRegions=False,replace=False,\
+    rMin = voidRadiusBinEdges[0],rMax = voidRadiusBinEdges[-1],\
     computePairCounts=True,maxSampling = 1,pairCounts = allPairCountsList)
 #regionDensityAndTripleConditionDict = \
 #    regionDensityAndTripleConditionStack.getRandomCataloguePairCounts()
@@ -4398,6 +4399,7 @@ regionAndVoidCentralDensityConditionStack = profileStack(\
     conditioningQuantityToMatch=conditioningQuantityMCMC,\
     conditionBinEdges=[conBinEdges],\
     combineRandomRegions=False,replace=False,\
+    rMin = voidRadiusBinEdges[0],rMax = voidRadiusBinEdges[-1],\
     computePairCounts=True,maxSampling = 1,pairCounts = allPairCountsList)
 regionAndVoidCentralDensityConditionDict = tools.loadOrRecompute(\
     data_folder + "regionAndVoidCentralDensityCondition_stack.p",\
@@ -4421,6 +4423,7 @@ regionAndVoidDensityConditionStack = profileStack(\
     conditioningQuantityToMatch=conditioningQuantityMCMC,\
     conditionBinEdges=[conBinEdges,conBinEdges],\
     combineRandomRegions=False,replace=False,\
+    rMin = voidRadiusBinEdges[0],rMax = voidRadiusBinEdges[-1],\
     computePairCounts=True,maxSampling = 1,pairCounts = allPairCountsList)
 regionAndVoidDensityConditionDict = tools.loadOrRecompute(\
     data_folder + "regionAndVoidDensityCondition_stack.p",\
@@ -4444,6 +4447,7 @@ regionDensityAndAllConditionStackPooled = profileStack(\
     conditioningQuantityToMatch=conditioningQuantityMCMC,\
     conditionBinEdges=[conBinEdges,conBinEdges],\
     combineRandomRegions=True,replace=False,\
+    rMin = voidRadiusBinEdges[0],rMax = voidRadiusBinEdges[-1],\
     computePairCounts=True,maxSampling=10,pairCounts = allPairCountsList)
 #regionDensityAndTripleConditionDict2 = \
 #    regionDensityAndTripleConditionStack.getRandomCataloguePairCounts()
@@ -4533,32 +4537,64 @@ conditioningQuantityMCMC = np.vstack([meanRadii,\
 centreListToTest = centresUnderdenseNonOverlapping
 radBinEdges = voidRadiusBinEdges
 meanRadiiMCMC = meanRadii
-conditionBinEdges = [voidRadiusBinEdges,conBinEdges,conBinEdges]
+#conditionBinEdges = [voidRadiusBinEdges,conBinEdges,conBinEdges]
+conditionBinEdges = [conBinEdges,conBinEdges]
 combineRandomRegions = True
 start = 0
 end = -1
 seed = 1000
+constrainedDictionary = regionAndVoidDensityConditionDict
+#constrainedDictionary = regionDensityAndTripleConditionDict
 conditioningVariable = np.vstack([\
     conditioningQuantityUn[ns][ind] \
     for ns, ind in zip(nsListNoConstraints,noConstraintsDict['selections'])])
 conditionedMasses = np.hstack([\
     antihaloMassesUn[ns][ind] \
     for ns, ind in zip(nsListNoConstraints,noConstraintsDict['selections'])])
+conditionedRadii = np.hstack([\
+    antihaloRadiiUn[ns][ind] \
+    for ns, ind in zip(nsListNoConstraints,noConstraintsDict['selections'])])
+conditionedCentralDensity = np.hstack([\
+    ahPropsUn[ns][11][ind] \
+    for ns, ind in zip(nsListNoConstraints,noConstraintsDict['selections'])])
+conditionedAverageDensity = np.hstack([\
+    ahPropsUn[ns][12][ind] \
+    for ns, ind in zip(nsListNoConstraints,noConstraintsDict['selections'])])
 allSelectedConditions = np.vstack(\
-    regionDensityAndTripleConditionDict['selectedConditions'])
-allSelectedMasses = np.hstack([antihaloMasses[ns][ind] \
+    constrainedDictionary['selectedConditions'])
+allSelectedMasses = np.hstack([antihaloMassesUn[ns][ind] \
     for ns, ind in zip(nsListDensityConstraint,\
-    regionDensityAndTripleConditionDict['selections'])])
+    constrainedDictionary['selections'])])
+allSelectedRadii = np.hstack([antihaloRadiiUn[ns][ind] \
+    for ns, ind in zip(nsListDensityConstraint,\
+    constrainedDictionary['selections'])])
+allSelectedCentralDensity = np.hstack([ahPropsUn[ns][11][ind] \
+    for ns, ind in zip(nsListDensityConstraint,\
+    constrainedDictionary['selections'])])
+allSelectedAverageDensity = np.hstack([ahPropsUn[ns][12][ind] \
+    for ns, ind in zip(nsListDensityConstraint,\
+    constrainedDictionary['selections'])])
 replace = False
 
 
+massBins = 10**(np.linspace(np.log10(1e13),np.log10(1e15),nBinEdges))
 [samplingMCMC,edges] = np.histogramdd(conditioningQuantityMCMC,\
     bins = conditionBinEdges)
 [samplingMCMCMasses,edges] = np.histogramdd(meanMasses,bins=[massBins])
+[samplingMCMCRadii,edges] = np.histogramdd(meanRadii,bins=[radBins])
+[samplingMCMCCentralDensity,edges] = np.histogramdd(\
+    deltaCentralMean[filter300],bins=[conBinEdges])
+[samplingMCMCAverageDensity,edges] = np.histogramdd(
+    deltaAverageMean[filter300],bins=[conBinEdges])
 samplingMCMCLin = np.array(samplingMCMC.flatten(),dtype=int)
 [samplingRand,edges] = np.histogramdd(conditioningVariable,\
     bins = conditionBinEdges)
 [samplingRandMasses,edges] = np.histogramdd(conditionedMasses,bins=[massBins])
+[samplingRandRadii,edges] = np.histogramdd(conditionedRadii,bins=[radBins])
+[samplingRandCentralDensity,edges] = np.histogramdd(conditionedCentralDensity,
+                                                    bins=[conBinEdges])
+[samplingRandAverageDensity,edges] = np.histogramdd(conditionedAverageDensity,
+                                                    bins=[conBinEdges])
 samplingRandLin = np.array(samplingRand.flatten(),dtype=int)
 
 #[samplingRandSelected,edges] = np.histogramdd(\
@@ -4567,25 +4603,44 @@ samplingRandLin = np.array(samplingRand.flatten(),dtype=int)
     allSelectedConditions,bins = conditionBinEdges)
 [samplingRandSelectedMasses,edges] = np.histogramdd(\
     allSelectedMasses,bins=[massBins])
+[samplingRandSelectedRadii,edges] = np.histogramdd(\
+    allSelectedRadii,bins=[radBins])
+[samplingRandSelectedCentralDensity,edges] = np.histogramdd(\
+    allSelectedCentralDensity,bins=[conBinEdges])
+[samplingRandSelectedAverageDensity,edges] = np.histogramdd(\
+    allSelectedAverageDensity,bins=[conBinEdges])
+
+
 
 nzMCMC = np.where(samplingMCMCLin > 0)
 rat = np.zeros(samplingMCMCLin.shape,dtype=int)
 rat[nzMCMC] = samplingRandLin[nzMCMC]/samplingMCMCLin[nzMCMC]
 minRatio = np.min(rat[rat > 0])
 
-samplingRand0 = np.sum(samplingRand,(1,2))
-samplingRand1 = np.sum(samplingRand,(0,2))
-samplingRand2 = np.sum(samplingRand,(0,1))
+#samplingRand0 = np.sum(samplingRand,(1,2))
+#samplingRand1 = np.sum(samplingRand,(0,2))
+#samplingRand2 = np.sum(samplingRand,(0,1))
+samplingRand0 = samplingRandRadii
+samplingRand1 = samplingRandCentralDensity
+samplingRand2 = samplingRandAverageDensity
 samplingRand3 = samplingRandMasses
 
-samplingMCMC0 = np.sum(samplingMCMC,(1,2))
-samplingMCMC1 = np.sum(samplingMCMC,(0,2))
-samplingMCMC2 = np.sum(samplingMCMC,(0,1))
+
+#samplingMCMC0 = np.sum(samplingMCMC,(1,2))
+#samplingMCMC1 = np.sum(samplingMCMC,(0,2))
+#samplingMCMC2 = np.sum(samplingMCMC,(0,1))
+samplingMCMC0 = samplingMCMCRadii
+samplingMCMC1 = samplingMCMCCentralDensity
+samplingMCMC2 = samplingMCMCAverageDensity
 samplingMCMC3 = samplingMCMCMasses
 
-samplingRandSelected0 = np.sum(samplingRandSelected,(1,2))
-samplingRandSelected1 = np.sum(samplingRandSelected,(0,2))
-samplingRandSelected2 = np.sum(samplingRandSelected,(0,1))
+#samplingRandSelected0 = np.sum(samplingRandSelected,(1,2))
+#samplingRandSelected1 = np.sum(samplingRandSelected,(0,2))
+#samplingRandSelected2 = np.sum(samplingRandSelected,(0,1))
+
+samplingRandSelected0 = samplingRandSelectedRadii
+samplingRandSelected1 = samplingRandSelectedCentralDensity
+samplingRandSelected2 = samplingRandSelectedAverageDensity
 samplingRandSelected3 = samplingRandSelectedMasses
 
 def getBarWidths(bins):
@@ -4617,7 +4672,7 @@ randCounts = [[samplingRand0,samplingRand1,samplingRand2,samplingRand3],\
 mcmcCounts = [[samplingMCMC0,samplingMCMC1,samplingMCMC2,samplingMCMC3],\
     [samplingMCMC0,samplingMCMC1,samplingMCMC2,samplingMCMC3]]
 
-histBins = conditionBinEdges + [massBins]
+histBins = [radBins,conBinEdges,conBinEdges,massBins]
 
 xlabels = ['$R [\\mathrm{Mpc}h^{-1}]$','$\\delta_{\\mathrm{central}}$',\
     '$\\bar{\\delta}$','Mass [$M_{\\odot}h^{-1}$]']
@@ -4831,11 +4886,16 @@ def plotStackedProfileVsRandoms(rBinStackCentres,profileDictionary,nbar,\
 
 # Show all plots on one figure:
 colors = [seabornColormap[k] for k in range(1,5)]
+#dictionaries = [noConstraintsDict,regionDensityDict,\
+#    regionDensityAndRadiusDict,regionDensityAndTripleConditionDict]
 dictionaries = [noConstraintsDict,regionDensityDict,\
-    regionDensityAndRadiusDict,regionDensityAndTripleConditionDict]
+    regionAndVoidCentralDensityConditionDict,regionAndVoidDensityConditionDict]
+#labels = ['No constraints','Region Density constraint',\
+#    'Region Density + Void Radius',\
+#    'Region Density + Void Radius + Void Density']
 labels = ['No constraints','Region Density constraint',\
-    'Region Density + Void Radius',\
-    'Region Density + Void Radius + Void Density']
+    'Region Density + Void Central Density',\
+    'Region Density + Void Central Density + Void Average Density']
 fig, ax = plt.subplots(figsize=(textwidth,0.5*textwidth))
 for k in range(0,len(colors)):
     plotConditionedProfile(rBinStackCentres,dictionaries[k],nbar,ax=ax,\
@@ -4858,8 +4918,8 @@ plt.show()
 from PIL import Image
 frames = []
 filenames = ["profiles_no_constraints.png","profiles_regionDensity.png",\
-    "profiles_regionDensity_and_voidRadius.png",\
-    "profiles_regionDensity_voidRadius_and_voidDensity.png"]
+    "profiles_regionDensity_and_voidCentral.png",\
+    "profiles_regionDensity_voidCentral_and_voidAverage.png"]
 deltaRange = np.array([1 + deltaListMeanNew - deltaListErrorNew,\
     1 + deltaListMeanNew + deltaListErrorNew])
 for profileDictionary, savename, label in zip(dictionaries,filenames,labels):

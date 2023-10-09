@@ -1172,82 +1172,6 @@ def getNumberOfConditions(conditionList):
     return numCond
 
 
-# Select random catalogue voids that match the distribution of properties
-# in the MCMC catalogue.
-def selectConditionedRandomVoids(conditioningQuantityMCMC,\
-        conditioningVariable,conditionBinEdges,voidRadii,\
-        seed=1000,replace=False,rMin = None,rMax=None,maxSampling=None):
-    numCond = getNumberOfConditions(conditioningQuantityMCMC)
-    if len(conditionBinEdges) != numCond:
-        raise Exception("List of bins must match list of " + \
-            "condition data")
-    # Verify the same for the randoms:
-    numCondRand = getNumberOfConditions(conditioningVariable)
-    if type(conditioningVariable) is list:
-        conditioningVariable = np.array(conditioningVariable)
-    if type(conditioningQuantityMCMC) is list:
-        conditioningQuantityMCMC = np.array(conditioningQuantityMCMC)
-    if numCondRand != numCond:
-        raise Exception("Condition list for randoms does " + \
-            "not match condition list for MCMC.")
-    # Having verified that the input is sane, now bin everything:
-    [samplingMCMC,edges] = np.histogramdd(conditioningQuantityMCMC,\
-        bins = conditionBinEdges)
-    samplingMCMCLin = np.array(samplingMCMC.flatten(),dtype=int)
-    [samplingRand,edges] = np.histogramdd(conditioningVariable,\
-        bins = conditionBinEdges)
-    samplingRandLin = np.array(samplingRand.flatten(),dtype=int)
-    # Figure out how many times we can sample the random set, and retain
-    # the same distribution as the MCMC set. This is defined as the lowest 
-    # ratio between the counts in MCMC bins and in random bins.
-    nzMCMC = np.where(samplingMCMCLin > 0)
-    rat = np.zeros(samplingMCMCLin.shape,dtype=int)
-    rat[nzMCMC] = samplingRandLin[nzMCMC]/samplingMCMCLin[nzMCMC]
-    if len(rat[rat > 0]) > 0:
-        minRatio = np.min(rat[rat > 0])
-    else:
-        minRatio = 1
-    # Impose an upper limit, to avoid taking forever...
-    if maxSampling is not None:
-        minRatio = np.min([minRatio,maxSampling])
-    # Indices in each list of bins:
-    inAllRanges = np.ones(len(conditioningVariable),dtype = bool)
-    for n in range(0,numCond):
-        inAllRanges = (inAllRanges & \
-            (conditioningVariable[:,n] >= conditionBinEdges[n][0]) & \
-            (conditioningVariable[:,n] < conditionBinEdges[n][-1]) )
-    if rMin is not None:
-        inAllRanges = inAllRanges & (voidRadii > rMin)
-    if rMax is not None:
-        inAllRanges = inAllRanges & (voidRadii < rMax)
-    inAllRangesInd = np.where(inAllRanges)[0]
-    indicesRand = []
-    for n in range(0,numCond):
-        indicesRand.append(np.digitize(\
-            conditioningVariable[inAllRanges,n],conditionBinEdges[n])-1)
-    indicesRand = np.array(indicesRand)
-    dims = [len(x) - 1 for x in conditionBinEdges]
-    numBinsTot = np.prod(dims)
-    linearIndices = np.ravel_multi_index(indicesRand,tuple(dims))
-    # Now sample these to try and match the MCMC conditions:
-    selection = []
-    np.random.seed(seed)
-    for k in range(0,numBinsTot):
-        thisIndex = np.where((linearIndices == k))[0]
-        if replace:
-            if len(thisIndex) > 0:
-                numSamplesToTake = minRatio*samplingMCMCLin[k]
-            else:
-                numSamplesToTake = 0
-        else:
-            numSamplesToTake = \
-                np.min([minRatio*samplingMCMCLin[k],len(thisIndex)])
-        selection.append(np.random.choice(thisIndex,numSamplesToTake,\
-            replace=replace))
-    selectArray = np.hstack(selection)
-    return inAllRangesInd[selectArray]
-
-
 # Class to store information about a void stack:
 class profileStack:
     def __init__(self,centreList,snapList,propsList,rSphere,\
@@ -1287,6 +1211,8 @@ class profileStack:
         self.replace = replace
         self.computePairCounts = computePairCounts
         self.pairCounts = pairCounts
+        self.samplingMCMC = None
+        self.samplingRand = None
         # Verify number of conditions matches the bins specified:
         self.numCond = getNumberOfConditions(self.conditioningQuantityToMatch)
         if self.conditionBinEdges is not None:
@@ -1300,6 +1226,106 @@ class profileStack:
             if self.numCondRand != self.numCond:
                 raise Exception("Condition list for randoms does " + \
                     "not match condition list for MCMC.")
+    def getNumberOfRadialBins(self):
+        if self.pairCounts is not None:
+            return self.pairCounts[0].shape[1]
+        else:
+            return len(self.rEffBinEdges) - 1
+    def getSamplingRatio(self):
+        if not self.combineRandomRegions:
+            minRatio = 1
+        else:
+            # Having verified that the input is sane, now bin everything:
+            if self.samplingMCMC is None:
+                [self.samplingMCMC,edges] = np.histogramdd(\
+                    self.conditioningQuantityToMatch,
+                    bins = self.conditionBinEdges)
+                self.samplingMCMCLin = np.array(self.samplingMCMC.flatten(),
+                                                dtype=int)
+            if self.samplingRand is None:
+                [self.samplingRand,edges] = np.histogramdd(\
+                    self.conditioningQuantityToMatch,
+                    bins = self.conditionBinEdges)
+                self.samplingRandLin = np.array(self.samplingRand.flatten(),
+                                                dtype=int)
+            # Figure out how many times we can sample the random set, and retain
+            # the same distribution as the MCMC set. This is defined as the lowest 
+            # ratio between the counts in MCMC bins and in random bins.
+            nzMCMC = np.where(self.samplingMCMCLin > 0)
+            rat = np.zeros(self.samplingMCMCLin.shape,dtype=int)
+            rat[nzMCMC] = \
+                self.samplingRandLin[nzMCMC]/self.samplingMCMCLin[nzMCMC]
+            if len(rat[rat > 0]) > 0:
+                minRatio = np.min(rat[rat > 0])
+            else:
+                minRatio = 1
+        minRatio = np.min([minRatio,self.maxSampling])
+        return minRatio
+    # Select random catalogue voids that match the distribution of properties
+    # in the MCMC catalogue.
+    def selectConditionedRandomVoids(self,conditioningVariable,voidRadii,
+                                     minRatio = None):
+        numCond = getNumberOfConditions(self.conditioningQuantityToMatch)
+        if len(self.conditionBinEdges) != numCond:
+            raise Exception("List of bins must match list of " + \
+                "condition data")
+        # Verify the same for the randoms:
+        numCondRand = getNumberOfConditions(conditioningVariable)
+        if type(conditioningVariable) is list:
+            conditioningVariable = np.array(conditioningVariable)
+        if type(self.conditioningQuantityToMatch) is list:
+            self.conditioningQuantityToMatch = \
+                np.array(self.conditioningQuantityToMatch)
+        if numCondRand != numCond:
+            raise Exception("Condition list for randoms does " + \
+                "not match condition list for MCMC.")
+        # Having verified that the input is sane, now bin everything:
+        [self.samplingMCMC,edges] = np.histogramdd(\
+            self.conditioningQuantityToMatch,\
+            bins = self.conditionBinEdges)
+        self.samplingMCMCLin = np.array(self.samplingMCMC.flatten(),dtype=int)
+        [self.samplingRand,edges] = np.histogramdd(conditioningVariable,\
+            bins = self.conditionBinEdges)
+        self.samplingRandLin = np.array(self.samplingRand.flatten(),dtype=int)
+        if minRatio is None:
+            minRatio = self.getSamplingRatio()
+        # Indices in each list of bins:
+        inAllRanges = np.ones(len(conditioningVariable),dtype = bool)
+        for n in range(0,numCond):
+            inAllRanges = (inAllRanges & \
+                (conditioningVariable[:,n] >= self.conditionBinEdges[n][0]) & \
+                (conditioningVariable[:,n] < self.conditionBinEdges[n][-1]) )
+        if self.rMin is not None:
+            inAllRanges = inAllRanges & (voidRadii > self.rMin)
+        if self.rMax is not None:
+            inAllRanges = inAllRanges & (voidRadii < self.rMax)
+        inAllRangesInd = np.where(inAllRanges)[0]
+        indicesRand = []
+        for n in range(0,numCond):
+            indicesRand.append(np.digitize(\
+                conditioningVariable[inAllRanges,n],
+                self.conditionBinEdges[n])-1)
+        indicesRand = np.array(indicesRand)
+        dims = [len(x) - 1 for x in self.conditionBinEdges]
+        numBinsTot = np.prod(dims)
+        linearIndices = np.ravel_multi_index(indicesRand,tuple(dims))
+        # Now sample these to try and match the MCMC conditions:
+        selection = []
+        np.random.seed(self.seed)
+        for k in range(0,numBinsTot):
+            thisIndex = np.where((linearIndices == k))[0]
+            if self.replace:
+                if len(thisIndex) > 0:
+                    numSamplesToTake = minRatio*self.samplingMCMCLin[k]
+                else:
+                    numSamplesToTake = 0
+            else:
+                numSamplesToTake = \
+                    np.min([minRatio*self.samplingMCMCLin[k],len(thisIndex)])
+            selection.append(np.random.choice(thisIndex,numSamplesToTake,\
+                replace=self.replace))
+        selectArray = np.hstack(selection)
+        return inAllRangesInd[selectArray]
     # Get arrays which store the variables for each void we wish to sample
     # from:
     def getAllConditionVariables(self):
@@ -1373,44 +1399,58 @@ class profileStack:
             if self.conditioningQuantityToMatch is not None:
                 self.getAllConditionVariables()
             self.numVoidsTotal = len(self.centralRadiiAll)
+            self.minRatio = self.getSamplingRatio()
             if self.conditioningQuantityToMatch is not None:
-                selectArray = selectConditionedRandomVoids(\
-                self.conditioningQuantityToMatch,\
-                self.centralConditionVariableAll,\
-                self.conditionBinEdges,self.centralRadiiAll,\
-                rMin=self.rMin,rMax = self.rMax,\
-                seed=self.seed,replace=self.replace,\
-                maxSampling = self.maxSampling)
+                selectArray = self.selectConditionedRandomVoids(\
+                    self.centralConditionVariableAll,\
+                    self.centralRadiiAll)
+                if (len(selectArray) 
+                        != self.minRatio*len(self.conditioningQuantityToMatch)):
+                    raise Exception("Failed to sample in integer ratio.")
             else:
                 selectArray = np.range(0,self.numVoidsTotal)
-            nPairsListAll = []
-            volumesListAll = []
-            for ns in range(self.start,self.end):
-                snapLoaded = self.snapList[ns]
-                tree = self.treeList[ns]
-                nsSelectArray = selectArray[\
-                    self.sampleIndices[selectArray] == ns]
-                if self.computePairCounts:
-                    if self.pairCounts is None:
-                        [nPairsList,volumesList] = stacking.getPairCounts(\
-                            self.centralCentresAll[nsSelectArray],\
-                            self.centralRadiiAll[nsSelectArray],snapLoaded,\
-                            self.rEffBinEdges,tree=tree,method='poisson',\
-                            vorVolumes=None)
+            self.allPairs = [
+                np.zeros((0,self.getNumberOfRadialBins()),dtype=int) 
+                for k in range(0,self.minRatio)]
+            self.allVolumes = [
+                np.zeros((0,self.getNumberOfRadialBins()),dtype=int) 
+                for k in range(0,self.minRatio)]
+            self.allSelections = [
+                np.zeros((0),dtype=int) 
+                for k in range(0,self.minRatio)]
+            for k in range(0,self.minRatio):
+                for ns in range(self.start,self.end):
+                    snapLoaded = self.snapList[ns]
+                    tree = self.treeList[ns]
+                    numSelected = len(selectArray)
+                    kFilter = np.arange(k,numSelected,minRatio)
+                    nsSelectArray = selectArray[\
+                        self.sampleIndices[selectArray][kFilter] == ns]
+                    if self.computePairCounts:
+                        if self.pairCounts is None:
+                            [nPairsList,volumesList] = stacking.getPairCounts(\
+                                self.centralCentresAll[nsSelectArray],\
+                                self.centralRadiiAll[nsSelectArray],snapLoaded,\
+                                self.rEffBinEdges,tree=tree,method='poisson',\
+                                vorVolumes=None)
+                        else:
+                            nPairsList = self.pairCounts[ns][\
+                                    self.voidIndices[nsSelectArray],:]
+                            volumesList = \
+                                self.getVolumesOfRadialBins(\
+                                    self.centralRadiiAll,nsSelectArray)
+                        self.allPairs[k] = np.vstack((self.allPairs[k],
+                                                     nPairsList))
+                        self.allVolumes[k] = np.vstack((self.allVolumes[k],
+                                                     volumesList))
                     else:
-                        nPairsList = self.pairCounts[ns][\
-                                self.voidIndices[nsSelectArray],:]
-                        volumesList = \
-                            self.getVolumesOfRadialBins(self.centralRadiiAll,\
-                                selectArray)
-                    self.allPairs.append(nPairsList)
-                else:
-                    volumes = 4*np.pi*(self.rEffBinEdges[1:]**3 - \
-                        self.rEffBinEdges[0:-1]**3)/3
-                    voidRadii = self.centralRadiiAll[nsSelectArray]
-                    volumesList = np.outer(voidRadii**3,volumes)
-                self.allVolumes.append(volumesList)
-                self.allSelections.append(nsSelectArray)
+                        volumes = 4*np.pi*(self.rEffBinEdges[1:]**3 - \
+                            self.rEffBinEdges[0:-1]**3)/3
+                        voidRadii = self.centralRadiiAll[nsSelectArray]
+                        volumesList = np.outer(voidRadii**3,volumes)
+                        self.allVolumes[k] = np.vstack((self.allVolumes[k],
+                                                     volumesList))
+                    self.allSelections.append(nsSelectArray)
             self.allConditions.append(self.centralConditionVariableAll)
         else:
             lengthsArray = np.zeros(0,dtype=int)
@@ -1440,13 +1480,8 @@ class profileStack:
                                 self.conditioningQuantity[ns][\
                                 centralAntihalos,:]
                         self.allConditions.append(centralConditionVariable)
-                        selectArray = selectConditionedRandomVoids(\
-                            self.conditioningQuantityToMatch,\
-                            centralConditionVariable,\
-                            self.conditionBinEdges,centralRadii,\
-                            rMin = self.rMin,rMax = self.rMax,
-                            seed=self.seed,replace=self.replace,\
-                            maxSampling = self.maxSampling)
+                        selectArray = self.selectConditionedRandomVoids(\
+                            centralConditionVariable,centralRadii)
                         self.allSelectedConditions.append(\
                             centralConditionVariable[selectArray,:])
                     else:
