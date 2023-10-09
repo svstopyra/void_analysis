@@ -1388,11 +1388,18 @@ class profileStack:
                 nsSelectArray = selectArray[\
                     self.sampleIndices[selectArray] == ns]
                 if self.computePairCounts:
-                    [nPairsList,volumesList] = stacking.getPairCounts(\
-                        self.centralCentresAll[nsSelectArray],\
-                        self.centralRadiiAll[nsSelectArray],snapLoaded,\
-                        self.rEffBinEdges,tree=tree,method='poisson',\
-                        vorVolumes=None)
+                    if self.pairCounts is None:
+                        [nPairsList,volumesList] = stacking.getPairCounts(\
+                            self.centralCentresAll[nsSelectArray],\
+                            self.centralRadiiAll[nsSelectArray],snapLoaded,\
+                            self.rEffBinEdges,tree=tree,method='poisson',\
+                            vorVolumes=None)
+                    else:
+                        nPairsList = self.pairCounts[ns][\
+                                self.voidIndices[nsSelectArray],:]
+                        volumesList = \
+                            self.getVolumesOfRadialBins(self.centralRadiiAll,\
+                                selectArray)
                     self.allPairs.append(nPairsList)
                 else:
                     volumes = 4*np.pi*(self.rEffBinEdges[1:]**3 - \

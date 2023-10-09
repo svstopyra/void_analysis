@@ -4283,6 +4283,8 @@ densityUnderdenseNonOverlapping = np.hstack(densityListUnderdenseNonOverlapping)
 
 from void_analysis.catalogue import profileStack
 
+# Load all pair Counts:
+allPairCountsList = [props[9] for props in ahPropsUn]
 
 # With no constraints:
 noConstraintsStack = profileStack(\
@@ -4294,17 +4296,17 @@ noConstraintsStack = profileStack(\
     conditionBinEdges=None,\
     combineRandomRegions=False,replace=False,\
     rMin = voidRadiusBinEdges[0],rMax = voidRadiusBinEdges[-1],\
-    computePairCounts=False,maxSampling = 1)
-#noConstraintsDict2 = noConstraintsStack.getRandomCataloguePairCounts()
+    computePairCounts=True,maxSampling = 1,pairCounts = allPairCountsList)
+#noConstraintsDict = noConstraintsStack.getRandomCataloguePairCounts()
 noConstraintsDict = tools.loadOrRecompute(\
     data_folder + "no_constraints_stack.p",\
     noConstraintsStack.getRandomCataloguePairCounts,_recomputeData=False)
-nsListNoConstraints = np.array([[k \
-    for centre in centresAllDensityNonOverlapping[k] ] \
-    for k in range(0,len(centresAllDensityNonOverlapping))]).flatten()
-nsListDensityConstraint = np.hstack([[k \
-    for centre in centresUnderdenseNonOverlapping[k] ] \
-    for k in range(0,len(centresUnderdenseNonOverlapping))])
+#nsListNoConstraints = np.array([[k \
+#    for centre in centresAllDensityNonOverlapping[k] ] \
+#    for k in range(0,len(centresAllDensityNonOverlapping))]).flatten()
+#nsListDensityConstraint = np.hstack([[k \
+#    for centre in centresUnderdenseNonOverlapping[k] ] \
+#    for k in range(0,len(centresUnderdenseNonOverlapping))])
 
 # Reconstruct the pairs list:
 stackedPairs = np.vstack(noConstraintsDict['pairs'])
@@ -4329,8 +4331,8 @@ regionDensityStack = profileStack(\
     conditionBinEdges=None,\
     combineRandomRegions=False,replace=False,\
     rMin = voidRadiusBinEdges[0],rMax = voidRadiusBinEdges[-1],\
-    computePairCounts=False,maxSampling = 1)
-#regionDensityDict2 = regionDensityStack.getRandomCataloguePairCounts()
+    computePairCounts=True,maxSampling = 1,pairCounts = allPairCountsList)
+#regionDensityDict = regionDensityStack.getRandomCataloguePairCounts()
 regionDensityDict = tools.loadOrRecompute(\
     data_folder + "regionDensity_stack.p",\
     regionDensityStack.getRandomCataloguePairCounts,_recomputeData=False)
@@ -4349,8 +4351,8 @@ regionDensityAndRadiusStack = profileStack(\
     conditionBinEdges=[voidRadiusBinEdges],\
     combineRandomRegions=False,replace=False,\
     rMin = voidRadiusBinEdges[0],rMax = voidRadiusBinEdges[-1],\
-    computePairCounts=False,maxSampling = 1)
-#regionDensityAndRadiusDict2 = \
+    computePairCounts=True,maxSampling = 1,pairCounts = allPairCountsList)
+#regionDensityAndRadiusDict = \
 #    regionDensityAndRadiusStack.getRandomCataloguePairCounts()
 regionDensityAndRadiusDict = tools.loadOrRecompute(\
     data_folder + "regionDensityAndRadius_stack.p",\
@@ -4373,37 +4375,82 @@ regionDensityAndTripleConditionStack = profileStack(\
     conditioningQuantityToMatch=conditioningQuantityMCMC,\
     conditionBinEdges=[voidRadiusBinEdges,conBinEdges,conBinEdges],\
     combineRandomRegions=False,replace=False,\
-    computePairCounts=True,maxSampling = 1)
-#regionDensityAndTripleConditionDict2 = \
+    computePairCounts=True,maxSampling = 1,pairCounts = allPairCountsList)
+#regionDensityAndTripleConditionDict = \
 #    regionDensityAndTripleConditionStack.getRandomCataloguePairCounts()
 regionDensityAndTripleConditionDict = tools.loadOrRecompute(\
     data_folder + "regionDensityAndTripleCondition_stack.p",\
     regionDensityAndTripleConditionStack.getRandomCataloguePairCounts,\
-    _recomputeData=True)
+    _recomputeData=False)
 
-# Density, Radius, and Void Density constraints, with pooling:
+# Region density and void central density constraints:
 conBinEdges = np.linspace(-1,-0.5,21)
-conditioningQuantityUn = [np.vstack([antihaloRadiiUn[ns],\
-    ahPropsUn[ns][11],ahPropsUn[ns][12]]).T \
+conditioningQuantityUn = [np.vstack([ahPropsUn[ns][11]]).T \
     for ns in range(0,len(snapListUn))]
-conditioningQuantityMCMC = np.vstack([meanRadii,\
-    deltaCentralMean[filter300],deltaAverageMean[filter300]]).T
+conditioningQuantityMCMC = np.vstack([\
+    deltaCentralMean[filter300]]).T
 
-regionDensityAndTripleConditionStackPooled = profileStack(\
+regionAndVoidCentralDensityConditionStack = profileStack(\
     centresUnderdenseNonOverlapping,\
     snapListUn,ahPropsUnconstrained,rSphere,\
     rBinStack,treeList=treeListUncon,seed=1000,start=0,end=-1,\
     conditioningQuantity=conditioningQuantityUn,\
     conditioningQuantityToMatch=conditioningQuantityMCMC,\
-    conditionBinEdges=[voidRadiusBinEdges,conBinEdges,conBinEdges],\
+    conditionBinEdges=[conBinEdges],\
+    combineRandomRegions=False,replace=False,\
+    computePairCounts=True,maxSampling = 1,pairCounts = allPairCountsList)
+regionAndVoidCentralDensityConditionDict = tools.loadOrRecompute(\
+    data_folder + "regionAndVoidCentralDensityCondition_stack.p",\
+    regionAndVoidCentralDensityConditionStack.getRandomCataloguePairCounts,\
+    _recomputeData=False)
+
+
+
+# Region density and void density constraints:
+conBinEdges = np.linspace(-1,-0.5,21)
+conditioningQuantityUn = [np.vstack([ahPropsUn[ns][11],ahPropsUn[ns][12]]).T \
+    for ns in range(0,len(snapListUn))]
+conditioningQuantityMCMC = np.vstack([\
+    deltaCentralMean[filter300],deltaAverageMean[filter300]]).T
+
+regionAndVoidDensityConditionStack = profileStack(\
+    centresUnderdenseNonOverlapping,\
+    snapListUn,ahPropsUnconstrained,rSphere,\
+    rBinStack,treeList=treeListUncon,seed=1000,start=0,end=-1,\
+    conditioningQuantity=conditioningQuantityUn,\
+    conditioningQuantityToMatch=conditioningQuantityMCMC,\
+    conditionBinEdges=[conBinEdges,conBinEdges],\
+    combineRandomRegions=False,replace=False,\
+    computePairCounts=True,maxSampling = 1,pairCounts = allPairCountsList)
+regionAndVoidDensityConditionDict = tools.loadOrRecompute(\
+    data_folder + "regionAndVoidDensityCondition_stack.p",\
+    regionAndVoidDensityConditionStack.getRandomCataloguePairCounts,\
+    _recomputeData=False)
+
+
+# Density, Radius, and Void Density constraints, with pooling:
+conBinEdges = np.linspace(-1,-0.5,21)
+conditioningQuantityUn = [np.vstack([\
+    ahPropsUn[ns][11],ahPropsUn[ns][12]]).T \
+    for ns in range(0,len(snapListUn))]
+conditioningQuantityMCMC = np.vstack([\
+    deltaCentralMean[filter300],deltaAverageMean[filter300]]).T
+
+regionDensityAndAllConditionStackPooled = profileStack(\
+    centresUnderdenseNonOverlapping,\
+    snapListUn,ahPropsUnconstrained,rSphere,\
+    rBinStack,treeList=treeListUncon,seed=1000,start=0,end=-1,\
+    conditioningQuantity=conditioningQuantityUn,\
+    conditioningQuantityToMatch=conditioningQuantityMCMC,\
+    conditionBinEdges=[conBinEdges,conBinEdges],\
     combineRandomRegions=True,replace=False,\
-    computePairCounts=True,maxSampling=10)
+    computePairCounts=True,maxSampling=10,pairCounts = allPairCountsList)
 #regionDensityAndTripleConditionDict2 = \
 #    regionDensityAndTripleConditionStack.getRandomCataloguePairCounts()
-regionDensityAndTripleConditionPooledDict = tools.loadOrRecompute(\
-    data_folder + "regionDensityAndTripleConditionPooled_stack.p",\
-    regionDensityAndTripleConditionStackPooled.getRandomCataloguePairCounts,\
-    _recomputeData=True)
+regionDensityAndAllConditionPooledDict = tools.loadOrRecompute(\
+    data_folder + "regionDensityAndAllConditionPooled_stack.p",\
+    regionDensityAndAllConditionStackPooled.getRandomCataloguePairCounts,\
+    _recomputeData=False)
 
 # Density and Radius constraints with pooling:
 conBinEdges = np.linspace(-1,-0.5,21)
