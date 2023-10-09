@@ -1203,7 +1203,10 @@ def selectConditionedRandomVoids(conditioningQuantityMCMC,\
     nzMCMC = np.where(samplingMCMCLin > 0)
     rat = np.zeros(samplingMCMCLin.shape,dtype=int)
     rat[nzMCMC] = samplingRandLin[nzMCMC]/samplingMCMCLin[nzMCMC]
-    minRatio = np.max([np.min(np.hstack((rat[rat > 0],np.array([1])))),1])
+    if len(rat[rat > 0]) > 0:
+        minRatio = np.min(rat[rat > 0])
+    else:
+        minRatio = 1
     # Impose an upper limit, to avoid taking forever...
     if maxSampling is not None:
         minRatio = np.min([minRatio,maxSampling])
