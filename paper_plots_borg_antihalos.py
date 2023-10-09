@@ -3992,6 +3992,9 @@ if doVoidProfiles:
 snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
         + "gadget_full_forward_512/snapshot_001") for snapNum in snapNumList]
 
+snapListRev =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" \
+        + "gadget_full_reverse_512/snapshot_001") for snapNum in snapNumList]
+
 snapNameList = [samplesFolder + "sample" + str(snapNum) + "/" \
         + "gadget_full_forward_512/snapshot_001" for snapNum in snapNumList]
 
