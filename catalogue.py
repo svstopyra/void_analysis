@@ -6,21 +6,23 @@ from void_analysis import tools, snapedit, plot_utilities, stacking
 
 class combinedCatalogue:
     # Class to store and compute a combined catalogue
-    def __init__(self,snapList,snapListRev,muR,muS,rSphere,\
-            ahProps=None,sortMethod="ratio",snapSortList=None,hrList=None,\
-            verbose=False,rMin = 5,rMax = 30,massRange = None,\
-            NWayMatch = False,additionalFilters = None,sortBy="mass",\
-            refineCentres=False,max_index=None,enforceExclusive=False,\
-            blockDuplicates=True,iterMax=100,matchType='distance',\
-            crossMatchQuantity='radius',pynbodyThresh=0.5,twoWayOnly=True,\
-            mode="fractional",overlapList = None):
+    def __init__(self,snapList,snapListRev,muR,muS,rSphere,
+                 ahProps=None,sortMethod="ratio",snapSortList=None,hrList=None,
+                 verbose=False,r_min = 5,r_max = 30,massRange = None,
+                 NWayMatch = False,additionalFilters = None,sortBy="mass",
+                 refineCentres=False,max_index=None,enforceExclusive=False,
+                 blockDuplicates=True,iterMax=100,matchType='distance',
+                 crossMatchQuantity='radius',pynbodyThresh=0.5,twoWayOnly=True,
+                 mode="fractional",overlapList = None):
         self.muR = muR # Radius ratio threshold
         self.muS = muS # Search distance ratio threshold
         self.rSphere = rSphere # Radius from the centre of the simulation box
             # out to which we build the catalogue
         # Load catalogue data:
-        self.rMin = rMin # Minimum radius for voids used to build the catalogue
-        self.rMax = rMax # Maximum radius for voids used to build the catalogue
+        self.r_min = r_min # Minimum radius for voids used to build the 
+            # catalogue
+        self.r_max = r_max # Maximum radius for voids used to build the 
+            # catalogue
         self.massRange = massRange # Mass range for voids in the catalogue
         self.NWayMatch = NWayMatch # Whether to use N-way matching
         self.additionalFilters = additionalFilters # Additional filters to
@@ -82,7 +84,8 @@ class combinedCatalogue:
         # already added to the catalogue somehow. This is achieved using a 
         # boolean array - every time we find a void, we flag it here so that
         # we can later check if it has already been added:
-        self.alreadyMatched = np.zeros((self.numCats,self.max_index),dtype=bool)
+        self.alreadyMatched = np.zeros((self.numCats,self.max_index),
+                                       dtype=bool)
         # List of the other catalogues, for each catalogue:
         self.diffMap = [np.setdiff1d(np.arange(0,self.numCats),[k]) \
             for k in range(0,self.numCats)]
@@ -125,6 +128,9 @@ class combinedCatalogue:
             "mass":self.massListShort,\
             "deltaCentral":self.deltaCentralListShort,\
             "deltaAverage":self.deltaAverageListShort}
+        self.filter = None
+        self.thresholds = None
+        self.threshold_bins = None
         if self.crossMatchQuantity == 'radius':
             self.quantityList = self.radiusListShort
         elif self.crossMatchQuantity == 'mass':
@@ -200,8 +206,8 @@ class combinedCatalogue:
         centres2 = self.centresListShort[n2]
         quantity1 = self.quantityList[n1]
         #quantity2 = self.quantityList[n2]
-        # Our procedure here is to get the closest anti-halo that lies within the 
-        # threshold:
+        # Our procedure here is to get the closest anti-halo that lies within
+        # the threshold:
         match = [-2] # Always include -2, for compatibility with pynbody output
         candidatesList = []
         ratioList = []
@@ -241,7 +247,8 @@ class combinedCatalogue:
             # matches in each one way pair
         allCandidates = [] # List of candidates for each one way pair
         allRatios = [] # List of the radius (or mass) ratios of each candidate
-        allDistances = [] # List of distances from a void to all it's candidates
+        allDistances = [] # List of distances from a void to all it's 
+            # candidates
         for k in range(0,self.numCats):
             matchArrayListNew = matchArrayList[k]
             allCandidatesNew = []
@@ -271,8 +278,8 @@ class combinedCatalogue:
             allDistances.append(allDistancesNew)
         # Here we arrange the one-way matches of every void in every 
         # catalogue. This is a list of Ncat matrices, one for each catalogue.
-        # Each matrix has dimensions Nvoids_i x Ncat (Nvoids_i being the number of
-        # voids in catalogue i):
+        # Each matrix has dimensions Nvoids_i x Ncat (Nvoids_i being the 
+        # number of voids in catalogue i):
         oneWayMatchesAllCatalogues = \
             [np.array(matchArrayList[k]).transpose()[1:,:] \
             for k in range(0,self.numCats)]
@@ -283,7 +290,7 @@ class combinedCatalogue:
             self.ahCounts,self.max_index]  = computeShortCentresList(\
             self.snapNameList,self.antihaloCentres,\
             self.antihaloRadii,self.antihaloMasses,self.rSphere,\
-            self.rMin,self.rMax,massRange = self.massRange,\
+            self.r_min,self.r_max,massRange = self.massRange,\
             additionalFilters = self.additionalFilters,\
             sortBy = self.sortBy,max_index = self.max_index)
         # Build a KD tree with the centres in centresListShort for efficient 
@@ -544,7 +551,8 @@ class combinedCatalogue:
                 quantitiesArray.append(quantitiesList[l][voidMatches[l] - 1])
         return quantitiesArray
     def getStdCentreFromVoidMatches(self,voidMatches,centresList):
-        centresArray = getAllQuantityiesFromVoidMatches(voidMatches,centresList)
+        centresArray = getAllQuantityiesFromVoidMatches(voidMatches,
+                                                        centresList)
         stdCentres = np.std(centresArray,0)
         return stdCentres
     def getMeanCentreFromVoidMatches(self,voidMatches):
@@ -626,7 +634,8 @@ class combinedCatalogue:
         return [quantRatio,sortedCandidates,indSort]
     def getVoidsAboveThresholds(self,quantRatio,distances,\
             searchQuantity,otherQuantities,sortedCandidates,indSort):
-        # Number of search quantities (radius or mass) to process for this void:
+        # Number of search quantities (radius or mass) to process for this 
+        # void:
         if np.isscalar(searchQuantity):
             nQuantLen = 1
         else:
@@ -752,7 +761,8 @@ class combinedCatalogue:
             if self.enforceExclusive:
                 # Filter any already included voids so that they can't appear
                 # in multiple voids:
-                voidMatchesNew = self.removeAlreadyIncludedVoids(voidMatchesNew)
+                voidMatchesNew = self.removeAlreadyIncludedVoids(
+                    voidMatchesNew)
             # Check that we didn't run completely out of voids, as this will
             # make our centre meaningless.
             if np.all(voidMatchesNew < 0):
@@ -777,8 +787,9 @@ class combinedCatalogue:
         oneWayMatchesOther = oneWayMatches[:,otherColumns]
         # Mark companions of this void as already found, to avoid duplication.
         # Additionally, store the candidates (candm), radius ratios (ratiosm) 
-        # and distances to candidates (distancesm) of this void for output data:
-        [candm,ratiosm,distancesm] = self.gatherCandidatesRatiosAndDistances(\
+        # and distances to candidates (distancesm) of this void for output 
+        # data:
+        [candm,ratiosm,distancesm] = self.gatherCandidatesRatiosAndDistances(
             nCat,nVoid)
         self.finalCandidates.append(candm)
         if self.NWayMatch:
@@ -789,9 +800,9 @@ class combinedCatalogue:
             success = True
         else:
             if self.refineCentres:
-                [voidMatches,ratiosm,distancesm,success,allCentres,allRadii] = \
-                    self.refineVoidCentres(oneWayMatches[nVoid],ratiosm,\
-                        distancesm)
+                [voidMatches,ratiosm,distancesm,success,allCentres,
+                 allRadii] = self.refineVoidCentres(oneWayMatches[nVoid],
+                                                    ratiosm,distancesm)
                 if len(self.finalCat) > 0:
                     duplicates = self.checkForDuplicates(voidMatches)
                     if np.any(duplicates):
@@ -847,7 +858,7 @@ class combinedCatalogue:
             self.finalCombinatoricFrac.append(combFrac)
         return voidMatches
     # Get the catalogue fraction thresholds for each void:
-    def getAllThresholds(self,percentiles,radBins):
+    def getAllThresholds(self,percentiles,radBins,void_filter=False):
         if len(percentiles) != len(radBins) - 1:
             raise Exception("Bins not compatible with specified percentiles.")
         if self.meanRadii is None:
@@ -858,11 +869,11 @@ class combinedCatalogue:
         thresholds = np.zeros(self.meanRadii.shape)
         for filt, perc in zip(scaleFilter,percentiles):
             thresholds[filt] = perc
-        return thresholds
+        return self.property_with_filter(thresholds,void_filter)
     # Compute mean properties for all voids, averaged over corresponding
     # anti-halos.
     def getMeanProperty(self,prop,stdError=True,\
-            recompute=False):
+            recompute=False,void_filter=False):
         if self.finalCat is None:
             raise Exception("Final catalogue has not yet been computed.")
         if type(prop) == str:
@@ -892,8 +903,23 @@ class combinedCatalogue:
                 sigmaProperty[k] /= np.sqrt(len(haveProperty))
         self.meanDict[prop] = meanProperty
         self.sigmaDict[prop] = sigmaProperty
-        return [meanProperty,sigmaProperty]
-    def getAllProperties(self,prop):
+        return [self.property_with_filter(meanProperty,void_filter),
+                self.property_with_filter(sigmaProperty,void_filter)]
+    # Optionally apply a filter to the output catalogue so we only include
+    # a specific subset of voids. Usually, this would be those which are
+    # above a given significance threshold.
+    def property_with_filter(self,prop,void_filter):
+        if type(void_filter) is bool:
+            if void_filter:
+                if self.filter is None:
+                    raise Exception("Void filter has not yet " +
+                                    "been specified!")
+                return prop[self.filter]
+            else:
+                return prop
+        else:
+            return prop[void_filter]
+    def getAllProperties(self,prop,void_filter=False):
         if prop not in self.propertyDict:
             raise Exception("Property " + str(prop) + " not yet implemented.")
         if self.finalCat is None:
@@ -907,8 +933,9 @@ class combinedCatalogue:
                             self.shortListDict[prop][l][self.finalCat[k,l]-1]
                     else:
                         self.propertyDict[prop][k,l] = np.nan
-            return self.propertyDict[prop]
-    def getSNRForVoidRealisations(self,snrAllCatsList):
+            return self.property_with_filter(
+                self.propertyDict[prop],void_filter)
+    def getSNRForVoidRealisations(self,snrAllCatsList,void_filter=False):
         if self.finalCat is None:
             raise Exception("Final catalogue is not yet computed.")
         snrCat = np.zeros(self.finalCat.shape)
@@ -916,11 +943,13 @@ class combinedCatalogue:
             haveVoids = np.where(self.finalCat[:,ns] >= 0)[0]
             snrCat[haveVoids,ns] = snrAllCatsList[ns][self.ahNumbers[ns][\
                 finalCat[haveVoids,ns]-1]]
-        return snrCat
-    def getAllCentres(self):
-        return np.array([self.getCentresInSample(ns) \
+        return self.property_with_filter(snrCat,void_filter)
+    def getAllCentres(self,void_filter=False):
+        all_centres = np.array([self.property_with_filter(
+            self.getCentresInSample(ns), void_filter)\
             for ns in range(0,self.numCats)])
-    def getCentresInSample(self,ns):
+        return all_centres
+    def getCentresInSample(self,ns,void_filter=False):
         centresListOut = np.zeros((len(self.finalCat),3),dtype=float)
         for k in range(0,len(self.finalCat)):
             if self.finalCat[k,ns] > 0:
@@ -928,9 +957,10 @@ class combinedCatalogue:
                     [self.finalCat[k,ns]-1]
             else:
                 centresListOut[k,:] = np.nan
-        return centresListOut
-    def getMeanCentres(self):
-        return np.nanmean(self.getAllCentres(),0)
+        return self.property_with_filter(centresListOut,void_filter)
+    def getMeanCentres(self,void_filter=False):
+        return self.property_with_filter(
+            np.nanmean(self.getAllCentres(),0),void_filter)
     # Generate percentile thresholds (mostly used by random catalogues):
     def getThresholdsInBins(self,binEdges,percThresh,binVariable="radius"):
         if self.meanMass is None:
@@ -962,6 +992,37 @@ class combinedCatalogue:
                 percentilesComb.append(0.0)
                 percentilesCat.append(0.0)
         return [np.array(percentilesCat),np.array(percentilesComb)]
+    # Set a filter to be applied to the catalogue, usually ot focus on 
+    # the highest-significance voids.
+    def set_filter(self,thresholds,threshold_bins,r_min=None,r_max=None,
+                   r_sphere=None):
+        if len(thresholds) != len(threshold_bins) - 1:
+            raise Exception("Bins not compatible with specified percentiles.")
+        self.thresholds = thresholds
+        self.threshold_bins = threshold_bins
+        all_thresholds = self.getAllThresholds(self.thresholds,
+                                               self.threshold_bins)
+        if r_min is None:
+            r_min = self.r_min
+        if r_max is None:
+            r_max = self.r_max
+        if r_sphere is None:
+            r_sphere = self.rSphere
+        # Construct a filter with this threshold:
+        if self.meanRadii is None:
+            [self.meanRadii,self.sigmaRadii] = self.getMeanProperty('radii')
+        meanCentres  = self.getMeanCentres()
+        distances = np.sqrt(np.sum(meanCentres**2,1))
+        self.filter = ( (self.meanRadii > r_min) & (self.meanRadii <= r_max) 
+                       & (distances < r_sphere) 
+                       & (self.finalCatFrac > all_thresholds) )
+    # As set_filter, but computes the thresholds directly from another
+    # catalogue (usually a random catalogue)
+    def set_filter_from_random_catalogue(self,random_catalogue,threshold_bins,
+                                         percentile=99,**kwargs):
+        thresholds = random_catalogue.getThresholdsInBins(threshold_bins,
+                                                          percentile)
+        self.set_filter(thresholds,threshold_bins,**kwargs)
 
 def loadSnapshots(snapList):
     if type(snapList[0]) == str:
@@ -1033,8 +1094,8 @@ def overlapMap(cat1,cat2,volumes1,volumes2,checkFirst = False,verbose=False):
 
 # Select the voids which will be included in catalogue matching, applying
 # radius and mass cuts, and other arbitrary cuts (such as signel-to-noise):
-def computeShortCentresList(snapNumList,antihaloCentres,antihaloRadii,\
-        antihaloMasses,rSphere,rMin,rMax,massRange=None,additionalFilters=None,\
+def computeShortCentresList(snapNumList,antihaloCentres,antihaloRadii,
+        antihaloMasses,rSphere,rMin,rMax,massRange=None,additionalFilters=None,
         sortBy = "mass",max_index=None):
     # Build a filter from the specified radius range:
     filterCond = [(antihaloRadii[k] > rMin) & (antihaloRadii[k] <= rMax) \
