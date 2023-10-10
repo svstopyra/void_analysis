@@ -1399,10 +1399,10 @@ class ProfileStack:
                                  replace=self.replace))
             if self.combine_random_regions:
                 # Store which of the fake regions each sample belongs to:
-                self.region_index = np.hstack(
+                self.region_index = np.hstack((
                     self.region_index,np.array(
                         np.arange(0,num_samples_to_take,1)/min_ratio,
-                        dtype=int))
+                        dtype=int)))
         select_array = np.hstack(selection)
         return in_all_ranges_ind[select_array]
     # Get arrays which store the variables for each void we wish to sample
