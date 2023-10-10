@@ -4325,7 +4325,7 @@ noConstraintsDict2['volumes'] = unstackedVolumes
 regionDensityStack = ProfileStack(\
     centresUnderdenseNonOverlapping,\
     snapListUn,ahPropsUnconstrained,rSphere,\
-    rBinStack,treeList=treeListUncon,seed=1000,start=0,end=-1,\
+    rBinStack,tree_list=treeListUncon,seed=1000,start=0,end=-1,\
     conditioning_quantity=None,\
     conditioning_quantity_to_match=None,\
     condition_bin_edges=None,\
@@ -4350,7 +4350,7 @@ regionDensityAndRadiusStack = ProfileStack(\
     conditioning_quantity_to_match=conditioningQuantityMCMC,\
     condition_bin_edges=[voidRadiusBinEdges],\
     combine_random_regions=False,replace=False,\
-    r_min = voidRadiusBinEdges[0],rmax = voidRadiusBinEdges[-1],\
+    r_min = voidRadiusBinEdges[0],r_max = voidRadiusBinEdges[-1],\
     compute_pair_counts=True,max_sampling = 1,pair_counts = allPairCountsList)
 #regionDensityAndRadiusDict = \
 #    regionDensityAndRadiusStack.get_random_catalogue_pair_counts()
@@ -4449,8 +4449,8 @@ regionDensityAndAllConditionStackPooled = ProfileStack(\
     combine_random_regions=True,replace=False,\
     r_min = voidRadiusBinEdges[0],r_max = voidRadiusBinEdges[-1],\
     compute_pair_counts=True,max_sampling=10,pair_counts = allPairCountsList)
-#regionDensityAndTripleConditionDict2 = \
-#    regionDensityAndTripleConditionStack.get_random_catalogue_pair_counts()
+regionDensityAndAllConditionPooledDict = \
+    regionDensityAndAllConditionStackPooled.get_random_catalogue_pair_counts()
 regionDensityAndAllConditionPooledDict = tools.loadOrRecompute(\
     data_folder + "regionDensityAndAllConditionPooled_stack.p",\
     regionDensityAndAllConditionStackPooled.get_random_catalogue_pair_counts,\

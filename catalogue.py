@@ -1480,6 +1480,10 @@ class ProfileStack:
                 if (len(select_array) 
                         != (self.min_ratio
                             * len(self.conditioning_quantity_to_match))):
+                    print("min_ratio = " + str(self.min_ratio))
+                    print("len(select_array) = " + str(len(select_array)))
+                    print("N_mcmc = "
+                          + str(len(self.conditioning_quantity_to_match)))
                     raise Exception("Failed to sample in integer ratio.")
             else:
                 select_array = np.range(0,self.num_voids_total)
