@@ -1304,13 +1304,13 @@ class ProfileStack:
                     self.conditioning_quantity_to_match,
                     bins = self.condition_bin_edges)
                 self.sampling_MCMC_lin = np.array(self.sampling_MCMC.flatten(),
-                                                dtype=int)
+                                                  dtype=int)
             if self.sampling_rand is None:
                 [self.sampling_rand,edges] = np.histogramdd(\
-                    self.conditioning_quantity_to_match,
+                    self.conditioning_variable,
                     bins = self.condition_bin_edges)
                 self.sampling_rand_lin = np.array(self.sampling_rand.flatten(),
-                                                dtype=int)
+                                                  dtype=int)
             # Figure out how many times we can sample the random set, and 
             # retain the same distribution as the MCMC set. This is defined 
             # as the lowest ratio between the counts in MCMC bins and in 
