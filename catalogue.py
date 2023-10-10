@@ -1497,13 +1497,16 @@ class ProfileStack:
             self.all_selections = [
                 np.zeros((0),dtype=int) 
                 for k in range(0,self.min_ratio)]
+            self.all_selected_conditions = [
+                np.zeros((0,self.num_cond),dtype=int) 
+                for k in range(0,self.min_ratio)]
             for k in range(0,self.min_ratio):
                 for ns in range(self.start,self.end):
                     snap_loaded = self.snap_list[ns]
                     tree = self.tree_list[ns]
                     num_selected = len(select_array)
                     k_filter = np.arange(k,num_selected,self.min_ratio)
-                    ns_select_array = select_array[\
+                    ns_select_array = select_array[k_filter][\
                         self.sample_indices[select_array][k_filter] == ns]
                     if self.compute_pair_counts:
                         if self.pair_counts is None:
@@ -1530,7 +1533,12 @@ class ProfileStack:
                         volumes_list = np.outer(void_radii**3,volumes)
                         self.all_volumes[k] = np.vstack((self.all_volumes[k],
                                                      volumes_list))
-                    self.all_selections.append(ns_select_array)
+                    self.all_selected_conditions[k] = np.vstack(
+                        (self.all_selected_conditions[k],
+                         self.central_condition_variable_all[
+                         ns_select_array,:]))
+                    self.all_selections[k] = np.hstack((self.all_selections[k],
+                                                       ns_select_array))
             self.all_conditions.append(self.central_condition_variable_all)
         else:
             lengths_array = np.zeros(0,dtype=int)
