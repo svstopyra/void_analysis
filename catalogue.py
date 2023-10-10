@@ -1294,10 +1294,12 @@ class ProfileStack:
             return self.pair_counts[0].shape[1]
         else:
             return len(self.r_eff_bin_edges) - 1
-    def get_sampling_ratio(self):
+    def get_sampling_ratio(self,condition_variable = None):
         if not self.combine_random_regions:
             min_ratio = 1
         else:
+            if condition_variable is None:
+                condition_variable = self.central_condition_variable_all
             # Having verified that the input is sane, now bin everything:
             if self.sampling_MCMC is None:
                 [self.sampling_MCMC,edges] = np.histogramdd(\
@@ -1307,8 +1309,7 @@ class ProfileStack:
                                                   dtype=int)
             if self.sampling_rand is None:
                 [self.sampling_rand,edges] = np.histogramdd(\
-                    self.conditioning_variable,
-                    bins = self.condition_bin_edges)
+                    condition_variable,bins = self.condition_bin_edges)
                 self.sampling_rand_lin = np.array(self.sampling_rand.flatten(),
                                                   dtype=int)
             # Figure out how many times we can sample the random set, and 
