@@ -4448,7 +4448,7 @@ regionDensityAndAllConditionStackPooled = ProfileStack(\
     condition_bin_edges=[conBinEdges,conBinEdges],\
     combine_random_regions=True,replace=False,\
     r_min = voidRadiusBinEdges[0],r_max = voidRadiusBinEdges[-1],\
-    compute_pair_counts=True,max_sampling=10,pair_counts = allPairCountsList)
+    compute_pair_counts=True,max_sampling=200,pair_counts = allPairCountsList)
 regionDensityAndAllConditionPooledDict = \
     regionDensityAndAllConditionStackPooled.get_random_catalogue_pair_counts()
 regionDensityAndAllConditionPooledDict = tools.loadOrRecompute(\

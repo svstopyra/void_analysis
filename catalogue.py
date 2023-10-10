@@ -1329,7 +1329,7 @@ class ProfileStack:
     # Select random catalogue voids that match the distribution of properties
     # in the MCMC catalogue.
     def select_conditioned_random_voids(self,conditioning_variable,void_radii,
-                                     min_ratio = None):
+                                        min_ratio = None):
         num_cond = get_number_of_conditions(
             self.conditioning_quantity_to_match)
         if len(self.condition_bin_edges) != num_cond:
@@ -1383,6 +1383,7 @@ class ProfileStack:
         # Now sample these to try and match the MCMC conditions:
         selection = []
         np.random.seed(self.seed)
+        self.region_index = np.zeros(0,dtype=int)
         for k in range(0,num_bins_tot):
             this_index = np.where((linearIndices == k))[0]
             if self.replace:
@@ -1396,6 +1397,12 @@ class ProfileStack:
             selection.append(
                 np.random.choice(this_index,num_samples_to_take,\
                                  replace=self.replace))
+            if self.combine_random_regions:
+                # Store which of the fake regions each sample belongs to:
+                self.region_index = np.hstack(
+                    self.region_index,np.array(
+                        np.arange(0,num_samples_to_take,1)/min_ratio,
+                        dtype=int))
         select_array = np.hstack(selection)
         return in_all_ranges_ind[select_array]
     # Get arrays which store the variables for each void we wish to sample
@@ -1478,14 +1485,6 @@ class ProfileStack:
                 select_array = self.select_conditioned_random_voids(\
                     self.central_condition_variable_all,\
                     self.central_radii_all)
-                if (len(select_array) 
-                        != (self.min_ratio
-                            * len(self.conditioning_quantity_to_match))):
-                    print("min_ratio = " + str(self.min_ratio))
-                    print("len(select_array) = " + str(len(select_array)))
-                    print("N_mcmc = "
-                          + str(len(self.conditioning_quantity_to_match)))
-                    raise Exception("Failed to sample in integer ratio.")
             else:
                 select_array = np.range(0,self.num_voids_total)
             self.all_pairs = [
@@ -1500,12 +1499,14 @@ class ProfileStack:
             self.all_selected_conditions = [
                 np.zeros((0,self.num_cond),dtype=int) 
                 for k in range(0,self.min_ratio)]
+            self.region_counts = np.zeros(self.min_ratio,dtype=int)
             for k in range(0,self.min_ratio):
                 for ns in range(self.start,self.end):
                     snap_loaded = self.snap_list[ns]
                     tree = self.tree_list[ns]
                     num_selected = len(select_array)
-                    k_filter = np.arange(k,num_selected,self.min_ratio)
+                    k_filter = np.where(self.region_index == k)[0]
+                    self.region_counts[k] = len(k_filter)
                     ns_select_array = select_array[k_filter][\
                         self.sample_indices[select_array][k_filter] == ns]
                     if self.compute_pair_counts:
