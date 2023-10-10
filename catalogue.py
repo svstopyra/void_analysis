@@ -1502,7 +1502,7 @@ class ProfileStack:
                     snap_loaded = self.snap_list[ns]
                     tree = self.tree_list[ns]
                     num_selected = len(select_array)
-                    k_filter = np.arange(k,num_selected,min_ratio)
+                    k_filter = np.arange(k,num_selected,self.min_ratio)
                     ns_select_array = select_array[\
                         self.sample_indices[select_array][k_filter] == ns]
                     if self.compute_pair_counts:
