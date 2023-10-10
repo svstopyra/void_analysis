@@ -1155,7 +1155,7 @@ def analyseSplit(catRef,catTest,nVRef,nVTest):
     return compareVoids(catRef[nVRef],catTest[nVTest])
 
 # Count the number of conditions being applied:
-def getNumberOfConditions(conditionList):
+def get_number_of_conditions(conditionList):
     if type(conditionList) is list:
         numCond = len(conditionList)
     elif type(conditionList) is np.ndarray:
@@ -1173,356 +1173,378 @@ def getNumberOfConditions(conditionList):
 
 
 # Class to store information about a void stack:
-class profileStack:
-    def __init__(self,centreList,snapList,propsList,rSphere,\
-            rEffBinEdges,treeList=None,seed=1000,start=0,end=-1,\
-            conditioningQuantity=None,conditioningQuantityToMatch=None,\
-            conditionBinEdges=None,combineRandomRegions=False,replace=False,\
-            rMin=None,rMax=None,computePairCounts = True,maxSampling=None,\
-            pairCounts=None):
-        self.centreList = centreList
-        self.snapList = snapList
-        if treeList is None:
+class ProfileStack:
+    def __init__(self,centre_list,snap_list,props_list,r_sphere,
+                 r_eff_bin_edges,tree_list=None,seed=1000,start=0,end=-1,
+                 conditioning_quantity=None,
+                 conditioning_quantity_to_match=None,condition_bin_edges=None,
+                 combine_random_regions=False,replace=False,r_min=None,
+                 r_max=None,compute_pair_counts = True,max_sampling=None,
+                 pair_counts=None):
+        self.centre_list = centre_list
+        self.snap_list = snap_list
+        if tree_list is None:
             # Generate the tree list from scratch (expensive in both cputime 
             # and memory, which is why we give the option to supply a 
             # pre-generated tree list
-            self.treeList = [scipy.spatial.cKDTree(snap['pos'],\
-                boxsize=boxsize) for snap in snapList]
+            self.tree_list = [scipy.spatial.cKDTree(snap['pos'],\
+                boxsize=boxsize) for snap in snap_list]
         else:
-            self.treeList = treeList
-        self.ahCentresList = [props[5] for props in propsList]
-        self.antihaloRadiiList = [props[7] for props in propsList]
-        self.boxsize = snapList[0].properties['boxsize'].ratio("Mpc a h**-1")
+            self.tree_list = tree_list
+        self.ah_centres_list = [props[5] for props in props_list]
+        self.antihalo_radii_list = [props[7] for props in props_list]
+        self.boxsize = snap_list[0].properties['boxsize'].ratio("Mpc a h**-1")
         self.seed = seed
-        self.rSphere = rSphere
-        self.rEffBinEdges = rEffBinEdges
-        self.rMin = rMin
-        self.rMax = rMax
+        self.r_sphere = r_sphere
+        self.r_eff_bin_edges = r_eff_bin_edges
+        self.r_min = r_min
+        self.r_max = r_max
         self.start=0
-        self.maxSampling = maxSampling
+        self.max_sampling = max_sampling
         if end == -1:
-            self.end = len(snapList)
+            self.end = len(snap_list)
         else:
             self.end = end
-        self.conditioningQuantity = conditioningQuantity
-        self.conditioningQuantityToMatch = conditioningQuantityToMatch
-        self.conditionBinEdges = conditionBinEdges
-        self.combineRandomRegions = combineRandomRegions
+        self.conditioning_quantity = conditioning_quantity
+        self.conditioning_quantity_to_match = conditioning_quantity_to_match
+        self.condition_bin_edges = condition_bin_edges
+        self.combine_random_regions = combine_random_regions
         self.replace = replace
-        self.computePairCounts = computePairCounts
-        self.pairCounts = pairCounts
-        self.samplingMCMC = None
-        self.samplingRand = None
+        self.compute_pair_counts = compute_pair_counts
+        self.pair_counts = pair_counts
+        self.sampling_MCMC = None
+        self.sampling_rand = None
         # Verify number of conditions matches the bins specified:
-        self.numCond = getNumberOfConditions(self.conditioningQuantityToMatch)
-        if self.conditionBinEdges is not None:
-            if len(self.conditionBinEdges) != self.numCond:
-                raise Exception("List of bins must match list of " + \
-                    "condition data")
+        self.num_cond = get_number_of_conditions(
+            self.conditioning_quantity_to_match)
+        if self.condition_bin_edges is not None:
+            if len(self.condition_bin_edges) != self.num_cond:
+                raise Exception("List of bins must match list of " + 
+                                "condition data")
         # Verify the same for the randoms:
-        if self.conditioningQuantity is not None:
-            self.numCondRand = getNumberOfConditions(\
-                self.conditioningQuantity[0])
-            if self.numCondRand != self.numCond:
-                raise Exception("Condition list for randoms does " + \
-                    "not match condition list for MCMC.")
-    def getNumberOfRadialBins(self):
-        if self.pairCounts is not None:
-            return self.pairCounts[0].shape[1]
+        if self.conditioning_quantity is not None:
+            self.num_cond_rand = get_number_of_conditions(\
+                self.conditioning_quantity[0])
+            if self.num_cond_rand != self.num_cond:
+                raise Exception("Condition list for randoms does " + 
+                                "not match condition list for MCMC.")
+    def get_number_of_radial_bins(self):
+        if self.pair_counts is not None:
+            return self.pair_counts[0].shape[1]
         else:
-            return len(self.rEffBinEdges) - 1
-    def getSamplingRatio(self):
-        if not self.combineRandomRegions:
-            minRatio = 1
+            return len(self.r_eff_bin_edges) - 1
+    def get_sampling_ratio(self):
+        if not self.combine_random_regions:
+            min_ratio = 1
         else:
             # Having verified that the input is sane, now bin everything:
-            if self.samplingMCMC is None:
-                [self.samplingMCMC,edges] = np.histogramdd(\
-                    self.conditioningQuantityToMatch,
-                    bins = self.conditionBinEdges)
-                self.samplingMCMCLin = np.array(self.samplingMCMC.flatten(),
+            if self.sampling_MCMC is None:
+                [self.sampling_MCMC,edges] = np.histogramdd(\
+                    self.conditioning_quantity_to_match,
+                    bins = self.condition_bin_edges)
+                self.sampling_MCMC_lin = np.array(self.sampling_MCMC.flatten(),
                                                 dtype=int)
-            if self.samplingRand is None:
-                [self.samplingRand,edges] = np.histogramdd(\
-                    self.conditioningQuantityToMatch,
-                    bins = self.conditionBinEdges)
-                self.samplingRandLin = np.array(self.samplingRand.flatten(),
+            if self.sampling_rand is None:
+                [self.sampling_rand,edges] = np.histogramdd(\
+                    self.conditioning_quantity_to_match,
+                    bins = self.condition_bin_edges)
+                self.sampling_rand_lin = np.array(self.sampling_rand.flatten(),
                                                 dtype=int)
-            # Figure out how many times we can sample the random set, and retain
-            # the same distribution as the MCMC set. This is defined as the lowest 
-            # ratio between the counts in MCMC bins and in random bins.
-            nzMCMC = np.where(self.samplingMCMCLin > 0)
-            rat = np.zeros(self.samplingMCMCLin.shape,dtype=int)
-            rat[nzMCMC] = \
-                self.samplingRandLin[nzMCMC]/self.samplingMCMCLin[nzMCMC]
+            # Figure out how many times we can sample the random set, and 
+            # retain the same distribution as the MCMC set. This is defined 
+            # as the lowest ratio between the counts in MCMC bins and in 
+            # random bins.
+            nz_MCMC = np.where(self.sampling_MCMC_lin > 0)
+            rat = np.zeros(self.sampling_MCMC_lin.shape,dtype=int)
+            rat[nz_MCMC] = \
+                self.sampling_rand_lin[nz_MCMC]/self.sampling_MCMC_lin[nz_MCMC]
             if len(rat[rat > 0]) > 0:
-                minRatio = np.min(rat[rat > 0])
+                min_ratio = np.min(rat[rat > 0])
             else:
-                minRatio = 1
-        minRatio = np.min([minRatio,self.maxSampling])
-        return minRatio
+                min_ratio = 1
+        min_ratio = np.min([min_ratio,self.max_sampling])
+        return min_ratio
     # Select random catalogue voids that match the distribution of properties
     # in the MCMC catalogue.
-    def selectConditionedRandomVoids(self,conditioningVariable,voidRadii,
-                                     minRatio = None):
-        numCond = getNumberOfConditions(self.conditioningQuantityToMatch)
-        if len(self.conditionBinEdges) != numCond:
+    def select_conditioned_random_voids(self,conditioning_variable,void_radii,
+                                     min_ratio = None):
+        num_cond = get_number_of_conditions(
+            self.conditioning_quantity_to_match)
+        if len(self.condition_bin_edges) != num_cond:
             raise Exception("List of bins must match list of " + \
                 "condition data")
         # Verify the same for the randoms:
-        numCondRand = getNumberOfConditions(conditioningVariable)
-        if type(conditioningVariable) is list:
-            conditioningVariable = np.array(conditioningVariable)
-        if type(self.conditioningQuantityToMatch) is list:
-            self.conditioningQuantityToMatch = \
-                np.array(self.conditioningQuantityToMatch)
-        if numCondRand != numCond:
+        num_cond_rand = get_number_of_conditions(conditioning_variable)
+        if type(conditioning_variable) is list:
+            conditioning_variable = np.array(conditioning_variable)
+        if type(self.conditioning_quantity_to_match) is list:
+            self.conditioning_quantity_to_match = \
+                np.array(self.conditioning_quantity_to_match)
+        if num_cond_rand != num_cond:
             raise Exception("Condition list for randoms does " + \
                 "not match condition list for MCMC.")
         # Having verified that the input is sane, now bin everything:
-        [self.samplingMCMC,edges] = np.histogramdd(\
-            self.conditioningQuantityToMatch,\
-            bins = self.conditionBinEdges)
-        self.samplingMCMCLin = np.array(self.samplingMCMC.flatten(),dtype=int)
-        [self.samplingRand,edges] = np.histogramdd(conditioningVariable,\
-            bins = self.conditionBinEdges)
-        self.samplingRandLin = np.array(self.samplingRand.flatten(),dtype=int)
-        if minRatio is None:
-            minRatio = self.getSamplingRatio()
+        [self.sampling_MCMC,edges] = np.histogramdd(\
+            self.conditioning_quantity_to_match,\
+            bins = self.condition_bin_edges)
+        self.sampling_MCMC_lin = np.array(self.sampling_MCMC.flatten(),
+                                          dtype=int)
+        [self.sampling_rand,edges] = np.histogramdd(conditioning_variable,\
+            bins = self.condition_bin_edges)
+        self.sampling_rand_lin = np.array(self.sampling_rand.flatten(),
+                                          dtype=int)
+        if min_ratio is None:
+            min_ratio = self.get_sampling_ratio()
         # Indices in each list of bins:
-        inAllRanges = np.ones(len(conditioningVariable),dtype = bool)
-        for n in range(0,numCond):
-            inAllRanges = (inAllRanges & \
-                (conditioningVariable[:,n] >= self.conditionBinEdges[n][0]) & \
-                (conditioningVariable[:,n] < self.conditionBinEdges[n][-1]) )
-        if self.rMin is not None:
-            inAllRanges = inAllRanges & (voidRadii > self.rMin)
-        if self.rMax is not None:
-            inAllRanges = inAllRanges & (voidRadii < self.rMax)
-        inAllRangesInd = np.where(inAllRanges)[0]
-        indicesRand = []
-        for n in range(0,numCond):
-            indicesRand.append(np.digitize(\
-                conditioningVariable[inAllRanges,n],
-                self.conditionBinEdges[n])-1)
-        indicesRand = np.array(indicesRand)
-        dims = [len(x) - 1 for x in self.conditionBinEdges]
-        numBinsTot = np.prod(dims)
-        linearIndices = np.ravel_multi_index(indicesRand,tuple(dims))
+        in_all_ranges = np.ones(len(conditioning_variable),dtype = bool)
+        for n in range(0,num_cond):
+            in_all_ranges = (
+                in_all_ranges 
+                & (conditioning_variable[:,n] 
+                   >= self.condition_bin_edges[n][0])
+                & (conditioning_variable[:,n]
+                   < self.condition_bin_edges[n][-1]))
+        if self.r_min is not None:
+            in_all_ranges = in_all_ranges & (void_radii > self.r_min)
+        if self.r_max is not None:
+            in_all_ranges = in_all_ranges & (void_radii < self.r_max)
+        in_all_ranges_ind = np.where(in_all_ranges)[0]
+        indices_rand = []
+        for n in range(0,num_cond):
+            indices_rand.append(np.digitize(\
+                conditioning_variable[in_all_ranges,n],
+                self.condition_bin_edges[n])-1)
+        indices_rand = np.array(indices_rand)
+        dims = [len(x) - 1 for x in self.condition_bin_edges]
+        num_bins_tot = np.prod(dims)
+        linearIndices = np.ravel_multi_index(indices_rand,tuple(dims))
         # Now sample these to try and match the MCMC conditions:
         selection = []
         np.random.seed(self.seed)
-        for k in range(0,numBinsTot):
-            thisIndex = np.where((linearIndices == k))[0]
+        for k in range(0,num_bins_tot):
+            this_index = np.where((linearIndices == k))[0]
             if self.replace:
-                if len(thisIndex) > 0:
-                    numSamplesToTake = minRatio*self.samplingMCMCLin[k]
+                if len(this_index) > 0:
+                    num_samples_to_take = min_ratio*self.sampling_MCMC_lin[k]
                 else:
-                    numSamplesToTake = 0
+                    num_samples_to_take = 0
             else:
-                numSamplesToTake = \
-                    np.min([minRatio*self.samplingMCMCLin[k],len(thisIndex)])
-            selection.append(np.random.choice(thisIndex,numSamplesToTake,\
-                replace=self.replace))
-        selectArray = np.hstack(selection)
-        return inAllRangesInd[selectArray]
+                num_samples_to_take = np.min(
+                    [min_ratio*self.sampling_MCMC_lin[k],len(this_index)])
+            selection.append(
+                np.random.choice(this_index,num_samples_to_take,\
+                                 replace=self.replace))
+        select_array = np.hstack(selection)
+        return in_all_ranges_ind[select_array]
     # Get arrays which store the variables for each void we wish to sample
     # from:
-    def getAllConditionVariables(self):
-        self.centralConditionVariableAll = np.zeros((0,self.numCond))
-        self.centralCentresAll = np.zeros((0,3))
-        self.centralRadiiAll = np.zeros(0)
-        self.sampleIndices = np.zeros(0,dtype=int)
-        self.voidIndices = np.zeros(0,dtype=int)
+    def get_all_condition_variables(self):
+        self.central_condition_variable_all = np.zeros((0,self.num_cond))
+        self.central_centres_all = np.zeros((0,3))
+        self.central_radii_all = np.zeros(0)
+        self.sample_indices = np.zeros(0,dtype=int)
+        self.void_indices = np.zeros(0,dtype=int)
         # Iterate over all simulations:
         for ns in range(self.start,self.end):
             # Iterate over all regions within each simulation:
-            for centre, count in zip(self.centreList[ns],\
-                range(0,len(self.centreList[ns]))):
+            for centre, count in zip(self.centre_list[ns],\
+                range(0,len(self.centre_list[ns]))):
                 # Get all voids within this region:
-                centralAntihalos = tools.getAntiHalosInSphere(\
-                    self.ahCentresList[ns],self.rSphere,origin=centre,\
+                central_antihalos = tools.getAntiHalosInSphere(\
+                    self.ah_centres_list[ns],self.r_sphere,origin=centre,\
                     boxsize=self.boxsize)[1]
-                numCentral = np.sum(centralAntihalos)
+                num_central = np.sum(central_antihalos)
                 # Void radii:
-                centralRadii = self.antihaloRadiiList[ns][centralAntihalos]
+                central_radii = self.antihalo_radii_list[ns][central_antihalos]
                 # Void centres:
-                centralCentres = self.ahCentresList[ns][centralAntihalos]
+                central_centres = self.ah_centres_list[ns][central_antihalos]
                 # Void indices:
-                centralIndices = np.where(centralAntihalos)[0]
+                central_indices = np.where(central_antihalos)[0]
                 # Void condition variables:
-                if self.numCond == 1:
-                    centralConditionVariable = np.array(\
-                        self.conditioningQuantity[ns][centralAntihalos])
-                    centralConditionVariable = \
-                        centralConditionVariable.reshape(\
-                        (numCentral,self.numCond))
+                if self.num_cond == 1:
+                    central_condition_variable = np.array(\
+                        self.conditioning_quantity[ns][central_antihalos])
+                    central_condition_variable = \
+                        central_condition_variable.reshape(\
+                        (num_central,self.num_cond))
                 else:
-                    centralConditionVariable = np.array(\
-                        self.conditioningQuantity[ns][centralAntihalos,:])
+                    central_condition_variable = np.array(\
+                        self.conditioning_quantity[ns][central_antihalos,:])
                 # Stack all variables into one array for each variable:
-                self.centralConditionVariableAll = \
-                    np.vstack((self.centralConditionVariableAll,\
-                    centralConditionVariable))
-                self.centralCentresAll = np.vstack((self.centralCentresAll,\
-                    centralCentres))
-                self.centralRadiiAll = np.hstack((self.centralRadiiAll,\
-                    centralRadii))
-                self.sampleIndices = np.hstack((self.sampleIndices,\
-                    ns*np.ones(centralRadii.shape,dtype=int)))
-                self.voidIndices = np.hstack((self.voidIndices,centralIndices))
-    def getVolumesOfRadialBins(self,centralRadii,selectArray):
-        volumes = 4*np.pi*(self.rEffBinEdges[1:]**3 - \
-            self.rEffBinEdges[0:-1]**3)/3
-        voidRadii = centralRadii[selectArray]
-        volumesList = np.outer(voidRadii**3,volumes)
-        return volumesList
-    def restoreFromDictionary(self,dictionary):
-        self.allPairs = dictionary['pairs']
-        self.allVolumes = dictionary['volumes']
-        self.allSelections = dictionary['selections']
-        self.allConditions = dictionary['conditions']
-        self.allSelectedConditions = dictionary['selectedConditions']
-        if self.combineRandomRegions and \
-                (self.conditioningQuantityToMatch is not None):
-            self.getAllConditionVariables()
-            self.numVoidsTotal = len(self.centralRadiiAll)
+                self.central_condition_variable_all = np.vstack(
+                    (self.central_condition_variable_all,
+                     central_condition_variable))
+                self.central_centres_all = np.vstack(
+                    (self.central_centres_all,central_centres))
+                self.central_radii_all = np.hstack(
+                    (self.central_radii_all,central_radii))
+                self.sample_indices = np.hstack(
+                    (self.sample_indices,
+                     ns*np.ones(central_radii.shape,dtype=int)))
+                self.void_indices = np.hstack(
+                    (self.void_indices,central_indices))
+    def get_volumes_of_radial_bins(self,central_radii,select_array):
+        volumes = 4*np.pi*(self.r_eff_bin_edges[1:]**3 - \
+            self.r_eff_bin_edges[0:-1]**3)/3
+        void_radii = central_radii[select_array]
+        volumes_list = np.outer(void_radii**3,volumes)
+        return volumes_list
+    def restore_from_dictionary(self,dictionary):
+        self.all_pairs = dictionary['pairs']
+        self.all_volumes = dictionary['volumes']
+        self.all_selections = dictionary['selections']
+        self.all_conditions = dictionary['conditions']
+        self.all_selected_conditions = dictionary['selectedConditions']
+        if self.combine_random_regions and \
+                (self.conditioning_quantity_to_match is not None):
+            self.get_all_condition_variables()
+            self.num_voids_total = len(self.central_radii_all)
     # Sampling a set of random catalogues while matching to an MCMC catalogue:
-    def getRandomCataloguePairCounts(self):
+    def get_random_catalogue_pair_counts(self):
         # Get pair counts in similar-density regions:
-        self.allPairs = []
-        self.allVolumes = []
-        self.allSelections = []
-        self.allConditions = []
-        self.allSelectedConditions = []
-        if self.combineRandomRegions:
-            if self.conditioningQuantityToMatch is not None:
-                self.getAllConditionVariables()
-            self.numVoidsTotal = len(self.centralRadiiAll)
-            self.minRatio = self.getSamplingRatio()
-            if self.conditioningQuantityToMatch is not None:
-                selectArray = self.selectConditionedRandomVoids(\
-                    self.centralConditionVariableAll,\
-                    self.centralRadiiAll)
-                if (len(selectArray) 
-                        != self.minRatio*len(self.conditioningQuantityToMatch)):
+        self.all_pairs = []
+        self.all_volumes = []
+        self.all_selections = []
+        self.all_conditions = []
+        self.all_selected_conditions = []
+        if self.combine_random_regions:
+            if self.conditioning_quantity_to_match is not None:
+                self.get_all_condition_variables()
+            self.num_voids_total = len(self.central_radii_all)
+            self.min_ratio = self.get_sampling_ratio()
+            if self.conditioning_quantity_to_match is not None:
+                select_array = self.select_conditioned_random_voids(\
+                    self.central_condition_variable_all,\
+                    self.central_radii_all)
+                if (len(select_array) 
+                        != (self.min_ratio
+                            * len(self.conditioning_quantity_to_match))):
                     raise Exception("Failed to sample in integer ratio.")
             else:
-                selectArray = np.range(0,self.numVoidsTotal)
-            self.allPairs = [
-                np.zeros((0,self.getNumberOfRadialBins()),dtype=int) 
-                for k in range(0,self.minRatio)]
-            self.allVolumes = [
-                np.zeros((0,self.getNumberOfRadialBins()),dtype=int) 
-                for k in range(0,self.minRatio)]
-            self.allSelections = [
+                select_array = np.range(0,self.num_voids_total)
+            self.all_pairs = [
+                np.zeros((0,self.get_number_of_radial_bins()),dtype=int) 
+                for k in range(0,self.min_ratio)]
+            self.all_volumes = [
+                np.zeros((0,self.get_number_of_radial_bins()),dtype=int) 
+                for k in range(0,self.min_ratio)]
+            self.all_selections = [
                 np.zeros((0),dtype=int) 
-                for k in range(0,self.minRatio)]
-            for k in range(0,self.minRatio):
+                for k in range(0,self.min_ratio)]
+            for k in range(0,self.min_ratio):
                 for ns in range(self.start,self.end):
-                    snapLoaded = self.snapList[ns]
-                    tree = self.treeList[ns]
-                    numSelected = len(selectArray)
-                    kFilter = np.arange(k,numSelected,minRatio)
-                    nsSelectArray = selectArray[\
-                        self.sampleIndices[selectArray][kFilter] == ns]
-                    if self.computePairCounts:
-                        if self.pairCounts is None:
-                            [nPairsList,volumesList] = stacking.getPairCounts(\
-                                self.centralCentresAll[nsSelectArray],\
-                                self.centralRadiiAll[nsSelectArray],snapLoaded,\
-                                self.rEffBinEdges,tree=tree,method='poisson',\
-                                vorVolumes=None)
+                    snap_loaded = self.snap_list[ns]
+                    tree = self.tree_list[ns]
+                    num_selected = len(select_array)
+                    k_filter = np.arange(k,num_selected,min_ratio)
+                    ns_select_array = select_array[\
+                        self.sample_indices[select_array][k_filter] == ns]
+                    if self.compute_pair_counts:
+                        if self.pair_counts is None:
+                            [n_pairs_list,volumes_list] = \
+                                stacking.getPairCounts(
+                                    self.central_centres_all[ns_select_array],
+                                    self.central_radii_all[ns_select_array],
+                                    snap_loaded,self.r_eff_bin_edges,tree=tree,
+                                    method='poisson',vorVolumes=None)
                         else:
-                            nPairsList = self.pairCounts[ns][\
-                                    self.voidIndices[nsSelectArray],:]
-                            volumesList = \
-                                self.getVolumesOfRadialBins(\
-                                    self.centralRadiiAll,nsSelectArray)
-                        self.allPairs[k] = np.vstack((self.allPairs[k],
-                                                     nPairsList))
-                        self.allVolumes[k] = np.vstack((self.allVolumes[k],
-                                                     volumesList))
+                            n_pairs_list = self.pair_counts[ns][\
+                                    self.void_indices[ns_select_array],:]
+                            volumes_list = \
+                                self.get_volumes_of_radial_bins(\
+                                    self.central_radii_all,ns_select_array)
+                        self.all_pairs[k] = np.vstack((self.all_pairs[k],
+                                                     n_pairs_list))
+                        self.all_volumes[k] = np.vstack((self.all_volumes[k],
+                                                     volumes_list))
                     else:
-                        volumes = 4*np.pi*(self.rEffBinEdges[1:]**3 - \
-                            self.rEffBinEdges[0:-1]**3)/3
-                        voidRadii = self.centralRadiiAll[nsSelectArray]
-                        volumesList = np.outer(voidRadii**3,volumes)
-                        self.allVolumes[k] = np.vstack((self.allVolumes[k],
-                                                     volumesList))
-                    self.allSelections.append(nsSelectArray)
-            self.allConditions.append(self.centralConditionVariableAll)
+                        volumes = 4*np.pi*(self.r_eff_bin_edges[1:]**3 - \
+                            self.r_eff_bin_edges[0:-1]**3)/3
+                        void_radii = self.central_radii_all[ns_select_array]
+                        volumes_list = np.outer(void_radii**3,volumes)
+                        self.all_volumes[k] = np.vstack((self.all_volumes[k],
+                                                     volumes_list))
+                    self.all_selections.append(ns_select_array)
+            self.all_conditions.append(self.central_condition_variable_all)
         else:
-            lengthsArray = np.zeros(0,dtype=int)
+            lengths_array = np.zeros(0,dtype=int)
             for ns in range(self.start,self.end):
-                snapLoaded = self.snapList[ns]
-                tree = self.treeList[ns]
-                for centre, count in zip(self.centreList[ns],\
-                    range(0,len(self.centreList[ns]))):
+                snap_loaded = self.snap_list[ns]
+                tree = self.tree_list[ns]
+                for centre, count in zip(self.centre_list[ns],\
+                    range(0,len(self.centre_list[ns]))):
                     # Get anti-halos:
-                    centralAntihalos = tools.getAntiHalosInSphere(\
-                        self.ahCentresList[ns],self.rSphere,origin=centre,\
+                    central_antihalos = tools.getAntiHalosInSphere(\
+                        self.ah_centres_list[ns],self.r_sphere,origin=centre,\
                         boxsize=self.boxsize)[1]
-                    centralIndices = np.where(centralAntihalos)[0]
+                    central_indices = np.where(central_antihalos)[0]
                     # Get radii and randomly select voids with the same
                     # radius distribution as the combined catalogue:
-                    centralRadii = self.antihaloRadiiList[ns][centralAntihalos]
-                    centralCentres = self.ahCentresList[ns][centralAntihalos]
-                    if self.conditioningQuantityToMatch is not None:
-                        if self.numCond == 1:
-                            numCondVariables = \
-                                len(np.where(centralAntihalos)[0])
-                            centralConditionVariable = \
-                                self.conditioningQuantity[ns]\
-                                [centralAntihalos].reshape(numCondVariables,1)
+                    central_radii = \
+                        self.antihalo_radii_list[ns][central_antihalos]
+                    central_centres = \
+                        self.ah_centres_list[ns][central_antihalos]
+                    if self.conditioning_quantity_to_match is not None:
+                        if self.num_cond == 1:
+                            num_cond_variables = \
+                                len(np.where(central_antihalos)[0])
+                            central_condition_variable = \
+                                self.conditioning_quantity[ns]\
+                                [central_antihalos].reshape(
+                                    num_cond_variables,1)
                         else:
-                            centralConditionVariable = \
-                                self.conditioningQuantity[ns][\
-                                centralAntihalos,:]
-                        self.allConditions.append(centralConditionVariable)
-                        selectArray = self.selectConditionedRandomVoids(\
-                            centralConditionVariable,centralRadii)
-                        self.allSelectedConditions.append(\
-                            centralConditionVariable[selectArray,:])
+                            central_condition_variable = \
+                                self.conditioning_quantity[ns][\
+                                central_antihalos,:]
+                        self.all_conditions.append(central_condition_variable)
+                        select_array = self.select_conditioned_random_voids(\
+                            central_condition_variable,central_radii)
+                        self.all_selected_conditions.append(\
+                            central_condition_variable[select_array,:])
                     else:
-                        condition = np.ones(centralRadii.shape,dtype=bool)
-                        if self.rMin is not None:
-                            condition = condition & (centralRadii > self.rMin)
-                        if self.rMax is not None:
-                            condition = condition & (centralRadii < self.rMax)
-                        selectArray = np.where(condition)[0]
+                        condition = np.ones(central_radii.shape,dtype=bool)
+                        # Bounding with radius cuts:
+                        if self.r_min is not None:
+                            condition = (condition 
+                                         & (central_radii > self.r_min))
+                        if self.r_max is not None:
+                            condition = (condition 
+                                         & (central_radii < self.r_max))
+                        select_array = np.where(condition)[0]
                     # Now get pair counts around these voids:
-                    lengthsArray = np.hstack((lengthsArray,\
-                        np.array([len(selectArray)])))
-                    if self.computePairCounts:
-                        if self.pairCounts is None:
+                    lengths_array = np.hstack(
+                        (lengths_array,np.array([len(select_array)])))
+                    if self.compute_pair_counts:
+                        if self.pair_counts is None:
                             # Regenerate pair counts from scratch:
-                            [nPairsList,volumesList] = stacking.getPairCounts(\
-                                centralCentres[selectArray],\
-                                centralRadii[selectArray],snapLoaded,\
-                                self.rEffBinEdges,tree=tree,method='poisson',\
-                                vorVolumes=None)
+                            [n_pairs_list,volumes_list] = \
+                            stacking.getPairCounts(
+                                central_centres[select_array],
+                                central_radii[select_array],snap_loaded,
+                                self.r_eff_bin_edges,tree=tree,
+                                method='poisson',vorVolumes=None)
                         else:
                             # Use a pre-computed list:
-                            nPairsList = self.pairCounts[ns][\
-                                centralIndices[selectArray],:]
-                            volumesList = \
-                                self.getVolumesOfRadialBins(centralRadii,\
-                                    selectArray)
+                            n_pairs_list = \
+                                self.pair_counts[ns][\
+                                    central_indices[select_array],:]
+                            volumes_list = \
+                                self.get_volumes_of_radial_bins(
+                                    central_radii,select_array)
                     else:
-                        volumesList = \
-                            self.getVolumesOfRadialBins(centralRadii,\
-                                    selectArray)
+                        volumes_list = \
+                            self.get_volumes_of_radial_bins(central_radii,
+                                    select_array)
                     print("Done centre " + str(count+1) + " of " + \
-                        str(len(self.centreList[ns])))
-                    if self.computePairCounts:
-                        self.allPairs.append(nPairsList)
-                    self.allVolumes.append(volumesList)
-                    self.allSelections.append(centralIndices[selectArray])
+                        str(len(self.centre_list[ns])))
+                    if self.compute_pair_counts:
+                        self.all_pairs.append(n_pairs_list)
+                    self.all_volumes.append(volumes_list)
+                    self.all_selections.append(central_indices[select_array])
                 print("Done sample " + str(ns + 1) + ".")
-        return {'pairs':self.allPairs,'volumes':self.allVolumes,\
-            'selections':self.allSelections,'conditions':self.allConditions,\
-            'selectedConditions':self.allSelectedConditions}
+        return {'pairs':self.all_pairs,'volumes':self.all_volumes,
+            'selections':self.all_selections,'conditions':self.all_conditions,
+            'selected_conditions':self.all_selected_conditions}
 
 
 
