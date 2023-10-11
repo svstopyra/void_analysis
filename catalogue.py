@@ -1294,12 +1294,32 @@ class ProfileStack:
             return self.pair_counts[0].shape[1]
         else:
             return len(self.r_eff_bin_edges) - 1
-    def get_sampling_ratio(self,condition_variable = None):
+    def get_all_condition_variables_in_range(self,condition_variables,
+                                             void_radii):
+        in_all_ranges = np.ones(len(condition_variables),dtype = bool)
+        num_cond = get_number_of_conditions(condition_variables)
+        for n in range(0,num_cond):
+            in_all_ranges = (
+                in_all_ranges 
+                & (condition_variables[:,n] 
+                   >= self.condition_bin_edges[n][0])
+                & (condition_variables[:,n]
+                   < self.condition_bin_edges[n][-1]))
+        if self.r_min is not None:
+            in_all_ranges = in_all_ranges & (void_radii > self.r_min)
+        if self.r_max is not None:
+            in_all_ranges = in_all_ranges & (void_radii < self.r_max)
+        return in_all_ranges
+    def get_sampling_ratio(self,condition_variable = None,void_radii=None):
         if not self.combine_random_regions:
             min_ratio = 1
         else:
             if condition_variable is None:
                 condition_variable = self.central_condition_variable_all
+            if void_radii is None:
+                void_radii = self.central_radii_all
+            in_all_ranges = self.get_all_condition_variables_in_range(
+                condition_variable,void_radii)
             # Having verified that the input is sane, now bin everything:
             [self.sampling_MCMC,edges] = np.histogramdd(\
                 self.conditioning_quantity_to_match,
@@ -1307,7 +1327,8 @@ class ProfileStack:
             self.sampling_MCMC_lin = np.array(self.sampling_MCMC.flatten(),
                                               dtype=int)
             [self.sampling_rand,edges] = np.histogramdd(\
-                condition_variable,bins = self.condition_bin_edges)
+                condition_variable[in_all_ranges],
+                bins = self.condition_bin_edges)
             self.sampling_rand_lin = np.array(self.sampling_rand.flatten(),
                                               dtype=int)
             # Figure out how many times we can sample the random set, and 
@@ -1353,19 +1374,10 @@ class ProfileStack:
             bins = self.condition_bin_edges)
         self.sampling_rand_lin = np.array(self.sampling_rand.flatten(),
                                           dtype=int)
-        # Indices in each list of bins:
-        in_all_ranges = np.ones(len(conditioning_variable),dtype = bool)
-        for n in range(0,num_cond):
-            in_all_ranges = (
-                in_all_ranges 
-                & (conditioning_variable[:,n] 
-                   >= self.condition_bin_edges[n][0])
-                & (conditioning_variable[:,n]
-                   < self.condition_bin_edges[n][-1]))
-        if self.r_min is not None:
-            in_all_ranges = in_all_ranges & (void_radii > self.r_min)
-        if self.r_max is not None:
-            in_all_ranges = in_all_ranges & (void_radii < self.r_max)
+        # Fina all voids in the correct radius range, which lie within some
+        # of the bins. These are the voids we can sample from:
+        in_all_ranges = self.get_all_condition_variables_in_range(
+            conditioning_variable,void_radii)
         in_all_ranges_ind = np.where(in_all_ranges)[0]
         # Minimum ratio between available random-catalogue samples, and MCMC
         # catalogue samples. Use this to determine how many times we can 
