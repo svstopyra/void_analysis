@@ -1436,7 +1436,7 @@ class ProfileStack:
         for ns in range(self.start,self.end):
             # Iterate over all regions within each simulation:
             for centre, count in zip(self.centre_list[ns],\
-                range(0,len(self.centre_list[ns]))):
+                                     range(0,len(self.centre_list[ns]))):
                 # Get all voids within this region:
                 central_antihalos = tools.getAntiHalosInSphere(\
                     self.ah_centres_list[ns],self.r_sphere,origin=centre,\
@@ -1471,6 +1471,31 @@ class ProfileStack:
                      ns*np.ones(central_radii.shape,dtype=int)))
                 self.void_indices = np.hstack(
                     (self.void_indices,central_indices))
+    # Computes a pooled array of variables:
+    def get_pooled_variable(self,variable_list):
+        num_dims = len(variable_list[0].shape)
+        if num_dims == 1
+            pooled_variable = np.zeros(0,dtype=variable_list[0].dtype)
+        elif num_dims == 2:
+            pooled_variable = np.zeros(
+                (0,variable_list[0].shape[1]),dtype=variable_list[0].dtype)
+        else:
+            raise Exception("Not implemented for num_dims = " + str(num_dims))
+        for ns in range(self.start,self.end):
+            for centre, count in zip(self.centre_list[ns],\
+                                     range(0,len(self.centre_list[ns]))):
+                central_antihalos = tools.getAntiHalosInSphere(\
+                    self.ah_centres_list[ns],self.r_sphere,origin=centre,\
+                    boxsize=self.boxsize)[1]
+                num_central = np.sum(central_antihalos)
+                central_variables = variable_list[ns][central_antihalos]
+                if num_dims == 1:
+                    pooled_variable = np.hstack(
+                        (pooled_variable,central_variables))
+                else:
+                    pooled_variable = np.vstack(
+                        (pooled_variable,central_variables))
+        return pooled_variable
     def get_volumes_of_radial_bins(self,central_radii,select_array):
         volumes = 4*np.pi*(self.r_eff_bin_edges[1:]**3 - \
             self.r_eff_bin_edges[0:-1]**3)/3
@@ -1612,11 +1637,11 @@ class ProfileStack:
                         if self.pair_counts is None:
                             # Regenerate pair counts from scratch:
                             [n_pairs_list,volumes_list] = \
-                            stacking.getPairCounts(
-                                central_centres[select_array],
-                                central_radii[select_array],snap_loaded,
-                                self.r_eff_bin_edges,tree=tree,
-                                method='poisson',vorVolumes=None)
+                                stacking.getPairCounts(
+                                    central_centres[select_array],
+                                    central_radii[select_array],snap_loaded,
+                                    self.r_eff_bin_edges,tree=tree,
+                                    method='poisson',vorVolumes=None)
                         else:
                             # Use a pre-computed list:
                             n_pairs_list = \
