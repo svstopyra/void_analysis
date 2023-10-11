@@ -1474,7 +1474,7 @@ class ProfileStack:
     # Computes a pooled array of variables:
     def get_pooled_variable(self,variable_list):
         num_dims = len(variable_list[0].shape)
-        if num_dims == 1
+        if num_dims == 1:
             pooled_variable = np.zeros(0,dtype=variable_list[0].dtype)
         elif num_dims == 2:
             pooled_variable = np.zeros(
