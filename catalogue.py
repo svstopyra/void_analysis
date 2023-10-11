@@ -37,11 +37,11 @@ class combinedCatalogue:
         self.crossMatchQuantity = crossMatchQuantity
         self.sortMethod = sortMethod
         self.mode = mode
-        [_,_,self.boxsize,_,\
-            self.antihaloCentres,self.antihaloMasses,self.antihaloRadii,\
+        [_,_,self.boxsize,_,
+            self.antihaloCentres,self.antihaloMasses,self.antihaloRadii,
             _,self.volumesList,_,self.deltaCentral,self.deltaAverage] = \
-            loadCatalogueData(snapList,snapListRev,ahProps,sortMethod,\
-                snapSortList,hrList,verbose=verbose)
+            loadCatalogueData(snapList,snapListRev,ahProps,sortMethod,
+                              snapSortList,hrList,verbose=verbose)
         self.numCats = len(snapList) # Number of catalogues
         self.enforceExclusive = enforceExclusive
         self.blockDuplicates = blockDuplicates
@@ -1301,17 +1301,15 @@ class ProfileStack:
             if condition_variable is None:
                 condition_variable = self.central_condition_variable_all
             # Having verified that the input is sane, now bin everything:
-            if self.sampling_MCMC is None:
-                [self.sampling_MCMC,edges] = np.histogramdd(\
-                    self.conditioning_quantity_to_match,
-                    bins = self.condition_bin_edges)
-                self.sampling_MCMC_lin = np.array(self.sampling_MCMC.flatten(),
-                                                  dtype=int)
-            if self.sampling_rand is None:
-                [self.sampling_rand,edges] = np.histogramdd(\
-                    condition_variable,bins = self.condition_bin_edges)
-                self.sampling_rand_lin = np.array(self.sampling_rand.flatten(),
-                                                  dtype=int)
+            [self.sampling_MCMC,edges] = np.histogramdd(\
+                self.conditioning_quantity_to_match,
+                bins = self.condition_bin_edges)
+            self.sampling_MCMC_lin = np.array(self.sampling_MCMC.flatten(),
+                                              dtype=int)
+            [self.sampling_rand,edges] = np.histogramdd(\
+                condition_variable,bins = self.condition_bin_edges)
+            self.sampling_rand_lin = np.array(self.sampling_rand.flatten(),
+                                              dtype=int)
             # Figure out how many times we can sample the random set, and 
             # retain the same distribution as the MCMC set. This is defined 
             # as the lowest ratio between the counts in MCMC bins and in 
@@ -1355,8 +1353,6 @@ class ProfileStack:
             bins = self.condition_bin_edges)
         self.sampling_rand_lin = np.array(self.sampling_rand.flatten(),
                                           dtype=int)
-        if min_ratio is None:
-            min_ratio = self.get_sampling_ratio()
         # Indices in each list of bins:
         in_all_ranges = np.ones(len(conditioning_variable),dtype = bool)
         for n in range(0,num_cond):
@@ -1371,6 +1367,13 @@ class ProfileStack:
         if self.r_max is not None:
             in_all_ranges = in_all_ranges & (void_radii < self.r_max)
         in_all_ranges_ind = np.where(in_all_ranges)[0]
+        # Minimum ratio between available random-catalogue samples, and MCMC
+        # catalogue samples. Use this to determine how many times we can 
+        # sample the voids while keeping the same distribution as the MCMC
+        # catalogue:
+        if min_ratio is None:
+            min_ratio = self.get_sampling_ratio(
+                condition_variable = conditioning_variable[in_all_ranges])
         indices_rand = []
         for n in range(0,num_cond):
             indices_rand.append(np.digitize(\
@@ -1384,8 +1387,11 @@ class ProfileStack:
         selection = []
         np.random.seed(self.seed)
         self.region_index = np.zeros(0,dtype=int)
+        samples_taken = np.zeros(num_bins_tot,dtype=int)
+        available_samples = np.zeros(num_bins_tot,dtype=int)
         for k in range(0,num_bins_tot):
             this_index = np.where((linearIndices == k))[0]
+            available_samples[k] = len(this_index)
             if self.replace:
                 if len(this_index) > 0:
                     num_samples_to_take = min_ratio*self.sampling_MCMC_lin[k]
@@ -1397,6 +1403,7 @@ class ProfileStack:
             selection.append(
                 np.random.choice(this_index,num_samples_to_take,\
                                  replace=self.replace))
+            samples_taken[k] = num_samples_to_take
             if self.combine_random_regions:
                 # Store which of the fake regions each sample belongs to:
                 self.region_index = np.hstack((
