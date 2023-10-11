@@ -1384,8 +1384,7 @@ class ProfileStack:
         # sample the voids while keeping the same distribution as the MCMC
         # catalogue:
         if min_ratio is None:
-            min_ratio = self.get_sampling_ratio(
-                condition_variable = conditioning_variable[in_all_ranges])
+            min_ratio = self.get_sampling_ratio()
         indices_rand = []
         for n in range(0,num_cond):
             indices_rand.append(np.digitize(\
