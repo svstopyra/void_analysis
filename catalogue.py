@@ -1057,12 +1057,12 @@ class combinedCatalogue:
             for ns in range(0,self.numCats)]
         alpha_shapes = []
         ahMWPos = []
-        for k in range(0,finalCat.shape[0]):
+        for k in range(0,self.finalCat.shape[0]):
             allPosXYZ = np.full((0,3),0)
-            for ns in range(0,finalCat.shape[1]):
+            for ns in range(0,self.finalCat.shape[1]):
                 # Select the correct anti-halo
                 fullList = fullListAll[ns]
-                listPosition = finalCat[k,ns]-1
+                listPosition = self.finalCat[k,ns]-1
                 if listPosition >= 0:
                     # Only include anti-halos which we have representatives for
                     # in a given catalogue
