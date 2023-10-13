@@ -1727,7 +1727,9 @@ class ProfileStack:
                 print("Done sample " + str(ns + 1) + ".")
         return {'pairs':self.all_pairs,'volumes':self.all_volumes,
             'selections':self.all_selections,'conditions':self.all_conditions,
-            'selected_conditions':self.all_selected_conditions}
+            'selected_conditions':self.all_selected_conditions,
+            'radii':self.all_radii,'indices':self.all_indices,
+            'centres':self.all_centres}
 
 
 

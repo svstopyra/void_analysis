@@ -469,6 +469,8 @@ allPairCountsList = [props[9] for props in ahPropsUn]
 #-------------------------------------------------------------------------------
 # COMPUTE VOID STACKS APPLYING DIFFERENT CONDITIONS
 
+from void_analysis.catalogue import ProfileStack
+
 # NO CONSTRAINTS:
 noConstraintsStack = ProfileStack(\
     centresAllDensityNonOverlapping,\
