@@ -1664,9 +1664,6 @@ class ProfileStack:
                         self.antihalo_radii_list[ns][central_antihalos]
                     central_centres = \
                         self.ah_centres_list[ns][central_antihalos]
-                    self.all_radii.append(central_radii)
-                    self.all_centres.append(central_centres)
-                    self.all_indices.append(central_indices)
                     if self.conditioning_quantity_to_match is not None:
                         if self.num_cond == 1:
                             num_cond_variables = \
@@ -1694,6 +1691,9 @@ class ProfileStack:
                             condition = (condition 
                                          & (central_radii < self.r_max))
                         select_array = np.where(condition)[0]
+                    self.all_radii.append(central_radii[condition])
+                    self.all_centres.append(central_centres[condition])
+                    self.all_indices.append(central_indices[condition])
                     # Now get pair counts around these voids:
                     lengths_array = np.hstack(
                         (lengths_array,np.array([len(select_array)])))

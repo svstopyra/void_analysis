@@ -801,39 +801,61 @@ rightFilter = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
     (distances300 < 300) & (cat300.finalCatFrac > thresholds300)
 
 
-radiusBins = np.linspace(10,25,21)
+radius_bins = np.linspace(10,25,21)
 
-def plot_void_counts():
-    
+def compute_lcdm_vsf(radii_lists,radius_bins,confidence = 0.68):
+    binned_radii_counts = np.array([plot.binValues(radii,radius_bins)[1] 
+                                   for radii in radii_lists])
+    mean_radii_counts = np.mean(binned_radii_counts,0)
+    interval = scipy.stats.poisson.interval(confidence,mean_radii_counts)
+    return [mean_radii_counts,interval]
 
+def plot_void_counts(sample_radii,radius_bins,lambda_cdm_samples,
+                     confidence=0.95,ax=None,textwidth=7.1014,
+                     sample_style="-",sample_colour=None,lcdm_style=":",
+                     lcdm_colour="grey",alpha=0.5,lcdm_label="$\\Lambda$-CDM",
+                     label="MCMC catalogue",xlabel="$r [\\mathrm{Mpc}h^{-1}$]",
+                     ylabel="Number of voids",fontsize=8,fontfamily="serif",
+                     savename=None,show=False):
+    # Get lambda-cdm comparison
+    [lcdm_radii_counts,interval] = compute_lcdm_vsf(lambda_cdm_samples,
+                                                    radius_bins,
+                                                    confidence = confidence)
+    # Get sample counts:
+    if type(sample_radii) is list:
+        sample_counts = np.mean(np.array([plot.binValues(radii,radius_bins)[1] 
+                                   for radii in sample_radii]),0)
+    else:
+        sample_counts = plot.binValues(sample_radii,radius_bins)[1]
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(textwidth,0.45*textwidth))
+    # Formatting choices:
+    if sample_colour is None:
+        sample_colour = seabornColormap[0]
+    # Plot lines:
+    radius_bin_centres = plot.binCentres(radius_bins)
+    ax.plot(radius_bin_centres,sample_counts,linestyle=sample_style,
+            color=sample_colour,label=label)
+    ax.plot(radius_bin_centres,lcdm_radii_counts,linestyle=lcdm_style,
+            color=lcdm_colour)
+    ax.fill_between(radius_bin_centres,interval[0],interval[1],
+                    color=lcdm_colour,alpha=alpha,label=lcdm_label)
+    # Labels and other annotation:
+    ax.set_xlabel(xlabel,fontsize=fontsize,fontfamily=fontfamily)
+    ax.set_ylabel(ylabel,fontsize=fontsize,fontfamily=fontfamily)
+    ax.legend(prop={"size":fontsize,"family":fontfamily},frameon=False)
+    if savename is not None:
+        plt.savefig(savename)
+    if show:
+        plt.show()
+
+# Actual plot:
+
+mean_radii_mcmc = cat300.getMeanProperty('radii',void_filter=filter300)
 
 plt.clf()
-if doCat:
-    nBins = 8
-    Om = referenceSnap.properties['omegaM0']
-    rhoc = 2.7754e11
-    boxsize = referenceSnap.properties['boxsize'].ratio("Mpc a h**-1")
-    N = int(np.cbrt(len(referenceSnap)))
-    mUnit = 8*Om*rhoc*(boxsize/N)**3
-    mLower = 100*mUnit
-    mUpper = 2e15
-    rSphere = 300
-    rSphereInner = 135
-    # Check mass functions:
-    volSphere135 = 4*np.pi*rSphereInner**3/3
-    volSphere = 4*np.pi*rSphere**3/3
-    plot.massFunctionComparison(massMean300[leftFilter],\
-        massMean300[rightFilter],4*np.pi*135**3/3,nBins=nBins,\
-        labelLeft = "Combined catalogue \n(well-constrained voids only)",\
-        labelRight  ="Combined catalogue \n(well-constrained voids only)",\
-        ylabel="Number of antihalos",savename=figuresFolder + \
-        "mass_function_combined_300vs135_test.pdf",massLower=mLower,\
-        ylim=[1,1000],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,\
-        fontsize=8,massUpper = mUpper,\
-        titleLeft = "Combined catalogue, $<135\\mathrm{Mpc}h^{-1}$",\
-        titleRight = "Combined catalogue, $<300\\mathrm{Mpc}h^{-1}$",\
-        volSimRight = 4*np.pi*300**3/3,ylimRight=[1,1000],\
-        legendLoc="upper right")
+plot_void_counts(mean_radii_mcmc,radius_bins,noConstraintsDict['radii'],
+                 savename = figuresFolder + "void_size_function.pdf")
 
 
 #-------------------------------------------------------------------------------
