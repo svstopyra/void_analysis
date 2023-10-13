@@ -1076,7 +1076,7 @@ class combinedCatalogue:
             ahMWPos.append(posMW)
             alpha_shapes.append(alphashape.alphashape(
                     np.array([posMW[0],posMW[1]]).T,alphaVal))
-    return [ahMWPos,alpha_shapes]
+        return [ahMWPos,alpha_shapes]
 
 def loadSnapshots(snapList):
     if type(snapList[0]) == str:
