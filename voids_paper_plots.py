@@ -471,10 +471,12 @@ allPairCountsList = [props[9] for props in ahPropsUn]
 
 from void_analysis.catalogue import ProfileStack
 
+rSphereInner = 135
+
 # NO CONSTRAINTS:
 noConstraintsStack = ProfileStack(\
     centresAllDensityNonOverlapping,\
-    snapListUn,ahPropsUnconstrained,rSphere,\
+    snapListUn,ahPropsUnconstrained,rSphereInner,\
     rBinStack,tree_list=treeListUncon,seed=1000,start=0,end=-1,\
     conditioning_quantity=None,\
     conditioning_quantity_to_match=None,\
@@ -497,7 +499,7 @@ nsListDensityConstraint = np.hstack([[k \
 # REGION DENSITY CONSTRAINT ONLY:
 regionDensityStack = ProfileStack(\
     centresUnderdenseNonOverlapping,\
-    snapListUn,ahPropsUnconstrained,rSphere,\
+    snapListUn,ahPropsUnconstrained,rSphereInner,\
     rBinStack,tree_list=treeListUncon,seed=1000,start=0,end=-1,\
     conditioning_quantity=None,\
     conditioning_quantity_to_match=None,\
@@ -517,7 +519,7 @@ conditioningQuantityUn = [antihaloRadiiUn[ns].T\
 conditioningQuantityMCMC = meanRadii
 regionDensityAndRadiusStack = ProfileStack(\
     centresUnderdenseNonOverlapping,\
-    snapListUn,ahPropsUnconstrained,rSphere,\
+    snapListUn,ahPropsUnconstrained,rSphereInner,\
     rBinStack,tree_list=treeListUncon,seed=1000,start=0,end=-1,\
     conditioning_quantity=conditioningQuantityUn,\
     conditioning_quantity_to_match=conditioningQuantityMCMC,\
@@ -542,7 +544,7 @@ conditioningQuantityMCMC = np.vstack([meanRadii,\
 
 regionDensityAndTripleConditionStack = ProfileStack(\
     centresUnderdenseNonOverlapping,\
-    snapListUn,ahPropsUnconstrained,rSphere,\
+    snapListUn,ahPropsUnconstrained,rSphereInner,\
     rBinStack,tree_list=treeListUncon,seed=1000,start=0,end=-1,\
     conditioning_quantity=conditioningQuantityUn,\
     conditioning_quantity_to_match=conditioningQuantityMCMC,\
@@ -566,7 +568,7 @@ conditioningQuantityMCMC = np.vstack([\
 
 regionAndVoidCentralDensityConditionStack = ProfileStack(\
     centresUnderdenseNonOverlapping,\
-    snapListUn,ahPropsUnconstrained,rSphere,\
+    snapListUn,ahPropsUnconstrained,rSphereInner,\
     rBinStack,tree_list=treeListUncon,seed=1000,start=0,end=-1,\
     conditioning_quantity=conditioningQuantityUn,\
     conditioning_quantity_to_match=conditioningQuantityMCMC,\
@@ -590,7 +592,7 @@ conditioningQuantityMCMC = np.vstack([\
 
 regionAndVoidDensityConditionStack = ProfileStack(\
     centresUnderdenseNonOverlapping,\
-    snapListUn,ahPropsUnconstrained,rSphere,\
+    snapListUn,ahPropsUnconstrained,rSphereInner,\
     rBinStack,tree_list=treeListUncon,seed=1000,start=0,end=-1,\
     conditioning_quantity=conditioningQuantityUn,\
     conditioning_quantity_to_match=conditioningQuantityMCMC,\
@@ -614,7 +616,7 @@ conditioningQuantityMCMC = np.vstack([\
 
 regionDensityAndAllConditionStackPooled = ProfileStack(\
     centresUnderdenseNonOverlapping,\
-    snapListUn,ahPropsUnconstrained,rSphere,\
+    snapListUn,ahPropsUnconstrained,rSphereInner,\
     rBinStack,tree_list=treeListUncon,seed=1000,start=0,end=-1,\
     conditioning_quantity=conditioningQuantityUn,\
     conditioning_quantity_to_match=conditioningQuantityMCMC,\
@@ -622,8 +624,8 @@ regionDensityAndAllConditionStackPooled = ProfileStack(\
     combine_random_regions=True,replace=False,\
     r_min = voidRadiusBinEdges[0],r_max = voidRadiusBinEdges[-1],\
     compute_pair_counts=True,max_sampling=200,pair_counts = allPairCountsList)
-regionDensityAndAllConditionPooledDict = \
-    regionDensityAndAllConditionStackPooled.get_random_catalogue_pair_counts()
+#regionDensityAndAllConditionPooledDict = \
+#    regionDensityAndAllConditionStackPooled.get_random_catalogue_pair_counts()
 regionDensityAndAllConditionPooledDict = tools.loadOrRecompute(\
     data_folder + "regionDensityAndAllConditionPooled_stack.p",\
     regionDensityAndAllConditionStackPooled.get_random_catalogue_pair_counts,\
@@ -801,7 +803,7 @@ rightFilter = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
     (distances300 < 300) & (cat300.finalCatFrac > thresholds300)
 
 
-radius_bins = np.linspace(10,25,21)
+radius_bins = np.linspace(10,21,7)
 
 def compute_lcdm_vsf(radii_lists,radius_bins,confidence = 0.68):
     binned_radii_counts = np.array([plot.binValues(radii,radius_bins)[1] 
@@ -816,7 +818,7 @@ def plot_void_counts(sample_radii,radius_bins,lambda_cdm_samples,
                      lcdm_colour="grey",alpha=0.5,lcdm_label="$\\Lambda$-CDM",
                      label="MCMC catalogue",xlabel="$r [\\mathrm{Mpc}h^{-1}$]",
                      ylabel="Number of voids",fontsize=8,fontfamily="serif",
-                     savename=None,show=False):
+                     savename=None,show=False,logy=True):
     # Get lambda-cdm comparison
     [lcdm_radii_counts,interval] = compute_lcdm_vsf(lambda_cdm_samples,
                                                     radius_bins,
@@ -844,6 +846,8 @@ def plot_void_counts(sample_radii,radius_bins,lambda_cdm_samples,
     ax.set_xlabel(xlabel,fontsize=fontsize,fontfamily=fontfamily)
     ax.set_ylabel(ylabel,fontsize=fontsize,fontfamily=fontfamily)
     ax.legend(prop={"size":fontsize,"family":fontfamily},frameon=False)
+    if logy:
+        ax.set_yscale('log')
     if savename is not None:
         plt.savefig(savename)
     if show:
@@ -854,8 +858,15 @@ def plot_void_counts(sample_radii,radius_bins,lambda_cdm_samples,
 mean_radii_mcmc = cat300.getMeanProperty('radii',void_filter=filter300)
 
 plt.clf()
-plot_void_counts(mean_radii_mcmc,radius_bins,noConstraintsDict['radii'],
-                 savename = figuresFolder + "void_size_function.pdf")
+fig, ax = plt.subplots(figsize=(0.45*textwidth,0.45*textwidth))
+plot_void_counts(mean_radii_mcmc[0],radius_bins,noConstraintsDict['radii'],
+                 ax=ax)
+
+ax.tick_params(axis='both',which='major',labelsize=fontsize)
+ax.tick_params(axis='both',which='minor',labelsize=fontsize)
+plt.subplots_adjust(left = 0.17,right=0.97,bottom = 0.15,top = 0.97)
+plt.savefig(figuresFolder + "void_size_function.pdf")
+plt.show()
 
 
 #-------------------------------------------------------------------------------
@@ -1028,50 +1039,96 @@ def barAsHist(counts,bins,ax=None,density=True,**kwargs):
 
 # All distributions:
 nRows = 2
-nCols = 4
+#nCols = 4
+nCols = 2
 
-randCounts = [[samplingRand0,samplingRand1,samplingRand2,samplingRand3],\
-    [samplingRandSelected0,samplingRandSelected1,samplingRandSelected2,\
-    samplingRandSelected3]]
+#randCounts = [[samplingRand0,samplingRand1,samplingRand2,samplingRand3],\
+#    [samplingRandSelected0,samplingRandSelected1,samplingRandSelected2,\
+#    samplingRandSelected3]]
 
-mcmcCounts = [[samplingMCMC0,samplingMCMC1,samplingMCMC2,samplingMCMC3],\
-    [samplingMCMC0,samplingMCMC1,samplingMCMC2,samplingMCMC3]]
+randCounts = [[samplingRand1,samplingRand2],\
+    [samplingRandSelected1,samplingRandSelected2]]
 
-histBins = [radBins,conBinEdges,conBinEdges,massBins]
+#mcmcCounts = [[samplingMCMC0,samplingMCMC1,samplingMCMC2,samplingMCMC3],\
+#    [samplingMCMC0,samplingMCMC1,samplingMCMC2,samplingMCMC3]]
 
-xlabels = ['$R [\\mathrm{Mpc}h^{-1}]$','$\\delta_{\\mathrm{central}}$',\
+mcmcCounts = [[samplingMCMC1,samplingMCMC2],\
+    [samplingMCMC1,samplingMCMC2]]
+
+#histBins = [radBins,conBinEdges,conBinEdges,massBins]
+histBins = [conBinEdges,conBinEdges]
+
+#xlabels = ['$R [\\mathrm{Mpc}h^{-1}]$','$\\delta_{\\mathrm{central}}$',\
     '$\\bar{\\delta}$','Mass [$M_{\\odot}h^{-1}$]']
-ylims = [[0,0.3],[0,20],[0,20],[0,7e-15]]
-titlesList = [['Void radii, \nall samples','Central Density, \nall samples',\
-    'Average Density, \nall samples','Void mass, \nall samples'],\
-    ['Void radii, \nconditioned samples',\
-    'Central Density, \nconditioned samples',\
-    'Average Density, \nconditioned samples',\
-    'Void mass, \nconditioned samples']]
+xlabels = ['$\\delta_{\\mathrm{central}}$',\
+    '$\\bar{\\delta}$']
+#ylims = [[0,0.3],[0,20],[0,20],[0,7e-15]]
+ylims = [[0,30],[0,30]]
+xlims = [[-0.95,-0.7],[-0.85,-0.6]]
+#titlesList = [['Void radii, \nall samples','Central Density, \nall samples',\
+#    'Average Density, \nall samples','Void mass, \nall samples'],\
+#    ['Void radii, \nconditioned samples',\
+#    'Central Density, \nconditioned samples',\
+#    'Average Density, \nconditioned samples',\
+#    'Void mass, \nconditioned samples']]
 
+titlesList = [['Central Density, \nall samples',\
+    'Average Density, \nall samples'],\
+    ['Central Density, \nconditioned samples',\
+    'Average Density, \nconditioned samples']]
 
+rowText = ["All samples","Conditioned Samples"]
+colText = ["Central Density","Average Density"]
 
 plt.clf()
 fig, ax = plt.subplots(nRows,nCols,figsize=(textwidth,0.7*textwidth))
 for i in range(0,nRows):
     for j in range(0,nCols):
-        barAsHist(randCounts[i][j],histBins[j],ax=ax[i,j],\
+        axij = get_axis_handle(i,j,nRows,nCols)
+        barAsHist(randCounts[i][j],histBins[j],ax=axij,\
             alpha=0.5,color=seabornColormap[0],label="Randoms")
-        barAsHist(mcmcCounts[i][j],histBins[j],ax=ax[i,j],\
+        barAsHist(mcmcCounts[i][j],histBins[j],ax=axij,\
             alpha=0.5,color=seabornColormap[1],label="MCMC")
         if j == 3:
-            ax[i,j].set_xscale('log')
-            ax[i,j].set_xlim([1e13,1e15])
+            axij.set_xscale('log')
+            axij.set_xlim([1e13,1e15])
         plot.formatPlotGrid(ax,i,j,None,None,None,None,nRows,ylims[j],\
             fontsize=fontsize)
-        ax[i,j].set_xlabel(xlabels[j],fontsize=fontsize,fontfamily = "serif")
-        ax[i,j].set_ylabel('Probability Density',fontsize=fontsize,\
+        axij.set_xlabel(xlabels[j],fontsize=fontsize,fontfamily = "serif")
+        axij.set_ylabel('Probability Density',fontsize=fontsize,\
             fontfamily = "serif")
-        ax[i,j].set_title(titlesList[i][j],fontsize = fontsize,\
-            fontfamily = "serif")
+        axij.set_xlim(xlims[j])
+        if i == 0:
+            axij.set_title(colText[i],fontsize = fontsize,\
+                fontfamily = "serif")
+        axij.tick_params(axis='both',which='major',labelsize=fontsize)
+        axij.tick_params(axis='both',which='minor',labelsize=fontsize)
+        # Adjust the tick labels to prevent annoying overlaps:
+        if i > 0:
+            axij.set_yticks(axij.get_yticks()[0:-1])
+        if j < n_cols - 1:
+            axij.set_xticks(axij.get_xticks()[0:-1])
 
-ax[1,2].legend(prop={"size":fontsize,"family":"serif"},frameon=False)
-plt.savefig(figuresFolder + "all_condition_distributions.pdf")
+# Adjustment parameters:
+left=0.1
+right=0.93
+top=0.93
+bottom = 0.1
+wspace=0.0
+hspace=0.0
+spacing = 1/nRows
+start = 1/(2*nRows)
+
+for l in range(0,nRows):
+    fig.text(right + 0.025,top + (bottom - top)*(start + l*spacing),\
+             rowText[l],\
+             fontsize=fontsize,fontfamily="serif",ha='center',\
+             rotation='vertical',va='center')
+
+plt.subplots_adjust(wspace=wspace,hspace=hspace,left=left,right=right,
+                    top=top,bottom=bottom)
+ax[1,1].legend(prop={"size":fontsize,"family":"serif"},frameon=False)
+plt.savefig(figuresFolder + "all_density_distributions.pdf")
 plt.show()
 
 
