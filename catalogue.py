@@ -1691,9 +1691,9 @@ class ProfileStack:
                             condition = (condition 
                                          & (central_radii < self.r_max))
                         select_array = np.where(condition)[0]
-                    self.all_radii.append(central_radii[condition])
-                    self.all_centres.append(central_centres[condition])
-                    self.all_indices.append(central_indices[condition])
+                    self.all_radii.append(central_radii[select_array])
+                    self.all_centres.append(central_centres[select_array])
+                    self.all_indices.append(central_indices[select_array])
                     # Now get pair counts around these voids:
                     lengths_array = np.hstack(
                         (lengths_array,np.array([len(select_array)])))
