@@ -547,5 +547,70 @@ def processSnapshot(standard,reverse,nBins,offset=4,output=None,rMax=3.0,\
       open(output,"wb"))
 
 
+# Get the density from a single snap-shot, about a particular point:
+def density_from_snapshot(snap,centre,radius,tree=None):
+    m_unit = snap['mass'][0]*1e10
+    boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+    Om0 = snap.properties['omegaM0']
+    rho_crit = 2.7754e11
+    rho_mean = rho_crit*Om0
+    vol_sphere = 4*np.pi*radius**3/3
+    if tree is None:
+        tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
+    return m_unit*tree.query_ball_point(centre,radius,\
+            workers=-1,return_length=True)/(vol_sphere*rho_mean) - 1.0
+
+# Get a random selection of centres:
+def get_random_centres_and_densities(rSphere,snapListUn,\
+        seed=1000,nRandCentres = 10000):
+    # Get a random selection of centres:
+    np.random.seed(seed)
+    # Get random selection of centres and their densities:
+    randCentres = np.random.random((nRandCentres,3))*boxsize
+    randOverDen = []
+    snapSample = snapListUn[0]
+    boxsize = snapSample.properties['boxsize'].ratio("Mpc a h**-1")
+    for k in range(0,len(snapListUn)):
+        snap = snapListUn[k]
+        gc.collect() # Clear memory of the previous snapshot
+        tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
+        gc.collect()
+        randOverDen.append(density_from_snapshot(snap,randCentres,rSphere,
+            tree = tree))
+    return [randCentres,randOverDen]
+
+# Get the distance between two points in a simulation, accounting for 
+# wrapping:
+def getDistanceBetweenCentres(centre1,centre2,boxsize):
+    if (len(centre1.shape) == 1 and len(centre2.shape) == 1):
+        return np.sqrt(np.sum(snapedit.unwrap(centre1 - centre2,boxsize)**2))
+    else:
+        return np.sqrt(np.sum(snapedit.unwrap(centre1 - centre2,boxsize)**2,1))
+
+# From a list of centres, compute a sub-set which don't overlap by some radius
+# rSep:
+def getNonOverlappingCentres(centresList,rSep,boxsize,returnIndices=False):
+    centresNonOverlapping = []
+    indicesNonOverlapping = []
+    for ns in range(0,len(centresList)):
+        centresNS = centresList[ns]
+        centresNSNonOverlap = []
+        indicesNSNonOverlap = []
+        for k in range(0,len(centresNS)):
+            include = True
+            for l in range(0,len(centresNSNonOverlap)):
+                include = include and (getDistanceBetweenCentres(centresNS[k],\
+                    centresNSNonOverlap[l],boxsize) > rSep)
+            if include:
+                centresNSNonOverlap.append(centresNS[k])
+                indicesNSNonOverlap.append(k)
+        centresNonOverlapping.append(np.array(centresNSNonOverlap))
+        indicesNonOverlapping.append(np.array(indicesNSNonOverlap))
+    if returnIndices:
+        return indicesNonOverlapping
+    else:
+        return centresNonOverlapping
+
+
 
 

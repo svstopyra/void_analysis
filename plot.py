@@ -26,6 +26,7 @@ from descartes import PolygonPatch
 import seaborn as sns
 from matplotlib.ticker import NullFormatter
 import matplotlib
+from PIL import Image
 # Use seaborn colours:
 seabornColormap = sns.color_palette("colorblind",as_cmap=True)
 
@@ -3494,8 +3495,98 @@ def singleMassFunctionPlot(masses,mlow,mupp,nMassBins,textwidth=7.1014,\
 
 
 
+# Plotting functions:
+def plotConditionedProfile(rBinStackCentres,profileDictionary,nbar,\
+        intervals=[68,95],alphas = [0.75,0.5],ax = None,textwidth=7.1014,\
+        color='grey',xlim=[0,3],ylim=[0,1.2],cumulative=False,label=None):
+    credibleIntervals = stacking.get_profile_interval_in_regions(
+        profileDictionary,intervals = intervals,cumulative = cumulative)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(textwidth,0.5*textwidth))
+    for k in range(0,len(intervals)):
+        if type(color) == str:
+            shadeColor = color
+        elif type(color) == list:
+            shadeColor = color[k]
+        else:
+            raise Exception("Unknown colour")
+        if label is None:
+            labelText = 'Random catalogue (' + ("%.2g" % intervals[k]) + '%)'
+        else:
+            labelText = label
+        ax.fill_between(rBinStackCentres,credibleIntervals[2*k]/nbar,\
+            credibleIntervals[2*k+1]/nbar,alpha=alphas[k],color=shadeColor,\
+            label=labelText)
+
+def plotMCMCProfile(rBinStackCentres,rhoMCMCToUse,sigmaRhoMCMCToUse,nbar,\
+        ax = None,color=None,textwidth=7.1014):
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(textwidth,0.5*textwidth))
+    if color is None:
+        color = seabornColormap[0]
+    ax.fill_between(rBinStackCentres,(rhoMCMCToUse - sigmaRhoMCMCToUse)/nbar,\
+        (rhoMCMCToUse + sigmaRhoMCMCToUse)/nbar,alpha=0.5,color=color,\
+        label='MCMC catalogue')
+
+def plotStackedProfileVsRandoms(rBinStackCentres,profileDictionary,nbar,\
+        rhoMCMCToUse,sigmaRhoMCMCToUse,deltaRange=None,\
+        textwidth=7.1014,fontsize = 8,legloc="lower right",\
+        deltaLabel = "Local super-volume density",\
+        xlabel='$R/R_{\\mathrm{eff}}$',ylabel='$\\rho/\\bar{\\rho}$',\
+        xlim=[0,3],ylim=[0,1.2],savename = None,title=None):
+    fig, ax = plt.subplots(figsize=(textwidth,0.5*textwidth))
+    plotConditionedProfile(rBinStackCentres,profileDictionary,nbar,ax=ax)
+    plotMCMCProfile(rBinStackCentres,rhoMCMCToUse,sigmaRhoMCMCToUse,nbar,ax=ax)
+    ax.axvline(1.0,color='grey',linestyle=':')
+    ax.axhline(1.0,color='grey',linestyle=':')
+    if deltaRange is not None:
+        ax.fill_between(rBinStackCentres,deltaRange[0],deltaRange[1],alpha=0.5,\
+            color=seabornColormap[1],label='Local super-volume density')
+    ax.set_xlabel(xlabel,fontsize=fontsize)
+    ax.set_ylabel(ylabel,fontsize=fontsize)
+    ax.legend(prop={"size":fontsize,"family":"serif"},frameon=False,\
+        loc=legloc)
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    if title is not None:
+        ax.set_title(title,fontsize=fontsize)
+    plt.tight_layout()
+    if savename is not None:
+        plt.savefig(savename)
+    plt.show()
+
+# Combine a sequence of images into an animation:
+def plot_gif_animation(filenames,output_filename,save_all=True,duration=1000
+                       loop = 0):
+    frames = []
+    for i in filenames:
+        new_frame = Image.open(i)
+        frames.append(new_frame)
+    frames[0].save(
+        output_filename,\
+        format='GIF', append_images=frames[1:],save_all=save_all,
+        duration=duration,\
+        loop=loop)
 
 
+def get_axis_indices(k,n_cols):
+    i = int(k/n_cols)
+    j = k - n_cols*i
+    return [i,j]
+
+def get_axis_handle(i,j,n_rows,n_cols):
+    k = n_cols*i + j
+    if n_rows == 1:
+        if n_cols == 1:
+            axij = ax
+        else:
+            axij = ax[k]
+    else:
+        if n_rows == 1:
+            axij = ax[k]
+        else:
+            axij = ax[i,j]
+    return axij
 
 
 

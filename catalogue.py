@@ -1023,6 +1023,60 @@ class combinedCatalogue:
         thresholds = random_catalogue.getThresholdsInBins(threshold_bins,
                                                           percentile)
         self.set_filter(thresholds,threshold_bins,**kwargs)
+    def get_alpha_shapes(self,snapList,snapListRev,antihaloCatalogueList=None,
+                         ahProps = None,snapsortList=None):
+        if reCentreSnaps:
+            for snap in snapList:
+                tools.remapBORGSimulation(snap,swapXZ=False,reverse=True)
+                snap.recentred = True
+        boxsize = snapList[0].properties['boxsize'].ratio("Mpc a h**-1")
+        if antihaloCatalogueList is None:
+            antihaloCatalogueList = [snap.halos() for snap in snapListRev]
+        if ahProps is None:
+            ahProps = [tools.loadPickle(snap.filename + ".AHproperties.p") \
+                for snap in snapList]
+        if snapsortList is None:
+            snapsortList = [np.argsort(snap['iord']) \
+                for snap in snapList]
+        radSortCentral = [\
+            np.flip(np.argsort(
+            self.antihaloRadii[k][self.centralAntihalos[k][0]])) \
+            for k in range(0,len(self.centralAntihalos))]
+        largeAntihalos = [np.array(self.centralAntihalos[ns][0],dtype=int)[\
+                radSortCentral[ns]] for ns in range(0,len(snapList))]
+        if verbose:
+            print("Computing alpha shapes...")
+        # From here, we have to combined the positions of ALL voids:
+        positionLists = [] # Positions of all particles in all voids
+        centralAntihaloRadii = [\
+                self.antihaloRadii[k][self.centralAntihalos[k][0]] \
+                for k in range(0,len(self.centralAntihalos))]
+        sortedList = [np.flip(np.argsort(centralAntihaloRadii[ns])) \
+            for ns in range(0,self.numCats)]
+        fullListAll = [np.array(self.centralAntihalos[ns][0])[sortedList[ns]] \
+            for ns in range(0,self.numCats)]
+        alpha_shapes = []
+        ahMWPos = []
+        for k in range(0,finalCat.shape[0]):
+            allPosXYZ = np.full((0,3),0)
+            for ns in range(0,finalCat.shape[1]):
+                # Select the correct anti-halo
+                fullList = fullListAll[ns]
+                listPosition = finalCat[k,ns]-1
+                if listPosition >= 0:
+                    # Only include anti-halos which we have representatives for
+                    # in a given catalogue
+                    ahNumber = fullList[listPosition]
+                    posXYZ = snapedit.unwrap(
+                        snapList[ns]['pos'][snapsortList[ns][\
+                        antihaloCatalogueList[ns][\
+                        largeAntihalos[ns][ahNumber]+1]['iord']],:],boxsize)
+                    allPosXYZ = np.vstack((allPosXYZ,posXYZ))
+            posMW = plot_utilities.computeMollweidePositions(allPosXYZ)
+            ahMWPos.append(posMW)
+            alpha_shapes.append(alphashape.alphashape(
+                    np.array([posMW[0],posMW[1]]).T,alphaVal))
+    return [ahMWPos,alpha_shapes]
 
 def loadSnapshots(snapList):
     if type(snapList[0]) == str:

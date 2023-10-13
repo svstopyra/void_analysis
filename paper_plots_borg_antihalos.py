@@ -4027,7 +4027,6 @@ antihaloMasses = [props[3] for props in ahProps]
 antihaloRadii = [props[7] for props in ahProps]
 
 # Load the catalogues:
-
 cat300 = tools.loadPickle(data_folder + "cat300.p")
 cat300Rand = tools.loadPickle(data_folder + "cat300Rand.p")
 radiiListShort = cat300.radiusListShort
@@ -4112,8 +4111,7 @@ treeListUncon = [tools.loadOrRecompute(\
 # MCMC profiles, about a centre specific to each sample:
 [allPairsSample,allVolumesSample] = tools.loadOrRecompute(
     data_folder + "pair_counts_mcmc_cut_samples.p",
-    stacking.get_all_pair_counts_MCMC_samples,
-    allCentres300Gadget,allRadii300,
+    stacking.get_all_pair_counts_MCMC_samples,allCentres300Gadget,allRadii300,
     rBinStackCentres,snapList,treeList,rBinStack,_recomputeData=False)
 
 
@@ -4171,7 +4169,8 @@ def getRandomCentresAndDensities(rSphere,snapListUn,\
 
 [randCentres,randOverDen] = tools.loadOrRecompute(\
     data_folder + "random_centres_and_densities.p",\
-    getRandomCentresAndDensities,rSphere,snapListUn,_recomputeData=False)
+    simulation_tools.get_random_centres_and_densities,rSphere,snapListUn,
+    _recomputeData=False)
 
 
 # Get MCMC densities:
@@ -4221,34 +4220,6 @@ deltaToUse = [randOverDen[ns][comp] \
 [deltaAverageMean,deltaAverageSigma] = cat300.getMeanProperty('deltaAverage')
 
 
-
-def getDistanceBetweenCentres(centre1,centre2,boxsize):
-    if (len(centre1.shape) == 1 and len(centre2.shape) == 1):
-        return np.sqrt(np.sum(snapedit.unwrap(centre1 - centre2,boxsize)**2))
-    else:
-        return np.sqrt(np.sum(snapedit.unwrap(centre1 - centre2,boxsize)**2,1))
-
-def getNonOverlappingCentres(centresList,rSep,boxsize,returnIndices=False):
-    centresNonOverlapping = []
-    indicesNonOverlapping = []
-    for ns in range(0,len(centresList)):
-        centresNS = centresList[ns]
-        centresNSNonOverlap = []
-        indicesNSNonOverlap = []
-        for k in range(0,len(centresNS)):
-            include = True
-            for l in range(0,len(centresNSNonOverlap)):
-                include = include and (getDistanceBetweenCentres(centresNS[k],\
-                    centresNSNonOverlap[l],boxsize) > rSep)
-            if include:
-                centresNSNonOverlap.append(centresNS[k])
-                indicesNSNonOverlap.append(k)
-        centresNonOverlapping.append(np.array(centresNSNonOverlap))
-        indicesNonOverlapping.append(np.array(indicesNSNonOverlap))
-    if returnIndices:
-        return indicesNonOverlapping
-    else:
-        return centresNonOverlapping
 
 
 # Bins to use when building a catalogue similar to the constrained
@@ -4544,7 +4515,11 @@ start = 0
 end = -1
 seed = 1000
 constrainedDictionary = regionAndVoidDensityConditionDict
+#constrainedDictionary = regionDensityAndAllConditionPooledDict
 #constrainedDictionary = regionDensityAndTripleConditionDict
+#constrainedStack = regionDensityAndAllConditionStackPooled
+constrainedStack = regionAndVoidDensityConditionStack
+
 conditioningVariable = np.vstack([\
     conditioningQuantityUn[ns][ind] \
     for ns, ind in zip(nsListNoConstraints,noConstraintsDict['selections'])])
@@ -4560,20 +4535,42 @@ conditionedCentralDensity = np.hstack([\
 conditionedAverageDensity = np.hstack([\
     ahPropsUn[ns][12][ind] \
     for ns, ind in zip(nsListNoConstraints,noConstraintsDict['selections'])])
-allSelectedConditions = np.vstack(\
-    constrainedDictionary['selected_conditions'])
-allSelectedMasses = np.hstack([antihaloMassesUn[ns][ind] \
-    for ns, ind in zip(nsListDensityConstraint,\
-    constrainedDictionary['selections'])])
-allSelectedRadii = np.hstack([antihaloRadiiUn[ns][ind] \
-    for ns, ind in zip(nsListDensityConstraint,\
-    constrainedDictionary['selections'])])
-allSelectedCentralDensity = np.hstack([ahPropsUn[ns][11][ind] \
-    for ns, ind in zip(nsListDensityConstraint,\
-    constrainedDictionary['selections'])])
-allSelectedAverageDensity = np.hstack([ahPropsUn[ns][12][ind] \
-    for ns, ind in zip(nsListDensityConstraint,\
-    constrainedDictionary['selections'])])
+if not constrainedStack.combine_random_regions:
+    allSelectedConditions = np.vstack(\
+        constrainedDictionary['selected_conditions'])
+    allSelectedMasses = np.hstack([antihaloMassesUn[ns][ind] \
+        for ns, ind in zip(nsListDensityConstraint,\
+        constrainedDictionary['selections'])])
+    allSelectedRadii = np.hstack([antihaloRadiiUn[ns][ind] \
+        for ns, ind in zip(nsListDensityConstraint,\
+        constrainedDictionary['selections'])])
+    allSelectedCentralDensity = np.hstack([ahPropsUn[ns][11][ind] \
+        for ns, ind in zip(nsListDensityConstraint,\
+        constrainedDictionary['selections'])])
+    allSelectedAverageDensity = np.hstack([ahPropsUn[ns][12][ind] \
+        for ns, ind in zip(nsListDensityConstraint,\
+        constrainedDictionary['selections'])])
+else:
+    allSelectedConditions = np.vstack(\
+        constrainedDictionary['selected_conditions'])
+    constrainedStack.get_all_condition_variables()
+    allMasses = constrainedStack.get_pooled_variable(antihaloMassesUn)
+    allRadii = constrainedStack.get_pooled_variable(antihaloRadiiUn)
+    allCentralDensity = constrainedStack.get_pooled_variable(
+        [ahPropsUn[ns][11] for ns in range(0,len(snapListUn))])
+    allAverageDensity = constrainedStack.get_pooled_variable(
+        [ahPropsUn[ns][12] for ns in range(0,len(snapListUn))])
+    allSelectedMasses = np.hstack(
+        [allMasses[ind] for ind in constrainedDictionary['selections']])
+    allSelectedRadii = np.hstack(
+        [allRadii[ind] for ind in constrainedDictionary['selections']])
+    allSelectedCentralDensity = np.hstack(
+        [allCentralDensity[ind] 
+        for ind in constrainedDictionary['selections']])
+    allSelectedAverageDensity = np.hstack(
+        [allAverageDensity[ind] 
+        for ind in constrainedDictionary['selections']])
+
 replace = False
 
 
@@ -4880,10 +4877,6 @@ def plotStackedProfileVsRandoms(rBinStackCentres,profileDictionary,nbar,\
     plt.show()
 
 
-
-
-
-
 # Show all plots on one figure:
 colors = [seabornColormap[k] for k in range(1,5)]
 #dictionaries = [noConstraintsDict,regionDensityDict,\
@@ -4936,6 +4929,23 @@ for i in imgs:
 frames[0].save(figuresFolder + 'profiles_constraint_progression_animation.gif',\
     format='GIF', append_images=frames[1:],save_all=True,duration=1000,\
     loop=0)
+
+
+
+# Plotting for the paper:
+
+
+
+
+
+# Plotting the pooled voids:
+plotStackedProfileVsRandoms(
+    rBinStackCentres,regionDensityAndAllConditionPooledDict,nbar,rhoMCMCToUse,
+    sigmaRhoMCMCToUse,deltaRange=deltaRange,
+    title = "Pooled stacks with region & void density constraint",
+    savename = figuresFolder + "profiles_pooled_void_density_constrained.pdf")
+
+
 
 
 # Plot of profile distributions:
