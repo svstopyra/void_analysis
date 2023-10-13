@@ -792,17 +792,57 @@ if doCat:
 #-------------------------------------------------------------------------------
 # VOID SIZE FUNCTION PLOT
 
+# Mass functions:
+leftFilter = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
+    (distances300 < 135) & (cat300.finalCatFrac > thresholds300)
+rightFilter = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
+    (distances300 < 300) & (cat300.finalCatFrac > thresholds300)
+
+
+radiusBins = np.linspace(10,25,21)
+
+def plot_void_counts():
+    
+
+
+plt.clf()
+if doCat:
+    nBins = 8
+    Om = referenceSnap.properties['omegaM0']
+    rhoc = 2.7754e11
+    boxsize = referenceSnap.properties['boxsize'].ratio("Mpc a h**-1")
+    N = int(np.cbrt(len(referenceSnap)))
+    mUnit = 8*Om*rhoc*(boxsize/N)**3
+    mLower = 100*mUnit
+    mUpper = 2e15
+    rSphere = 300
+    rSphereInner = 135
+    # Check mass functions:
+    volSphere135 = 4*np.pi*rSphereInner**3/3
+    volSphere = 4*np.pi*rSphere**3/3
+    plot.massFunctionComparison(massMean300[leftFilter],\
+        massMean300[rightFilter],4*np.pi*135**3/3,nBins=nBins,\
+        labelLeft = "Combined catalogue \n(well-constrained voids only)",\
+        labelRight  ="Combined catalogue \n(well-constrained voids only)",\
+        ylabel="Number of antihalos",savename=figuresFolder + \
+        "mass_function_combined_300vs135_test.pdf",massLower=mLower,\
+        ylim=[1,1000],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,\
+        fontsize=8,massUpper = mUpper,\
+        titleLeft = "Combined catalogue, $<135\\mathrm{Mpc}h^{-1}$",\
+        titleRight = "Combined catalogue, $<300\\mathrm{Mpc}h^{-1}$",\
+        volSimRight = 4*np.pi*300**3/3,ylimRight=[1,1000],\
+        legendLoc="upper right")
+
 
 #-------------------------------------------------------------------------------
 # SKYPLOT
+snapSortList = [np.argsort(snap['iord']) for snap in snapList]
 
-[ahMWPos,alpha_shapes_finalCat] = getFinalCatalogueAlphaShapes,snapNumList(
-            cat300.finalCat[filter300],samplesFolder=samplesFolder,\
-            _recomputeData = recomputeData,recomputeData = recomputeData,\
-            massRange = [mMin,mMax],\
-            rRange = [5,30],reCentreSnaps = True,\
-            additionalFilters=snrFilter,rSphere=rSphere,\
-            centralAntihalos=centralAntihalos)
+[ahMWPos,alpha_shapes_finalCat] = cat300.get_alpha_shapes(
+    snapList,snapListRev,antihaloCatalogueList=hrlist,ahProps = ahProps,
+    snapsortList=snapSortList)
+
+
 
 #-------------------------------------------------------------------------------
 # VOID DENSITY DISTRIBUTION PLOT

@@ -1574,6 +1574,9 @@ class ProfileStack:
         self.all_selections = []
         self.all_conditions = []
         self.all_selected_conditions = []
+        self.all_radii = []
+        self.all_indices = []
+        self.all_centres = []
         if self.combine_random_regions:
             if self.conditioning_quantity_to_match is not None:
                 self.get_all_condition_variables()
@@ -1638,6 +1641,10 @@ class ProfileStack:
                          ns_select_array,:]))
                     self.all_selections[k] = np.hstack((self.all_selections[k],
                                                        ns_select_array))
+                    self.all_radii.append(
+                        self.central_radii_all[ns_select_array])
+                    self.all_centres.append(
+                        self.central_centres_all[ns_select_array])
             self.all_conditions.append(self.central_condition_variable_all)
         else:
             lengths_array = np.zeros(0,dtype=int)
@@ -1657,6 +1664,9 @@ class ProfileStack:
                         self.antihalo_radii_list[ns][central_antihalos]
                     central_centres = \
                         self.ah_centres_list[ns][central_antihalos]
+                    self.all_radii.append(central_radii)
+                    self.all_centres.append(central_centres)
+                    self.all_indices.append(central_indices)
                     if self.conditioning_quantity_to_match is not None:
                         if self.num_cond == 1:
                             num_cond_variables = \
