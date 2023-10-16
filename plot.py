@@ -3556,7 +3556,7 @@ def plotStackedProfileVsRandoms(rBinStackCentres,profileDictionary,nbar,\
     plt.show()
 
 # Combine a sequence of images into an animation:
-def plot_gif_animation(filenames,output_filename,save_all=True,duration=1000
+def plot_gif_animation(filenames,output_filename,save_all=True,duration=1000,
                        loop = 0):
     frames = []
     for i in filenames:
