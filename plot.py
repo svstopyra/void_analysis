@@ -3574,7 +3574,7 @@ def get_axis_indices(k,n_cols):
     j = k - n_cols*i
     return [i,j]
 
-def get_axis_handle(i,j,n_rows,n_cols):
+def get_axis_handle(i,j,n_rows,n_cols,ax):
     k = n_cols*i + j
     if n_rows == 1:
         if n_cols == 1:

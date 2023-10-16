@@ -210,6 +210,7 @@ else:
 # CATALOGUE DATA:
 
 ns = 0
+doSky=True
 snapToShow = pynbody.load(samplesFolder + "sample" + str(snapNumList[ns]) + \
     "/gadget_full_forward_512/snapshot_001")
 tools.remapBORGSimulation(snapToShow,swapXZ=False,reverse=True)
@@ -476,7 +477,7 @@ rSphereInner = 135
 # NO CONSTRAINTS:
 noConstraintsStack = ProfileStack(\
     centresAllDensityNonOverlapping,\
-    snapListUn,ahPropsUnconstrained,rSphereInner,\
+    snapListUn,ahPropsUn,rSphereInner,\
     rBinStack,tree_list=treeListUncon,seed=1000,start=0,end=-1,\
     conditioning_quantity=None,\
     conditioning_quantity_to_match=None,\
@@ -499,7 +500,7 @@ nsListDensityConstraint = np.hstack([[k \
 # REGION DENSITY CONSTRAINT ONLY:
 regionDensityStack = ProfileStack(\
     centresUnderdenseNonOverlapping,\
-    snapListUn,ahPropsUnconstrained,rSphereInner,\
+    snapListUn,ahPropsUn,rSphereInner,\
     rBinStack,tree_list=treeListUncon,seed=1000,start=0,end=-1,\
     conditioning_quantity=None,\
     conditioning_quantity_to_match=None,\
@@ -519,7 +520,7 @@ conditioningQuantityUn = [antihaloRadiiUn[ns].T\
 conditioningQuantityMCMC = meanRadii
 regionDensityAndRadiusStack = ProfileStack(\
     centresUnderdenseNonOverlapping,\
-    snapListUn,ahPropsUnconstrained,rSphereInner,\
+    snapListUn,ahPropsUn,rSphereInner,\
     rBinStack,tree_list=treeListUncon,seed=1000,start=0,end=-1,\
     conditioning_quantity=conditioningQuantityUn,\
     conditioning_quantity_to_match=conditioningQuantityMCMC,\
@@ -544,7 +545,7 @@ conditioningQuantityMCMC = np.vstack([meanRadii,\
 
 regionDensityAndTripleConditionStack = ProfileStack(\
     centresUnderdenseNonOverlapping,\
-    snapListUn,ahPropsUnconstrained,rSphereInner,\
+    snapListUn,ahPropsUn,rSphereInner,\
     rBinStack,tree_list=treeListUncon,seed=1000,start=0,end=-1,\
     conditioning_quantity=conditioningQuantityUn,\
     conditioning_quantity_to_match=conditioningQuantityMCMC,\
@@ -568,7 +569,7 @@ conditioningQuantityMCMC = np.vstack([\
 
 regionAndVoidCentralDensityConditionStack = ProfileStack(\
     centresUnderdenseNonOverlapping,\
-    snapListUn,ahPropsUnconstrained,rSphereInner,\
+    snapListUn,ahPropsUn,rSphereInner,\
     rBinStack,tree_list=treeListUncon,seed=1000,start=0,end=-1,\
     conditioning_quantity=conditioningQuantityUn,\
     conditioning_quantity_to_match=conditioningQuantityMCMC,\
@@ -592,7 +593,7 @@ conditioningQuantityMCMC = np.vstack([\
 
 regionAndVoidDensityConditionStack = ProfileStack(\
     centresUnderdenseNonOverlapping,\
-    snapListUn,ahPropsUnconstrained,rSphereInner,\
+    snapListUn,ahPropsUn,rSphereInner,\
     rBinStack,tree_list=treeListUncon,seed=1000,start=0,end=-1,\
     conditioning_quantity=conditioningQuantityUn,\
     conditioning_quantity_to_match=conditioningQuantityMCMC,\
@@ -616,7 +617,7 @@ conditioningQuantityMCMC = np.vstack([\
 
 regionDensityAndAllConditionStackPooled = ProfileStack(\
     centresUnderdenseNonOverlapping,\
-    snapListUn,ahPropsUnconstrained,rSphereInner,\
+    snapListUn,ahPropsUn,rSphereInner,\
     rBinStack,tree_list=treeListUncon,seed=1000,start=0,end=-1,\
     conditioning_quantity=conditioningQuantityUn,\
     conditioning_quantity_to_match=conditioningQuantityMCMC,\
@@ -641,8 +642,11 @@ dictionaries = [noConstraintsDict,regionDensityDict,\
 filenames = ["profiles_no_constraints.png","profiles_regionDensity.png",\
     "profiles_regionDensity_and_voidCentral.png",\
     "profiles_regionDensity_voidCentral_and_voidAverage.png"]
-deltaRange = np.array([1 + deltaListMeanNew - deltaListErrorNew,\
-    1 + deltaListMeanNew + deltaListErrorNew])
+labels = ['No constraints','Region Density',\
+    'Region Density + \nVoid Central Density',\
+    'Region Density + \nVoid Central & Average Density']
+deltaRange = np.array([1 + deltaMAPInterval[0],\
+    1 + deltaMAPInterval[1]])
 for profileDictionary, savename, label in zip(dictionaries,filenames,labels):
     plotStackedProfileVsRandoms(rBinStackCentres,profileDictionary,nbar,\
         rhoMCMCToUse,sigmaRhoMCMCToUse,deltaRange=deltaRange,\
