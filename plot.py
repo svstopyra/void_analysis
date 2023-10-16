@@ -3588,8 +3588,58 @@ def get_axis_handle(i,j,n_rows,n_cols,ax):
             axij = ax[i,j]
     return axij
 
+# Compute a void size function from a set of simulation lists of void radii:
+def compute_lcdm_vsf(radii_lists,radius_bins,confidence = 0.68):
+    binned_radii_counts = np.array([plot.binValues(radii,radius_bins)[1] 
+                                   for radii in radii_lists])
+    mean_radii_counts = np.mean(binned_radii_counts,0)
+    interval = scipy.stats.poisson.interval(confidence,mean_radii_counts)
+    return [mean_radii_counts,interval]
 
 
+# Plot void counts as a function of radius:
+def plot_void_counts_radius(sample_radii,radius_bins,lambda_cdm_samples,
+                            confidence=0.95,ax=None,textwidth=7.1014,
+                            sample_style="-",sample_colour=None,lcdm_style=":",
+                            lcdm_colour="grey",alpha=0.5,
+                            lcdm_label="$\\Lambda$-CDM",label="MCMC catalogue",
+                            xlabel="$r [\\mathrm{Mpc}h^{-1}$]",
+                            ylabel="Number of voids",fontsize=8,
+                            fontfamily="serif",savename=None,show=False,
+                            logy=True):
+    # Get lambda-cdm comparin
+    [lcdm_radii_counts,interval] = compute_lcdm_vsf(lambda_cdm_samples,
+                                                    radius_bins,
+                                                    confidence = confidence)
+    # Get sample counts:
+    if type(sample_radii) is list:
+        sample_counts = np.mean(np.array([plot.binValues(radii,radius_bins)[1] 
+                                   for radii in sample_radii]),0)
+    else:
+        sample_counts = plot.binValues(sample_radii,radius_bins)[1]
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(textwidth,0.45*textwidth))
+    # Formatting choices:
+    if sample_colour is None:
+        sample_colour = seabornColormap[0]
+    # Plot lines:
+    radius_bin_centres = plot.binCentres(radius_bins)
+    ax.plot(radius_bin_centres,sample_counts,linestyle=sample_style,
+            color=sample_colour,label=label)
+    ax.plot(radius_bin_centres,lcdm_radii_counts,linestyle=lcdm_style,
+            color=lcdm_colour)
+    ax.fill_between(radius_bin_centres,interval[0],interval[1],
+                    color=lcdm_colour,alpha=alpha,label=lcdm_label)
+    # Labels and other annotation:
+    ax.set_xlabel(xlabel,fontsize=fontsize,fontfamily=fontfamily)
+    ax.set_ylabel(ylabel,fontsize=fontsize,fontfamily=fontfamily)
+    ax.legend(prop={"size":fontsize,"family":fontfamily},frameon=False)
+    if logy:
+        ax.set_yscale('log')
+    if savename is not None:
+        plt.savefig(savename)
+    if show:
+        plt.show()
 
 
 

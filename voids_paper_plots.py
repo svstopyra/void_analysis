@@ -676,7 +676,7 @@ plt.clf()
 fig, ax = plt.subplots(n_rows,n_cols,figsize=(textwidth,0.7*textwidth))
 for k in range(0,len(dictionaries)):
     [i,j] = get_axis_indices(k,n_cols)
-    axij = get_axis_handle(i,j,n_rows,n_cols)
+    axij = get_axis_handle(i,j,n_rows,n_cols,ax)
     plotConditionedProfile(rBinStackCentres,dictionaries[k],nbar,ax=axij,\
                            intervals=[68,95],alphas=[0.75,0.5])
     plotMCMCProfile(rBinStackCentres,rhoMCMCToUse,sigmaRhoMCMCToUse,nbar,
@@ -724,7 +724,7 @@ plt.clf()
 fig, ax = plt.subplots(n_rows,n_cols,figsize=(textwidth,0.45*textwidth))
 for k in range(0,len(dictionaries)):
     [i,j] = get_axis_indices(k,n_cols)
-    axij = get_axis_handle(i,j,n_rows,n_cols)
+    axij = get_axis_handle(i,j,n_rows,n_cols,ax)
     plotConditionedProfile(rBinStackCentres,dictionaries[k],nbar,ax=axij,\
                            intervals=[68,95],alphas=[0.75,0.5])
     plotMCMCProfile(rBinStackCentres,rhoMCMCToUse,sigmaRhoMCMCToUse,nbar,
@@ -768,6 +768,7 @@ rightFilter = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
     (distances300 < 300) & (cat300.finalCatFrac > thresholds300)
 
 plt.clf()
+doCat = True
 if doCat:
     nBins = 8
     Om = referenceSnap.properties['omegaM0']
@@ -800,6 +801,8 @@ if doCat:
 #-------------------------------------------------------------------------------
 # VOID SIZE FUNCTION PLOT
 
+from void_analysis.plot import plot_void_counts_radius
+
 # Mass functions:
 leftFilter = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
     (distances300 < 135) & (cat300.finalCatFrac > thresholds300)
@@ -809,53 +812,7 @@ rightFilter = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
 
 radius_bins = np.linspace(10,21,7)
 
-def compute_lcdm_vsf(radii_lists,radius_bins,confidence = 0.68):
-    binned_radii_counts = np.array([plot.binValues(radii,radius_bins)[1] 
-                                   for radii in radii_lists])
-    mean_radii_counts = np.mean(binned_radii_counts,0)
-    interval = scipy.stats.poisson.interval(confidence,mean_radii_counts)
-    return [mean_radii_counts,interval]
 
-def plot_void_counts(sample_radii,radius_bins,lambda_cdm_samples,
-                     confidence=0.95,ax=None,textwidth=7.1014,
-                     sample_style="-",sample_colour=None,lcdm_style=":",
-                     lcdm_colour="grey",alpha=0.5,lcdm_label="$\\Lambda$-CDM",
-                     label="MCMC catalogue",xlabel="$r [\\mathrm{Mpc}h^{-1}$]",
-                     ylabel="Number of voids",fontsize=8,fontfamily="serif",
-                     savename=None,show=False,logy=True):
-    # Get lambda-cdm comparison
-    [lcdm_radii_counts,interval] = compute_lcdm_vsf(lambda_cdm_samples,
-                                                    radius_bins,
-                                                    confidence = confidence)
-    # Get sample counts:
-    if type(sample_radii) is list:
-        sample_counts = np.mean(np.array([plot.binValues(radii,radius_bins)[1] 
-                                   for radii in sample_radii]),0)
-    else:
-        sample_counts = plot.binValues(sample_radii,radius_bins)[1]
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(textwidth,0.45*textwidth))
-    # Formatting choices:
-    if sample_colour is None:
-        sample_colour = seabornColormap[0]
-    # Plot lines:
-    radius_bin_centres = plot.binCentres(radius_bins)
-    ax.plot(radius_bin_centres,sample_counts,linestyle=sample_style,
-            color=sample_colour,label=label)
-    ax.plot(radius_bin_centres,lcdm_radii_counts,linestyle=lcdm_style,
-            color=lcdm_colour)
-    ax.fill_between(radius_bin_centres,interval[0],interval[1],
-                    color=lcdm_colour,alpha=alpha,label=lcdm_label)
-    # Labels and other annotation:
-    ax.set_xlabel(xlabel,fontsize=fontsize,fontfamily=fontfamily)
-    ax.set_ylabel(ylabel,fontsize=fontsize,fontfamily=fontfamily)
-    ax.legend(prop={"size":fontsize,"family":fontfamily},frameon=False)
-    if logy:
-        ax.set_yscale('log')
-    if savename is not None:
-        plt.savefig(savename)
-    if show:
-        plt.show()
 
 # Actual plot:
 
@@ -863,8 +820,8 @@ mean_radii_mcmc = cat300.getMeanProperty('radii',void_filter=filter300)
 
 plt.clf()
 fig, ax = plt.subplots(figsize=(0.45*textwidth,0.45*textwidth))
-plot_void_counts(mean_radii_mcmc[0],radius_bins,noConstraintsDict['radii'],
-                 ax=ax)
+plot_void_counts_radius(mean_radii_mcmc[0],radius_bins,
+                        noConstraintsDict['radii'],ax=ax)
 
 ax.tick_params(axis='both',which='major',labelsize=fontsize)
 ax.tick_params(axis='both',which='minor',labelsize=fontsize)
@@ -876,9 +833,98 @@ plt.show()
 #-------------------------------------------------------------------------------
 # SKYPLOT
 snapSortList = [np.argsort(snap['iord']) for snap in snapList]
+snapToShow = snapList[0]
+
+# Verify positions are in the correct co-ordinates:
+
+for snap in snapList:
+    tools.remapBORGSimulation(snap,swapXZ=False,reverse=True)
+
+# Function to get the CIC density:
+from nbodykit.source.catalog import ArrayCatalog
+def getCICDensity(positions,boxsize,mUnit,nres):
+    cat = ArrayCatalog({'Position' : positions,\
+        'Mass' : mUnit*np.ones(len(positions))},\
+        BoxSize=(boxsize,boxsize,boxsize))
+    mesh = cat.to_mesh(Nmesh=nres)
+    return mesh.preview()
+
+def coord_range_to_ind_range(coord_range,extent,N):
+    indices = [int((x - extent[0])*N/(extent[1] - extent[0])) 
+               for x in coord_range]
+    return indices
+
+
+
+density0 = getCICDensity(np.fliplr(snapToShow['pos']),
+    boxsize,snapToShow['mass'][0],256)
+
+density1 = getCICDensity(snapToShow['pos'],
+    boxsize,snapToShow['mass'][0],256)
+
+density2 = np.reshape(density0,(256,256,256),order='F')
+
+coord_range = [-2.5,2.5]
+ind_range = coord_range_to_ind_range(coord_range,[-boxsize/2,boxsize/2],256)
+coord_filter = (equatorialXYZ[:,2] > coord_range[0]) & \
+    (equatorialXYZ[:,2] <= coord_range[1])
+coord_filter_snap = (snapToShow['pos'][:,2] > coord_range[0]) & \
+    (snapToShow['pos'][:,2] <= coord_range[1])
+
+positions = snapToShow['pos'][coord_filter_snap,0:-1]
+
+counts = np.histogramdd(positions,
+    bins = [np.linspace(-boxsize/2,boxsize/2,256+1)]*2)
+
+fig, ax = plt.subplots()
+den_field = counts[0]/np.mean(counts[0])
+#den_field = np.mean(
+#    density1[:,:,np.arange(ind_range[0],ind_range[1]+1)],2)
+im = ax.imshow(den_field.T,norm=colors.LogNorm(vmin=1e-3,vmax=1e3),
+        cmap="PuOr_r",extent=(-boxsize/2,boxsize/2,-boxsize/2,boxsize/2),
+        origin="lower")
+#ax.scatter(positions[:,0],positions[:,1],marker = '.',color='r')
+ax.scatter(equatorialXYZ[coord_filter,0],equatorialXYZ[coord_filter,1],
+           marker = '.',color='r')
+ax.set_title("Simulation Density")
+ax.set_xlabel("x [$\\mathrm{Mpc}h^{-1}$]")
+ax.set_ylabel("y [$\\mathrm{Mpc}h^{-1}$]")
+ax.set_xlim([-100,100])
+ax.set_ylim([-100,100])
+plt.show()
+
+
+# Create the histogram with the correct bin edges
+num_bins= 256
+x_bins = np.linspace(-boxsize/2, boxsize/2, num_bins + 1)
+y_bins = np.linspace(-boxsize/2, boxsize/2, num_bins + 1)
+counts, _, _ = np.histogram2d(positions[:,0], positions[:,1], bins=[x_bins, y_bins])
+
+fig, ax = plt.subplots()
+den_field = counts / np.mean(counts)
+im = ax.imshow(den_field.T, 
+    norm=colors.LogNorm(vmin=1e-3, vmax=1e3), cmap="PuOr_r",
+    extent=(-boxsize/2, boxsize/2, -boxsize/2, boxsize/2),origin="lower")
+ax.scatter(positions[:,0], positions[:,1], marker='.', color='r')
+ax.set_title("Simulation Density")
+ax.set_xlabel("x [$\\mathrm{Mpc}h^{-1}$]")
+ax.set_ylabel("y [$\\mathrm{Mpc}h^{-1}$]")
+ax.set_xlim([-50, 50])
+ax.set_ylim([-50, 50])
+plt.show()
+
+
+
+#den_field = np.mean(
+#    density0[:,:,np.arange(ind_range[0],ind_range[1]+1)],2)
+#ax.scatter(equatorialXYZ[coord_filter,0],equatorialXYZ[coord_filter,1],
+#           marker = '.',color='r')
+
+
+# Alpha shapes
 
 [ahMWPos,alpha_shapes_finalCat] = cat300.get_alpha_shapes(
-    snapList,snapListRev,antihaloCatalogueList=hrlist,ahProps = ahProps,
+    snapList,snapListRev,antihaloCatalogueList=hrList,ahProps = ahProps,
     snapsortList=snapSortList)
 
 
@@ -1088,7 +1134,7 @@ plt.clf()
 fig, ax = plt.subplots(nRows,nCols,figsize=(textwidth,0.7*textwidth))
 for i in range(0,nRows):
     for j in range(0,nCols):
-        axij = get_axis_handle(i,j,nRows,nCols)
+        axij = get_axis_handle(i,j,nRows,nCols,ax)
         barAsHist(randCounts[i][j],histBins[j],ax=axij,\
             alpha=0.5,color=seabornColormap[0],label="Randoms")
         barAsHist(mcmcCounts[i][j],histBins[j],ax=axij,\

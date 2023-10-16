@@ -1024,7 +1024,7 @@ class combinedCatalogue:
                                                           percentile)
         self.set_filter(thresholds,threshold_bins,**kwargs)
     def get_alpha_shapes(self,snapList,snapListRev,antihaloCatalogueList=None,
-                         ahProps = None,snapsortList=None):
+                         ahProps = None,snapsortList=None,reCentreSnaps=True):
         if reCentreSnaps:
             for snap in snapList:
                 tools.remapBORGSimulation(snap,swapXZ=False,reverse=True)
