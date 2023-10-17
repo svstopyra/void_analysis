@@ -3623,7 +3623,7 @@ def plot_void_counts_radius(sample_radii,radius_bins,lambda_cdm_samples,
     if sample_colour is None:
         sample_colour = seabornColormap[0]
     # Plot lines:
-    radius_bin_centres = plot.binCentres(radius_bins)
+    radius_bin_centres = binCentres(radius_bins)
     ax.plot(radius_bin_centres,sample_counts,linestyle=sample_style,
             color=sample_colour,label=label)
     ax.plot(radius_bin_centres,lcdm_radii_counts,linestyle=lcdm_style,
