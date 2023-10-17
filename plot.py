@@ -3590,7 +3590,7 @@ def get_axis_handle(i,j,n_rows,n_cols,ax):
 
 # Compute a void size function from a set of simulation lists of void radii:
 def compute_lcdm_vsf(radii_lists,radius_bins,confidence = 0.68):
-    binned_radii_counts = np.array([plot.binValues(radii,radius_bins)[1] 
+    binned_radii_counts = np.array([binValues(radii,radius_bins)[1] 
                                    for radii in radii_lists])
     mean_radii_counts = np.mean(binned_radii_counts,0)
     interval = scipy.stats.poisson.interval(confidence,mean_radii_counts)
@@ -3613,10 +3613,10 @@ def plot_void_counts_radius(sample_radii,radius_bins,lambda_cdm_samples,
                                                     confidence = confidence)
     # Get sample counts:
     if type(sample_radii) is list:
-        sample_counts = np.mean(np.array([plot.binValues(radii,radius_bins)[1] 
+        sample_counts = np.mean(np.array([binValues(radii,radius_bins)[1] 
                                    for radii in sample_radii]),0)
     else:
-        sample_counts = plot.binValues(sample_radii,radius_bins)[1]
+        sample_counts = binValues(sample_radii,radius_bins)[1]
     if ax is None:
         fig, ax = plt.subplots(figsize=(textwidth,0.45*textwidth))
     # Formatting choices:

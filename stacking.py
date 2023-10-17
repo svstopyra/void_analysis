@@ -773,7 +773,7 @@ def get_all_pair_counts_MCMC_samples(all_centres_300_gadget,all_radii_300,
         all_volumes_sample[k,no_anti_halo,:] = np.nan
     return [all_pairs_sample,all_volumes_sample]
 
-# Comptue the mean mcmc profile and it's error:
+# Compute the mean mcmc profile and its error:
 def get_mean_mcmc_profile(all_pairs,all_volumes,cumulative=False):
     # Average the profiles over all MCMC samples:
     if cumulative:
