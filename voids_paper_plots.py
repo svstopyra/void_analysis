@@ -1074,13 +1074,12 @@ if doSky:
         vmin=1e-2,vmax=1e2,legLoc = 'lower left',\
         bbox_to_anchor = (-0.1,-0.2),\
         snapsort = snapSortList[ns],antihaloCentres = ahMWPos,\
-        figOut = figuresFolder + "/ah_match_sample_" + \
-        str(ns) + plotFormat,\
+        figOut = figuresFolder + "/ah_match_combined" + plotFormat,\
         showFig=False,figsize = (scale*textwidth,scale*0.55*textwidth),\
         voidColour = colourListTot,antiHaloLabel=labelListTot,\
         bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
         galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
-        voidAlpha = 0.6,margins=None)
+        voidAlpha = 0.6,margins=None,positions = [None for x in laListTot])
 
 
 #-------------------------------------------------------------------------------

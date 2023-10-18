@@ -1465,7 +1465,7 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
             else:
                 raise Exception('Unrecognised antihalo label option.')
             if alpha_shapes[k] is not None:
-                if positions is not None:
+                if positions is None:
                     position_list = snapedit.unwrap(
                         snap['pos'][
                         snapsort[hr[largeAntihalos[k]+1]['iord']],:],boxsize)
