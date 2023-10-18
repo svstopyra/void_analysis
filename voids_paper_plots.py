@@ -935,9 +935,118 @@ plt.show()
 
 # Alpha shapes
 
-[ahMWPos,alpha_shapes_finalCat] = cat300.get_alpha_shapes(
-    snapList,snapListRev,antihaloCatalogueList=hrList,ahProps = ahProps,
-    snapsortList=snapSortList)
+[ahMWPos,alpha_shapes_finalCat,alpha_shapes_individual] = \
+    tools.loadOrRecompute(
+        data_folder + "cat300_alpha_shapes.p",cat300.get_alpha_shapes,
+        snapList,snapListRev,antihaloCatalogueList=hrList,ahProps = ahProps,
+        snapsortList=snapSortList,void_filter=filter300,recentreSnaps=False,
+        _recomputeData = False)
+
+
+
+# Plots:
+
+
+
+sortedRadiiOpt = np.flip(np.argsort(
+    cat300.getMeanProperty('radii',void_filter=filter300)))
+catToUse = cat300.get_final_catalogue(void_filter=filter300)
+cat_object = cat300
+haveVoids = [np.where(catToUse[:,ns] > 0)[0] \
+    for ns in range(0,len(snapNameList))]
+
+#for ns in range(0,len(snapNameList)):
+#    catToUse[haveVoids[ns],ns] = np.arange(1,len(haveVoids[ns])+1)
+
+
+
+filterToUse = np.where(filter300)[0]
+nVoidsToShow = 10
+#nVoidsToShow = len(filterToUse)
+#selection = np.intersect1d(sortedRadiiOpt,filterToUse)[:(nVoidsToShow)]
+selection = sortedRadiiOpt[np.arange(0,nVoidsToShow)]
+asListAll = []
+colourListAll = []
+laListAll = []
+labelListAll = []
+
+plotFormat='.pdf'
+#plotFormat='.pdf'
+
+textwidth=7.1014
+textheight=9.0971
+scale = 1.26
+width = textwidth
+height = 0.55*textwidth
+cropPoint = ((scale -1)/2)*np.array([width,height]) + np.array([0,0.09])
+bound_box = transforms.Bbox([[cropPoint[0], cropPoint[1]],
+    [cropPoint[0] + width, cropPoint[1] + height]])
+
+if doSky:
+    #
+    #plot.plotLocalUniverseMollweide(rCut,snapToShow,\
+    #    alpha_shapes = alpha_shape_list[ns][1],
+    #    largeAntihalos = largeAntihalos[ns],hr=antihaloCatalogueList[ns],
+    #    coordAbell = coordCombinedAbellSphere,\
+    #    abellListLocation = clusterIndMain,\
+    #    nameListLargeClusters = [name[0] for name in clusterNames],\
+    #    ha = ha,va= va, annotationPos = annotationPos,\
+    #    title = 'Local super-volume: large voids (antihalos) within $' + \
+    #    str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",
+    #    vmin=1e-2,vmax=1e2,legLoc = 'lower left',bbox_to_anchor = (-0.1,-0.2),
+    #    snapsort = snapsortList[ns],antihaloCentres = None,
+    #    figOut = figuresFolder + "/antihalos_sky_plot.pdf",
+    #    showFig=True,figsize = (scale*textwidth,scale*0.55*textwidth),
+    #    voidColour = seabornColormap[0],antiHaloLabel='inPlot',
+    #    bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
+    #    galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False)
+    for ns in range(0,len(snapNameList)):
+        asList = []
+        colourList = []
+        laList = []
+        labelList = []
+        for k in range(0,np.min([nVoidsToShow,len(selection)])):
+            if catToUse[selection[k],ns] > 0:
+                listPosition = catToUse[selection[k],ns]-1
+                ahNumber = cat_object.indexListShort[ns][listPosition]
+                asList.append(alpha_shapes_individual[ns][selection[k]])
+                laList.append(ahNumber)
+                colourList.append(
+                    seabornColormap[np.mod(k,len(seabornColormap))])
+                labelList.append(str(k+1))
+            print("Done for void " + str(k+1))
+        print("Done for sample " + str(ns+1))
+        asListAll.append(asList)
+        colourListAll.append(colourList)
+        laListAll.append(laList)
+        labelListAll.append(labelList)
+
+
+
+# All anti-halos:
+if doSky:
+    for ns in range(0,len(snapNumList)):
+        plt.clf()
+        plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
+            alpha_shapes = asListAll[ns],\
+            largeAntihalos = laListAll[ns],hr=hrList[ns],\
+            coordAbell = coordCombinedAbellSphere,\
+            abellListLocation = clusterIndMain,\
+            nameListLargeClusters = [name[0] for name in clusterNames],\
+            ha = ha,va= va, annotationPos = annotationPos,\
+            title = 'Local super-volume: large voids (antihalos) within $' + \
+            str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",\
+            vmin=1e-2,vmax=1e2,legLoc = 'lower left',bbox_to_anchor = (-0.1,-0.2),\
+            snapsort = snapsortList_all[ns],antihaloCentres = None,\
+            figOut = figuresFolder + "/ah_match_sample_" + \
+            str(ns) + plotFormat,\
+            showFig=False,figsize = (scale*textwidth,scale*0.55*textwidth),\
+            voidColour = colourListAll[ns],antiHaloLabel=labelListAll[ns],\
+            bbox_inches = 'tight',galaxyAngles=equatorialRThetaPhi[:,1:],\
+            galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
+            voidAlpha = 0.6,margins=None)
+        plt.show()
+
 
 
 

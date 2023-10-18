@@ -125,6 +125,9 @@ class combinedCatalogue:
             self.deltaCentral,self.centralAntihalos)
         self.deltaAverageListShort = self.getShortenedQuantity(\
             self.deltaAverage,self.centralAntihalos)
+        self.indexListShort = self.getShortenedQuantity(
+            [np.arange(0,len(x)) for x in self.antihaloRadii],
+            self.centralAntihalos)
         self.shortListDict = {"radii":self.radiusListShort,\
             "mass":self.massListShort,\
             "deltaCentral":self.deltaCentralListShort,\
@@ -1029,7 +1032,7 @@ class combinedCatalogue:
             raise Exception("Final catalogue has not yet been computed.")
         return self.property_with_filter(self.finalCat,void_filter=void_filter)
     def get_alpha_shapes(self,snapList,snapListRev,antihaloCatalogueList=None,
-                         ahProps = None,snapsortList=None,reCentreSnaps=True,
+                         ahProps = None,snapsortList=None,reCentreSnaps=False,
                          void_filter=False,alphaVal = 7):
         if reCentreSnaps:
             for snap in snapList:
@@ -1044,22 +1047,10 @@ class combinedCatalogue:
         if snapsortList is None:
             snapsortList = [np.argsort(snap['iord']) \
                 for snap in snapList]
-        radSortCentral = [\
-            np.flip(np.argsort(
-            self.antihaloRadii[k][self.centralAntihalos[k][0]])) \
-            for k in range(0,len(self.centralAntihalos))]
-        largeAntihalos = [np.array(self.centralAntihalos[ns][0],dtype=int)[\
-                radSortCentral[ns]] for ns in range(0,len(snapList))]
         # From here, we have to combined the positions of ALL voids:
         positionLists = [] # Positions of all particles in all voids
-        centralAntihaloRadii = [\
-                self.antihaloRadii[k][self.centralAntihalos[k][0]] \
-                for k in range(0,len(self.centralAntihalos))]
-        sortedList = [np.flip(np.argsort(centralAntihaloRadii[ns])) \
-            for ns in range(0,self.numCats)]
-        fullListAll = [np.array(self.centralAntihalos[ns][0])[sortedList[ns]] \
-            for ns in range(0,self.numCats)]
         alpha_shapes = []
+        alpha_shapes_individual = [[] for ns in range(0,self.numCats)]
         ahMWPos = []
         cat_final = self.get_final_catalogue(void_filter=void_filter)
         for k in range(0,cat_final.shape[0]):
@@ -1071,17 +1062,28 @@ class combinedCatalogue:
                 if listPosition >= 0:
                     # Only include anti-halos which we have representatives for
                     # in a given catalogue
-                    ahNumber = fullList[listPosition]
+                    ahNumber = self.indexListShort[ns][listPosition]
                     posXYZ = snapedit.unwrap(
                         snapList[ns]['pos'][snapsortList[ns][\
-                        antihaloCatalogueList[ns][\
-                        largeAntihalos[ns][ahNumber]+1]['iord']],:],boxsize)
+                        antihaloCatalogueList[ns][ahNumber+1]['iord']],:],
+                        boxsize)
                     allPosXYZ = np.vstack((allPosXYZ,posXYZ))
+                    posMW = plot_utilities.computeMollweidePositions(posXYZ)
+                    alpha_shapes_individual[ns].append(
+                        alphashape.alphashape(
+                            np.array([posMW[0],posMW[1]]).T,alphaVal))
+                else:
+                    # Place-holder so that the alpha-shapes for the same void
+                    # are in the same position in the list. Necessary because
+                    # not voids exist in all catalogues.
+                    alpha_shapes_individual[ns].append(None)
+                print("Sample " + str(ns+1))
             posMW = plot_utilities.computeMollweidePositions(allPosXYZ)
             ahMWPos.append(posMW)
             alpha_shapes.append(alphashape.alphashape(
                     np.array([posMW[0],posMW[1]]).T,alphaVal))
-        return [ahMWPos,alpha_shapes]
+            print("Done " + str(k+1) + " of " + str(cat_final.shape[0]))
+        return [ahMWPos,alpha_shapes,alpha_shapes_individual]
 
 def loadSnapshots(snapList):
     if type(snapList[0]) == str:

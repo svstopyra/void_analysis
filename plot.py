@@ -1462,15 +1462,16 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
                 textToUse = antiHaloLabel[k]
             else:
                 raise Exception('Unrecognised antihalo label option.')
-            plotMollweideAlphaShape(
-                snapedit.unwrap(
-                    snap['pos'][snapsort[hr[largeAntihalos[k]+1]['iord']],:],
-                    boxsize),
-                ax=ax,alphaVal = alphaVal,alpha_shape=alpha_shapes[k],
-                alpha=voidAlpha,color=colourToUse,
-                text=textToUse,includePoints=False,
-                fontsize = labelFontSize,boxsize=boxsize,h=snap.properties['h'],
-                centreMW = centreMW)
+            if alpha_shapes[k] is not None:
+                plotMollweideAlphaShape(
+                    snapedit.unwrap(
+                        snap['pos'][
+                        snapsort[hr[largeAntihalos[k]+1]['iord']],:],boxsize),
+                    ax=ax,alphaVal = alphaVal,alpha_shape=alpha_shapes[k],
+                    alpha=voidAlpha,color=colourToUse,
+                    text=textToUse,includePoints=False,
+                    fontsize = labelFontSize,boxsize=boxsize,
+                    h=snap.properties['h'],centreMW = centreMW)
     if includeZOA:
         polygon = plotZoA(ax=ax,galacticCentreZOA = galacticCentreZOA,\
             nPointsZOA=nPointsZOA,bRangeCentre = bRangeCentre,bRange = bRange,\
