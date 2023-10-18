@@ -1024,8 +1024,13 @@ class combinedCatalogue:
         thresholds = random_catalogue.getThresholdsInBins(threshold_bins,
                                                           percentile)
         self.set_filter(thresholds,threshold_bins,**kwargs)
+    def get_final_catalogue(self,void_filter=False):
+        if self.finalCat is None:
+            raise Exception("Final catalogue has not yet been computed.")
+        return self.property_with_filter(self.finalCat,void_filter=void_filter)
     def get_alpha_shapes(self,snapList,snapListRev,antihaloCatalogueList=None,
-                         ahProps = None,snapsortList=None,reCentreSnaps=True):
+                         ahProps = None,snapsortList=None,reCentreSnaps=True,
+                         void_filter=False,alphaVal = 7):
         if reCentreSnaps:
             for snap in snapList:
                 tools.remapBORGSimulation(snap,swapXZ=False,reverse=True)
@@ -1056,12 +1061,13 @@ class combinedCatalogue:
             for ns in range(0,self.numCats)]
         alpha_shapes = []
         ahMWPos = []
-        for k in range(0,self.finalCat.shape[0]):
+        cat_final = self.get_final_catalogue(void_filter=void_filter)
+        for k in range(0,self.cat_final.shape[0]):
             allPosXYZ = np.full((0,3),0)
-            for ns in range(0,self.finalCat.shape[1]):
+            for ns in range(0,self.cat_final.shape[1]):
                 # Select the correct anti-halo
                 fullList = fullListAll[ns]
-                listPosition = self.finalCat[k,ns]-1
+                listPosition = self.cat_final[k,ns]-1
                 if listPosition >= 0:
                     # Only include anti-halos which we have representatives for
                     # in a given catalogue
