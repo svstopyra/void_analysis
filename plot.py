@@ -1471,9 +1471,12 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
                         snapsort[hr[largeAntihalos[k]+1]['iord']],:],boxsize)
                 else:
                     position_list = positions[k]
-                posMW = computeMollweidePositions(
-                    positions,angleUnit="deg",angleCoord="ra_dec",centre=None,
-                    boxsize=boxsize,h=h)
+                if positions is none None:
+                    posMW = computeMollweidePositions(
+                        positions,angleUnit="deg",angleCoord="ra_dec",
+                        centre=None,boxsize=boxsize,h=h)
+                else:
+                    posMW = np.array((0,3))
                 plotMollweideAlphaShape(
                     position_list,posMW=posMW,
                     ax=ax,alphaVal = alphaVal,alpha_shape=alpha_shapes[k],
