@@ -949,7 +949,7 @@ plt.show()
 
 
 sortedRadiiOpt = np.flip(np.argsort(
-    cat300.getMeanProperty('radii',void_filter=filter300)))
+    cat300.getMeanProperty('radii',void_filter=filter300)[0]))
 catToUse = cat300.get_final_catalogue(void_filter=filter300)
 cat_object = cat300
 haveVoids = [np.where(catToUse[:,ns] > 0)[0] \
@@ -975,7 +975,7 @@ plotFormat='.pdf'
 
 textwidth=7.1014
 textheight=9.0971
-scale = 1.26
+scale = 1
 width = textwidth
 height = 0.55*textwidth
 cropPoint = ((scale -1)/2)*np.array([width,height]) + np.array([0,0.09])
@@ -1036,18 +1036,17 @@ if doSky:
             ha = ha,va= va, annotationPos = annotationPos,\
             title = 'Local super-volume: large voids (antihalos) within $' + \
             str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",\
-            vmin=1e-2,vmax=1e2,legLoc = 'lower left',bbox_to_anchor = (-0.1,-0.2),\
-            snapsort = snapsortList_all[ns],antihaloCentres = None,\
+            vmin=1e-2,vmax=1e2,legLoc = 'lower left',\
+            bbox_to_anchor = (-0.1,-0.2),\
+            snapsort = snapSortList[ns],antihaloCentres = None,\
             figOut = figuresFolder + "/ah_match_sample_" + \
             str(ns) + plotFormat,\
             showFig=False,figsize = (scale*textwidth,scale*0.55*textwidth),\
             voidColour = colourListAll[ns],antiHaloLabel=labelListAll[ns],\
-            bbox_inches = 'tight',galaxyAngles=equatorialRThetaPhi[:,1:],\
+            bbox_inches = None,galaxyAngles=equatorialRThetaPhi[:,1:],\
             galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
             voidAlpha = 0.6,margins=None)
         plt.show()
-
-
 
 
 #-------------------------------------------------------------------------------

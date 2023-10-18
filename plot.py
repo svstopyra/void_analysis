@@ -1392,6 +1392,7 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         hpxMap = sphericalSlice(snap,rCut/2,thickness=rCut,
             fillZeros=vmin*rhobar,centre=np.array([0,0,0]),\
             nside=nside)/rhobar
+    fig, ax = plt.subplots(figsize=figsize)
     fig, ax = plotMollweide(hpxMap,galaxyAngles=galaxyAngles,\
         galaxyDistances=galaxyDistances,ax=ax,\
         thickness=rCut,radius=rCut/2,nside=nside,\
