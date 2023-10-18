@@ -832,7 +832,19 @@ plt.show()
 
 #-------------------------------------------------------------------------------
 # SKYPLOT
-snapSortList = [np.argsort(snap['iord']) for snap in snapList]
+
+def get_snapsort_lists(snapList,recompute=False):
+    snapsort_list = []
+    for snap in snapList:
+        filename = snap.filename + ".snapsort.p"
+        if os.path.isfile(filename) and not recompute:
+            snapsort_list.append(tools.loadPickle(filename))
+        else:
+            snapsort_list.append(np.argsort(snap['iord']))
+    return snapsort_list
+
+
+snapSortList = get_snapsort_lists(snapList,recompute=False)
 snapToShow = snapList[0]
 
 # Verify positions are in the correct co-ordinates:

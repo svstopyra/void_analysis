@@ -1044,8 +1044,6 @@ class combinedCatalogue:
             for k in range(0,len(self.centralAntihalos))]
         largeAntihalos = [np.array(self.centralAntihalos[ns][0],dtype=int)[\
                 radSortCentral[ns]] for ns in range(0,len(snapList))]
-        if verbose:
-            print("Computing alpha shapes...")
         # From here, we have to combined the positions of ALL voids:
         positionLists = [] # Positions of all particles in all voids
         centralAntihaloRadii = [\
