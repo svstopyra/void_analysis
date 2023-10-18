@@ -1471,7 +1471,7 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
                         snapsort[hr[largeAntihalos[k]+1]['iord']],:],boxsize)
                 else:
                     position_list = positions[k]
-                if positions is not None:
+                if position_list is not None:
                     posMW = computeMollweidePositions(
                         positions,angleUnit="deg",angleCoord="ra_dec",
                         centre=None,boxsize=boxsize,h=h)
