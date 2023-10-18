@@ -1385,7 +1385,8 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         xsize = 800,extent = None,bbox_inches = None,voidColour = None,
         antiHaloLabel = 'haloID',dpi=300,shrink=0.5,pad=0.05,\
         cbarLabel='$\\rho/\\bar{\\rho}$',ax=None,arrowAnnotations=True,\
-        doColorbar=True,sub=None,showLegend=True,reuse_axes=False):
+        doColorbar=True,sub=None,showLegend=True,reuse_axes=False,
+        positions=None):
     if hpxMap is None:
         rhobar = (np.sum(snap['mass'])/\
             (snap.properties['boxsize']**3)).in_units("Msol h**2 Mpc**-3")
@@ -1394,7 +1395,7 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
             nside=nside)/rhobar
     fig, ax = plt.subplots(figsize=figsize)
     fig, ax = plotMollweide(hpxMap,galaxyAngles=galaxyAngles,\
-        galaxyDistances=galaxyDistances,ax=ax,\
+        galaxyDistances=galaxyDistances,ax=ax,fig=fig,\
         thickness=rCut,radius=rCut/2,nside=nside,\
         vmin=vmin,vmax=vmax,showGalaxies=showGalaxies,
         title=title,boundaryOff=boundaryOff,margins=margins,
@@ -1464,10 +1465,17 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
             else:
                 raise Exception('Unrecognised antihalo label option.')
             if alpha_shapes[k] is not None:
-                plotMollweideAlphaShape(
-                    snapedit.unwrap(
+                if positions is not None:
+                    position_list = snapedit.unwrap(
                         snap['pos'][
-                        snapsort[hr[largeAntihalos[k]+1]['iord']],:],boxsize),
+                        snapsort[hr[largeAntihalos[k]+1]['iord']],:],boxsize)
+                else:
+                    position_list = positions[k]
+                posMW = computeMollweidePositions(
+                    positions,angleUnit="deg",angleCoord="ra_dec",centre=None,
+                    boxsize=boxsize,h=h)
+                plotMollweideAlphaShape(
+                    position_list,posMW=posMW,
                     ax=ax,alphaVal = alphaVal,alpha_shape=alpha_shapes[k],
                     alpha=voidAlpha,color=colourToUse,
                     text=textToUse,includePoints=False,

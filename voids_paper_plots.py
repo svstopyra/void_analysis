@@ -975,7 +975,7 @@ plotFormat='.pdf'
 
 textwidth=7.1014
 textheight=9.0971
-scale = 1
+scale = 1.26
 width = textwidth
 height = 0.55*textwidth
 cropPoint = ((scale -1)/2)*np.array([width,height]) + np.array([0,0.09])
@@ -1021,6 +1021,20 @@ if doSky:
         laListAll.append(laList)
         labelListAll.append(labelList)
 
+asListTot = []
+colourListTot = []
+laListTot = []
+labelListTot = []
+for k in range(0,np.min([nVoidsToShow,len(selection)])):
+    listPosition = catToUse[selection[k],ns]-1
+    ahNumber = listPosition
+    asListTot.append(alpha_shapes_finalCat[selection[k]])
+    laListTot.append(ahNumber)
+    colourListTot.append(
+        seabornColormap[np.mod(k,len(seabornColormap))])
+    labelListTot.append(str(k+1))
+    print("Done for void " + str(k+1))
+
 
 
 # All anti-halos:
@@ -1047,6 +1061,26 @@ if doSky:
             galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
             voidAlpha = 0.6,margins=None)
         plt.show()
+    ns = 0
+    plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
+        alpha_shapes = asListAll[ns],\
+        largeAntihalos = laListTot,hr=hrList[ns],\
+        coordAbell = coordCombinedAbellSphere,\
+        abellListLocation = clusterIndMain,\
+        nameListLargeClusters = [name[0] for name in clusterNames],\
+        ha = ha,va= va, annotationPos = annotationPos,\
+        title = 'Local super-volume: large voids (antihalos) within $' + \
+        str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",\
+        vmin=1e-2,vmax=1e2,legLoc = 'lower left',\
+        bbox_to_anchor = (-0.1,-0.2),\
+        snapsort = snapSortList[ns],antihaloCentres = ahMWPos,\
+        figOut = figuresFolder + "/ah_match_sample_" + \
+        str(ns) + plotFormat,\
+        showFig=False,figsize = (scale*textwidth,scale*0.55*textwidth),\
+        voidColour = colourListTot,antiHaloLabel=labelListTot,\
+        bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
+        galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
+        voidAlpha = 0.6,margins=None)
 
 
 #-------------------------------------------------------------------------------
