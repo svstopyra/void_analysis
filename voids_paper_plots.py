@@ -1071,7 +1071,7 @@ for ns in range(0,len(snapNumList)):
         bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
         galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
         voidAlpha = 0.6,margins=None,hpxMap = hpx_map_list[ns],pad=0.05,
-        cbar_aspect=30,shrink=0.5)
+        cbar_aspect=30,shrink=0.5,cbar_y_pos=0.3)
     plt.show()
 
 # Combined outlines:

@@ -1386,7 +1386,7 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         antiHaloLabel = 'haloID',dpi=300,shrink=0.5,pad=0.05,\
         cbarLabel='$\\rho/\\bar{\\rho}$',ax=None,arrowAnnotations=True,\
         doColorbar=True,sub=None,showLegend=True,reuse_axes=False,
-        positions=None,cmap_hpx = "PuOr_r",cbar_aspect= 30):
+        positions=None,cmap_hpx = "PuOr_r",cbar_aspect= 30,cbar_y_pos=0.3):
     if hpxMap is None:
         rhobar = (np.sum(snap['mass'])/\
             (snap.properties['boxsize']**3)).in_units("Msol h**2 Mpc**-3")
@@ -1533,7 +1533,7 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         cbar.set_label(label = '$\\rho/\\bar{\\rho}$',
                        fontsize = legendFontSize,fontfamily = fontname)
         cbar.ax.set_position(
-            [width/2 - cbar_width/2,0.1*height,cbar_width,
+            [width/2 - cbar_width/2,cbar_y_pos*height,cbar_width,
              cbar_width/cbar_aspect])
     if figOut is not None:
         plt.savefig(figOut,bbox_inches=bbox_inches,dpi=dpi)
