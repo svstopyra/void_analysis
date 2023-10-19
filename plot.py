@@ -1533,8 +1533,8 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         cbar.set_label(label = '$\\rho/\\bar{\\rho}$',
                        fontsize = legendFontSize,fontfamily = fontname)
         cbar.ax.set_position(
-            [width/2 - cbar_width/2,cbar_y_pos*height,cbar_width,
-             cbar_width/cbar_aspect])
+            [(width/2 - cbar_width/2)/width,cbar_y_pos,cbar_width/width,
+             cbar_width/(width*cbar_aspect)])
     if figOut is not None:
         plt.savefig(figOut,bbox_inches=bbox_inches,dpi=dpi)
     if showFig:
