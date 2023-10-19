@@ -1520,9 +1520,14 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
     if doColorbar:
         sm = cm.ScalarMappable(colors.LogNorm(vmin=vmin,vmax=vmax),
                                cmap=cmap_hpx)
+        width = figsize[0]
+        height = figsize[1]
+        cbar_width = shrink*width
+        cax = ax.inset_axes(
+            [width/2 - cbar_width/2,0.1*height,cbar_width,
+             cbar_width/cbar_aspect])
         cbar = plt.colorbar(
-            sm, orientation="horizontal",pad=pad,
-            label='$\\rho/\\bar{\\rho}$',shrink=shrink,aspect = cbar_aspect)
+            sm, orientation="horizontal",cax=cax,label='$\\rho/\\bar{\\rho}$')
         cbar.ax.tick_params(axis='both',labelsize=legendFontSize)
         cbar.set_label(label = '$\\rho/\\bar{\\rho}$',
                        fontsize = legendFontSize,fontfamily = fontname)

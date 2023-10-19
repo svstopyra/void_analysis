@@ -978,7 +978,7 @@ textheight=9.0971
 scale = 1.26
 width = textwidth
 height = 0.6*textwidth
-cropPoint = ((scale -1)/2)*np.array([width,height]) + np.array([0,-0.1])
+cropPoint = ((scale -1)/2)*np.array([width,height]) + np.array([0,-0.2])
 bound_box = transforms.Bbox([[cropPoint[0], cropPoint[1]],
     [cropPoint[0] + width, cropPoint[1] + height]])
 
@@ -1070,8 +1070,8 @@ for ns in range(0,len(snapNumList)):
         voidColour = colourListAll[ns],antiHaloLabel=labelListAll[ns],\
         bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
         galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
-        voidAlpha = 0.6,margins=None,hpxMap = hpx_map_list[ns],pad=0.0,
-        cbar_aspect=30)
+        voidAlpha = 0.6,margins=None,hpxMap = hpx_map_list[ns],pad=0.05,
+        cbar_aspect=30,shrink=0.5)
     plt.show()
 
 # Combined outlines:
