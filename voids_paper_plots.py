@@ -1070,7 +1070,8 @@ for ns in range(0,len(snapNumList)):
         voidColour = colourListAll[ns],antiHaloLabel=labelListAll[ns],\
         bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
         galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
-        voidAlpha = 0.6,margins=None,hpxMap = hpx_map_list[ns],pad=0.0)
+        voidAlpha = 0.6,margins=None,hpxMap = hpx_map_list[ns],pad=0.0,
+        cbar_aspect=30)
     plt.show()
 
 # Combined outlines:

@@ -1386,7 +1386,7 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         antiHaloLabel = 'haloID',dpi=300,shrink=0.5,pad=0.05,\
         cbarLabel='$\\rho/\\bar{\\rho}$',ax=None,arrowAnnotations=True,\
         doColorbar=True,sub=None,showLegend=True,reuse_axes=False,
-        positions=None,cmap_hpx = "PuOr_r"):
+        positions=None,cmap_hpx = "PuOr_r",cbar_aspect= 30):
     if hpxMap is None:
         rhobar = (np.sum(snap['mass'])/\
             (snap.properties['boxsize']**3)).in_units("Msol h**2 Mpc**-3")
@@ -1520,8 +1520,9 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
     if doColorbar:
         sm = cm.ScalarMappable(colors.LogNorm(vmin=vmin,vmax=vmax),
                                cmap=cmap_hpx)
-        cbar = plt.colorbar(sm, orientation="horizontal",
-            pad=pad,label='$\\rho/\\bar{\\rho}$',shrink=shrink)
+        cbar = plt.colorbar(
+            sm, orientation="horizontal",pad=pad,
+            label='$\\rho/\\bar{\\rho}$',shrink=shrink,aspect = cbar_aspect)
         cbar.ax.tick_params(axis='both',labelsize=legendFontSize)
         cbar.set_label(label = '$\\rho/\\bar{\\rho}$',
                        fontsize = legendFontSize,fontfamily = fontname)
