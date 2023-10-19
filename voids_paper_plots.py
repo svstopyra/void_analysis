@@ -299,7 +299,7 @@ equatorialRThetaPhi = np.vstack((coord.icrs.spherical.distance.value,\
 # VOID PROFILES PLOTS - DATA SETUP
 
 # Parameters:
-load_trees = True
+load_trees = False
 
 
 radiiListShort = cat300.radiusListShort
@@ -1035,6 +1035,18 @@ for k in range(0,np.min([nVoidsToShow,len(selection)])):
     labelListTot.append(str(k+1))
     print("Done for void " + str(k+1))
 
+# Pre-compute density field healpix maps, so we don't have to
+# recompute them everytime we want to make small changes:
+Om = snapList[0].properties['omegaM0']
+rhoc = 2.7754e11
+rhobar = rhoc*Om
+vmin = 1e-2
+vmax = 1e2
+rCut=135
+nside = 64
+hpx_map_list = [plot.sphericalSlice(
+    snap,rCut/2,thickness=rCut,fillZeros=vmin*rhobar,centre=np.array([0,0,0]),
+    nside=nside)/rhobar for snap in snapList]
 
 
 # All anti-halos:
@@ -1059,7 +1071,7 @@ if doSky:
             voidColour = colourListAll[ns],antiHaloLabel=labelListAll[ns],\
             bbox_inches = None,galaxyAngles=equatorialRThetaPhi[:,1:],\
             galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
-            voidAlpha = 0.6,margins=None)
+            voidAlpha = 0.6,margins=None,hpxMap = hpx_map_list[ns])
         plt.show()
     ns = 0
     plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
@@ -1079,7 +1091,8 @@ if doSky:
         voidColour = colourListTot,antiHaloLabel=labelListTot,\
         bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
         galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
-        voidAlpha = 0.6,margins=None,positions = [None for x in laListTot])
+        voidAlpha = 0.6,margins=None,positions = [None for x in laListTot],
+        hpxMap = hpx_map_list[ns])
 
 
 #-------------------------------------------------------------------------------

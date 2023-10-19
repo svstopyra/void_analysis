@@ -1472,6 +1472,7 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
                 else:
                     position_list = positions[k]
                 if position_list is not None:
+                    h = snap.properties['h']
                     posMW = computeMollweidePositions(
                         positions,angleUnit="deg",angleCoord="ra_dec",
                         centre=None,boxsize=boxsize,h=h)
