@@ -977,8 +977,8 @@ textwidth=7.1014
 textheight=9.0971
 scale = 1.26
 width = textwidth
-height = 0.55*textwidth
-cropPoint = ((scale -1)/2)*np.array([width,height]) + np.array([0,0.09])
+height = 0.6*textwidth
+cropPoint = ((scale -1)/2)*np.array([width,height]) + np.array([0,-0.1])
 bound_box = transforms.Bbox([[cropPoint[0], cropPoint[1]],
     [cropPoint[0] + width, cropPoint[1] + height]])
 
@@ -1050,33 +1050,11 @@ hpx_map_list = [plot.sphericalSlice(
 
 
 # All anti-halos:
-if doSky:
-    for ns in range(0,len(snapNumList)):
-        plt.clf()
-        plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
-            alpha_shapes = asListAll[ns],\
-            largeAntihalos = laListAll[ns],hr=hrList[ns],\
-            coordAbell = coordCombinedAbellSphere,\
-            abellListLocation = clusterIndMain,\
-            nameListLargeClusters = [name[0] for name in clusterNames],\
-            ha = ha,va= va, annotationPos = annotationPos,\
-            title = 'Local super-volume: large voids (antihalos) within $' + \
-            str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",\
-            vmin=1e-2,vmax=1e2,legLoc = 'lower left',\
-            bbox_to_anchor = (-0.1,-0.2),\
-            snapsort = snapSortList[ns],antihaloCentres = None,\
-            figOut = figuresFolder + "/ah_match_sample_" + \
-            str(ns) + plotFormat,\
-            showFig=False,figsize = (scale*textwidth,scale*0.55*textwidth),\
-            voidColour = colourListAll[ns],antiHaloLabel=labelListAll[ns],\
-            bbox_inches = None,galaxyAngles=equatorialRThetaPhi[:,1:],\
-            galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
-            voidAlpha = 0.6,margins=None,hpxMap = hpx_map_list[ns])
-        plt.show()
-    ns = 0
+for ns in range(0,len(snapNumList)):
+    plt.clf()
     plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
         alpha_shapes = asListAll[ns],\
-        largeAntihalos = laListTot,hr=hrList[ns],\
+        largeAntihalos = laListAll[ns],hr=hrList[ns],\
         coordAbell = coordCombinedAbellSphere,\
         abellListLocation = clusterIndMain,\
         nameListLargeClusters = [name[0] for name in clusterNames],\
@@ -1085,14 +1063,37 @@ if doSky:
         str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",\
         vmin=1e-2,vmax=1e2,legLoc = 'lower left',\
         bbox_to_anchor = (-0.1,-0.2),\
-        snapsort = snapSortList[ns],antihaloCentres = ahMWPos,\
-        figOut = figuresFolder + "/ah_match_combined" + plotFormat,\
+        snapsort = snapSortList[ns],antihaloCentres = None,\
+        figOut = figuresFolder + "/ah_match_sample_" + \
+        str(ns) + plotFormat,\
         showFig=False,figsize = (scale*textwidth,scale*0.55*textwidth),\
-        voidColour = colourListTot,antiHaloLabel=labelListTot,\
+        voidColour = colourListAll[ns],antiHaloLabel=labelListAll[ns],\
         bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
         galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
-        voidAlpha = 0.6,margins=None,positions = [None for x in laListTot],
-        hpxMap = hpx_map_list[ns])
+        voidAlpha = 0.6,margins=None,hpxMap = hpx_map_list[ns])
+    plt.show()
+
+# Combined outlines:
+ns = 0
+plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
+    alpha_shapes = asListAll[ns],\
+    largeAntihalos = laListTot,hr=hrList[ns],\
+    coordAbell = coordCombinedAbellSphere,\
+    abellListLocation = clusterIndMain,\
+    nameListLargeClusters = [name[0] for name in clusterNames],\
+    ha = ha,va= va, annotationPos = annotationPos,\
+    title = 'Local super-volume: large voids (antihalos) within $' + \
+    str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",\
+    vmin=1e-2,vmax=1e2,legLoc = 'lower left',\
+    bbox_to_anchor = (-0.1,-0.2),\
+    snapsort = snapSortList[ns],antihaloCentres = ahMWPos,\
+    figOut = figuresFolder + "/ah_match_combined" + plotFormat,\
+    showFig=False,figsize = (scale*textwidth,scale*0.55*textwidth),\
+    voidColour = colourListTot,antiHaloLabel=labelListTot,\
+    bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
+    galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
+    voidAlpha = 0.6,margins=None,positions = [None for x in laListTot],
+    hpxMap = hpx_map_list[ns])
 
 
 #-------------------------------------------------------------------------------

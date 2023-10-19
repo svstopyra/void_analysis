@@ -1400,7 +1400,7 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         vmin=vmin,vmax=vmax,showGalaxies=showGalaxies,
         title=title,boundaryOff=boundaryOff,margins=margins,
         fontname=fontname,titleFontSize=titleFontSize,figsize=figsize,\
-        xsize=xsize,dpi=dpi,returnAx=True,doColorbar=doColorbar,\
+        xsize=xsize,dpi=dpi,returnAx=True,doColorbar=False,\
         cbarLabel=cbarLabel,sub=sub,reuse_axes=reuse_axes)
     if haloCentres is not None:
         haloAngles = context.equatorialXYZToSkyCoord(haloCentres)
@@ -1517,14 +1517,15 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
             prop={"size":legendFontSize,"family":"serif"},
             loc=legLoc,bbox_to_anchor=bbox_to_anchor)
     # As the last step,add a colorbar:
-    #sm = cm.ScalarMappable(colors.LogNorm(vmin=vmin,vmax=vmax),cmap=cmap)
-    #cbax = fig.add_axes([figsize[0]/4,0.05,figsize[0]/2,figsize[0]/16])
-    #cbar = plt.colorbar(sm, orientation="horizontal",
-    #    pad=pad,label='$\\rho/\\bar{\\rho}$',shrink=shrink,\
-    #    cax=cbax)
-    #cbar.ax.tick_params(axis='both',labelsize=legendFontSize)
-    #cbar.set_label(label = '$\\rho/\\bar{\\rho}$',fontsize = legendFontSize,\
-    #    fontfamily = fontname)
+    if doColorbar:
+        sm = cm.ScalarMappable(colors.LogNorm(vmin=vmin,vmax=vmax),cmap=cmap)
+        cbax = fig.add_axes([figsize[0]/4,0.05,figsize[0]/2,figsize[0]/16])
+        cbar = plt.colorbar(sm, orientation="horizontal",
+            pad=pad,label='$\\rho/\\bar{\\rho}$',shrink=shrink,\
+            cax=cbax)
+        cbar.ax.tick_params(axis='both',labelsize=legendFontSize)
+        cbar.set_label(label = '$\\rho/\\bar{\\rho}$',
+                       fontsize = legendFontSize,fontfamily = fontname)
     if figOut is not None:
         plt.savefig(figOut,bbox_inches=bbox_inches,dpi=dpi)
     if showFig:
