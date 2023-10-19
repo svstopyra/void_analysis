@@ -1523,14 +1523,18 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         width = figsize[0]
         height = figsize[1]
         cbar_width = shrink*width
-        cax = ax.inset_axes(
-            [width/2 - cbar_width/2,0.1*height,cbar_width,
-             cbar_width/cbar_aspect])
+        #cax = ax.inset_axes(
+        #    [width/2 - cbar_width/2,0.1*height,cbar_width,
+        #    cbar_width/cbar_aspect])
         cbar = plt.colorbar(
-            sm, orientation="horizontal",cax=cax,label='$\\rho/\\bar{\\rho}$')
+            sm, orientation="horizontal",pad=pad,
+            label='$\\rho/\\bar{\\rho}$',shrink=shrink,aspect = cbar_aspect)
         cbar.ax.tick_params(axis='both',labelsize=legendFontSize)
         cbar.set_label(label = '$\\rho/\\bar{\\rho}$',
                        fontsize = legendFontSize,fontfamily = fontname)
+        cbar.ax.set_position(
+            [width/2 - cbar_width/2,0.1*height,cbar_width,
+             cbar_width/cbar_aspect])
     if figOut is not None:
         plt.savefig(figOut,bbox_inches=bbox_inches,dpi=dpi)
     if showFig:
