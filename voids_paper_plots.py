@@ -1012,8 +1012,8 @@ ha = ['right','left','left','left','left','right','center',\
 va = ['center','center','bottom','bottom','top',\
         'top','center','center','center']
 annotationPos = [[-1.1,0.9],\
-        [1.5,0.2],[1.7,0.6],[1.3,-1.2],[1.5,-0.7],[-1.8,-0.7],[1.4,0.9],\
-        [1.5,-0.2],[-1.7,0.5]]
+        [1.5,0.3],[1.7,0.6],[1.3,-1.2],[1.5,-0.7],[-1.8,-0.7],[1.4,0.9],\
+        [1.5,0.05],[-1.7,0.5]]
 nameList = [name[0] for name in clusterNames]
 
 
