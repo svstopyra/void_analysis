@@ -1026,7 +1026,7 @@ class combinedCatalogue:
                                          percentile=99,**kwargs):
         thresholds = random_catalogue.getThresholdsInBins(threshold_bins,
                                                           percentile)
-        self.set_filter(thresholds,threshold_bins,**kwargs)
+        self.set_filter(thresholds[0],threshold_bins,**kwargs)
     def get_final_catalogue(self,void_filter=False):
         if self.finalCat is None:
             raise Exception("Final catalogue has not yet been computed.")

@@ -162,6 +162,7 @@ mMax = 1e16 # Maximum mass halos to include (Note, this is effectively
     # over-ridden by the maximum radius threshold)
 rMin = 5 # Minimum radius voids to use
 rMax = 30 # Maximum radius voids to use
+m_unit = snapList[0]['mass'][0]*1e10
 
 # Signal to noise information:
 snrThresh=10
@@ -177,7 +178,18 @@ if recomputeCatalogues or (not os.path.isfile(data_folder + "cat300.p")):
         ahProps=ahProps,hrList=hrList,max_index=None,\
         twoWayOnly=True,blockDuplicates=True,\
         massRange = [mMin,mMax],\
-        NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
+        NWayMatch = NWayMatch,r_min=rMin,r_max=rMax,\
+        additionalFilters = snrFilter,verbose=False,\
+        refineCentres=refineCentres,sortBy=sortBy,\
+        enforceExclusive=enforceExclusive,_recomputeData = recomputeCatalogues)
+    cat300test = tools.loadOrRecompute(
+        data_folder + "cat300test.p",\
+        catalogue.combinedCatalogue,snapNameList,snapNameListRev,\
+        muOpt,rSearchOpt,rSphere,\
+        ahProps=ahProps,hrList=hrList,max_index=None,\
+        twoWayOnly=True,blockDuplicates=True,\
+        massRange = [m_unit*800,mMax],\
+        NWayMatch = NWayMatch,r_min=10,r_max=30,\
         additionalFilters = snrFilter,verbose=False,\
         refineCentres=refineCentres,sortBy=sortBy,\
         enforceExclusive=enforceExclusive,_recomputeData = recomputeCatalogues)
@@ -197,39 +209,13 @@ if recomputeCatalogues or (not os.path.isfile(data_folder + "cat300Rand.p")):
         ahProps=ahPropsUn,hrList=hrListUn,max_index=None,\
         twoWayOnly=True,blockDuplicates=True,\
         massRange = [mMin,mMax],\
-        NWayMatch = NWayMatch,rMin=rMin,rMax=rMax,\
+        NWayMatch = NWayMatch,r_min=rMin,r_max=rMax,\
         additionalFilters = None,verbose=False,\
         refineCentres=refineCentres,sortBy=sortBy,\
         enforceExclusive=enforceExclusive,_recomputeData = recomputeCatalogues)
     finalCat300Rand = cat300Rand.constructAntihaloCatalogue()
 else:
     cat300Rand = tools.loadPickle(data_folder + "cat300Rand.p")
-
-#-------------------------------------------------------------------------------
-# CSV data output for the void catalogue table:
-
-# Filter for the voids we actually want in the catalogue (high catalogue 
-# fraction, only out to 135 Mpc/h):
-void_filter = filter300
-# Order in which the voids should be sorted:
-sort_order = np.argsort(cat300.property_with_filter(
-    cat300.finalCatFrac,void_filter=void_filter))
-
-# Other properties:
-void_radii_and_error = cat300.getMeanProperty('radius',void_filter=void_filter)
-void_radii = void_radii_and_error[0]
-void_radii_error = void_radii_and_error[1]
-
-void_mass_and_error = cat300.getMeanProperty('mass',void_filter=void_filter)
-void_mass = void_mass_and_error[0]
-void_mass_error = void_mass_and_error[1]
-
-void_centres = cat300.getMeanCentres()
-
-# List of dictionaries with all the relevant void properties:
-void_dictionaries = [{'ID':k+1,'radius':}]
-
-
 
 #-------------------------------------------------------------------------------
 # CATALOGUE DATA:
@@ -356,12 +342,18 @@ filter300 = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
 
 # Correct centres to be in equatorial co-ordinates:
 meanCentres = meanCentre300[filter300]
-meanCentresGadgetCoord = snapedit.wrap(np.fliplr(meanCentres) + boxsize/2,
+# OLD position IN SIMULATION (not equatorial co-ordinates!),
+# with swapXZ = True, reverse = False
+#meanCentresGadgetCoordOld = snapedit.wrap(np.fliplr(cat300old.getMeanCentres())
+#     + boxsize/2,boxsize)
+# NEW position IN SIMULATION (not equatorial co-ordinates!), 
+# with swapXZ = False, reverse = True
+meanCentresGadgetCoord = snapedit.wrap(-meanCentres + boxsize/2,
                                        boxsize)
 meanRadii = radiiMean300[filter300]
 meanMasses = massMean300[filter300]
 allCentres300Gadget = np.array([snapedit.wrap(\
-    np.fliplr(centre) + boxsize/2,boxsize) \
+    -centre + boxsize/2,boxsize) \
     for centre in finalCentres300List[:,filter300,:]])
 allRadii300 = radiiList300[filter300,:]
 isnan = np.where(allRadii300 < 0)
@@ -491,6 +483,42 @@ densityUnderdenseNonOverlapping = np.hstack(
 
 # Load all pair-counts data for efficient stacking:
 allPairCountsList = [props[9] for props in ahPropsUn]
+
+
+
+#-------------------------------------------------------------------------------
+# CSV data output for the void catalogue table:
+
+# Filter for the voids we actually want in the catalogue (high catalogue 
+# fraction, only out to 135 Mpc/h):
+void_filter = filter300
+num_voids = np.sum(void_filter)
+# Order in which the voids should be sorted:
+sort_order = np.argsort(cat300.property_with_filter(
+    cat300.finalCatFrac,void_filter=void_filter))
+
+# Other properties:
+void_radii_and_error = cat300.getMeanProperty('radius',void_filter=void_filter)
+void_radii = void_radii_and_error[0]
+void_radii_error = void_radii_and_error[1]
+
+void_mass_and_error = cat300.getMeanProperty('mass',void_filter=void_filter)
+void_mass = void_mass_and_error[0]
+void_mass_error = void_mass_and_error[1]
+
+void_centres = cat300.getMeanCentres(void_filter=void_filter)
+
+
+
+# List of dictionaries with all the relevant void properties:
+void_dictionaries = [{'ID':k+1,
+    'radius':"$" + ("%.2g" % void_radii[k]) + "\\pm" 
+    + ("%.1g" % void_radii_error[k]) "$"} 
+    for k in range(0,num_voids)]
+
+
+
+
 
 #-------------------------------------------------------------------------------
 # COMPUTE VOID STACKS APPLYING DIFFERENT CONDITIONS
