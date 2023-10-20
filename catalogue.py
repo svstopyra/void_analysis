@@ -1058,7 +1058,6 @@ class combinedCatalogue:
             allPosXYZ = np.full((0,3),0)
             for ns in range(0,cat_final.shape[1]):
                 # Select the correct anti-halo
-                fullList = fullListAll[ns]
                 listPosition = cat_final[k,ns]-1
                 if listPosition >= 0:
                     # Only include anti-halos which we have representatives for

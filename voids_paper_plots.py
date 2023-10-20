@@ -171,9 +171,8 @@ chainFile="chain_properties.p"
     snapNameList,boxsize)
 
 if recomputeCatalogues or (not os.path.isfile(data_folder + "cat300.p")):
-    cat300 = tools.loadOrRecompute(
-        data_folder + "cat300.p",\
-        catalogue.combinedCatalogue,snapNameList,snapNameListRev,\
+    cat300 = catalogue.combinedCatalogue(
+        snapNameList,snapNameListRev,\
         muOpt,rSearchOpt,rSphere,\
         ahProps=ahProps,hrList=hrList,max_index=None,\
         twoWayOnly=True,blockDuplicates=True,\
@@ -181,10 +180,9 @@ if recomputeCatalogues or (not os.path.isfile(data_folder + "cat300.p")):
         NWayMatch = NWayMatch,r_min=rMin,r_max=rMax,\
         additionalFilters = snrFilter,verbose=False,\
         refineCentres=refineCentres,sortBy=sortBy,\
-        enforceExclusive=enforceExclusive,_recomputeData = recomputeCatalogues)
-    cat300test = tools.loadOrRecompute(
-        data_folder + "cat300test.p",\
-        catalogue.combinedCatalogue,snapNameList,snapNameListRev,\
+        enforceExclusive=enforceExclusive)
+    cat300test = catalogue.combinedCatalogue(
+        snapNameList,snapNameListRev,\
         muOpt,rSearchOpt,rSphere,\
         ahProps=ahProps,hrList=hrList,max_index=None,\
         twoWayOnly=True,blockDuplicates=True,\
@@ -192,8 +190,10 @@ if recomputeCatalogues or (not os.path.isfile(data_folder + "cat300.p")):
         NWayMatch = NWayMatch,r_min=10,r_max=30,\
         additionalFilters = snrFilter,verbose=False,\
         refineCentres=refineCentres,sortBy=sortBy,\
-        enforceExclusive=enforceExclusive,_recomputeData = recomputeCatalogues)
+        enforceExclusive=enforceExclusive)
+    finalCat300test = cat300test.constructAntihaloCatalogue()
     finalCat300 = cat300.constructAntihaloCatalogue()
+    tools.savePickle(cat300,data_folder + "cat300.p")
 else:
     cat300 = tools.loadPickle(data_folder + "cat300.p")
 
@@ -202,9 +202,8 @@ snapNameListRand = [snap.filename for snap in snapListUn]
 snapNameListRandRev = [snap.filename for snap in snapListRevUn]
 
 if recomputeCatalogues or (not os.path.isfile(data_folder + "cat300Rand.p")):
-    cat300Rand = tools.loadOrRecompute(
-        data_folder + "cat300Rand.p",\
-        catalogue.combinedCatalogue,snapNameListRand,snapNameListRandRev,\
+    cat300Rand = catalogue.combinedCatalogue(
+        snapNameListRand,snapNameListRandRev,\
         muOpt,rSearchOpt,rSphere,\
         ahProps=ahPropsUn,hrList=hrListUn,max_index=None,\
         twoWayOnly=True,blockDuplicates=True,\
@@ -212,8 +211,9 @@ if recomputeCatalogues or (not os.path.isfile(data_folder + "cat300Rand.p")):
         NWayMatch = NWayMatch,r_min=rMin,r_max=rMax,\
         additionalFilters = None,verbose=False,\
         refineCentres=refineCentres,sortBy=sortBy,\
-        enforceExclusive=enforceExclusive,_recomputeData = recomputeCatalogues)
+        enforceExclusive=enforceExclusive)
     finalCat300Rand = cat300Rand.constructAntihaloCatalogue()
+    tools.savePickle(cat300Rand,data_folder + "cat300Rand.p")
 else:
     cat300Rand = tools.loadPickle(data_folder + "cat300Rand.p")
 
@@ -905,94 +905,13 @@ snapToShow = snapList[0]
 for snap in snapList:
     tools.remapBORGSimulation(snap,swapXZ=False,reverse=True)
 
-# Function to get the CIC density:
-from nbodykit.source.catalog import ArrayCatalog
-def getCICDensity(positions,boxsize,mUnit,nres):
-    cat = ArrayCatalog({'Position' : positions,\
-        'Mass' : mUnit*np.ones(len(positions))},\
-        BoxSize=(boxsize,boxsize,boxsize))
-    mesh = cat.to_mesh(Nmesh=nres)
-    return mesh.preview()
-
-def coord_range_to_ind_range(coord_range,extent,N):
-    indices = [int((x - extent[0])*N/(extent[1] - extent[0])) 
-               for x in coord_range]
-    return indices
-
-
-
-density0 = getCICDensity(np.fliplr(snapToShow['pos']),
-    boxsize,snapToShow['mass'][0],256)
-
-density1 = getCICDensity(snapToShow['pos'],
-    boxsize,snapToShow['mass'][0],256)
-
-density2 = np.reshape(density0,(256,256,256),order='F')
-
-coord_range = [-2.5,2.5]
-ind_range = coord_range_to_ind_range(coord_range,[-boxsize/2,boxsize/2],256)
-coord_filter = (equatorialXYZ[:,2] > coord_range[0]) & \
-    (equatorialXYZ[:,2] <= coord_range[1])
-coord_filter_snap = (snapToShow['pos'][:,2] > coord_range[0]) & \
-    (snapToShow['pos'][:,2] <= coord_range[1])
-
-positions = snapToShow['pos'][coord_filter_snap,0:-1]
-
-counts = np.histogramdd(positions,
-    bins = [np.linspace(-boxsize/2,boxsize/2,256+1)]*2)
-
-fig, ax = plt.subplots()
-den_field = counts[0]/np.mean(counts[0])
-#den_field = np.mean(
-#    density1[:,:,np.arange(ind_range[0],ind_range[1]+1)],2)
-im = ax.imshow(den_field.T,norm=colors.LogNorm(vmin=1e-3,vmax=1e3),
-        cmap="PuOr_r",extent=(-boxsize/2,boxsize/2,-boxsize/2,boxsize/2),
-        origin="lower")
-#ax.scatter(positions[:,0],positions[:,1],marker = '.',color='r')
-ax.scatter(equatorialXYZ[coord_filter,0],equatorialXYZ[coord_filter,1],
-           marker = '.',color='r')
-ax.set_title("Simulation Density")
-ax.set_xlabel("x [$\\mathrm{Mpc}h^{-1}$]")
-ax.set_ylabel("y [$\\mathrm{Mpc}h^{-1}$]")
-ax.set_xlim([-100,100])
-ax.set_ylim([-100,100])
-plt.show()
-
-
-# Create the histogram with the correct bin edges
-num_bins= 256
-x_bins = np.linspace(-boxsize/2, boxsize/2, num_bins + 1)
-y_bins = np.linspace(-boxsize/2, boxsize/2, num_bins + 1)
-counts, _, _ = np.histogram2d(positions[:,0], positions[:,1], bins=[x_bins, y_bins])
-
-fig, ax = plt.subplots()
-den_field = counts / np.mean(counts)
-im = ax.imshow(den_field.T, 
-    norm=colors.LogNorm(vmin=1e-3, vmax=1e3), cmap="PuOr_r",
-    extent=(-boxsize/2, boxsize/2, -boxsize/2, boxsize/2),origin="lower")
-ax.scatter(positions[:,0], positions[:,1], marker='.', color='r')
-ax.set_title("Simulation Density")
-ax.set_xlabel("x [$\\mathrm{Mpc}h^{-1}$]")
-ax.set_ylabel("y [$\\mathrm{Mpc}h^{-1}$]")
-ax.set_xlim([-50, 50])
-ax.set_ylim([-50, 50])
-plt.show()
-
-
-
-#den_field = np.mean(
-#    density0[:,:,np.arange(ind_range[0],ind_range[1]+1)],2)
-#ax.scatter(equatorialXYZ[coord_filter,0],equatorialXYZ[coord_filter,1],
-#           marker = '.',color='r')
-
-
 # Alpha shapes
 
 [ahMWPos,alpha_shapes_finalCat,alpha_shapes_individual] = \
     tools.loadOrRecompute(
         data_folder + "cat300_alpha_shapes.p",cat300.get_alpha_shapes,
         snapList,snapListRev,antihaloCatalogueList=hrList,ahProps = ahProps,
-        snapsortList=snapSortList,void_filter=filter300,recentreSnaps=False,
+        snapsortList=snapSortList,void_filter=filter300,reCentreSnaps=False,
         _recomputeData = False)
 
 
