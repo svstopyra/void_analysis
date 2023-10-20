@@ -218,10 +218,10 @@ tools.remapBORGSimulation(snapToShow,swapXZ=False,reverse=True)
 rCut = 135
 ha = ['right','left','left','left','left','center','right',\
         'right','right']
-va = ['center','bottom','bottom','bottom','top',\
+va = ['center','left','bottom','bottom','top',\
         'top','center','center','center']
 annotationPos = [[-1.1,0.9],\
-        [1.1,1.0],[1.5,0.6],[1.3,-1.2],[1.3,-0.7],[-1,0.2],[0.8,0.6],\
+        [1.3,0.1],[1.5,0.6],[1.3,-1.2],[1.3,-0.7],[-1,0.2],[0.8,0.6],\
         [1.0,0.1],[-1.7,0.5]]
 nameList = [name[0] for name in clusterNames]
 textwidth=7.1014
@@ -947,13 +947,18 @@ plt.show()
 # Plots:
 
 
+radiiOpt = cat300.getMeanProperty('radii',void_filter=filter300)[0]
+sortedRadiiOpt = np.flip(np.argsort(radiiOpt))
 
-sortedRadiiOpt = np.flip(np.argsort(
-    cat300.getMeanProperty('radii',void_filter=filter300)[0]))
 catToUse = cat300.get_final_catalogue(void_filter=filter300)
 cat_object = cat300
 haveVoids = [np.where(catToUse[:,ns] > 0)[0] \
     for ns in range(0,len(snapNameList))]
+cat_fracs = cat300.property_with_filter(cat300.finalCatFrac,
+                                        void_filter=filter300)
+cat_centres = cat300.getMeanCentres(void_filter=filter300)
+cat_distances = np.sqrt(np.sum(cat_centres**2,1))
+sorted_cat_frac = np.flip(np.argsort(cat_fracs))
 
 #for ns in range(0,len(snapNameList)):
 #    catToUse[haveVoids[ns],ns] = np.arange(1,len(haveVoids[ns])+1)
@@ -964,62 +969,48 @@ filterToUse = np.where(filter300)[0]
 nVoidsToShow = 10
 #nVoidsToShow = len(filterToUse)
 #selection = np.intersect1d(sortedRadiiOpt,filterToUse)[:(nVoidsToShow)]
-selection = sortedRadiiOpt[np.arange(0,nVoidsToShow)]
+#selection = sortedRadiiOpt[cat_fracs > 0.7][np.arange(0,nVoidsToShow)]
+selection = sorted_cat_frac[np.arange(0,nVoidsToShow)]
 asListAll = []
 colourListAll = []
 laListAll = []
 labelListAll = []
 
-plotFormat='.pdf'
+plotFormat='.png'
 #plotFormat='.pdf'
 
 textwidth=7.1014
 textheight=9.0971
-scale = 1.26
+scale = 1.18
+ratio = 0.58
 width = textwidth
-height = 0.6*textwidth
-cropPoint = ((scale -1)/2)*np.array([width,height]) + np.array([0,-0.2])
+height = ratio*textwidth
+cropPoint = ((scale -1)/2)*np.array([width,height]) + \
+    np.array([0,0])
 bound_box = transforms.Bbox([[cropPoint[0], cropPoint[1]],
     [cropPoint[0] + width, cropPoint[1] + height]])
 
-if doSky:
-    #
-    #plot.plotLocalUniverseMollweide(rCut,snapToShow,\
-    #    alpha_shapes = alpha_shape_list[ns][1],
-    #    largeAntihalos = largeAntihalos[ns],hr=antihaloCatalogueList[ns],
-    #    coordAbell = coordCombinedAbellSphere,\
-    #    abellListLocation = clusterIndMain,\
-    #    nameListLargeClusters = [name[0] for name in clusterNames],\
-    #    ha = ha,va= va, annotationPos = annotationPos,\
-    #    title = 'Local super-volume: large voids (antihalos) within $' + \
-    #    str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",
-    #    vmin=1e-2,vmax=1e2,legLoc = 'lower left',bbox_to_anchor = (-0.1,-0.2),
-    #    snapsort = snapsortList[ns],antihaloCentres = None,
-    #    figOut = figuresFolder + "/antihalos_sky_plot.pdf",
-    #    showFig=True,figsize = (scale*textwidth,scale*0.55*textwidth),
-    #    voidColour = seabornColormap[0],antiHaloLabel='inPlot',
-    #    bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
-    #    galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False)
-    for ns in range(0,len(snapNameList)):
-        asList = []
-        colourList = []
-        laList = []
-        labelList = []
-        for k in range(0,np.min([nVoidsToShow,len(selection)])):
-            if catToUse[selection[k],ns] > 0:
-                listPosition = catToUse[selection[k],ns]-1
-                ahNumber = cat_object.indexListShort[ns][listPosition]
-                asList.append(alpha_shapes_individual[ns][selection[k]])
-                laList.append(ahNumber)
-                colourList.append(
-                    seabornColormap[np.mod(k,len(seabornColormap))])
-                labelList.append(str(k+1))
-            print("Done for void " + str(k+1))
-        print("Done for sample " + str(ns+1))
-        asListAll.append(asList)
-        colourListAll.append(colourList)
-        laListAll.append(laList)
-        labelListAll.append(labelList)
+
+for ns in range(0,len(snapNameList)):
+    asList = []
+    colourList = []
+    laList = []
+    labelList = []
+    for k in range(0,np.min([nVoidsToShow,len(selection)])):
+        if catToUse[selection[k],ns] > 0:
+            listPosition = catToUse[selection[k],ns]-1
+            ahNumber = cat_object.indexListShort[ns][listPosition]
+            asList.append(alpha_shapes_individual[ns][selection[k]])
+            laList.append(ahNumber)
+            colourList.append(
+                seabornColormap[np.mod(k,len(seabornColormap))])
+            labelList.append(str(k+1))
+        print("Done for void " + str(k+1))
+    print("Done for sample " + str(ns+1))
+    asListAll.append(asList)
+    colourListAll.append(colourList)
+    laListAll.append(laList)
+    labelListAll.append(labelList)
 
 asListTot = []
 colourListTot = []
@@ -1044,6 +1035,17 @@ vmin = 1e-2
 vmax = 1e2
 rCut=135
 nside = 64
+ha = ['right','left','left','left','left','right','center',\
+        'left','right']
+va = ['center','center','bottom','bottom','top',\
+        'top','center','center','center']
+annotationPos = [[-1.1,0.9],\
+        [1.5,0.2],[1.7,0.6],[1.3,-1.2],[1.5,-0.7],[-1.8,-0.7],[1.4,0.9],\
+        [1.5,-0.2],[-1.7,0.5]]
+nameList = [name[0] for name in clusterNames]
+
+
+
 hpx_map_list = [plot.sphericalSlice(
     snap,rCut/2,thickness=rCut,fillZeros=vmin*rhobar,centre=np.array([0,0,0]),
     nside=nside)/rhobar for snap in snapList]
@@ -1059,25 +1061,33 @@ for ns in range(0,len(snapNumList)):
         abellListLocation = clusterIndMain,\
         nameListLargeClusters = [name[0] for name in clusterNames],\
         ha = ha,va= va, annotationPos = annotationPos,\
-        title = 'Local super-volume: large voids (antihalos) within $' + \
+        title = 'Sample ' +str(ns+1) + ': large voids (antihalos) within $' + \
         str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",\
         vmin=1e-2,vmax=1e2,legLoc = 'lower left',\
         bbox_to_anchor = (-0.1,-0.2),\
         snapsort = snapSortList[ns],antihaloCentres = None,\
         figOut = figuresFolder + "/ah_match_sample_" + \
         str(ns) + plotFormat,\
-        showFig=False,figsize = (scale*textwidth,scale*0.55*textwidth),\
+        showFig=False,figsize = (scale*textwidth,scale*ratio*textwidth),\
         voidColour = colourListAll[ns],antiHaloLabel=labelListAll[ns],\
         bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
         galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
         voidAlpha = 0.6,margins=None,hpxMap = hpx_map_list[ns],pad=0.05,
-        cbar_aspect=30,shrink=0.5,cbar_y_pos=0.3)
+        cbar_aspect=10,shrink=0.35,cbar_y_pos=0.17)
     plt.show()
 
-# Combined outlines:
+# Animation:
+imgs = [
+    figuresFolder + "ah_match_sample_" +str(ns) + ".png" 
+    for ns in range(0,len(snapList))]
+
+plot_gif_animation(
+    imgs,figuresFolder + 'sky_plot_animation_largest_voids.gif')
+
+# Combined outlines (plotting not working at present for unknown reasons)
 ns = 0
 plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
-    alpha_shapes = asListAll[ns],\
+    alpha_shapes = asListTot,\
     largeAntihalos = laListTot,hr=hrList[ns],\
     coordAbell = coordCombinedAbellSphere,\
     abellListLocation = clusterIndMain,\
@@ -1094,7 +1104,8 @@ plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
     bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
     galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
     voidAlpha = 0.6,margins=None,positions = [None for x in laListTot],
-    hpxMap = hpx_map_list[ns])
+    hpxMap = hpx_map_list[ns],pad=0.05,cbar_aspect=10,shrink=0.35,
+    cbar_y_pos=0.2)
 
 
 #-------------------------------------------------------------------------------
