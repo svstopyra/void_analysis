@@ -205,6 +205,31 @@ if recomputeCatalogues or (not os.path.isfile(data_folder + "cat300Rand.p")):
 else:
     cat300Rand = tools.loadPickle(data_folder + "cat300Rand.p")
 
+#-------------------------------------------------------------------------------
+# CSV data output for the void catalogue table:
+
+# Filter for the voids we actually want in the catalogue (high catalogue 
+# fraction, only out to 135 Mpc/h):
+void_filter = filter300
+# Order in which the voids should be sorted:
+sort_order = np.argsort(cat300.property_with_filter(
+    cat300.finalCatFrac,void_filter=void_filter))
+
+# Other properties:
+void_radii_and_error = cat300.getMeanProperty('radius',void_filter=void_filter)
+void_radii = void_radii_and_error[0]
+void_radii_error = void_radii_and_error[1]
+
+void_mass_and_error = cat300.getMeanProperty('mass',void_filter=void_filter)
+void_mass = void_mass_and_error[0]
+void_mass_error = void_mass_and_error[1]
+
+void_centres = cat300.getMeanCentres()
+
+# List of dictionaries with all the relevant void properties:
+void_dictionaries = [{'ID':k+1,'radius':}]
+
+
 
 #-------------------------------------------------------------------------------
 # CATALOGUE DATA:

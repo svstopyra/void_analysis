@@ -1036,6 +1036,7 @@ class combinedCatalogue:
                          void_filter=False,alphaVal = 7):
         if reCentreSnaps:
             for snap in snapList:
+                # Necessary to place snimulations in equatorial co-ordinates:
                 tools.remapBORGSimulation(snap,swapXZ=False,reverse=True)
                 snap.recentred = True
         boxsize = snapList[0].properties['boxsize'].ratio("Mpc a h**-1")
@@ -1107,7 +1108,8 @@ def loadCatalogueData(snapList,snapListRev,ahProps,sortMethod,snapSortList,\
     if ahProps is None:
         ahProps = [tools.loadPickle(snap.filename + ".AHproperties.p") \
             for snap in snapshotsList]
-    antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
+    antihaloCentres = [tools.remapAntiHaloCentre(
+        props[5],boxsize,swapXZ  = False,reverse = True) \
         for props in ahProps]
     antihaloMasses = [props[3] for props in ahProps]
     antihaloRadii = [props[7] for props in ahProps]
