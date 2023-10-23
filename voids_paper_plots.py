@@ -524,20 +524,50 @@ void_dist = np.sqrt(np.sum(void_centres**2,1))
 # Void SNR:
 snrShortened = cat300.getShortenedQuantity(snrAllCatsList,
     cat300.centralAntihalos)
-void_snr_mean = cat300.getMeanProperty(snrShortened,void_filter=void_filter)
-
+void_snr_and_error = cat300.getMeanProperty(snrShortened,
+                                            void_filter=void_filter)
+void_snr = void_snr_and_error[0]
+void_snr_error = void_snr_and_error[1]
 
 # List of dictionaries with all the relevant void properties:
-void_dictionaries = [{'ID':str(k+1),
+void_dictionaries = [
+    {'ID':"$" + str(k+1) + "$",
     'radius':"$" + ("%.2g" % void_radii[sort_order[k]]) + "\\pm" 
-    + ("%.1g" % void_radii_error[sort_order[k]]) "$",
+    + ("%.1g" % void_radii_error[sort_order[k]]) + "$",
     'mass':"$" + ("%.2g" % (void_mass[sort_order[k]]/1e14)) + "\\pm" 
-    + ("%.1g" % (void_mass_error[sort_order[k]]/1e14)) + "$"} 
+    + ("%.1g" % (void_mass_error[sort_order[k]]/1e14)) + "$",
+    'ra':"$" + ("%.3g" % void_ra[sort_order[k]]) + "$",
+    'dec':"$" + ("%.3g" % void_dec[sort_order[k]]) + "$",
+    'z':"$" + ("%.2g" % void_z[sort_order[k]]) + "$",
+    'dist':"$" + ("%.2g" % void_dist[sort_order[k]]) + "$",
+    'snr':"$" + ("%.2g" % void_snr[sort_order[k]]) + "$",
+    'cat_frac':"$" + ("%.2g" % void_cat_frac[sort_order[k]]) + "$"}
     for k in range(0,num_voids)]
 
+table_titles = {'ID':"ID",'radius':"Radius $(h^{-1}\\mathrm{Mpc})$",
+                'mass':"Mass $(10^{14}h^{-1}M_{\\odot})$",
+                'ra':'R.A. (deg.)','dec':"Dec. (deg.)",
+                'z':"z",'dist':"Distance $(h^{-1}\\mathrm{Mpc})$",
+                'snr':"SNR",'cat_frac':"Catalogue Fraction"}
 
+save_name = data_folder + "void_catalogue.csv"
 
+def dictionary_to_csv(dictionary_list,filename,titles_dictionary=None):
+    outfile = open(filename,"w")
+    # Titles:
+    if titles_dictionary is not None:
+        for x in titles_dictionary:
+            outfile.write(titles_dictionary[x] + ",")
+        outfile.write("\n")
+    # Data:
+    for dictionary in dictionary_list:
+        for x in dictionary:
+            outfile.write(dictionary[x] + ",")
+        outfile.write("\n")
+    outfile.close()
 
+# Save data:
+dictionary_to_csv(void_dictionaries,save_name,titles_dictionary=table_titles)
 
 #-------------------------------------------------------------------------------
 # COMPUTE VOID STACKS APPLYING DIFFERENT CONDITIONS
@@ -839,6 +869,40 @@ leftFilter = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
 rightFilter = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
     (distances300 < 300) & (cat300.finalCatFrac > thresholds300)
 
+
+# Bootstrap error bars?
+
+def bin_count(data,low,high):
+    return np.sum((data > low) & (data <= high))
+
+mass_bins = 10**np.linspace(np.log10(mLower),np.log10(mUpper),nBins)
+
+bin_bootstraps = [scipy.stats.bootstrap(
+    (massMean300[leftFilter],),
+    lambda x: bin_count(x,mass_bins[k],mass_bins[k+1]),
+    confidence_level = 0.68,vectorized=False,random_state=2000) 
+    for k in range(0,len(mass_bins)-1)]
+
+errors = [x.confidence_interval for x in bin_bootstraps]
+
+# Or, just take bootstrap samples:
+def bootstrap_mass_function(masses,n_boot = 1000,seed=2000):
+    n_data = len(masses)
+    mass_function_samples = []
+    np.random.seed(seed)
+    for k in range(0,n_boot):
+        mass_function_samples.append(
+            np.random.choice(masses,size=(n_data),replace=True))
+    return mass_function_samples
+
+
+#mass_samples_left = massMean300[leftFilter]
+#mass_samples_right = massMean300[rightFilter]
+mass_samples_left = bootstrap_mass_function(massMean300[leftFilter])
+mass_samples_right = bootstrap_mass_function(massMean300[rightFilter])
+
+
+
 plt.clf()
 doCat = True
 if doCat:
@@ -855,8 +919,8 @@ if doCat:
     # Check mass functions:
     volSphere135 = 4*np.pi*rSphereInner**3/3
     volSphere = 4*np.pi*rSphere**3/3
-    plot.massFunctionComparison(massMean300[leftFilter],\
-        massMean300[rightFilter],4*np.pi*135**3/3,nBins=nBins,\
+    plot.massFunctionComparison(mass_samples_left,\
+        mass_samples_right,4*np.pi*135**3/3,nBins=nBins,\
         labelLeft = "Combined catalogue \n(well-constrained voids only)",\
         labelRight  ="Combined catalogue \n(well-constrained voids only)",\
         ylabel="Number of antihalos",savename=figuresFolder + \
@@ -867,7 +931,6 @@ if doCat:
         titleRight = "Combined catalogue, $<300\\mathrm{Mpc}h^{-1}$",\
         volSimRight = 4*np.pi*300**3/3,ylimRight=[1,1000],\
         legendLoc="upper right")
-
 
 
 #-------------------------------------------------------------------------------

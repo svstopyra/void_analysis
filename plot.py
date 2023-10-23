@@ -2283,13 +2283,21 @@ def compareDensities(rBins,densities,clusterNames,labels = None,styles= None,\
     if show:
         plt.show()
 
-def computeMeanHMF(haloMasses,massLower=1e12,massUpper = 1e16,nBins=31):
+def computeMeanHMF(haloMasses,massLower=1e12,massUpper = 1e16,nBins=31,
+                   error_type="standard",interval=68):
     nSamples = len(haloMasses)
     massBins = 10**np.linspace(np.log10(massLower),np.log10(massUpper),nBins)
     binLists = [plot_utilities.binValues(hnmasses,massBins) \
         for hnmasses in haloMasses]
-    sigmaBins = np.std([bins[1] for bins in binLists],0)\
-        /np.sqrt(len(haloMasses))
+    if error_type == "standard":
+        sigmaBins = np.std([bins[1] for bins in binLists],0)\
+            /np.sqrt(len(haloMasses))
+    elif error_type == "variance":
+        sigmaBins = np.std([bins[1] for bins in binLists],0)
+    elif error_type = "interval":
+        sigmaBins = np.percentile(np.array([bins[1] for bins in binLists]),
+                                  np.array([50 - interval/2,50+interval/2]),
+                                  axis=0)
     noInBins = np.mean([bins[1] for bins in binLists],0)
     return [noInBins,sigmaBins]
 
@@ -3279,18 +3287,19 @@ def plotMassTypeComparison(massList1,massListFull1,massList2,massListFull2,\
 
 
 
-def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,\
-        Delta=200,sigma8=0.8,fontsize=8,legendFontsize=8,font="serif",\
-        Ob0=0.049,mass_function='Tinker',delta_wrt='SOCritical',massLower=5e13,\
-        massUpper=1e15,figsize=(4,4),marker='x',linestyle='--',\
-        color=None,colorTheory = None,\
-        nBins=21,poisson_interval = 0.95,legendLoc='lower left',\
-        label="Gadget Simulation",transfer_model='EH',fname=None,\
-        xlabel="Mass [$M_{\odot}h^{-1}$]",ylabel="Number of halos",\
-        ylim=[1e1,2e4],title="Gadget Simulation",showLegend=True,\
-        tickRight=False,tickLeft=True,savename=None,\
-        linking_length=0.2,showTheory=True,returnHandles=False,\
-        massErrors=False,listMode="average",errorType="bar"):
+def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,
+        Delta=200,sigma8=0.8,fontsize=8,legendFontsize=8,font="serif",
+        Ob0=0.049,mass_function='Tinker',delta_wrt='SOCritical',massLower=5e13,
+        massUpper=1e15,figsize=(4,4),marker='x',linestyle='--',
+        color=None,colorTheory = None,
+        nBins=21,poisson_interval = 0.95,legendLoc='lower left',
+        label="Gadget Simulation",transfer_model='EH',fname=None,
+        xlabel="Mass [$M_{\odot}h^{-1}$]",ylabel="Number of halos",
+        ylim=[1e1,2e4],title="Gadget Simulation",showLegend=True,
+        tickRight=False,tickLeft=True,savename=None,
+        linking_length=0.2,showTheory=True,returnHandles=False,
+        massErrors=False,listMode="average",errorType="bar",
+        error_type="standard",hmf_interval=68):
     [dndm,m] = cosmology.TMF_from_hmf(massLower,massUpper,\
         h=h,Om0=Om0,Delta=Delta,delta_wrt=delta_wrt,\
         mass_function=mass_function,sigma8=sigma8,Ob0 = Ob0,\
@@ -3305,16 +3314,18 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,\
     massBinCentres = plot_utilities.binCentres(massBins)
     if type(masses) == list:
         if listMode == "average":
-            [noInBins,sigmaBins] = computeMeanHMF(masses,\
-                massLower=massLower,massUpper=massUpper,nBins = nBins)
+            [noInBins,sigmaBins] = computeMeanHMF(
+                masses,massLower=massLower,massUpper=massUpper,nBins = nBins,
+                error_type=error_type,interval=hmf_interval)
             noInBinsList = [noInBins]
             sigmaBinsList = [sigmaBins]
         elif listMode == "separate":
             noInBinsList = []
             sigmaBinsList = []
             for massList in masses:
-                [noInBins,sigmaBins] = computeMeanHMF(massList,\
-                    massLower=massLower,massUpper=massUpper,nBins = nBins)
+                [noInBins,sigmaBins] = computeMeanHMF(
+                    massList,massLower=massLower,massUpper=massUpper,
+                    nBins = nBins,error_type=error_type,interval=hmf_interval)
                 noInBinsList.append(noInBins)
                 sigmaBinsList.append(sigmaBins)
     else:
@@ -3396,7 +3407,7 @@ def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
         returnAx = False,ns=1.0,rows=1,cols=2,titleLeft = "Gadget Simulation",\
         titleRight = "Gadget Simulation",saveLeft=None,saveRight=None,\
         ylimRight=None,volSimRight=None,listMode="average",massErrors=False,\
-        errorType="shaded"):
+        errorType="shaded",**kwargs):
     if ax is None:
         fig, ax = plt.subplots(rows,cols,figsize=(8,4))
     if volSimRight is None:
@@ -3413,7 +3424,7 @@ def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
         nBins=nBins,poisson_interval = poisson_interval,legendLoc=legendLoc,\
         label=labelLeft,transfer_model=transfer_model,ylim=ylim,\
         savename=saveLeft,listMode=listMode,massErrors=massErrors,\
-        errorType=errorType)
+        errorType=errorType,**kwargs)
     plotMassFunction(massesRight,volSimRight,ax=ax[1],Om0=Om0,h=h,ns=ns,\
         Delta=Delta,sigma8=sigma8,fontsize=fontsize,\
         legendFontsize=legendFontsize,font="serif",\
@@ -3424,7 +3435,7 @@ def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
         nBins=nBins,poisson_interval = poisson_interval,legendLoc=legendLoc,\
         label=labelRight,transfer_model=transfer_model,ylim=ylimRight,\
         savename=saveRight,listMode=listMode,massErrors=massErrors,\
-        errorType=errorType)
+        errorType=errorType,**kwargs)
     plt.tight_layout()
     if savename is not None:
         plt.savefig(savename)
