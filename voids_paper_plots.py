@@ -531,20 +531,20 @@ void_snr_error = void_snr_and_error[1]
 
 # List of dictionaries with all the relevant void properties:
 void_dictionaries = [
-    {'ID':"$" + str(k+1) + "$",
-    'radius':"$" + ("%.2g" % void_radii[sort_order[k]]) + "\\pm" 
-    + ("%.1g" % void_radii_error[sort_order[k]]) + "$",
-    'mass':"$" + ("%.2g" % (void_mass[sort_order[k]]/1e14)) + "\\pm" 
-    + ("%.1g" % (void_mass_error[sort_order[k]]/1e14)) + "$",
-    'ra':"$" + ("%.3g" % void_ra[sort_order[k]]) + "$",
-    'dec':"$" + ("%.3g" % void_dec[sort_order[k]]) + "$",
-    'z':"$" + ("%.2g" % void_z[sort_order[k]]) + "$",
-    'dist':"$" + ("%.2g" % void_dist[sort_order[k]]) + "$",
-    'snr':"$" + ("%.2g" % void_snr[sort_order[k]]) + "$",
-    'cat_frac':"$" + ("%.2g" % void_cat_frac[sort_order[k]]) + "$"}
+    {'ID':str(k+1),
+    'rad':("%.2g" % void_radii[sort_order[k]]),
+    'rad_error':("%.1g" % void_radii_error[sort_order[k]]),
+    'mass':("%.2g" % (void_mass[sort_order[k]]/1e14)),
+    'mass_error':("%.1g" % (void_mass_error[sort_order[k]]/1e14)),
+    'ra':("%.3g" % void_ra[sort_order[k]]),
+    'dec':("%.3g" % void_dec[sort_order[k]]),
+    'z':("%.2g" % void_z[sort_order[k]]),
+    'dist':("%.3g" % void_dist[sort_order[k]]),
+    'snr':("%.3g" % void_snr[sort_order[k]]),
+    'cat_frac':("%.2g" % void_cat_frac[sort_order[k]])}
     for k in range(0,num_voids)]
 
-table_titles = {'ID':"ID",'radius':"Radius $(h^{-1}\\mathrm{Mpc})$",
+table_titles = {'ID':"ID",'rad':"Radius $(h^{-1}\\mathrm{Mpc})$",
                 'mass':"Mass $(10^{14}h^{-1}M_{\\odot})$",
                 'ra':'R.A. (deg.)','dec':"Dec. (deg.)",
                 'z':"z",'dist':"Distance $(h^{-1}\\mathrm{Mpc})$",
@@ -567,7 +567,7 @@ def dictionary_to_csv(dictionary_list,filename,titles_dictionary=None):
     outfile.close()
 
 # Save data:
-dictionary_to_csv(void_dictionaries,save_name,titles_dictionary=table_titles)
+dictionary_to_csv(void_dictionaries,save_name)
 
 #-------------------------------------------------------------------------------
 # COMPUTE VOID STACKS APPLYING DIFFERENT CONDITIONS
@@ -931,7 +931,7 @@ if doCat:
         titleRight = "Combined catalogue, $<300\\mathrm{Mpc}h^{-1}$",\
         volSimRight = 4*np.pi*300**3/3,ylimRight=[1,1000],\
         legendLoc="upper right",errorType="shaded",massErrors=True,
-        error_type="interval")
+        error_type="interval",hmf_interval=95)
 
 
 #-------------------------------------------------------------------------------
