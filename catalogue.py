@@ -888,12 +888,8 @@ class combinedCatalogue:
             else:
                 raise Exception("Property not implemented.")
         elif type(prop) == list:
-            # Check it is sensible:
-            if len(prop) != self.numCats:
-                raise Exception("Property list has invalid length.")
-            if (not np.all(np.array([len(x) for x in prop]) == self.ahCounts)):
-                raise Exception("Property list lengths do not match " + \
-                    "supplied catalogue lengths.")
+            propertyToProcess = self.short_list_to_cat_list(prop)
+        else:
             propertyToProcess = prop
         # Begin computing the mean property:
         meanProperty = np.zeros(len(self.finalCat))
@@ -929,16 +925,35 @@ class combinedCatalogue:
         if self.finalCat is None:
             raise Exception("Final catalogue has not yet been computed.")
         else:
-            self.propertyDict[prop] = np.zeros(self.finalCat.shape,dtype=float)
-            for k in range(0,len(self.finalCat)):
-                for l in range(0,self.numCats):
-                    if self.finalCat[k,l] > 0:
-                        self.propertyDict[prop][k,l] = \
-                            self.shortListDict[prop][l][self.finalCat[k,l]-1]
-                    else:
-                        self.propertyDict[prop][k,l] = np.nan
+            self.propertyDict[prop] = self.short_list_to_cat_list(
+                self.shortListDict[prop])
             return self.property_with_filter(
                 self.propertyDict[prop],void_filter)
+    # Check that a supplied short-list is sensible:
+    def verify_short_list(self,short_list):
+        if len(short_list) != self.numCats:
+            raise Exception("Number of catalogues in short list does not " 
+                            + "match catalogue.")
+        lengths = np.array(len(x) for x in short_list,dtype=int)
+        if not np.all(lengths = cat300.ahCounts):
+            raise Exception("Number of voids in each short list does not "
+                            "match catalogue.")
+    # Convert a list of property for a short-list of voids in each sample
+    # into a list of properties for the voids in the final catalogue in
+    # each sample
+    def short_list_to_cat_list(self,short_list):
+        if self.finalCat is None:
+            raise Exception("Final catalogue has not yet been computed.")
+        self.verify_short_list(short_list)
+        cat_list = np.array(self.finalCat.shape,dtype=type(short_list[0][0]))
+        for k in range(0,len(self.finalCat)):
+            for l in range(0,self.numCats):
+                if self.finalCat[k,l] > 0:
+                    cat_list[k,l] = \
+                        short_list[l][self.finalCat[k,l]-1]
+                else:
+                    cat_list[k,l] = np.nan
+        return cat_list
     def getSNRForVoidRealisations(self,snrAllCatsList,void_filter=False):
         if self.finalCat is None:
             raise Exception("Final catalogue is not yet computed.")
