@@ -935,7 +935,7 @@ class combinedCatalogue:
             raise Exception("Number of catalogues in short list does not " 
                             + "match catalogue.")
         lengths = np.array([len(x) for x in short_list],dtype=int)
-        if not np.all(lengths = self.ahCounts):
+        if not np.all(lengths == self.ahCounts):
             raise Exception("Number of voids in each short list does not "
                             "match catalogue.")
     # Convert a list of property for a short-list of voids in each sample
