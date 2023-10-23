@@ -901,8 +901,9 @@ class combinedCatalogue:
             sigmaProperty[k] = np.std(propertyToProcess[k,haveProperty])
             if stdError:
                 sigmaProperty[k] /= np.sqrt(len(haveProperty))
-        self.meanDict[prop] = meanProperty
-        self.sigmaDict[prop] = sigmaProperty
+        if type(prop) == str:
+            self.meanDict[prop] = meanProperty
+            self.sigmaDict[prop] = sigmaProperty
         return [self.property_with_filter(meanProperty,void_filter),
                 self.property_with_filter(sigmaProperty,void_filter)]
     # Optionally apply a filter to the output catalogue so we only include

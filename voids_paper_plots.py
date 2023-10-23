@@ -524,8 +524,7 @@ void_dist = np.sqrt(np.sum(void_centres**2,1))
 # Void SNR:
 snrShortened = cat300.getShortenedQuantity(snrAllCatsList,
     cat300.centralAntihalos)
-void_snr_all = cat300.getSNRForVoidRealisations(snrAllCatsList)
-void_snr_mean = cat300.getMeanProperty(void_snr_all,void_filter=void_filter)
+void_snr_mean = cat300.getMeanProperty(snrShortened,void_filter=void_filter)
 
 
 # List of dictionaries with all the relevant void properties:
