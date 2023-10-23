@@ -2294,7 +2294,7 @@ def computeMeanHMF(haloMasses,massLower=1e12,massUpper = 1e16,nBins=31,
             /np.sqrt(len(haloMasses))
     elif error_type == "variance":
         sigmaBins = np.std([bins[1] for bins in binLists],0)
-    elif error_type = "interval":
+    elif error_type == "interval":
         sigmaBins = np.percentile(np.array([bins[1] for bins in binLists]),
                                   np.array([50 - interval/2,50+interval/2]),
                                   axis=0)
