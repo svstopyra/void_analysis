@@ -934,7 +934,7 @@ class combinedCatalogue:
         if len(short_list) != self.numCats:
             raise Exception("Number of catalogues in short list does not " 
                             + "match catalogue.")
-        lengths = np.array(len(x) for x in short_list,dtype=int)
+        lengths = np.array([len(x) for x in short_list],dtype=int)
         if not np.all(lengths = cat300.ahCounts):
             raise Exception("Number of voids in each short list does not "
                             "match catalogue.")
