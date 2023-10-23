@@ -946,7 +946,7 @@ class combinedCatalogue:
         for ns in range(0,len(snrAllCatsList)):
             haveVoids = np.where(self.finalCat[:,ns] >= 0)[0]
             snrCat[haveVoids,ns] = snrAllCatsList[ns][self.ahNumbers[ns][\
-                finalCat[haveVoids,ns]-1]]
+                self.finalCat[haveVoids,ns]-1]]
         return self.property_with_filter(snrCat,void_filter)
     def getAllCentres(self,void_filter=False):
         all_centres = np.array([self.property_with_filter(

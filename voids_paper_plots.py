@@ -494,11 +494,12 @@ allPairCountsList = [props[9] for props in ahPropsUn]
 void_filter = filter300
 num_voids = np.sum(void_filter)
 # Order in which the voids should be sorted:
-sort_order = np.argsort(cat300.property_with_filter(
-    cat300.finalCatFrac,void_filter=void_filter))
+void_cat_frac = cat300.property_with_filter(
+    cat300.finalCatFrac,void_filter=void_filter)
+sort_order = np.flip(np.argsort(void_cat_frac))
 
 # Other properties:
-void_radii_and_error = cat300.getMeanProperty('radius',void_filter=void_filter)
+void_radii_and_error = cat300.getMeanProperty('radii',void_filter=void_filter)
 void_radii = void_radii_and_error[0]
 void_radii_error = void_radii_and_error[1]
 
@@ -507,13 +508,32 @@ void_mass = void_mass_and_error[0]
 void_mass_error = void_mass_and_error[1]
 
 void_centres = cat300.getMeanCentres(void_filter=void_filter)
+void_dist = np.sqrt(np.sum(void_centres**2,1))
+void_z = astropy.cosmology.z_at_value(
+    lambda x: cosmo.comoving_distance(x).value,void_dist).value
 
+# Get RA DEC co-ords:
+coord_equatorial = SkyCoord(x=void_centres[:,0]*u.Mpc,\
+            y = void_centres[:,1]*u.Mpc,z = void_centres[:,2]*u.Mpc,\
+            frame='icrs',representation_type='cartesian')
+
+void_ra = coord_equatorial.icrs.spherical.lon.value
+void_dec = coord_equatorial.icrs.spherical.lat.value
+void_dist = np.sqrt(np.sum(void_centres**2,1))
+
+# Void SNR:
+snrShortened = cat300.getShortenedQuantity(snrAllCatsList,
+    cat300.centralAntihalos)
+void_snr = cat300.getSNRForVoidRealisations(snrAllCatsList,
+                                            void_filter=void_filter)
 
 
 # List of dictionaries with all the relevant void properties:
-void_dictionaries = [{'ID':k+1,
-    'radius':"$" + ("%.2g" % void_radii[k]) + "\\pm" 
-    + ("%.1g" % void_radii_error[k]) "$"} 
+void_dictionaries = [{'ID':str(k+1),
+    'radius':"$" + ("%.2g" % void_radii[sort_order[k]]) + "\\pm" 
+    + ("%.1g" % void_radii_error[sort_order[k]]) "$",
+    'mass':"$" + ("%.2g" % (void_mass[sort_order[k]]/1e14)) + "\\pm" 
+    + ("%.1g" % (void_mass_error[sort_order[k]]/1e14)) + "$"} 
     for k in range(0,num_voids)]
 
 
