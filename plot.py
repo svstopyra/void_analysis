@@ -3353,10 +3353,16 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,
                 handles.append(ax.errorbar(massBinCentres,noInBins,sigmaBins,\
                     marker=marker,linestyle=linestyle,label=lab,color=color))
             elif errorType == "shaded":
-                handles.append(ax.fill_between(massBinCentres,\
-                    noInBins - sigmaBins,noInBins + sigmaBins,\
-                    label=lab,color=color,\
-                    alpha=0.5))
+                if error_type == "interval":
+                    handles.append(ax.fill_between(massBinCentres,\
+                        sigmaBins[0],sigmaBins[1],\
+                        label=lab,color=color,\
+                        alpha=0.5))
+                else:
+                    handles.append(ax.fill_between(massBinCentres,\
+                        noInBins - sigmaBins,noInBins + sigmaBins,\
+                        label=lab,color=color,\
+                        alpha=0.5))
             else:
                 raise Exception("Unrecognised plotting method for errors.")
     else:

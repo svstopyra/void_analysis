@@ -930,7 +930,8 @@ if doCat:
         titleLeft = "Combined catalogue, $<135\\mathrm{Mpc}h^{-1}$",\
         titleRight = "Combined catalogue, $<300\\mathrm{Mpc}h^{-1}$",\
         volSimRight = 4*np.pi*300**3/3,ylimRight=[1,1000],\
-        legendLoc="upper right")
+        legendLoc="upper right",errorType="shaded",massErrors=True,
+        error_type="interval")
 
 
 #-------------------------------------------------------------------------------
