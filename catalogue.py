@@ -945,7 +945,7 @@ class combinedCatalogue:
         if self.finalCat is None:
             raise Exception("Final catalogue has not yet been computed.")
         self.verify_short_list(short_list)
-        cat_list = np.array(self.finalCat.shape,dtype=type(short_list[0][0]))
+        cat_list = np.zeros(self.finalCat.shape,dtype=type(short_list[0][0]))
         for k in range(0,len(self.finalCat)):
             for l in range(0,self.numCats):
                 if self.finalCat[k,l] > 0:
