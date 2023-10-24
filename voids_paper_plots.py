@@ -995,15 +995,20 @@ def bootstrap_mass_function(masses,n_boot = 1000,seed=2000):
     return mass_function_samples
 
 # Just using a single line (no error bar):
-#mass_samples_left = massMean300[leftFilter]
-#mass_samples_right = massMean300[rightFilter]
+mass_left = cat300.getMeanProperty("mass",void_filter=leftFilter)
+mass_right = cat300.getMeanProperty("mass",void_filter=rightFilter)
+mass_samples_left = mass_left[0]
+mass_samples_right = mass_right[0]
+mass_error_left = mass_left[1]
+mass_error_right = mass_right[1]
 # Using bootstrap errors:
 #mass_samples_left = bootstrap_mass_function(massMean300[leftFilter])
 #mass_samples_right = bootstrap_mass_function(massMean300[rightFilter])
 # Using permuted masses as errors:
-mass_samples_left = massFunctionsPerm135
-mass_samples_right = massFunctionsPerm300
-
+#mass_samples_left = massFunctionsPerm135
+#mass_samples_right = massFunctionsPerm300
+#mass_error_left = None
+#mass_error_right = None
 
 plt.clf()
 doCat = True
@@ -1033,7 +1038,8 @@ if doCat:
         titleRight = "Combined catalogue, $<300\\mathrm{Mpc}h^{-1}$",\
         volSimRight = 4*np.pi*300**3/3,ylimRight=[1,1000],\
         legendLoc="upper right",errorType="shaded",massErrors=True,
-        error_type="interval",hmf_interval=95)
+        error_type="interval",hmf_interval=95,
+        mass_error_left = mass_error_left,mass_error_right=mass_error_right)
 
 
 #-------------------------------------------------------------------------------
@@ -1053,15 +1059,18 @@ radius_bins = np.linspace(10,21,6)
 
 
 # Actual plot:
-#mean_radii_mcmc = cat300.getMeanProperty('radii',void_filter=filter300)
+mean_radii_mcmc = cat300.getMeanProperty('radii',void_filter=filter300)
 #mean_radii_mcmc = cat300test.getMeanProperty('radii',
 #                                             void_filter=cat300test.filter)
-mean_radii_mcmc = vsfPerm135
+#mean_radii_mcmc = vsfPerm135
 
 plt.clf()
 fig, ax = plt.subplots(figsize=(0.45*textwidth,0.45*textwidth))
 plot_void_counts_radius(mean_radii_mcmc[0],radius_bins,
-                        noConstraintsDict['radii'],ax=ax,do_errors=True)
+                        noConstraintsDict['radii'],ax=ax,do_errors=True,
+                        radii_errors = mean_radii_mcmc[1],
+                        label="MCMC catalogue ($68\%$)",
+                        lcdm_label="$\\Lambda$-CDM ($95\%$)")
 
 ax.tick_params(axis='both',which='major',labelsize=fontsize)
 ax.tick_params(axis='both',which='minor',labelsize=fontsize)

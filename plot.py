@@ -3299,7 +3299,7 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,
         tickRight=False,tickLeft=True,savename=None,
         linking_length=0.2,showTheory=True,returnHandles=False,
         massErrors=False,listMode="average",errorType="bar",
-        error_type="standard",hmf_interval=68):
+        error_type="standard",hmf_interval=68,mass_errors=None):
     [dndm,m] = cosmology.TMF_from_hmf(massLower,massUpper,\
         h=h,Om0=Om0,Delta=Delta,delta_wrt=delta_wrt,\
         mass_function=mass_function,sigma8=sigma8,Ob0 = Ob0,\
@@ -3329,11 +3329,19 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,
                 noInBinsList.append(noInBins)
                 sigmaBinsList.append(sigmaBins)
     else:
-        noInBins = plot_utilities.binValues(masses,massBins)[1]
-        sigmaBins = np.abs(np.array([scipy.stats.chi2.ppf(\
-            alphaO2,2*noInBins)/2,\
-            scipy.stats.chi2.ppf(1.0 - alphaO2,2*(noInBins+1))/2]) - \
-            noInBins)
+        if error_type == "standard":
+            noInBins = plot_utilities.binValues(masses,massBins)[1]
+            sigmaBins = np.abs(np.array([scipy.stats.chi2.ppf(\
+                alphaO2,2*noInBins)/2,\
+                scipy.stats.chi2.ppf(1.0 - alphaO2,2*(noInBins+1))/2]) - \
+                noInBins)
+        elif error_type == "bernoulli":
+            if mass_errors is None:
+                noInBins = plot_utilities.binValues(masses,massBins)[1]
+                sigmaBins = np.zeros(noInBins.shape)
+            else:
+                [noInBins,sigmaBins] = normally_distributed_bin_counts(
+                    masses,mass_errors,massBins)
         noInBinsList = [noInBins]
         sigmaBinsList = [sigmaBins]
     if ax is None:
@@ -3402,18 +3410,25 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,
         return handles
 
 def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
-        Delta=200,sigma8=0.8,fontsize=8,legendFontsize=8,font="serif",\
-        Ob0=0.049,mass_function='Tinker',delta_wrt='SOCritical',massLower=5e13,\
-        massUpper=1e15,figsize=(8,4),marker='x',linestyle='--',ax=None,\
-        color=seabornColormap[0],colorTheory = seabornColormap[1],\
-        nBins=21,poisson_interval = 0.95,legendLoc='lower left',\
-        labelLeft = 'Gadget Simulation',labelRight='ML Simulation',\
-        xlabel="Mass [$M_{\odot}h^{-1}$]",ylabel="Number of halos",\
-        ylim=[1e1,2e4],savename=None,show=True,transfer_model='EH',fname=None,\
-        returnAx = False,ns=1.0,rows=1,cols=2,titleLeft = "Gadget Simulation",\
-        titleRight = "Gadget Simulation",saveLeft=None,saveRight=None,\
-        ylimRight=None,volSimRight=None,listMode="average",massErrors=False,\
-        errorType="shaded",**kwargs):
+                           Delta=200,sigma8=0.8,fontsize=8,legendFontsize=8,
+                           font="serif",Ob0=0.049,mass_function='Tinker',
+                           delta_wrt='SOCritical',massLower=5e13,
+                           massUpper=1e15,figsize=(8,4),marker='x',
+                           linestyle='--',ax=None,color=seabornColormap[0],
+                           colorTheory = seabornColormap[1],nBins=21,
+                           poisson_interval = 0.95,legendLoc='lower left',
+                           labelLeft = 'Gadget Simulation',
+                           labelRight='ML Simulation',
+                           xlabel="Mass [$M_{\odot}h^{-1}$]",
+                           ylabel="Number of halos",ylim=[1e1,2e4],
+                           savename=None,show=True,transfer_model='EH',
+                           fname=None,returnAx = False,ns=1.0,rows=1,cols=2,
+                           titleLeft = "Gadget Simulation",
+                           titleRight = "Gadget Simulation",saveLeft=None,
+                           saveRight=None,ylimRight=None,volSimRight=None,
+                           listMode="average",massErrors=False,
+                           errorType="shaded",mass_error_left=None,
+                           mass_error_right=None,**kwargs):
     if ax is None:
         fig, ax = plt.subplots(rows,cols,figsize=(8,4))
     if volSimRight is None:
@@ -3430,7 +3445,7 @@ def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
         nBins=nBins,poisson_interval = poisson_interval,legendLoc=legendLoc,\
         label=labelLeft,transfer_model=transfer_model,ylim=ylim,\
         savename=saveLeft,listMode=listMode,massErrors=massErrors,\
-        errorType=errorType,**kwargs)
+        errorType=errorType,mass_errors=mass_error_left,**kwargs)
     plotMassFunction(massesRight,volSimRight,ax=ax[1],Om0=Om0,h=h,ns=ns,\
         Delta=Delta,sigma8=sigma8,fontsize=fontsize,\
         legendFontsize=legendFontsize,font="serif",\
@@ -3441,7 +3456,7 @@ def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
         nBins=nBins,poisson_interval = poisson_interval,legendLoc=legendLoc,\
         label=labelRight,transfer_model=transfer_model,ylim=ylimRight,\
         savename=saveRight,listMode=listMode,massErrors=massErrors,\
-        errorType=errorType,**kwargs)
+        errorType=errorType,mass_errors=mass_error_right,**kwargs)
     plt.tight_layout()
     if savename is not None:
         plt.savefig(savename)
@@ -3655,7 +3670,7 @@ def normally_distributed_bin_counts(data,data_error,bin_edges):
         pij[:,k] = err_func_upper - err_func_lower
     # Bin counts:
     bin_counts = np.sum(pij,0)
-    # Bin errors:
+    # Bin errors (Bernoulli distribution, using Gaussian errors):
     bin_errors = np.sqrt(np.sum(pij*(1.0 - pij),0))
     return [bin_counts,bin_errors]
 
