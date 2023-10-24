@@ -828,7 +828,7 @@ for k in range(0,len(dictionaries)):
     [i,j] = get_axis_indices(k,n_cols)
     axij = get_axis_handle(i,j,n_rows,n_cols,ax)
     plotConditionedProfile(rBinStackCentres,dictionaries[k],nbar,ax=axij,\
-                           intervals=[68,95],alphas=[0.75,0.5])
+                           intervals=[68],alphas=[0.0])
     plotMCMCProfile(rBinStackCentres,rhoMCMCToUse,sigmaRhoMCMCToUse,nbar,
                     ax = axij)
     axij.axvline(1.0,color='grey',linestyle=':')
