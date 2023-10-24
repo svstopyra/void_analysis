@@ -212,6 +212,17 @@ if recomputeCatalogues or (not os.path.isfile(data_folder + "cat300Rand.p")):
         additionalFilters = None,verbose=False,\
         refineCentres=refineCentres,sortBy=sortBy,\
         enforceExclusive=enforceExclusive)
+    cat300RandTest = catalogue.combinedCatalogue(
+        snapNameListRand,snapNameListRandRev,\
+        muOpt,rSearchOpt,rSphere,\
+        ahProps=ahPropsUn,hrList=hrListUn,max_index=None,\
+        twoWayOnly=True,blockDuplicates=True,\
+        massRange = [m_unit*800,mMax],\
+        NWayMatch = NWayMatch,r_min=10,r_max=30,\
+        additionalFilters = None,verbose=False,\
+        refineCentres=refineCentres,sortBy=sortBy,\
+        enforceExclusive=enforceExclusive)
+    finalCat300RandTest = cat300RandTest.constructAntihaloCatalogue()
     finalCat300Rand = cat300Rand.constructAntihaloCatalogue()
     tools.savePickle(cat300Rand,data_folder + "cat300Rand.p")
 else:
@@ -816,7 +827,8 @@ plt.show()
 #-------------------------------------------------------------------------------
 # ALL VOID PROFILES IN A 2-PANEL PLOT
 
-labels = ['No constraints','Region Density + \nVoid Central & Average Density']
+labels = ['No constraints',
+          'Region Density + \nVoid Central & \nAverage Density']
 dictionaries = [noConstraintsDict,regionAndVoidDensityConditionDict]
 n_cols = 2
 n_rows = 1
@@ -828,7 +840,7 @@ for k in range(0,len(dictionaries)):
     [i,j] = get_axis_indices(k,n_cols)
     axij = get_axis_handle(i,j,n_rows,n_cols,ax)
     plotConditionedProfile(rBinStackCentres,dictionaries[k],nbar,ax=axij,\
-                           intervals=[68],alphas=[0.0])
+                           intervals=[68],alphas=[1.0],ec='grey',color='None')
     plotMCMCProfile(rBinStackCentres,rhoMCMCToUse,sigmaRhoMCMCToUse,nbar,
                     ax = axij)
     axij.axvline(1.0,color='grey',linestyle=':')
@@ -858,6 +870,89 @@ plt.subplots_adjust(hspace=0.0,wspace=0.0,left = 0.08,right=0.98,top=0.98,
                     bottom = 0.15)
 plt.savefig(figuresFolder + "profile_constraint_progression_2panels.pdf")
 plt.show()
+
+#-------------------------------------------------------------------------------
+# CATALOGUE PERMUTATIONS
+
+
+cat300 = catalogue.combinedCatalogue(
+        snapNameList,snapNameListRev,\
+        muOpt,rSearchOpt,rSphere,\
+        ahProps=ahProps,hrList=hrList,max_index=None,\
+        twoWayOnly=True,blockDuplicates=True,\
+        massRange = [mMin,mMax],\
+        NWayMatch = NWayMatch,r_min=rMin,r_max=rMax,\
+        additionalFilters = snrFilter,verbose=False,\
+        refineCentres=refineCentres,sortBy=sortBy,\
+        enforceExclusive=enforceExclusive)
+
+# Order testing:
+permutations = []
+randomlyOrderedCats = []
+goodVoidsPerm = []
+np.random.seed(1000)
+nPerms = 10
+numVoidsPerm = np.zeros(nPerms,dtype=int)
+for k in range(0,nPerms):
+    perm = np.random.permutation(len(snapList))
+    catPerm = catalogue.combinedCatalogue(\
+        [snapNameList[k] for k in perm],\
+        [snapNameListRev[k] for k in perm],\
+        muOpt,rSearchOpt,rSphere,\
+        ahProps=[ahProps[k] for k in perm],\
+        hrList=[hrList[k] for k in perm],max_index=None,\
+        twoWayOnly=True,blockDuplicates=True,\
+        massRange = [mMin,mMax],\
+        NWayMatch = NWayMatch,r_min=rMin,r_max=rMax,\
+        additionalFilters = [snrFilter[k] for k in perm],\
+        verbose=False,\
+        refineCentres=refineCentres,sortBy=sortBy,\
+        enforceExclusive=enforceExclusive)
+    finalCatPerm = catPerm.constructAntihaloCatalogue()
+    randomlyOrderedCats.append(catPerm)
+    [radiiPerm,sigmaRadiiPerm] = catPerm.getMeanProperty("radii")
+    meanCentrePerm = catPerm.getMeanCentres()
+    distancesPerm = np.sqrt(np.sum(meanCentrePerm**2,1))
+    catPerm.set_filter_from_random_catalogue(cat300Rand,radBins,r_sphere=135,
+                                             r_min=10,r_max=25)
+    numVoidsPerm[k] = np.sum(catPerm.filter)
+    goodVoidsPerm.append(catPerm.filter)
+    permutations.append(perm)
+
+goodVoidsPerm300 = []
+radiiAllPerms = []
+for k in range(0,nPerms):
+    catPerm = randomlyOrderedCats[k]
+    [radiiPerm,sigmaRadiiPerm] = catPerm.getMeanProperty("radii")
+    meanCentrePerm = catPerm.getMeanCentres()
+    distancesPerm = np.sqrt(np.sum(meanCentrePerm**2,1))
+    thresholdsPerm = getAllThresholds(percentilesCat300,radBins,radiiPerm)
+    filterPerm = (radiiPerm > 10) & (radiiPerm <= 25) & \
+        (distancesPerm < 300) & (catPerm.finalCatFrac > thresholdsPerm)
+    goodVoidsPerm300.append(filterPerm)
+    radiiAllPerms.append(radiiPerm)
+
+massFunctionsPerm135 = [cat.getMeanProperty("mass")[0][filt] \
+    for cat, filt in zip(randomlyOrderedCats,goodVoidsPerm)]
+massFunctionsPerm300 = [cat.getMeanProperty("mass")[0][filt] \
+    for cat, filt in zip(randomlyOrderedCats,goodVoidsPerm300)]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #-------------------------------------------------------------------------------
 # MASS FUNCTIONS PLOT
@@ -953,6 +1048,8 @@ radius_bins = np.linspace(10,21,7)
 # Actual plot:
 
 mean_radii_mcmc = cat300.getMeanProperty('radii',void_filter=filter300)
+#mean_radii_mcmc = cat300test.getMeanProperty('radii',
+#                                             void_filter=cat300test.filter)
 
 plt.clf()
 fig, ax = plt.subplots(figsize=(0.45*textwidth,0.45*textwidth))
@@ -963,6 +1060,7 @@ ax.tick_params(axis='both',which='major',labelsize=fontsize)
 ax.tick_params(axis='both',which='minor',labelsize=fontsize)
 plt.subplots_adjust(left = 0.17,right=0.97,bottom = 0.15,top = 0.97)
 plt.savefig(figuresFolder + "void_size_function.pdf")
+#plt.savefig(figuresFolder + "void_size_function_test.pdf")
 plt.show()
 
 

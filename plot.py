@@ -3648,7 +3648,7 @@ def plot_void_counts_radius(sample_radii,radius_bins,lambda_cdm_samples,
                             xlabel="$r [\\mathrm{Mpc}h^{-1}$]",
                             ylabel="Number of voids",fontsize=8,
                             fontfamily="serif",savename=None,show=False,
-                            logy=True):
+                            logy=True,do_errors=False):
     # Get lambda-cdm comparin
     [lcdm_radii_counts,interval] = compute_lcdm_vsf(lambda_cdm_samples,
                                                     radius_bins,
@@ -3657,8 +3657,11 @@ def plot_void_counts_radius(sample_radii,radius_bins,lambda_cdm_samples,
     if type(sample_radii) is list:
         sample_counts = np.mean(np.array([binValues(radii,radius_bins)[1] 
                                    for radii in sample_radii]),0)
+        sample_counts_error = np.std(np.array([binValues(radii,radius_bins)[1] 
+                                   for radii in sample_radii]),0)
     else:
         sample_counts = binValues(sample_radii,radius_bins)[1]
+        sample_counts_error = np.zeros(sample_counts.shape)
     if ax is None:
         fig, ax = plt.subplots(figsize=(textwidth,0.45*textwidth))
     # Formatting choices:
@@ -3666,8 +3669,13 @@ def plot_void_counts_radius(sample_radii,radius_bins,lambda_cdm_samples,
         sample_colour = seabornColormap[0]
     # Plot lines:
     radius_bin_centres = binCentres(radius_bins)
-    ax.plot(radius_bin_centres,sample_counts,linestyle=sample_style,
-            color=sample_colour,label=label)
+    if do_errors:
+        ax.fill_between(radius_bin_centres,sample_counts-sample_counts_error,
+            sample_counts+sample_counts_error,alpha=alpha,color=sample_colour,
+            label=label)
+    else:
+        ax.plot(radius_bin_centres,sample_counts,linestyle=sample_style,
+                color=sample_colour,label=label)
     ax.plot(radius_bin_centres,lcdm_radii_counts,linestyle=lcdm_style,
             color=lcdm_colour)
     ax.fill_between(radius_bin_centres,interval[0],interval[1],
