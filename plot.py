@@ -3671,8 +3671,8 @@ def plot_void_counts_radius(sample_radii,radius_bins,lambda_cdm_samples,
     radius_bin_centres = binCentres(radius_bins)
     if do_errors:
         ax.fill_between(radius_bin_centres,sample_counts-sample_counts_error,
-            sample_counts+sample_counts_error,alpha=alpha,color=sample_colour,
-            label=label)
+                        sample_counts+sample_counts_error,alpha=alpha,
+                        color=sample_colour,label=label)
     else:
         ax.plot(radius_bin_centres,sample_counts,linestyle=sample_style,
                 color=sample_colour,label=label)
