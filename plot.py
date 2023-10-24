@@ -3638,6 +3638,27 @@ def compute_lcdm_vsf(radii_lists,radius_bins,confidence = 0.68):
     interval = scipy.stats.poisson.interval(confidence,mean_radii_counts)
     return [mean_radii_counts,interval]
 
+# Compute bin counts, using data with normally-distributed errors:
+def normally_distributed_bin_counts(data,data_error,bin_edges):
+    data_lin = np.array(data).flatten()
+    data_error_lin = np.array(data_error).flatten()
+    n_data = len(data_lin)
+    n_bins = len(bin_edges) - 1
+    # Probabilities of being in each bin:
+    pij = np.zeros((n_data,n_bins))
+    for k in range(0,n_bins):
+        # Compute the contributions of each data element to a given bin:
+        err_func_upper = scipy.stats.norm.cdf(bin_edges[k+1],loc=data_lin,
+                                              scale=data_error_lin)
+        err_func_lower = scipy.stats.norm.cdf(bin_edges[k],loc=data_lin,
+                                              scale=data_error_lin)
+        pij[:,k] = err_func_upper - err_func_lower
+    # Bin counts:
+    bin_counts = np.sum(pij,0)
+    # Bin errors:
+    bin_errors = np.sqrt(np.sum(pij*(1.0 - pij),0))
+    return [bin_counts,bin_errors]
+
 
 # Plot void counts as a function of radius:
 def plot_void_counts_radius(sample_radii,radius_bins,lambda_cdm_samples,
@@ -3648,7 +3669,7 @@ def plot_void_counts_radius(sample_radii,radius_bins,lambda_cdm_samples,
                             xlabel="$r [\\mathrm{Mpc}h^{-1}$]",
                             ylabel="Number of voids",fontsize=8,
                             fontfamily="serif",savename=None,show=False,
-                            logy=True,do_errors=False):
+                            logy=True,do_errors=False,radii_errors=None):
     # Get lambda-cdm comparin
     [lcdm_radii_counts,interval] = compute_lcdm_vsf(lambda_cdm_samples,
                                                     radius_bins,
@@ -3660,8 +3681,13 @@ def plot_void_counts_radius(sample_radii,radius_bins,lambda_cdm_samples,
         sample_counts_error = np.std(np.array([binValues(radii,radius_bins)[1] 
                                    for radii in sample_radii]),0)
     else:
-        sample_counts = binValues(sample_radii,radius_bins)[1]
-        sample_counts_error = np.zeros(sample_counts.shape)
+        if radii_errors is None:
+            sample_counts = binValues(sample_radii,radius_bins)[1]
+            sample_counts_error = np.zeros(sample_counts.shape)
+        else:
+            [sample_counts,sample_counts_error] = \
+                normally_distributed_bin_counts(sample_radii,radii_errors,
+                                                radius_bins)
     if ax is None:
         fig, ax = plt.subplots(figsize=(textwidth,0.45*textwidth))
     # Formatting choices:

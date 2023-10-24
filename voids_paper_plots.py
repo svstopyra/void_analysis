@@ -926,9 +926,11 @@ for k in range(0,nPerms):
     [radiiPerm,sigmaRadiiPerm] = catPerm.getMeanProperty("radii")
     meanCentrePerm = catPerm.getMeanCentres()
     distancesPerm = np.sqrt(np.sum(meanCentrePerm**2,1))
-    thresholdsPerm = getAllThresholds(percentilesCat300,radBins,radiiPerm)
-    filterPerm = (radiiPerm > 10) & (radiiPerm <= 25) & \
-        (distancesPerm < 300) & (catPerm.finalCatFrac > thresholdsPerm)
+    catPerm.set_filter_from_random_catalogue(cat300Rand,radBins,r_sphere=300,
+                                             r_min=10,r_max=25)
+    filterPerm = catPerm.filter
+    catPerm.set_filter_from_random_catalogue(cat300Rand,radBins,r_sphere=135,
+                                             r_min=10,r_max=25)
     goodVoidsPerm300.append(filterPerm)
     radiiAllPerms.append(radiiPerm)
 
@@ -937,8 +939,10 @@ massFunctionsPerm135 = [cat.getMeanProperty("mass")[0][filt] \
 massFunctionsPerm300 = [cat.getMeanProperty("mass")[0][filt] \
     for cat, filt in zip(randomlyOrderedCats,goodVoidsPerm300)]
 
-
-
+vsfPerm135 = [cat.getMeanProperty("radii")[0][filt] \
+    for cat, filt in zip(randomlyOrderedCats,goodVoidsPerm)]
+vsfPerm300 = [cat.getMeanProperty("radii")[0][filt] \
+    for cat, filt in zip(randomlyOrderedCats,goodVoidsPerm300)]
 
 
 
@@ -990,12 +994,15 @@ def bootstrap_mass_function(masses,n_boot = 1000,seed=2000):
             np.random.choice(masses,size=(n_data),replace=True))
     return mass_function_samples
 
-
+# Just using a single line (no error bar):
 #mass_samples_left = massMean300[leftFilter]
 #mass_samples_right = massMean300[rightFilter]
-mass_samples_left = bootstrap_mass_function(massMean300[leftFilter])
-mass_samples_right = bootstrap_mass_function(massMean300[rightFilter])
-
+# Using bootstrap errors:
+#mass_samples_left = bootstrap_mass_function(massMean300[leftFilter])
+#mass_samples_right = bootstrap_mass_function(massMean300[rightFilter])
+# Using permuted masses as errors:
+mass_samples_left = massFunctionsPerm135
+mass_samples_right = massFunctionsPerm300
 
 
 plt.clf()
@@ -1041,20 +1048,20 @@ rightFilter = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
     (distances300 < 300) & (cat300.finalCatFrac > thresholds300)
 
 
-radius_bins = np.linspace(10,21,7)
+radius_bins = np.linspace(10,21,6)
 
 
 
 # Actual plot:
-
-mean_radii_mcmc = cat300.getMeanProperty('radii',void_filter=filter300)
+#mean_radii_mcmc = cat300.getMeanProperty('radii',void_filter=filter300)
 #mean_radii_mcmc = cat300test.getMeanProperty('radii',
 #                                             void_filter=cat300test.filter)
+mean_radii_mcmc = vsfPerm135
 
 plt.clf()
 fig, ax = plt.subplots(figsize=(0.45*textwidth,0.45*textwidth))
 plot_void_counts_radius(mean_radii_mcmc[0],radius_bins,
-                        noConstraintsDict['radii'],ax=ax)
+                        noConstraintsDict['radii'],ax=ax,do_errors=True)
 
 ax.tick_params(axis='both',which='major',labelsize=fontsize)
 ax.tick_params(axis='both',which='minor',labelsize=fontsize)
