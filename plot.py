@@ -3329,19 +3329,19 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,
                 noInBinsList.append(noInBins)
                 sigmaBinsList.append(sigmaBins)
     else:
-        if error_type == "standard":
-            noInBins = plot_utilities.binValues(masses,massBins)[1]
-            sigmaBins = np.abs(np.array([scipy.stats.chi2.ppf(\
-                alphaO2,2*noInBins)/2,\
-                scipy.stats.chi2.ppf(1.0 - alphaO2,2*(noInBins+1))/2]) - \
-                noInBins)
-        elif error_type == "bernoulli":
+        if error_type == "bernoulli":
             if mass_errors is None:
                 noInBins = plot_utilities.binValues(masses,massBins)[1]
                 sigmaBins = np.zeros(noInBins.shape)
             else:
                 [noInBins,sigmaBins] = normally_distributed_bin_counts(
                     masses,mass_errors,massBins)
+        else error_type == "standard":
+            noInBins = plot_utilities.binValues(masses,massBins)[1]
+            sigmaBins = np.abs(np.array([scipy.stats.chi2.ppf(\
+                alphaO2,2*noInBins)/2,\
+                scipy.stats.chi2.ppf(1.0 - alphaO2,2*(noInBins+1))/2]) - \
+                noInBins)
         noInBinsList = [noInBins]
         sigmaBinsList = [sigmaBins]
     if ax is None:

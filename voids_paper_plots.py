@@ -1026,19 +1026,21 @@ if doCat:
     # Check mass functions:
     volSphere135 = 4*np.pi*rSphereInner**3/3
     volSphere = 4*np.pi*rSphere**3/3
-    plot.massFunctionComparison(mass_samples_left,\
-        mass_samples_right,4*np.pi*135**3/3,nBins=nBins,\
-        labelLeft = "Combined catalogue \n(well-constrained voids only)",\
-        labelRight  ="Combined catalogue \n(well-constrained voids only)",\
-        ylabel="Number of antihalos",savename=figuresFolder + \
-        "mass_function_combined_300vs135_test.pdf",massLower=mLower,\
-        ylim=[1,1000],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,\
-        fontsize=8,massUpper = mUpper,\
-        titleLeft = "Combined catalogue, $<135\\mathrm{Mpc}h^{-1}$",\
-        titleRight = "Combined catalogue, $<300\\mathrm{Mpc}h^{-1}$",\
-        volSimRight = 4*np.pi*300**3/3,ylimRight=[1,1000],\
+    plot.massFunctionComparison(mass_samples_left,
+        mass_samples_right,4*np.pi*135**3/3,nBins=nBins,
+        labelLeft = "Combined catalogue ($68\%$)" 
+        + " \n(well-constrained voids only)",
+        labelRight  ="Combined catalogue ($68\%$) " 
+        + "\n(well-constrained voids only)",
+        ylabel="Number of antihalos",savename=figuresFolder + 
+        "mass_function_combined_300vs135_test.pdf",massLower=mLower,
+        ylim=[1,1000],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,
+        fontsize=8,massUpper = mUpper,
+        titleLeft = "Combined catalogue, $<135\\mathrm{Mpc}h^{-1}$",
+        titleRight = "Combined catalogue, $<300\\mathrm{Mpc}h^{-1}$",
+        volSimRight = 4*np.pi*300**3/3,ylimRight=[1,1000],
         legendLoc="upper right",errorType="shaded",massErrors=True,
-        error_type="interval",hmf_interval=95,
+        error_type="bernoulli",hmf_interval=95,
         mass_error_left = mass_error_left,mass_error_right=mass_error_right)
 
 
