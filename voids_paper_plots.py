@@ -1062,6 +1062,7 @@ radius_bins = np.linspace(10,21,6)
 
 # Actual plot:
 mean_radii_mcmc = cat300.getMeanProperty('radii',void_filter=filter300)
+all_radii_mcmc = cat300.getAllProperties('radii',void_filter=filter300)
 #mean_radii_mcmc = cat300test.getMeanProperty('radii',
 #                                             void_filter=cat300test.filter)
 #mean_radii_mcmc = vsfPerm135
@@ -1070,7 +1071,7 @@ plt.clf()
 fig, ax = plt.subplots(figsize=(0.45*textwidth,0.45*textwidth))
 plot_void_counts_radius(mean_radii_mcmc[0],radius_bins,
                         noConstraintsDict['radii'],ax=ax,do_errors=True,
-                        radii_errors = mean_radii_mcmc[1],
+                        radii_errors = all_radii_mcmc,
                         label="MCMC catalogue ($68\%$)",
                         lcdm_label="$\\Lambda$-CDM ($95\%$)",
                         weight_model="bin_fractions")

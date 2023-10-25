@@ -3683,7 +3683,7 @@ def weighted_bin_counts(data,data_error,bin_edges,weight_model="Gaussian"):
         if type(data_error) == np.ndarray:
             if len(data_error.shape) != 2:
                 raise Exception("data_error format is not valid.")
-            if len(data_error.shape[0]) != n_data:
+            if data_error.shape[0] != n_data:
                 raise Exception("data_error has wrong number of entries")
             error_list = [np.isfinite(data_error[k,:]) 
                           for k in range(0,n_data)]
