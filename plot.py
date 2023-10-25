@@ -3672,7 +3672,7 @@ def weighted_bin_counts(data,data_error,bin_edges,weight_model="Gaussian"):
             if len(data_error) != n_data:
                 raise Exception("data_error has wrong number of entries")
             error_list = data_error
-        if type(data_error) == np.ndarray:
+        elif type(data_error) == np.ndarray:
             if len(data_error.shape) != 2:
                 raise Exception("data_error format is not valid.")
             if data_error.shape[0] != n_data:
@@ -3683,13 +3683,12 @@ def weighted_bin_counts(data,data_error,bin_edges,weight_model="Gaussian"):
             raise Exception("data_error type is not implemented.")
     else:
         raise Exception("weight_model is not implemented.")
-    n_data = len(data_lin)
     n_bins = len(bin_edges) - 1
     # Probabilities of being in each bin:
     pij = np.zeros((n_data,n_bins))
-    for k in range(0,n_data):
-        # Compute the contributions of each data element to a given bin:
-        if weight_model == "Gaussian":
+    if weight_model == "Gaussian":
+        for k in range(0,n_bins):
+            # Compute the contributions of each data element to a given bin:
             # Probability that a sample drawn from a Gaussian with this mean
             # and standard deviation lies in a given bin:
             err_func_upper = scipy.stats.norm.cdf(bin_edges[k+1],loc=data_lin,
@@ -3697,11 +3696,12 @@ def weighted_bin_counts(data,data_error,bin_edges,weight_model="Gaussian"):
             err_func_lower = scipy.stats.norm.cdf(bin_edges[k],loc=data_lin,
                                                   scale=data_error_lin)
             pij[:,k] = err_func_upper - err_func_lower
-        elif weight_model == "bin_fractions":
+    elif weight_model == "bin_fractions":
+        for k in range(0,n_data):
             # Probability for each bin is just given by the fraction of voids
             # which fall into each bin:
             [_,no_in_bins] = binValues(error_list[k],bin_edges)
-            n_tot = np.sum(no_in_bins)
+            n_tot = len(error_list[k])
             if n_tot > 0:
                 #pij[k,:] = no_in_bins/n_tot
                 pij[k,:] = np.array(no_in_bins,dtype=float)/float(n_tot)
