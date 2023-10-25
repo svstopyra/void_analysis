@@ -3708,7 +3708,7 @@ def weighted_bin_counts(data,data_error,bin_edges,weight_model="Gaussian"):
         elif weight_model == "bin_fractions":
             # Probability for each bin is just given by the fraction of voids
             # which fall into each bin:
-            [no_in_bins,_] = binValues(error_list[k],bin_edges)
+            [_,no_in_bins] = binValues(error_list[k],bin_edges)
             n_tot = np.sum(no_in_bins)
             if n_tot > 0:
                 pij[:,k] = no_in_bins/n_tot
