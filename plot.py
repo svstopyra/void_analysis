@@ -3685,7 +3685,7 @@ def weighted_bin_counts(data,data_error,bin_edges,weight_model="Gaussian"):
                 raise Exception("data_error format is not valid.")
             if data_error.shape[0] != n_data:
                 raise Exception("data_error has wrong number of entries")
-            error_list = [np.isfinite(data_error[k,:]) 
+            error_list = [data_error[k,np.isfinite(data_error[k,:])] 
                           for k in range(0,n_data)]
         else:
             raise Exception("data_error type is not implemented.")
