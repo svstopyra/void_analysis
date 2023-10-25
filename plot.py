@@ -3299,7 +3299,8 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,
         tickRight=False,tickLeft=True,savename=None,
         linking_length=0.2,showTheory=True,returnHandles=False,
         massErrors=False,listMode="average",errorType="bar",
-        error_type="standard",hmf_interval=68,mass_errors=None):
+        error_type="standard",hmf_interval=68,mass_errors=None,
+        all_masses=None,weight_model="Gaussian"):
     [dndm,m] = cosmology.TMF_from_hmf(massLower,massUpper,\
         h=h,Om0=Om0,Delta=Delta,delta_wrt=delta_wrt,\
         mass_function=mass_function,sigma8=sigma8,Ob0 = Ob0,\
@@ -3330,13 +3331,22 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,
                 sigmaBinsList.append(sigmaBins)
     else:
         if error_type == "bernoulli":
-            if mass_errors is None:
-                noInBins = plot_utilities.binValues(masses,massBins)[1]
-                sigmaBins = np.zeros(noInBins.shape)
-            else:
-                [noInBins,sigmaBins] = normally_distributed_bin_counts(
-                    masses,mass_errors,massBins)
-        else error_type == "standard":
+            if weight_model == "Gaussian":
+                if mass_errors is None:
+                    noInBins = plot_utilities.binValues(masses,massBins)[1]
+                    sigmaBins = np.zeros(noInBins.shape)
+                else:
+                    [noInBins,sigmaBins] = weighted_bin_counts(
+                        masses,mass_errors,massBins,
+                        weight_model = weight_model)
+            elif weight_model == "bin_fractions":
+                if all_masses is None:
+                    raise Exception("Must provide all_masses to use bin " \
+                        + "fraction weight model.")
+                [noInBins,sigmaBins] = weighted_bin_counts(
+                        masses,all_masses,massBins,
+                        weight_model=weight_model)
+        else:
             noInBins = plot_utilities.binValues(masses,massBins)[1]
             sigmaBins = np.abs(np.array([scipy.stats.chi2.ppf(\
                 alphaO2,2*noInBins)/2,\
@@ -3654,20 +3664,54 @@ def compute_lcdm_vsf(radii_lists,radius_bins,confidence = 0.68):
     return [mean_radii_counts,interval]
 
 # Compute bin counts, using data with normally-distributed errors:
-def normally_distributed_bin_counts(data,data_error,bin_edges):
+def weighted_bin_counts(data,data_error,bin_edges,weight_model="Gaussian"):
     data_lin = np.array(data).flatten()
-    data_error_lin = np.array(data_error).flatten()
+    n_data = len(data_lin)
+    if weight_model == "Gaussian":
+        # Assume that data_error is a list of standard deviations for each
+        # data element:
+        data_error_lin = np.array(data_error).flatten()
+        if len(data_error_lin) != n_data:
+            raise Exception("Length of data must match length of data errors.")
+    elif weight_model == "bin_fractions":
+        # Assume that data_error is a list of data for each data point. 
+        # First, process the list to check that it is valid:
+        if type(data_error) == list:
+            if len(data_error) != n_data:
+                raise Exception("data_error has wrong number of entries")
+            error_list = data_error
+        if type(data_error) == np.ndarray:
+            if len(data_error.shape) != 2:
+                raise Exception("data_error format is not valid.")
+            if len(data_error.shape[0]) != n_data:
+                raise Exception("data_error has wrong number of entries")
+            error_list = [np.isfinite(data_error[k,:]) 
+                          for k in range(0,n_data)]
+        else:
+            raise Exception("data_error type is not implemented.")
+    else:
+        raise Exception("weight_model is not implemented.")
     n_data = len(data_lin)
     n_bins = len(bin_edges) - 1
     # Probabilities of being in each bin:
     pij = np.zeros((n_data,n_bins))
     for k in range(0,n_bins):
         # Compute the contributions of each data element to a given bin:
-        err_func_upper = scipy.stats.norm.cdf(bin_edges[k+1],loc=data_lin,
-                                              scale=data_error_lin)
-        err_func_lower = scipy.stats.norm.cdf(bin_edges[k],loc=data_lin,
-                                              scale=data_error_lin)
-        pij[:,k] = err_func_upper - err_func_lower
+        if weight_model == "Gaussian":
+            # Probability that a sample drawn from a Gaussian with this mean
+            # and standard deviation lies in a given bin:
+            err_func_upper = scipy.stats.norm.cdf(bin_edges[k+1],loc=data_lin,
+                                                  scale=data_error_lin)
+            err_func_lower = scipy.stats.norm.cdf(bin_edges[k],loc=data_lin,
+                                                  scale=data_error_lin)
+            pij[:,k] = err_func_upper - err_func_lower
+        elif weight_model == "bin_fractions":
+            # Probability for each bin is just given by the fraction of voids
+            # which fall into each bin:
+            [no_in_bins,_] = binValues(error_list[k],bin_edges)
+            n_tot = np.sum(no_in_bins)
+            if n_tot > 0:
+                pij[:,k] = no_in_bins/n_tot
     # Bin counts:
     bin_counts = np.sum(pij,0)
     # Bin errors (Bernoulli distribution, using Gaussian errors):
@@ -3684,7 +3728,8 @@ def plot_void_counts_radius(sample_radii,radius_bins,lambda_cdm_samples,
                             xlabel="$r [\\mathrm{Mpc}h^{-1}$]",
                             ylabel="Number of voids",fontsize=8,
                             fontfamily="serif",savename=None,show=False,
-                            logy=True,do_errors=False,radii_errors=None):
+                            logy=True,do_errors=False,radii_errors=None,
+                            weight_model="Gaussian"):
     # Get lambda-cdm comparin
     [lcdm_radii_counts,interval] = compute_lcdm_vsf(lambda_cdm_samples,
                                                     radius_bins,
@@ -3701,8 +3746,8 @@ def plot_void_counts_radius(sample_radii,radius_bins,lambda_cdm_samples,
             sample_counts_error = np.zeros(sample_counts.shape)
         else:
             [sample_counts,sample_counts_error] = \
-                normally_distributed_bin_counts(sample_radii,radii_errors,
-                                                radius_bins)
+                weighted_bin_counts(sample_radii,radii_errors,radius_bins
+                                    weight_model=weight_model)
     if ax is None:
         fig, ax = plt.subplots(figsize=(textwidth,0.45*textwidth))
     # Formatting choices:
