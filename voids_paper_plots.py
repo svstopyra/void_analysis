@@ -999,8 +999,8 @@ mass_left = cat300.getMeanProperty("mass",void_filter=leftFilter)
 mass_right = cat300.getMeanProperty("mass",void_filter=rightFilter)
 mass_samples_left = mass_left[0]
 mass_samples_right = mass_right[0]
-mass_error_left = mass_left[1]
-mass_error_right = mass_right[1]
+mass_error_left = cat300.getAllProperties('mass',void_filter=leftFilter)
+mass_error_right = cat300.getAllProperties('mass',void_filter=rightFilter)
 # Using bootstrap errors:
 #mass_samples_left = bootstrap_mass_function(massMean300[leftFilter])
 #mass_samples_right = bootstrap_mass_function(massMean300[rightFilter])
@@ -1040,7 +1040,7 @@ if doCat:
         titleRight = "Combined catalogue, $<300\\mathrm{Mpc}h^{-1}$",
         volSimRight = 4*np.pi*300**3/3,ylimRight=[1,1000],
         legendLoc="upper right",errorType="shaded",massErrors=True,
-        error_type="bernoulli",hmf_interval=95,
+        error_type="bernoulli",hmf_interval=95,weight_model="bin_fractions",
         mass_error_left = mass_error_left,mass_error_right=mass_error_right)
 
 
@@ -1056,7 +1056,7 @@ rightFilter = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
     (distances300 < 300) & (cat300.finalCatFrac > thresholds300)
 
 
-radius_bins = np.linspace(10,21,6)
+radius_bins = np.linspace(10,21,7)
 
 
 

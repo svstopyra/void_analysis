@@ -3331,21 +3331,13 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,
                 sigmaBinsList.append(sigmaBins)
     else:
         if error_type == "bernoulli":
-            if weight_model == "Gaussian":
-                if mass_errors is None:
-                    noInBins = plot_utilities.binValues(masses,massBins)[1]
-                    sigmaBins = np.zeros(noInBins.shape)
-                else:
-                    [noInBins,sigmaBins] = weighted_bin_counts(
-                        masses,mass_errors,massBins,
-                        weight_model = weight_model)
-            elif weight_model == "bin_fractions":
-                if all_masses is None:
-                    raise Exception("Must provide all_masses to use bin " \
-                        + "fraction weight model.")
+            if mass_errors is None:
+                noInBins = plot_utilities.binValues(masses,massBins)[1]
+                sigmaBins = np.zeros(noInBins.shape)
+            else:
                 [noInBins,sigmaBins] = weighted_bin_counts(
-                        masses,all_masses,massBins,
-                        weight_model=weight_model)
+                    masses,mass_errors,massBins,
+                    weight_model = weight_model)
         else:
             noInBins = plot_utilities.binValues(masses,massBins)[1]
             sigmaBins = np.abs(np.array([scipy.stats.chi2.ppf(\
