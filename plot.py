@@ -3695,7 +3695,7 @@ def weighted_bin_counts(data,data_error,bin_edges,weight_model="Gaussian"):
     n_bins = len(bin_edges) - 1
     # Probabilities of being in each bin:
     pij = np.zeros((n_data,n_bins))
-    for k in range(0,n_bins):
+    for k in range(0,n_data):
         # Compute the contributions of each data element to a given bin:
         if weight_model == "Gaussian":
             # Probability that a sample drawn from a Gaussian with this mean
@@ -3711,7 +3711,8 @@ def weighted_bin_counts(data,data_error,bin_edges,weight_model="Gaussian"):
             [_,no_in_bins] = binValues(error_list[k],bin_edges)
             n_tot = np.sum(no_in_bins)
             if n_tot > 0:
-                pij[k,:] = no_in_bins/n_tot
+                #pij[k,:] = no_in_bins/n_tot
+                pij[k,:] = np.array(no_in_bins,dtype=float)/float(n_tot)
     # Bin counts:
     bin_counts = np.sum(pij,0)
     # Bin errors (Bernoulli distribution, using Gaussian errors):
