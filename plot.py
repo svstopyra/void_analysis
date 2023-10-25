@@ -3746,7 +3746,7 @@ def plot_void_counts_radius(sample_radii,radius_bins,lambda_cdm_samples,
             sample_counts_error = np.zeros(sample_counts.shape)
         else:
             [sample_counts,sample_counts_error] = \
-                weighted_bin_counts(sample_radii,radii_errors,radius_bins
+                weighted_bin_counts(sample_radii,radii_errors,radius_bins,
                                     weight_model=weight_model)
     if ax is None:
         fig, ax = plt.subplots(figsize=(textwidth,0.45*textwidth))
