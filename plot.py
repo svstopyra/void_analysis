@@ -3301,7 +3301,7 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,
         linking_length=0.2,showTheory=True,returnHandles=False,
         massErrors=False,listMode="average",errorType="bar",
         error_type="standard",hmf_interval=68,mass_errors=None,
-        all_masses=None,weight_model="Gaussian"):
+        all_masses=None,weight_model="Gaussian",error_interval=68):
     [dndm,m] = cosmology.TMF_from_hmf(massLower,massUpper,\
         h=h,Om0=Om0,Delta=Delta,delta_wrt=delta_wrt,\
         mass_function=mass_function,sigma8=sigma8,Ob0 = Ob0,\
@@ -3338,7 +3338,7 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,
             else:
                 [noInBins,sigmaBins] = weighted_bin_counts(
                     masses,mass_errors,massBins,
-                    weight_model = weight_model,interval=hmf_interval)
+                    weight_model = weight_model,interval=error_interval)
         else:
             noInBins = plot_utilities.binValues(masses,massBins)[1]
             sigmaBins = np.abs(np.array([scipy.stats.chi2.ppf(\
