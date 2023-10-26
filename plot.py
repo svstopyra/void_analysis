@@ -3657,7 +3657,7 @@ def compute_lcdm_vsf(radii_lists,radius_bins,confidence = 0.68):
     return [mean_radii_counts,interval]
 
 # Compute the weights in each bin for data with errors:
-def get_weights_for_bins(data_lin,error_list,weight_model="Gaussian",
+def get_weights_for_bins(data_lin,error_list,bin_edges,weight_model="Gaussian",
                          seed=1000,n_boot=10000):
     n_bins = len(bin_edges) - 1
     n_data = len(data_lin)
@@ -3734,8 +3734,9 @@ def weighted_bin_counts(data,data_error,bin_edges,weight_model="Gaussian",
                                     weight_model=weight_model)
     n_bins = len(bin_edges) - 1
     # Probabilities of being in each bin:
-    pij = get_weights_for_bins(data_lin,error_list,weight_model=weight_model,
-                               seed=seed,n_boot=n_boot)
+    pij = get_weights_for_bins(data_lin,error_list,bin_edges,
+                               weight_model=weight_model,seed=seed,
+                               n_boot=n_boot)
     # Bin counts:
     bin_counts = np.sum(pij,0)
     # Bin errors (Bernoulli distribution, using Gaussian errors):
