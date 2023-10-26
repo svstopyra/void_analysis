@@ -3370,8 +3370,14 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,
                         label=lab,color=color,\
                         alpha=0.5))
                 else:
+                    if len(sigmaBins.shape) == 1:
+                        error_low = sigmaBins
+                        error_high = sigmaBins
+                    else:
+                        error_low = sigmaBins[0]
+                        error_high = sigmaBins[1]
                     handles.append(ax.fill_between(massBinCentres,\
-                        noInBins - sigmaBins,noInBins + sigmaBins,\
+                        noInBins - error_low,noInBins + error_high,\
                         label=lab,color=color,\
                         alpha=0.5))
             else:
@@ -3751,7 +3757,9 @@ def weighted_bin_counts(data,data_error,bin_edges,weight_model="Gaussian",
             realisation = np.random.random(size=pij.shape)
             success = np.array(realisation <= pij,dtype=int)
             samples[k,:] = np.sum(success,0)
-        bin_errors = np.percentile(samples,ranges,axis=0)
+        bin_ranges = np.percentile(samples,ranges,axis=0)
+        bin_errors = np.vstack([bin_counts - bin_ranges[0],
+                                bin_ranges[1] - bin_counts])
     else:
         raise Exception("interval argument type not recognised.")
     return [bin_counts,bin_errors]
@@ -3795,8 +3803,14 @@ def plot_void_counts_radius(sample_radii,radius_bins,lambda_cdm_samples,
     # Plot lines:
     radius_bin_centres = binCentres(radius_bins)
     if do_errors:
-        ax.fill_between(radius_bin_centres,sample_counts-sample_counts_error,
-                        sample_counts+sample_counts_error,alpha=alpha,
+        if len(sample_counts_error.shape) == 1:
+            error_low = sample_counts_error
+            error_high = sample_counts_error
+        else:
+            error_low = sample_counts_error[0]
+            error_high = sample_counts_error[1]
+        ax.fill_between(radius_bin_centres,sample_counts-error_low,
+                        sample_counts+error_high,alpha=alpha,
                         color=sample_colour,label=label)
     else:
         ax.plot(radius_bin_centres,sample_counts,linestyle=sample_style,

@@ -1074,7 +1074,7 @@ plot_void_counts_radius(mean_radii_mcmc[0],radius_bins,
                         radii_errors = all_radii_mcmc,
                         label="MCMC catalogue ($68\%$)",
                         lcdm_label="$\\Lambda$-CDM ($95\%$)",
-                        weight_model="bootstrap")
+                        weight_model="bootstrap",mcmc_interval=68)
 
 ax.tick_params(axis='both',which='major',labelsize=fontsize)
 ax.tick_params(axis='both',which='minor',labelsize=fontsize)
