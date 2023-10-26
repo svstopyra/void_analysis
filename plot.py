@@ -3338,7 +3338,7 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,
             else:
                 [noInBins,sigmaBins] = weighted_bin_counts(
                     masses,mass_errors,massBins,
-                    weight_model = weight_model)
+                    weight_model = weight_model,interval=hmf_interval)
         else:
             noInBins = plot_utilities.binValues(masses,massBins)[1]
             sigmaBins = np.abs(np.array([scipy.stats.chi2.ppf(\
@@ -3767,7 +3767,7 @@ def plot_void_counts_radius(sample_radii,radius_bins,lambda_cdm_samples,
                             ylabel="Number of voids",fontsize=8,
                             fontfamily="serif",savename=None,show=False,
                             logy=True,do_errors=False,radii_errors=None,
-                            weight_model="Gaussian"):
+                            weight_model="Gaussian",mcmc_interval="variance"):
     # Get lambda-cdm comparin
     [lcdm_radii_counts,interval] = compute_lcdm_vsf(lambda_cdm_samples,
                                                     radius_bins,
@@ -3785,7 +3785,8 @@ def plot_void_counts_radius(sample_radii,radius_bins,lambda_cdm_samples,
         else:
             [sample_counts,sample_counts_error] = \
                 weighted_bin_counts(sample_radii,radii_errors,radius_bins,
-                                    weight_model=weight_model)
+                                    weight_model=weight_model,
+                                    interval=mcmc_interval)
     if ax is None:
         fig, ax = plt.subplots(figsize=(textwidth,0.45*textwidth))
     # Formatting choices:
