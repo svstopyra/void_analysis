@@ -1061,8 +1061,8 @@ radius_bins = np.linspace(10,21,7)
 
 
 # Actual plot:
-mean_radii_mcmc = cat300.getMeanProperty('radii',void_filter=filter300)
-all_radii_mcmc = cat300.getAllProperties('radii',void_filter=filter300)
+mean_radii_mcmc = cat300.getMeanProperty('radii',void_filter=leftFilter)
+all_radii_mcmc = cat300.getAllProperties('radii',void_filter=leftFilter)
 #mean_radii_mcmc = cat300test.getMeanProperty('radii',
 #                                             void_filter=cat300test.filter)
 #mean_radii_mcmc = vsfPerm135
@@ -1082,6 +1082,61 @@ plt.subplots_adjust(left = 0.17,right=0.97,bottom = 0.15,top = 0.97)
 plt.savefig(figuresFolder + "void_size_function.pdf")
 #plt.savefig(figuresFolder + "void_size_function_test.pdf")
 plt.show()
+
+
+# Histogram bootstrap samples to check the distribution of the mean:
+import seaborn
+def plot_bootstrap_mean_distribution(data,savename,seed=1000,n_boot=10000,
+                                     n_bins = 21,alpha=0.5,color=None,
+                                     xlabel = "Mean radius " 
+                                     + "[$\\mathrm{Mpc}h^{-1}$]",
+                                     ylabel="Probability Density",
+                                     title="Bootstrap mean distribution.",
+                                     plot_type="histogram",textwidth=7.1014,
+                                     fontsize=8):
+    # Clean data:
+    np.random.seed(seed)
+    data_to_use = data[np.isfinite(data)]
+    samples = np.random.choice(data_to_use,
+                               size=(len(data_to_use),n_boot),replace=True)
+    means = np.mean(samples,0)
+    mean_std = np.std(means)
+    mean_mean = np.mean(means)
+    bins = np.linspace(np.min(means),np.max(means),n_bins)
+    if color is None:
+        color = seabornColormap[0]
+    plt.clf()
+    fig, ax = plt.subplots(figsize=(0.5*textwidth,0.5*textwidth))
+    if plot_type == "histogram":
+        hist = plt.hist(means,bins=bins,color=color,alpha=alpha,density=True,
+            label='Histogram of means')
+    elif plot_type == "kde":
+        seaborn.kdeplot(data=means,color=color,alpha=alpha,
+                        label='KDE of means')
+    x = plot.binCentres(bins)
+    gaussian = np.exp(-(x - mean_mean)**2/(2*mean_std**2))/\
+        np.sqrt(2*np.pi*mean_std**2)
+    plt.plot(x,gaussian,linestyle=':',color='k',
+             label='Gaussian \napproximation')
+    plt.xlabel(xlabel,fontsize=fontsize)
+    plt.ylabel(ylabel,fontsize=fontsize)
+    plt.title(title,fontsize=fontsize)
+    plt.legend(prop={"size":fontsize,"family":"serif"},frameon=False)
+    plt.tight_layout()
+    plt.savefig(savename)
+    plt.show()
+
+
+
+plot_bootstrap_mean_distribution(all_radii_mcmc[0],
+                                 figuresFolder + "mean_test_radius.pdf",
+                                 n_bins=31,plot_type="kde")
+
+
+plot_bootstrap_mean_distribution(mass_error_left[0],
+                                 figuresFolder + "mean_test_mass.pdf",
+                                 xlabel="Mass [$M_{\\odot}h^{-1}$]",n_bins=31,
+                                 plot_type="kde")
 
 
 #-------------------------------------------------------------------------------

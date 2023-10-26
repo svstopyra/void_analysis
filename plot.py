@@ -3656,7 +3656,8 @@ def compute_lcdm_vsf(radii_lists,radius_bins,confidence = 0.68):
     return [mean_radii_counts,interval]
 
 # Compute bin counts, using data with normally-distributed errors:
-def weighted_bin_counts(data,data_error,bin_edges,weight_model="Gaussian"):
+def weighted_bin_counts(data,data_error,bin_edges,weight_model="Gaussian",
+                        seed=1000,n_boot=10000):
     data_lin = np.array(data).flatten()
     n_data = len(data_lin)
     if weight_model == "Gaussian":
@@ -3665,7 +3666,7 @@ def weighted_bin_counts(data,data_error,bin_edges,weight_model="Gaussian"):
         data_error_lin = np.array(data_error).flatten()
         if len(data_error_lin) != n_data:
             raise Exception("Length of data must match length of data errors.")
-    elif weight_model == "bin_fractions":
+    elif (weight_model == "bin_fractions") or (weight_model == "bootstrap"):
         # Assume that data_error is a list of data for each data point. 
         # First, process the list to check that it is valid:
         if type(data_error) == list:
@@ -3705,6 +3706,18 @@ def weighted_bin_counts(data,data_error,bin_edges,weight_model="Gaussian"):
             if n_tot > 0:
                 #pij[k,:] = no_in_bins/n_tot
                 pij[k,:] = np.array(no_in_bins,dtype=float)/float(n_tot)
+    elif weight_model == "bootstrap":
+        np.random.seed(seed)
+        for k in range(0,n_data):
+            # Same as bins, but estimate fraction of means:
+            n_tot = len(error_list[k])
+            bootstrap_samples = np.random.choice(error_list[k],
+                                                 size=(n_boot,n_tot),
+                                                 replace=True)
+            bootstrap_means = np.mean(bootstrap_samples,1)
+            [_,no_in_bins] = binValues(bootstrap_means,bin_edges)
+            if n_tot > 0:
+                pij[k,:] = np.array(no_in_bins,dtype=float)/float(n_boot)
     # Bin counts:
     bin_counts = np.sum(pij,0)
     # Bin errors (Bernoulli distribution, using Gaussian errors):
