@@ -27,6 +27,7 @@ import seaborn as sns
 from matplotlib.ticker import NullFormatter
 import matplotlib
 from PIL import Image
+import numbers
 # Use seaborn colours:
 seabornColormap = sns.color_palette("colorblind",as_cmap=True)
 
@@ -3655,36 +3656,11 @@ def compute_lcdm_vsf(radii_lists,radius_bins,confidence = 0.68):
     interval = scipy.stats.poisson.interval(confidence,mean_radii_counts)
     return [mean_radii_counts,interval]
 
-# Compute bin counts, using data with normally-distributed errors:
-def weighted_bin_counts(data,data_error,bin_edges,weight_model="Gaussian",
-                        seed=1000,n_boot=10000):
-    data_lin = np.array(data).flatten()
-    n_data = len(data_lin)
-    if weight_model == "Gaussian":
-        # Assume that data_error is a list of standard deviations for each
-        # data element:
-        data_error_lin = np.array(data_error).flatten()
-        if len(data_error_lin) != n_data:
-            raise Exception("Length of data must match length of data errors.")
-    elif (weight_model == "bin_fractions") or (weight_model == "bootstrap"):
-        # Assume that data_error is a list of data for each data point. 
-        # First, process the list to check that it is valid:
-        if type(data_error) == list:
-            if len(data_error) != n_data:
-                raise Exception("data_error has wrong number of entries")
-            error_list = data_error
-        elif type(data_error) == np.ndarray:
-            if len(data_error.shape) != 2:
-                raise Exception("data_error format is not valid.")
-            if data_error.shape[0] != n_data:
-                raise Exception("data_error has wrong number of entries")
-            error_list = [data_error[k,np.isfinite(data_error[k,:])] 
-                          for k in range(0,n_data)]
-        else:
-            raise Exception("data_error type is not implemented.")
-    else:
-        raise Exception("weight_model is not implemented.")
+# Compute the weights in each bin for data with errors:
+def get_weights_for_bins(data_lin,error_list,weight_model="Gaussian",
+                         seed=1000,n_boot=10000):
     n_bins = len(bin_edges) - 1
+    n_data = len(data_lin)
     # Probabilities of being in each bin:
     pij = np.zeros((n_data,n_bins))
     if weight_model == "Gaussian":
@@ -3693,9 +3669,9 @@ def weighted_bin_counts(data,data_error,bin_edges,weight_model="Gaussian",
             # Probability that a sample drawn from a Gaussian with this mean
             # and standard deviation lies in a given bin:
             err_func_upper = scipy.stats.norm.cdf(bin_edges[k+1],loc=data_lin,
-                                                  scale=data_error_lin)
+                                                  scale=error_list)
             err_func_lower = scipy.stats.norm.cdf(bin_edges[k],loc=data_lin,
-                                                  scale=data_error_lin)
+                                                  scale=error_list)
             pij[:,k] = err_func_upper - err_func_lower
     elif weight_model == "bin_fractions":
         for k in range(0,n_data):
@@ -3718,10 +3694,65 @@ def weighted_bin_counts(data,data_error,bin_edges,weight_model="Gaussian",
             [_,no_in_bins] = binValues(bootstrap_means,bin_edges)
             if n_tot > 0:
                 pij[k,:] = np.array(no_in_bins,dtype=float)/float(n_boot)
+    return pij
+
+# Process an error list to check it is valid and prepare it for
+# computing weights in each bin:
+def process_error_list(data_error,n_data,weight_model="Gaussian"):
+    if weight_model == "Gaussian":
+        # Assume that data_error is a list of standard deviations for each
+        # data element:
+        error_list = np.array(data_error).flatten()
+        if len(error_list) != n_data:
+            raise Exception("Length of data must match length of data errors.")
+    elif (weight_model == "bin_fractions") or (weight_model == "bootstrap"):
+        # Assume that data_error is a list of data for each data point. 
+        # First, process the list to check that it is valid:
+        if type(data_error) == list:
+            if len(data_error) != n_data:
+                raise Exception("data_error has wrong number of entries")
+            error_list = data_error
+        elif type(data_error) == np.ndarray:
+            if len(data_error.shape) != 2:
+                raise Exception("data_error format is not valid.")
+            if data_error.shape[0] != n_data:
+                raise Exception("data_error has wrong number of entries")
+            error_list = [data_error[k,np.isfinite(data_error[k,:])] 
+                          for k in range(0,n_data)]
+        else:
+            raise Exception("data_error type is not implemented.")
+    else:
+        raise Exception("weight_model is not implemented.")
+    return error_list
+
+# Compute bin counts, using data with normally-distributed errors:
+def weighted_bin_counts(data,data_error,bin_edges,weight_model="Gaussian",
+                        seed=1000,n_boot=10000,interval="variance"):
+    data_lin = np.array(data).flatten()
+    n_data = len(data_lin)
+    error_list = process_error_list(data_error,n_data,
+                                    weight_model=weight_model)
+    n_bins = len(bin_edges) - 1
+    # Probabilities of being in each bin:
+    pij = get_weights_for_bins(data_lin,error_list,weight_model=weight_model,
+                               seed=seed,n_boot=n_boot)
     # Bin counts:
     bin_counts = np.sum(pij,0)
     # Bin errors (Bernoulli distribution, using Gaussian errors):
-    bin_errors = np.sqrt(np.sum(pij*(1.0 - pij),0))
+    if interval == "variance":
+        bin_errors = np.sqrt(np.sum(pij*(1.0 - pij),0))
+    elif isinstance(interval,numbers.Number):
+        # monte carlo samples:
+        samples = np.zeros((n_boot,n_bins),dtype=int)
+        ranges = [50 - interval/2,50 + interval/2]
+        np.random.seed(seed)
+        for k in range(0,n_boot):
+            realisation = np.random.random(size=pij.shape)
+            success = np.array(realisation <= pij,dtype=int)
+            samples[k,:] = np.sum(success,0)
+        bin_errors = np.percentile(samples,ranges,axis=0)
+    else:
+        raise Exception("interval argument type not recognised.")
     return [bin_counts,bin_errors]
 
 

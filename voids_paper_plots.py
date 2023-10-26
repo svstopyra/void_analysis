@@ -1040,7 +1040,7 @@ if doCat:
         titleRight = "Combined catalogue, $<300\\mathrm{Mpc}h^{-1}$",
         volSimRight = 4*np.pi*300**3/3,ylimRight=[1,1000],
         legendLoc="upper right",errorType="shaded",massErrors=True,
-        error_type="bernoulli",hmf_interval=95,weight_model="bin_fractions",
+        error_type="bernoulli",hmf_interval=95,weight_model="bootstrap",
         mass_error_left = mass_error_left,mass_error_right=mass_error_right)
 
 
@@ -1074,7 +1074,7 @@ plot_void_counts_radius(mean_radii_mcmc[0],radius_bins,
                         radii_errors = all_radii_mcmc,
                         label="MCMC catalogue ($68\%$)",
                         lcdm_label="$\\Lambda$-CDM ($95\%$)",
-                        weight_model="bin_fractions")
+                        weight_model="bootstrap")
 
 ax.tick_params(axis='both',which='major',labelsize=fontsize)
 ax.tick_params(axis='both',which='minor',labelsize=fontsize)
