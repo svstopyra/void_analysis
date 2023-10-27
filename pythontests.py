@@ -3,8 +3,8 @@ import unittest
 from void_analysis.tools import mcmcFileToWhiteNoise
 from void_analysis import antihalos, context, cosmology, halos, plot_utilities
 from void_analysis import real_clusters, simulation_tools, snapedit, stacking
-from void_analysis import survey, tools
-from void_analysis import paper_plots_borg_antihalos_generate_data as catalogue
+from void_analysis import survey, tools, catalogue
+from void_analysis import paper_plots_borg_antihalos_generate_data as generator
 import numpy as np
 import pynbody
 import multiprocessing as mp
@@ -443,7 +443,7 @@ class test_ppts(test_base):
         hpIndices = tools.loadPickle(self.dataFolder + "hpIndices_ref.p")
         ngList = tools.loadPickle(self.dataFolder + \
             "function_tests_simulation_tools/" + "ngPerLBin_ref.p")
-        computed = catalogue.getAllNgsToHealpix(ngList,hpIndices,[2791],\
+        computed = generator.getAllNgsToHealpix(ngList,hpIndices,[2791],\
             self.dataFolder + "reference_constrained/",4,recomputeData=False,\
             nres=64)
         referenceFile = self.dataFolder + "getAllNgsToHealpix_ref.p"
@@ -453,7 +453,7 @@ class test_ppts(test_base):
         np.random.seed(1000)
         voxels = np.random.randint(100,size=100)
         counts = np.random.randint(100,size=(16,100))
-        computed = catalogue.bootstrapGalaxyCounts(counts,voxels,1000,\
+        computed = generator.bootstrapGalaxyCounts(counts,voxels,1000,\
             randomSeed=1000)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "bootstrapGalaxyCounts_ref.p"
@@ -469,7 +469,7 @@ class test_ppts(test_base):
         nside = 4
         npixels = 12*(nside**2)
         # Perform test:
-        computed = catalogue.getAalpha(mask,hpIndices,ngHPMCMC,1,nMagBins,\
+        computed = generator.getAalpha(mask,hpIndices,ngHPMCMC,1,nMagBins,\
             npixels,10)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "getAalpha_ref.p"
@@ -487,7 +487,7 @@ class test_ppts(test_base):
             self.test_subfolder + "getAalpha_ref.p")
         # Random selection of test voxels:
         voxels = np.arange(85899 - 10,85899 + 10)
-        computed = catalogue.getVoxelSums(\
+        computed = generator.getVoxelSums(\
             voxels,hpIndicesLinear,Aalpha,ngMCMC,\
             inverseLambdaTot,ngHP,"bootstrap",1000,1,\
             16,bootstrapInterval=[2.5,97.5])
@@ -499,7 +499,7 @@ class test_ppts(test_base):
         points = np.array([[0,0,0],[50,50,50]])
         with open(self.dataFolder + "hpIndices_ref.p","rb") as infile:
             hpIndices = pickle.load(infile)
-        computed = catalogue.getPPTForPoints(points,hpIndices=hpIndices,\
+        computed = generator.getPPTForPoints(points,hpIndices=hpIndices,\
             snapNumList = [2791,3250],N=64,\
             samplesFolder = self.dataFolder + "reference_constrained/",\
             tmppFile=self.dataFolder + "2mpp_data/2MPP.txt",\
@@ -527,7 +527,7 @@ class test_hmfs(test_base):
         snapname = "gadget_full_forward/snapshot_001"
         snapnameRev = "gadget_full_reverse/snapshot_001"
         samplesFolder = self.dataFolder + "reference_constrained/"
-        computedHMFsData = catalogue.getHMFAMFDataFromSnapshots(\
+        computedHMFsData = generator.getHMFAMFDataFromSnapshots(\
             snapNumList,snapname,snapnameRev,samplesFolder,\
             recomputeData=True,reCentreSnap=True,verbose=False)
         referenceFile = samplesFolder + "constrained_hmfs_ref.p"
@@ -543,7 +543,7 @@ class test_hmfs(test_base):
         with open(samplesFolder + "constrained_hmfs_ref.p","rb") as infile:
             [constrainedHaloMasses512,constrainedAntihaloMasses512,\
             deltaListMean,deltaListError] = pickle.load(infile)
-        computedHMFsData = catalogue.getUnconstrainedHMFAMFData(\
+        computedHMFsData = generator.getUnconstrainedHMFAMFData(\
             snapNumList,snapname,snapnameRev,samplesFolder,\
             deltaListMean,deltaListError,\
             recomputeData=True,reCentreSnaps=True,randomSeed=1000,\
@@ -683,7 +683,7 @@ class test_void_profiles(test_base):
         print("Running stacking pipeline end-to-end test.")
         snapname = "gadget_full_forward/snapshot_001"
         snapnameRev = "gadget_full_reverse/snapshot_001"
-        computed = catalogue.getVoidProfilesData(\
+        computed = generator.getVoidProfilesData(\
             [2791, 3250],[2791,3250],\
             unconstrainedFolder = self.dataFolder + "reference_constrained/",\
             samplesFolder = self.dataFolder + "reference_constrained/",\
@@ -699,7 +699,7 @@ class test_void_profiles(test_base):
         rEffMin=0.0
         nBins=31
         rBins = np.linspace(rEffMin,rEffMax,nBins)
-        computed = catalogue.getPartialPairCountsAndVols(self.snapNameList,\
+        computed = generator.getPartialPairCountsAndVols(self.snapNameList,\
             self.antihaloRadii,self.antihaloMassesList,\
             self.ahCentresList,self.vorVols,rBins,"poisson",\
             5,25,1e14,1e15,677.7,filterListToApply=filterListToApply)
@@ -708,7 +708,7 @@ class test_void_profiles(test_base):
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
     def test_getCentreListUnconstrained(self):
-        [computed,tree] = catalogue.getCentreListUnconstrained(self.snapList,
+        [computed,tree] = generator.getCentreListUnconstrained(self.snapList,
             randomSeed = 1000,numDenSamples = 1000,rSphere = 135,\
             densityRange = [-0.051,-0.049])
         referenceFile = self.dataFolder + self.test_subfolder + \
@@ -3491,7 +3491,7 @@ class test_catalogue_code(test_base):
         # Test without N-way matching:
         referenceFile = self.dataFolder + self.test_subfolder + \
             "constructAntihaloCatalogue_ref.p"
-        computed = catalogue.constructAntihaloCatalogue(\
+        computed = generator.constructAntihaloCatalogue(\
             [2791,3250,5511],\
             samplesFolder="data_for_tests/reference_constrained/",\
             verbose=False,rSphere=135,max_index=None,thresh=0.5,\
@@ -3510,7 +3510,7 @@ class test_catalogue_code(test_base):
         # Test with N-way matching:
         referenceFile = self.dataFolder + self.test_subfolder + \
             "constructAntihaloCatalogueNway_ref.p"
-        computed = catalogue.constructAntihaloCatalogue(\
+        computed = generator.constructAntihaloCatalogue(\
             [2791,3250,5511],\
             samplesFolder="data_for_tests/reference_constrained/",\
             verbose=False,rSphere=135,max_index=None,thresh=0.5,\
@@ -3527,7 +3527,7 @@ class test_catalogue_code(test_base):
         self.compareToReference(computed,reference)
     def test_getSNRFilterFromChainFile(self):
         chainFile = self.dataFolder + "chain_properties.p"
-        computed = catalogue.getSNRFilterFromChainFile(chainFile,10,\
+        computed = generator.getSNRFilterFromChainFile(chainFile,10,\
             self.snapNameList,677.7,Nden = 256,allProps=None)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "getSNRFilterFromChainFile_ref.p"
@@ -3546,7 +3546,7 @@ class test_catalogue_code(test_base):
         [snap1,snap2] = [self.snapList[0],self.snapList[1]]
         [cat1,cat2] = [snap.halos() for snap in [snap1,snap2]]
         [quantity1,quantity2] = [self.antihaloRadii[k] for k in range(0,2)]
-        computed = catalogue.getMatchPynbody(snap1,snap2,cat1,cat2,\
+        computed = generator.getMatchPynbody(snap1,snap2,cat1,cat2,\
             quantity1,quantity2,max_index = 200,threshold = 0.5,\
             quantityThresh=0.5,fractionType='normal')
         referenceFile = self.dataFolder + self.test_subfolder + \
@@ -3557,7 +3557,7 @@ class test_catalogue_code(test_base):
         [snap1,snap2] = [self.snapList[0],self.snapList[1]]
         [centres1,centres2] = [self.ahCentresList[k] for k in range(0,2)]
         [quantity1,quantity2] = [self.antihaloRadii[k] for k in range(0,2)]
-        computed = catalogue.getMatchDistance(snap1,snap2,centres1,centres2,\
+        computed = generator.getMatchDistance(snap1,snap2,centres1,centres2,\
             quantity1,quantity2,tree1=None,tree2=None,distMax = 20.0,\
             max_index=200,quantityThresh=0.5,sortMethod='distance',\
             mode="fractional",sortQuantity = 0,cat1=None,cat2=None,\
@@ -3567,7 +3567,7 @@ class test_catalogue_code(test_base):
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
     def test_isInZoA(self):
-        computed = catalogue.isInZoA(np.array([0,0,0]),inUnits="equatorial",\
+        computed = generator.isInZoA(np.array([0,0,0]),inUnits="equatorial",\
             galacticCentreZOA = [-30,30],bRangeCentre = [-10,10],\
             bRange = [-5,5])
         referenceFile = self.dataFolder + self.test_subfolder + \
@@ -3579,7 +3579,7 @@ class test_catalogue_code(test_base):
         [snap1,snap2] = [self.snapList[0],self.snapList[1]]
         [cat1,cat2] = [snap.halos() for snap in [snap1,snap2]]
         [volumes1,volumes2] = [self.vorVols[k] for k in range(0,2)]
-        computed = catalogue.overlapMap(cat1,cat2,volumes1,volumes2,
+        computed = generator.overlapMap(cat1,cat2,volumes1,volumes2,
             checkFirst = False,verbose=False)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "overlapMap_ref.p"
@@ -3594,13 +3594,13 @@ class test_catalogue_code(test_base):
     def test_linearFromIJ(self):
         self.assertTrue(linearFromIJ(2,6,20) == 40)
     def test_getPoissonSamples(self):
-        computed = catalogue.getPoissonSamples(100,100,seed = 1000)
+        computed = generator.getPoissonSamples(100,100,seed = 1000)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "getPoissonSamples_ref.p"
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
     def test_estimatePoissonRatioErrorbarMonteCarlo(self):
-        computed = catalogue.estimatePoissonRatioErrorbarMonteCarlo(100,100,\
+        computed = generator.estimatePoissonRatioErrorbarMonteCarlo(100,100,\
             errorVal = 0.67,seed = 1000,nSamples=1000,returnSamples=False)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "estimatePoissonRatioErrorbarMonteCarlo_ref.p"
@@ -3619,7 +3619,7 @@ class test_catalogue_code(test_base):
             tools.loadPickle(self.dataFolder + \
             self.test_subfolder + "computeShortCentresList_ref.p")
         # Test:
-        computed = catalogue.getMeanCentresFromCombinedCatalogue(\
+        computed = generator.getMeanCentresFromCombinedCatalogue(\
             combinedCat[0],centresListShort,returnError=False,boxsize=boxsize)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "getMeanCentresFromCombinedCatalogue_ref.p"
@@ -3630,7 +3630,7 @@ class test_catalogue_code(test_base):
             for props in self.ahPropsConstrained]
         rMin = 5
         rMax = 30
-        computed = catalogue.computeShortCentresList(self.snapNumList,\
+        computed = generator.computeShortCentresList(self.snapNumList,\
             antihaloCentres,self.antihaloRadii,self.antihaloMasses,135,\
             rMin,rMax,massRange=None,additionalFilters=None,\
             sortBy = "mass",max_index=None)
@@ -3642,7 +3642,7 @@ class test_catalogue_code(test_base):
         [centresListShort,centralAntihalos,sortedList,ahCounts,max_index] = \
             tools.loadPickle(self.dataFolder + \
             self.test_subfolder + "computeShortCentresList_ref.p")
-        computed = catalogue.getShortenedQuantity(self.antihaloRadii,\
+        computed = generator.getShortenedQuantity(self.antihaloRadii,\
             centralAntihalos,centresListShort,sortedList,ahCounts,max_index)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "getShortenedQuantity_ref.p"
@@ -3651,7 +3651,7 @@ class test_catalogue_code(test_base):
     def test_loadCatalogueData(self):
         [snapList,snapListRev,boxsize,ahProps,antihaloCentres,\
             antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList] = \
-            catalogue.loadCatalogueData(self.snapNameList,self.snapNameListRev,
+            generator.loadCatalogueData(self.snapNameList,self.snapNameListRev,
                 None,"mass",None,None,verbose=False)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "loadCatalogueData_ref.p"
@@ -3662,12 +3662,12 @@ class test_catalogue_code(test_base):
     def test_constructShortenedCatalogues(self):
         [snapList,snapListRev,boxsize,ahProps,antihaloCentres,\
             antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList] = \
-            catalogue.loadCatalogueData(self.snapNameList,self.snapNameListRev,
+            generator.loadCatalogueData(self.snapNameList,self.snapNameListRev,
                 None,"mass",None,None,verbose=False)
         [centresListShort,centralAntihalos,sortedList,ahCounts,max_index] = \
             tools.loadPickle(self.dataFolder + \
             self.test_subfolder + "computeShortCentresList_ref.p")
-        computed = catalogue.constructShortenedCatalogues(3,"distance",\
+        computed = generator.constructShortenedCatalogues(3,"distance",\
             "mass",hrList,centralAntihalos,sortedList)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "constructShortenedCatalogues_ref.p"
@@ -3676,7 +3676,7 @@ class test_catalogue_code(test_base):
     def test_getOneWayMatchesAllCatalogues(self):
         [snapList,snapListRev,boxsize,ahProps,antihaloCentres,\
             antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList] = \
-            catalogue.loadCatalogueData(self.snapNameList,self.snapNameListRev,
+            generator.loadCatalogueData(self.snapNameList,self.snapNameListRev,
                 None,"mass",None,None,verbose=False)
         [centresListShort,centralAntihalos,sortedList,ahCounts,max_index] = \
             tools.loadPickle(self.dataFolder + \
@@ -3686,11 +3686,11 @@ class test_catalogue_code(test_base):
             for centres in centresListShort]
         hrListCentral = tools.loadPickle(self.dataFolder + \
             self.test_subfolder + "constructShortenedCatalogues_ref.p")
-        quantityListRad =  catalogue.getShortenedQuantity(antihaloRadii,\
+        quantityListRad =  generator.getShortenedQuantity(antihaloRadii,\
             centralAntihalos,centresListShort,sortedList,ahCounts,max_index)
-        quantityListMass = catalogue.getShortenedQuantity(antihaloMasses,\
+        quantityListMass = generator.getShortenedQuantity(antihaloMasses,\
             centralAntihalos,centresListShort,sortedList,ahCounts,max_index)
-        computed = catalogue.getOneWayMatchesAllCatalogues(3,"distance",\
+        computed = generator.getOneWayMatchesAllCatalogues(3,"distance",\
             snapListRev,hrListCentral,centresListShort,quantityListRad,\
             max_index,0.5,0.9,ahCounts,quantityListRad,quantityListMass,\
             'radius',treeList,20.0,"ratio","fractional",volumesList)
@@ -3711,7 +3711,7 @@ class test_catalogue_code(test_base):
     def test_getMatchCandidatesTwoCatalogues(self):
         [snapList,snapListRev,boxsize,ahProps,antihaloCentres,\
             antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList] = \
-            catalogue.loadCatalogueData(self.snapNameList,self.snapNameListRev,
+            generator.loadCatalogueData(self.snapNameList,self.snapNameListRev,
                 None,"mass",None,None,verbose=False)
         hrListCentral = tools.loadPickle(self.dataFolder + \
             self.test_subfolder + "constructShortenedCatalogues_ref.p")
@@ -3721,11 +3721,11 @@ class test_catalogue_code(test_base):
         treeList = [scipy.spatial.cKDTree(\
             snapedit.wrap(centres,boxsize),boxsize=boxsize) \
             for centres in centresListShort]
-        quantityListRad =  catalogue.getShortenedQuantity(antihaloRadii,\
+        quantityListRad =  generator.getShortenedQuantity(antihaloRadii,\
             centralAntihalos,centresListShort,sortedList,ahCounts,max_index)
-        quantityListMass = catalogue.getShortenedQuantity(antihaloMasses,\
+        quantityListMass = generator.getShortenedQuantity(antihaloMasses,\
             centralAntihalos,centresListShort,sortedList,ahCounts,max_index)
-        computed = catalogue.getMatchCandidatesTwoCatalogues(0,1,"distance",\
+        computed = generator.getMatchCandidatesTwoCatalogues(0,1,"distance",\
             snapListRev,hrListCentral,centresListShort,quantityListRad,\
             max_index,0.5,0.9,quantityListRad,quantityListMass,'radius',\
             treeList,20.0,"ratio","fractional",volumesList)
@@ -3737,11 +3737,11 @@ class test_catalogue_code(test_base):
     def test_getOverlapList(self):
         [snapList,snapListRev,boxsize,ahProps,antihaloCentres,\
             antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList] = \
-            catalogue.loadCatalogueData(self.snapNameList,self.snapNameListRev,
+            generator.loadCatalogueData(self.snapNameList,self.snapNameListRev,
                 None,"mass",None,None,verbose=False)
         hrListCentral = tools.loadPickle(self.dataFolder + \
             self.test_subfolder + "constructShortenedCatalogues_ref.p")
-        computed = catalogue.getOverlapList(3,hrListCentral,volumesList)
+        computed = generator.getOverlapList(3,hrListCentral,volumesList)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "getOverlapList_ref.p"
         reference = self.getReference(referenceFile,computed)
@@ -3771,7 +3771,7 @@ class test_catalogue_code(test_base):
         finalCombinatoricFrac = []
         finalDistances = []
         finalCatFrac = []
-        computed = catalogue.matchVoidToOtherCatalogues(0,0,3,\
+        computed = generator.matchVoidToOtherCatalogues(0,0,3,\
             otherColumns,oneWayMatchesOther,oneWayMatchesAllCatalogues,\
             twoWayMatch,allCandidates,alreadyMatched,candidateCounts,\
             False,allRatios,allDistances,diffMap,finalCandidates,\
@@ -3801,7 +3801,7 @@ class test_catalogue_code(test_base):
             candidateCounts[0][m,0] = len(allCandidates[0][m][0])
         diffMap = [np.setdiff1d(np.arange(0,3),[k]) \
             for k in range(0,3)]
-        computed = catalogue.applyNWayMatching(0,0,3,\
+        computed = generator.applyNWayMatching(0,0,3,\
             oneWayMatches,alreadyMatched,diffMap,allCandidates,\
             allRatios,allDistances)
         referenceFile = self.dataFolder + self.test_subfolder + \
@@ -3818,7 +3818,7 @@ class test_catalogue_code(test_base):
         diffMap = [np.setdiff1d(np.arange(0,3),[k]) \
             for k in range(0,3)]
         alreadyMatched = np.zeros((3,max_index),dtype=bool)
-        computed = catalogue.followAllMatchChains(0,0,3,oneWayMatches,\
+        computed = generator.followAllMatchChains(0,0,3,oneWayMatches,\
             alreadyMatched,diffMap,allCandidates)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "followAllMatchChains_ref.p"
@@ -3832,7 +3832,7 @@ class test_catalogue_code(test_base):
             "followAllMatchChains_ref.p")
         diffMap = [np.setdiff1d(np.arange(0,3),[k]) \
             for k in range(0,3)]
-        computed = catalogue.computeQuantityForCandidates(allRatios,3,\
+        computed = generator.computeQuantityForCandidates(allRatios,3,\
             allCands,diffMap)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "computeQuantityForCandidates_ref.p"
@@ -3857,7 +3857,7 @@ class test_catalogue_code(test_base):
             candidateCounts[0][m,0] = len(allCandidates[0][m][0])
         diffMap = [np.setdiff1d(np.arange(0,3),[k]) \
             for k in range(0,3)]
-        computed = catalogue.getTotalNumberOfTwoWayMatches(\
+        computed = generator.getTotalNumberOfTwoWayMatches(\
             3,diffMap,allCandidates,oneWayMatches[0])
         referenceFile = self.dataFolder + self.test_subfolder + \
             "getTotalNumberOfTwoWayMatches_ref.p"
@@ -3871,7 +3871,7 @@ class test_catalogue_code(test_base):
                 self.test_subfolder + "getOneWayMatchesAllCatalogues_ref.p")
         diffMap = [np.setdiff1d(np.arange(0,3),[k]) \
             for k in range(0,3)]
-        computed = catalogue.getNumberOfTwoWayMatchesNway(self.numCats,\
+        computed = generator.getNumberOfTwoWayMatchesNway(self.numCats,\
             allCands,allCandidates,diffMap)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "getNumberOfTwoWayMatchesNway_ref.p"
@@ -3896,7 +3896,7 @@ class test_catalogue_code(test_base):
             candidateCounts[0][m,0] = len(allCandidates[0][m][0])
         diffMap = [np.setdiff1d(np.arange(0,3),[k]) \
             for k in range(0,3)]
-        computed = catalogue.followAllMatchChains(0,0,3,\
+        computed = generator.followAllMatchChains(0,0,3,\
             oneWayMatches,alreadyMatched,diffMap,allCandidates)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "followAllMatchChains_ref.p"
@@ -3946,7 +3946,7 @@ class test_catalogue_code(test_base):
             candidateCounts[0][m,0] = len(allCandidates[0][m][0])
         diffMap = [np.setdiff1d(np.arange(0,3),[k]) \
             for k in range(0,3)]
-        computed = catalogue.checkIfVoidIsNeeded(0,0,alreadyMatched,\
+        computed = generator.checkIfVoidIsNeeded(0,0,alreadyMatched,\
             twoWayMatch,otherColumns,candidateCounts,oneWayMatches,\
             twoWayOnly=True,blockDuplicates=True)
         referenceFile = self.dataFolder + self.test_subfolder + \
@@ -3972,14 +3972,14 @@ class test_catalogue_code(test_base):
             candidateCounts[0][m,0] = len(allCandidates[0][m][0])
         diffMap = [np.setdiff1d(np.arange(0,3),[k]) \
             for k in range(0,3)]
-        computed = catalogue.getNewMatches(0,0,oneWayMatches,\
+        computed = generator.getNewMatches(0,0,oneWayMatches,\
             alreadyMatched,blockDuplicates=True)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "getNewMatches_ref.p"
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
     def test_getNumberOfConditions(self):
-        computed = catalogue.getNumberOfConditions(conditionList)
+        computed = generator.getNumberOfConditions(conditionList)
 
 
 # Testing of the ProfileStack class and its methods:
