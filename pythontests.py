@@ -4038,7 +4038,7 @@ class TestProfileStack(test_base):
             r_min = self.voidRadiusBinEdges[0],
             r_max = self.voidRadiusBinEdges[-1],
             compute_pair_counts=True,max_sampling = 1,
-            pair_counts = allPairCountsList)
+            pair_counts = self.allPairCountsList)
         self.combined_stack = catalogue.ProfileStack(
             centre_list,self.snapList,self.ahPropsConstrained,135,
             r_eff_bin_edges,tree_list=[None,None],seed=1000,start=0,end=-1,
@@ -4050,7 +4050,7 @@ class TestProfileStack(test_base):
             r_min = self.voidRadiusBinEdges[0],
             r_max = self.voidRadiusBinEdges[-1],
             compute_pair_counts=True,max_sampling = 1,
-            pair_counts = allPairCountsList)
+            pair_counts = self.allPairCountsList)
     def test_get_number_of_radial_bins(self):
         computed = self.uncombined_stack.get_number_of_radial_bins()
         referenceFile = self.dataFolder + self.test_subfolder + \
