@@ -426,26 +426,17 @@ from void_analysis.plot import plotStackedProfileVsRandoms, plot_gif_animation
 
 
 # Get MAP densities:
-def get_mcmc_supervolume_densities(snap_list,r_sphere=135):
-    boxsize = snap_list[0].properties['boxsize'].ratio("Mpc a h**-1")
-    deltaMCMCList = np.array(\
-        [simulation_tools.density_from_snapshot(
-        snap,np.array([boxsize/2]*3),r_sphere) \
-        for snap in snap_list])
-    return deltaMCMCList
+from void_analysis.simulation_tools import get_mcmc_supervolume_densities
 
 deltaMCMCList = tools.loadOrRecompute(data_folder + "delta_list.p",
                                       get_mcmc_supervolume_densities,
                                       snapList,r_sphere=135)
 
 # MAP value of the density of the local super-volume:
-def getMAPFromSample(sample):
-    kde = scipy.stats.gaussian_kde(sample,bw_method="scott")
-    return scipy.optimize.minimize(lambda x: -kde.evaluate(x),\
-        np.mean(sample)).x[0]
+from void_analysis.simulation_tools import get_map_from_sample
 
 deltaMAPBootstrap = scipy.stats.bootstrap((deltaMCMCList,),\
-    getMAPFromSample,confidence_level = 0.68,vectorized=False,\
+    get_map_from_sample,confidence_level = 0.68,vectorized=False,\
     random_state=1000)
 deltaMAPInterval = deltaMAPBootstrap.confidence_interval
 
