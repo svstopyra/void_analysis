@@ -4117,7 +4117,7 @@ class TestProfileStack(test_base):
     def test_get_volumes_of_radial_bins(self):
         centre = self.uncombined_stack.centre_list[0]
         central_antihalos = tools.getAntiHalosInSphere(\
-            self.uncombined_stack.ah_centres_list[ns],
+            self.uncombined_stack.ah_centres_list[0],
             self.uncombined_stack.r_sphere,origin=centre,\
             boxsize=self.uncombined_stack.boxsize)[1]
         central_radii = \
