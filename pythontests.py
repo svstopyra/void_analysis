@@ -4090,7 +4090,7 @@ class TestProfileStack(test_base):
     def test_select_conditioned_random_voids(self):
         centre = self.uncombined_stack.centre_list[0]
         central_antihalos = tools.getAntiHalosInSphere(\
-            self.uncombined_stack.ah_centres_list[ns],
+            self.uncombined_stack.ah_centres_list[0],
             self.uncombined_stack.r_sphere,origin=centre,\
             boxsize=self.uncombined_stack.boxsize)[1]
         central_indices = np.where(central_antihalos)[0]
