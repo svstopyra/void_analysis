@@ -620,4 +620,9 @@ def get_mcmc_supervolume_densities(snap_list,r_sphere=135):
          for snap in snap_list])
     return deltaMCMCList
 
+def get_map_from_sample(sample):
+    kde = scipy.stats.gaussian_kde(sample,bw_method="scott")
+    return scipy.optimize.minimize(lambda x: -kde.evaluate(x),\
+        np.mean(sample)).x[0]
+
 
