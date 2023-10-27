@@ -3196,7 +3196,9 @@ class test_simulation_tools(test_base):
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
     def test_get_map_from_sample(self):
-        deltaMCMCList = tools.loadPickle(self.dataFolder + "delta_list.p")
+        deltaMCMCList = tools.loadPickle(self.dataFolder 
+                                         + self.test_subfolder 
+                                         + "delta_list.p")
         computed = simulation_tools.get_map_from_sample(deltaMCMCList)
         referenceFile = self.dataFolder + self.test_subfolder + \
             "get_map_from_sample_ref.p"
