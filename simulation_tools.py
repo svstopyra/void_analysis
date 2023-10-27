@@ -12,6 +12,7 @@ import multiprocessing as mp
 thread_count = mp.cpu_count()
 from astropy.coordinates import SkyCoord
 import astropy.units as u
+import gc
 
 # Convert eulerian co-ordinate to redshift space co-ordinates:
 def eulerToZ(pos,vel,cosmo,boxsize,h,centre = None,Ninterp=1000,\
