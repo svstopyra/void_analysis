@@ -3204,7 +3204,36 @@ class test_simulation_tools(test_base):
             "get_map_from_sample_ref.p"
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
-
+    def test_getNonOverlappingCentres(self):
+        [randCentres,randOverDen] = tools.loadPickle(
+            self.dataFolder + self.test_subfolder + \
+            "get_random_centres_and_densities_ref.p")
+        snapNumList = [2791,3250]
+        snapname = "gadget_full_forward/snapshot_001"
+        samplesFolder = self.dataFolder + "reference_constrained/"
+        snapList =  [pynbody.load(samplesFolder + "sample" + \
+            str(snapNum) + "/" + snapname) for snapNum in snapNumList]
+        rSep = 2*135
+        boxsize = snapList[0].properties['boxsize'].ratio("Mpc a h**-1")
+        centresListAll = [randCentres for ns in range(0,len(snapList))]
+        computed = simulation_tools.getNonOverlappingCentres(
+            centresListAll,rSep,boxsize,returnIndices=True)
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "getNonOverlappingCentres_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_getDistanceBetweenCentres(self):
+        [randCentres,randOverDen] = tools.loadPickle(
+            self.dataFolder + self.test_subfolder + \
+            "get_random_centres_and_densities_ref.p")
+        boxsize = 677.7
+        computed = simulation_tools.getDistanceBetweenCentres(randCentres[0],
+                                                              randCentres[1],
+                                                              boxsize)
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "getDistanceBetweenCentres_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
 
 @unittest.skip("Tests in development")
 class test_snapedit(test_base):
