@@ -3183,6 +3183,18 @@ class test_simulation_tools(test_base):
             "get_random_centres_and_densities_ref.p"
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
+    def test_get_mcmc_supervolume_densities(self):
+        snapNumList = [2791,3250]
+        snapname = "gadget_full_forward/snapshot_001"
+        samplesFolder = self.dataFolder + "reference_constrained/"
+        snapList =  [pynbody.load(samplesFolder + "sample" + \
+            str(snapNum) + "/" + snapname) for snapNum in snapNumList]
+        computed = simulation_tools.get_mcmc_supervolume_densities(
+            snapList,r_sphere=135)
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "get_mcmc_supervolume_densities_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
 
 @unittest.skip("Tests in development")
 class test_snapedit(test_base):
@@ -3956,6 +3968,7 @@ class TestProfileStack(test_base):
             for props in self.ahPropsConstrained]
         self.vorVols = [props[4] for props in self.ahPropsConstrained]
         self.numCats = 3
+    def test_get_number_of_radial_bins(self):
         # Get the test centres:
         
         self.stack = catalogue.ProfileStack(centre_list,snap_list,props_list,r_sphere,
@@ -3965,8 +3978,7 @@ class TestProfileStack(test_base):
                  combine_random_regions=False,replace=False,r_min=None,
                  r_max=None,compute_pair_counts = True,max_sampling=None,
                  pair_counts=None)
-    #def test_get_number_of_radial_bins(self):
-
+        
 
 
 if __name__ == "__main__":
