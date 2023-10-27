@@ -4088,7 +4088,7 @@ class TestProfileStack(test_base):
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
     def test_select_conditioned_random_voids(self):
-        centre = self.uncombined_stack.centre_list[0]
+        centre = self.uncombined_stack.centre_list[0][0]
         central_antihalos = tools.getAntiHalosInSphere(\
             self.uncombined_stack.ah_centres_list[0],
             self.uncombined_stack.r_sphere,origin=centre,\
@@ -4098,7 +4098,7 @@ class TestProfileStack(test_base):
         central_condition_variable = \
             self.uncombined_stack.conditioning_quantity[0]\
             [central_antihalos].reshape(
-                num_cond_variables,1)
+                num_cond_variables,self.uncombined_stack.num_cond)
         central_radii = \
             self.uncombined_stack.antihalo_radii_list[0][central_antihalos]
         computed = self.uncombined_stack.select_conditioned_random_voids(
