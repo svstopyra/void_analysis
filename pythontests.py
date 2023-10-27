@@ -30,11 +30,11 @@ import os
 
 # Process configuration options:
 config = configparser.ConfigParser()
-if os.path.isfile("../config.ini"):
-    config.read("../config.ini")
+if os.path.isfile(os.path.dirname(__file__) + "/config.ini"):
+    config.read(os.path.dirname(__file__) + "/config.ini")
     print("Using user-defined config options.")
-elif os.path.isfile("../config_default.ini"):
-    config.read("../config_default.ini")
+elif os.path.isfile(os.path.dirname(__file__) + "/config_default.ini"):
+    config.read(os.path.dirname(__file__) + "/config_default.ini")
     print("Using default config options...")
 else:
     raise Exception("config_default.ini is missing.")
@@ -3171,7 +3171,18 @@ class test_simulation_tools(test_base):
         self.snaptest_getGriddedDensity(snapn)
         self.snaptest_getHaloCentresAndMassesRecomputed(hn,boxsize)
         self.snaptest_getClusterCentres(combinedAbellPos[0],snapn,standard)
-
+    def test_get_random_centres_and_densities(self):
+        snapNumList = [2791,3250]
+        snapname = "gadget_full_forward/snapshot_001"
+        samplesFolder = self.dataFolder + "reference_constrained/"
+        snapList =  [pynbody.load(samplesFolder + "sample" + \
+            str(snapNum) + "/" + snapname) for snapNum in snapNumList]
+        computed = simulation_tools.get_random_centres_and_densities(
+            135,snapList,seed=1000,nRandCentres = 100)
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "get_random_centres_and_densities_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
 
 @unittest.skip("Tests in development")
 class test_snapedit(test_base):
@@ -3920,6 +3931,42 @@ class test_catalogue_code(test_base):
         computed = catalogue.getNumberOfConditions(conditionList)
 
 
+# Testing of the ProfileStack class and its methods:
+class TestProfileStack(test_base):
+    def setUp(self):
+        # Some things shared by the catalogue tests:
+        self.snapNumList = [2791,3250,5511]
+        self.samplesFolder = dataFolder + "reference_constrained/"
+        self.snapname = "gadget_full_forward/snapshot_001"
+        self.snapnameRev = "gadget_full_reverse/snapshot_001"
+        self.snapNameList = [self.samplesFolder + "sample" + \
+            str(snapNum) + "/" + self.snapname for snapNum in self.snapNumList]
+        self.snapNameListRev = [self.samplesFolder + "sample" + \
+            str(snapNum) + "/" + self.snapnameRev \
+            for snapNum in self.snapNumList]
+        self.snapList =  [pynbody.load(self.samplesFolder + "sample" + \
+            str(snapNum) + "/" + self.snapname) for snapNum in self.snapNumList]
+        self.ahPropsConstrained = [tools.loadPickle(snap.filename + \
+            ".AHproperties.p") \
+            for snap in self.snapList]
+        self.antihaloRadii = [props[7] for props in self.ahPropsConstrained]
+        self.antihaloMasses = [props[3] \
+            for props in self.ahPropsConstrained]
+        self.ahCentresList = [props[5] \
+            for props in self.ahPropsConstrained]
+        self.vorVols = [props[4] for props in self.ahPropsConstrained]
+        self.numCats = 3
+        # Get the test centres:
+        
+        self.stack = catalogue.ProfileStack(centre_list,snap_list,props_list,r_sphere,
+                 r_eff_bin_edges,tree_list=None,seed=1000,start=0,end=-1,
+                 conditioning_quantity=None,
+                 conditioning_quantity_to_match=None,condition_bin_edges=None,
+                 combine_random_regions=False,replace=False,r_min=None,
+                 r_max=None,compute_pair_counts = True,max_sampling=None,
+                 pair_counts=None)
+    def test_get_number_of_radial_bins(self):
+        
 
 
 

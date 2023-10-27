@@ -968,6 +968,19 @@ leftFilter = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
 rightFilter = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
     (distances300 < 300) & (cat300.finalCatFrac > thresholds300)
 
+nBins = 8
+Om = referenceSnap.properties['omegaM0']
+rhoc = 2.7754e11
+boxsize = referenceSnap.properties['boxsize'].ratio("Mpc a h**-1")
+N = int(np.cbrt(len(referenceSnap)))
+mUnit = 8*Om*rhoc*(boxsize/N)**3
+mLower = 100*mUnit
+mUpper = 2e15
+rSphere = 300
+rSphereInner = 135
+# Check mass functions:
+volSphere135 = 4*np.pi*rSphereInner**3/3
+volSphere = 4*np.pi*rSphere**3/3
 
 # Bootstrap error bars?
 
@@ -1013,19 +1026,6 @@ mass_error_right = cat300.getAllProperties('mass',void_filter=rightFilter)
 plt.clf()
 doCat = True
 if doCat:
-    nBins = 8
-    Om = referenceSnap.properties['omegaM0']
-    rhoc = 2.7754e11
-    boxsize = referenceSnap.properties['boxsize'].ratio("Mpc a h**-1")
-    N = int(np.cbrt(len(referenceSnap)))
-    mUnit = 8*Om*rhoc*(boxsize/N)**3
-    mLower = 100*mUnit
-    mUpper = 2e15
-    rSphere = 300
-    rSphereInner = 135
-    # Check mass functions:
-    volSphere135 = 4*np.pi*rSphereInner**3/3
-    volSphere = 4*np.pi*rSphere**3/3
     plot.massFunctionComparison(mass_samples_left,
         mass_samples_right,4*np.pi*135**3/3,nBins=nBins,
         labelLeft = "Combined catalogue ($68\%$)" 
