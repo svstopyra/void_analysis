@@ -3965,8 +3965,7 @@ class TestProfileStack(test_base):
                  combine_random_regions=False,replace=False,r_min=None,
                  r_max=None,compute_pair_counts = True,max_sampling=None,
                  pair_counts=None)
-    def test_get_number_of_radial_bins(self):
-        
+    #def test_get_number_of_radial_bins(self):
 
 
 
