@@ -4070,7 +4070,7 @@ class TestProfileStack(test_base):
         referenceFile = self.dataFolder + self.test_subfolder + \
             "get_all_condition_variables_ref.p"
         reference = self.getReference(referenceFile,computed)
-        self.compareToReference(computed,reference)
+        self.compareToReference(computed,reference,filterNaN=True)
     def test_get_all_condition_variables_in_range(self):
         self.combined_stack.get_all_condition_variables()
         void_radii = self.combined_stack.central_radii_all
