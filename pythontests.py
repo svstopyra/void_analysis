@@ -4133,11 +4133,6 @@ class TestProfileStack(test_base):
         self.compareToReference(computed,reference)
     def test_get_random_catalogue_pair_counts(self):
         dictionary = self.uncombined_stack.get_random_catalogue_pair_counts()
-        {'pairs':self.all_pairs,'volumes':self.all_volumes,
-            'selections':self.all_selections,'conditions':self.all_conditions,
-            'selected_conditions':self.all_selected_conditions,
-            'radii':self.all_radii,'indices':self.all_indices,
-            'centres':self.all_centres}
         keys = ['pairs','volumes','selections','conditions',
                 'selected_conditions','radii','indices','centres']
         computed = [dictionary[key] for key in keys]
