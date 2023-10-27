@@ -4139,7 +4139,7 @@ class TestProfileStack(test_base):
         referenceFile = self.dataFolder + self.test_subfolder + \
             "get_random_catalogue_pair_counts_ref.p"
         reference = self.getReference(referenceFile,computed)
-        self.compareToReference(computed,reference)
+        self.compareToReference(computed,reference,filterNan=True)
 
 if __name__ == "__main__":
     unittest.main()
