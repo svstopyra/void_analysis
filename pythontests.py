@@ -3987,6 +3987,9 @@ class TestProfileStack(test_base):
     def setUp(self):
         # Some things shared by the catalogue tests:
         self.snapNumList = [2791,3250]
+        self.rtol=1e-5
+        self.atol=1e-8
+        self.generateTestData = generateMode
         self.samplesFolder = dataFolder + "reference_constrained/"
         self.dataFolder = dataFolder
         self.test_subfolder = "function_tests_catalogue/"
