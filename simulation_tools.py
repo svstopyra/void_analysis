@@ -566,10 +566,10 @@ def get_random_centres_and_densities(rSphere,snapListUn,\
     # Get a random selection of centres:
     np.random.seed(seed)
     # Get random selection of centres and their densities:
-    randCentres = np.random.random((nRandCentres,3))*boxsize
     randOverDen = []
     snapSample = snapListUn[0]
     boxsize = snapSample.properties['boxsize'].ratio("Mpc a h**-1")
+    randCentres = np.random.random((nRandCentres,3))*boxsize
     for k in range(0,len(snapListUn)):
         snap = snapListUn[k]
         gc.collect() # Clear memory of the previous snapshot
