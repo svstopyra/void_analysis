@@ -3986,8 +3986,10 @@ class test_catalogue_code(test_base):
 class TestProfileStack(test_base):
     def setUp(self):
         # Some things shared by the catalogue tests:
-        self.snapNumList = [2791,3250,5511]
+        self.snapNumList = [2791,3250]
         self.samplesFolder = dataFolder + "reference_constrained/"
+        self.dataFolder = dataFolder
+        self.test_subfolder = "function_tests_catalogue/"
         self.snapname = "gadget_full_forward/snapshot_001"
         self.snapnameRev = "gadget_full_reverse/snapshot_001"
         self.snapNameList = [self.samplesFolder + "sample" + \
@@ -4007,18 +4009,137 @@ class TestProfileStack(test_base):
             for props in self.ahPropsConstrained]
         self.vorVols = [props[4] for props in self.ahPropsConstrained]
         self.numCats = 3
-    def test_get_number_of_radial_bins(self):
         # Get the test centres:
-        
-        self.stack = catalogue.ProfileStack(centre_list,snap_list,props_list,r_sphere,
-                 r_eff_bin_edges,tree_list=None,seed=1000,start=0,end=-1,
-                 conditioning_quantity=None,
-                 conditioning_quantity_to_match=None,condition_bin_edges=None,
-                 combine_random_regions=False,replace=False,r_min=None,
-                 r_max=None,compute_pair_counts = True,max_sampling=None,
-                 pair_counts=None)
-        
-
+        [randCentres,randOverDen] = tools.loadPickle(
+            self.dataFolder + "function_tests_simulation_tools/" + \
+            "get_random_centres_and_densities_ref.p")
+        centre_list = [randCentres for ns in range(0,len(self.snapList))]
+        r_eff_bin_edges = np.linspace(0,10,101)
+        self.conBinEdges = np.linspace(-1,-0.5,21)
+        self.conditioningQuantity = [np.vstack([self.antihaloRadii[ns],\
+            self.ahPropsConstrained[ns][11],
+            self.ahPropsConstrained[ns][12]]).T \
+            for ns in range(0,len(self.snapList))]
+        self.voidRadiusBinEdges = np.linspace(10,25,6)
+        [meanRadii,deltaCentral,deltaAverage] = tools.loadPickle(
+            self.dataFolder + self.test_subfolder + "condition_data.p")
+        self.conditioningQuantityMCMC = np.vstack([meanRadii,deltaCentral,
+                                              deltaAverage]).T
+        self.allPairCountsList = [props[9] 
+                                  for props in self.ahPropsConstrained]
+        self.uncombined_stack = catalogue.ProfileStack(
+            centre_list,self.snapList,self.ahPropsConstrained,135,
+            r_eff_bin_edges,tree_list=[None,None],seed=1000,start=0,end=-1,
+            conditioning_quantity=self.conditioningQuantity,
+            conditioning_quantity_to_match=self.conditioningQuantityMCMC,
+            condition_bin_edges=[self.voidRadiusBinEdges,self.conBinEdges,
+                                 self.conBinEdges],
+            combine_random_regions=False,replace=False,
+            r_min = voidRadiusBinEdges[0],r_max = voidRadiusBinEdges[-1],
+            compute_pair_counts=True,max_sampling = 1,
+            pair_counts = allPairCountsList)
+        self.combined_stack = catalogue.ProfileStack(
+            centre_list,self.snapList,self.ahPropsConstrained,135,
+            r_eff_bin_edges,tree_list=[None,None],seed=1000,start=0,end=-1,
+            conditioning_quantity=self.conditioningQuantity,
+            conditioning_quantity_to_match=self.conditioningQuantityMCMC,
+            condition_bin_edges=[self.voidRadiusBinEdges,self.conBinEdges,
+                                 self.conBinEdges],
+            combine_random_regions=True,replace=False,
+            r_min = voidRadiusBinEdges[0],r_max = voidRadiusBinEdges[-1],
+            compute_pair_counts=True,max_sampling = 1,
+            pair_counts = allPairCountsList)
+    def test_get_number_of_radial_bins(self):
+        computed = self.uncombined_stack.get_number_of_radial_bins()
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "get_number_of_radial_bins_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_get_all_condition_variables(self):
+        self.combined_stack.get_all_condition_variables()
+        computed = [self.combined_stack.central_condition_variable_all,
+                    self.combined_stack.central_centres_all,
+                    self.combined_stack.central_radii_all,
+                    self.combined_stack.sample_indices,
+                    self.combined_stack.void_indices]
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "get_all_condition_variables_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_get_all_condition_variables_in_range(self):
+        self.combined_stack.get_all_condition_variables()
+        void_radii = self.combined_stack.central_radii_all
+        condition_variable = self.combined_stack.central_condition_variable_all
+        computed = self.combined_stack.get_all_condition_variables_in_range(
+            condition_variable,void_radii)
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "get_all_condition_variables_in_range_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_get_sampling_ratio(self):
+        computed = self.uncombined_stack.get_sampling_ratio()
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "get_sampling_ratio_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_select_conditioned_random_voids(self):
+        centre = self.uncombined_stack.centre_list[0]
+        central_antihalos = tools.getAntiHalosInSphere(\
+            self.uncombined_stack.ah_centres_list[ns],
+            self.uncombined_stack.r_sphere,origin=centre,\
+            boxsize=self.uncombined_stack.boxsize)[1]
+        central_indices = np.where(central_antihalos)[0]
+        num_cond_variables = len(np.where(central_antihalos)[0])
+        central_condition_variable = \
+            self.uncombined_stack.conditioning_quantity[0]\
+            [central_antihalos].reshape(
+                num_cond_variables,1)
+        central_radii = \
+            self.uncombined_stack.antihalo_radii_list[0][central_antihalos]
+        computed = self.uncombined_stack.select_conditioned_random_voids(
+            central_condition_variable,central_radii)
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "select_conditioned_random_voids_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_get_pooled_variable(self):
+        computed = self.combined_stack.get_pooled_variable(
+            self.combined_stack.ah_centres_list)
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "get_pooled_variable_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_get_volumes_of_radial_bins(self):
+        centre = self.uncombined_stack.centre_list[0]
+        central_antihalos = tools.getAntiHalosInSphere(\
+            self.uncombined_stack.ah_centres_list[ns],
+            self.uncombined_stack.r_sphere,origin=centre,\
+            boxsize=self.uncombined_stack.boxsize)[1]
+        central_radii = \
+            self.uncombined_stack.antihalo_radii_list[0][central_antihalos]
+        select_array = tools.loadPickle(
+            self.dataFolder + self.test_subfolder + \
+            "select_conditioned_random_voids_ref.p")
+        computed = self.uncombined_stack.get_volumes_of_radial_bins(
+            central_radii,select_array)
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "get_volumes_of_radial_bins_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
+    def test_get_random_catalogue_pair_counts(self):
+        dictionary = self.uncombined_stack.get_random_catalogue_pair_counts()
+        {'pairs':self.all_pairs,'volumes':self.all_volumes,
+            'selections':self.all_selections,'conditions':self.all_conditions,
+            'selected_conditions':self.all_selected_conditions,
+            'radii':self.all_radii,'indices':self.all_indices,
+            'centres':self.all_centres}
+        keys = ['pairs','volumes','selections','conditions',
+                'selected_conditions','radii','indices','centres']
+        computed = [dictionary[key] for key in keys]
+        referenceFile = self.dataFolder + self.test_subfolder + \
+            "get_random_catalogue_pair_counts_ref.p"
+        reference = self.getReference(referenceFile,computed)
+        self.compareToReference(computed,reference)
 
 if __name__ == "__main__":
     unittest.main()
