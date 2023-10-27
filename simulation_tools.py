@@ -616,9 +616,8 @@ def getNonOverlappingCentres(centresList,rSep,boxsize,returnIndices=False):
 def get_mcmc_supervolume_densities(snap_list,r_sphere=135):
     boxsize = snap_list[0].properties['boxsize'].ratio("Mpc a h**-1")
     deltaMCMCList = np.array(\
-        [simulation_tools.density_from_snapshot(
-        snap,np.array([boxsize/2]*3),r_sphere) \
-        for snap in snap_list])
+        [density_from_snapshot(snap,np.array([boxsize/2]*3),r_sphere) \
+         for snap in snap_list])
     return deltaMCMCList
 
 
