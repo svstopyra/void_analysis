@@ -4115,7 +4115,7 @@ class TestProfileStack(test_base):
         reference = self.getReference(referenceFile,computed)
         self.compareToReference(computed,reference)
     def test_get_volumes_of_radial_bins(self):
-        centre = self.uncombined_stack.centre_list[0]
+        centre = self.uncombined_stack.centre_list[0][0]
         central_antihalos = tools.getAntiHalosInSphere(\
             self.uncombined_stack.ah_centres_list[0],
             self.uncombined_stack.r_sphere,origin=centre,\
