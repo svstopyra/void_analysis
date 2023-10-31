@@ -3396,7 +3396,7 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,
         handles.append(ax.fill_between(massBinCentres,
                         bounds[0],bounds[1],
                         facecolor=colorTheory,alpha=0.5,interpolate=True,\
-                        label='$' + str(100*poisson_interval) + \
+                        label='$' + ( "%.2g" % (100*poisson_interval)) + \
                         '\%$ Confidence \nInterval'))
     if showLegend:
         ax.legend(prop={"size":legendFontsize,"family":font},

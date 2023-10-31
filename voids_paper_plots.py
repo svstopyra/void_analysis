@@ -1031,9 +1031,9 @@ if doCat:
         titleRight = "Combined catalogue, $<300\\mathrm{Mpc}h^{-1}$",
         volSimRight = 4*np.pi*300**3/3,ylimRight=[1,1000],
         legendLoc="upper right",errorType="shaded",massErrors=True,
-        error_type="bernoulli",hmf_interval=95,weight_model="bootstrap",
+        error_type="bernoulli",hmf_interval=68,weight_model="bootstrap",
         mass_error_left = mass_error_left,mass_error_right=mass_error_right,\
-        error_interval=68)
+        error_interval=68,poisson_interval=0.68)
 
 
 #-------------------------------------------------------------------------------
