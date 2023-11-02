@@ -530,6 +530,15 @@ void_snr_and_error = cat300.getMeanProperty(snrShortened,
                                             void_filter=void_filter)
 void_snr = void_snr_and_error[0]
 void_snr_error = void_snr_and_error[1]
+void_delta_central_and_error = cat300.getMeanProperty('deltaCentral',
+                                                      void_filter=void_filter)
+void_delta_average_and_error = cat300.getMeanProperty('deltaAverage',
+                                                      void_filter=void_filter)
+
+void_delta_central = void_delta_central_and_error[0]
+void_delta_average = void_delta_average_and_error[0]
+void_delta_central_error = void_delta_central_and_error[1]
+void_delta_average_error = void_delta_average_and_error[1]
 
 # List of dictionaries with all the relevant void properties:
 void_dictionaries = [
@@ -546,13 +555,16 @@ void_dictionaries = [
     'cat_frac':("%.2g" % void_cat_frac[sort_order[k]])}
     for k in range(0,num_voids)]
 
-table_titles = {'ID':"ID",'rad':"Radius $(h^{-1}\\mathrm{Mpc})$",
-                'mass':"Mass $(10^{14}h^{-1}M_{\\odot})$",
+table_titles = {'ID':"ID",'rad':"Radius $(h^{-1}\mathrm{Mpc})$",
+                'rad_error':"Radius uncertainty $(h^{-1}\mathrm{Mpc})$",
+                'mass':"Mass $(10^{14}h^{-1}M_{\odot})$",
+                'mass_error':"Mass uncertainty $(10^{14}h^{-1}M_{\odot})$",
                 'ra':'R.A. (deg.)','dec':"Dec. (deg.)",
                 'z':"z",'dist':"Distance $(h^{-1}\\mathrm{Mpc})$",
                 'snr':"SNR",'cat_frac':"Catalogue Fraction"}
 
 save_name = data_folder + "void_catalogue.csv"
+save_name_titled = data_folder + "void_catalogue_titled.csv"
 
 def dictionary_to_csv(dictionary_list,filename,titles_dictionary=None):
     outfile = open(filename,"w")
@@ -570,6 +582,132 @@ def dictionary_to_csv(dictionary_list,filename,titles_dictionary=None):
 
 # Save data:
 dictionary_to_csv(void_dictionaries,save_name)
+dictionary_to_csv(void_dictionaries,save_name_titled,
+                  titles_dictionary=table_titles)
+
+
+#-------------------------------------------------------------------------------
+# DATA PRODUCTS
+
+# Void catalogues. But we don't want to include everything here!
+
+all_catalogues = [{'radii':cat300.radiusListShort[ns],
+                   'mass':cat300.massListShort[ns],
+                   'centre':cat300.centresListShort[ns],
+                   'dist':np.sqrt(np.sum(cat300.centresListShort[ns]**2,1)),
+                   'delta_central':cat300.deltaCentralListShort[ns],
+                   'delta_average':cat300.deltaAverageListShort[ns],
+                   'snr':snrAllCatsList[ns][cat300.indexListShort[ns]],
+                   'ids':np.arange(0,cat300.ahCounts[ns])+1}
+                   for ns in range(0,cat300.numCats)]
+
+# Save each catalogue as an npz file:
+
+for ns in range(0,cat300.numCats):
+    savename = data_folder + "antihalo_catalogue_sample_" + str(ns) + ".npz"
+    cat = all_catalogues[ns]
+    np.savez(savename,radii=cat['radii'],mass=cat['mass'],centre=cat['centre'],
+             dist=cat['dist'],delta_central=cat['delta_central'],
+             delta_average=cat['delta_average'],snr=cat['snr'],ids=cat['ids'])
+
+# As a csv:
+titles_dict = {'ID':"ID",'radii':"Radius $(h^{-1}\mathrm{Mpc})$",
+               'mass':"Mass $(10^{14}h^{-1}M_{\odot})$",
+               'centre_x':"X ($\mathrm{Mpc}h^{-1}$)",
+               'centre_y':"Y ($\mathrm{Mpc}h^{-1}$)",
+               'centre_z':"Z ($\mathrm{Mpc}h^{-1}$)",
+               'dist':"Distance ($\mathrm{Mpc}h^{-1}$)",
+               'delta_central':"Central Density Contrast",
+               'delta_average':"Average Density Constrast",
+               'snr':"Signal-to-Noise Ratio"}
+for ns in range(0,cat300.numCats):
+    savename = data_folder + "antihalo_catalogue_sample_" + str(ns) + ".csv"
+    cat = all_catalogues[ns]
+    dictionaries = [{'ids':str(cat['ids'][k]),
+                     'radii':("%.3g" % cat['radii'][k]),
+                     'mass':("%.3g" % cat['mass'][k]),
+                     'centre_x':("%.3g" % cat['centre'][k,0]),
+                     'centre_y':("%.3g" % cat['centre'][k,1]),
+                     'centre_z':("%.3g" % cat['centre'][k,2]),
+                     'dist':("%.3g" % cat['dist'][k]),
+                     'delta_central':("%.3g" % cat['delta_central'][k]),
+                     'delta_average':("%.3g" % cat['delta_average'][k]),
+                     'snr':("%.3g" % cat['snr'][k])}
+                    for k in range(0,cat300.ahCounts[ns])]
+    dictionary_to_csv(dictionaries,savename,titles_dictionary=titles_dict)
+
+# Saving the final catalogue:
+
+dictionaries_final_filtered = [
+    {str(ns):str(cat300.finalCat[filter300][sort_order][k,ns])
+     for ns in range(0,cat300.numCats)}
+     for k in range(0,np.sum(filter300))]
+
+dictionaries_final_unfiltered = [{str(ns):str(cat300.finalCat[k,ns])
+                                for ns in range(0,cat300.numCats)}
+                                for k in range(0,len(cat300.finalCat))]
+
+titles_dict_final = {str(ns):"Sample " + str(ns) 
+                     for ns in range(0,cat300.numCats)}
+
+dictionary_to_csv(dictionaries_final_filtered,data_folder + 
+                  "combined_catalogue.csv",titles_dictionary=titles_dict_final)
+dictionary_to_csv(dictionaries_final_unfiltered,data_folder + 
+                  "combined_catalogue_unfiltered.csv",
+                  titles_dictionary=titles_dict_final)
+
+final_cat_properties = [
+    {'ID':str(k+1),
+    'rad':("%.2g" % void_radii[sort_order[k]]),
+    'rad_error':("%.1g" % void_radii_error[sort_order[k]]),
+    'mass':("%.2g" % (void_mass[sort_order[k]]/1e14)),
+    'mass_error':("%.1g" % (void_mass_error[sort_order[k]]/1e14)),
+    'ra':("%.3g" % void_ra[sort_order[k]]),
+    'dec':("%.3g" % void_dec[sort_order[k]]),
+    'z':("%.2g" % void_z[sort_order[k]]),
+    'dist':("%.3g" % void_dist[sort_order[k]]),
+    'snr':("%.3g" % void_snr[sort_order[k]]),
+    'cat_frac':("%.2g" % void_cat_frac[sort_order[k]]),
+    'delta_central':("%.2g" % void_delta_central[sort_order[k]]),
+    'delta_central_error':("%.2g" % void_delta_central_error[sort_order[k]]),
+    'delta_average':("%.2g" % void_delta_average[sort_order[k]]),
+    'delta_average_error':("%.2g" % void_delta_average_error[sort_order[k]])}
+    for k in range(0,num_voids)]
+
+final_cat_titles = {'ID':"ID",'rad':"Radius $(h^{-1}\mathrm{Mpc})$",
+                    'rad_error':"Radius uncertainty $(h^{-1}\mathrm{Mpc})$",
+                    'mass':"Mass $(10^{14}h^{-1}M_{\odot})$",
+                    'mass_error':"Mass uncertainty $(10^{14}h^{-1}M_{\odot})$",
+                    'ra':'R.A. (deg.)','dec':"Dec. (deg.)",
+                    'z':"z",'dist':"Distance $(h^{-1}\\mathrm{Mpc})$",
+                    'snr':"SNR",'cat_frac':"Catalogue Fraction",
+                    'delta_central':"Central Density Contrast",
+                    'delta_central_error':"Central Density Contrast Error",
+                    'delta_average':"Average Density Contrast",
+                    'delta_average_error':"Average Density Contrast Error"}
+
+
+dictionary_to_csv(final_cat_properties,
+                  data_folder+"combined_catalogue_properties.csv",
+                  titles_dictionary=final_cat_titles)
+
+np.savez(data_folder + "combined_catalogue.npz",
+         catalogue=cat300.finalCat[filter300][sort_order],
+         radii=void_radii[sort_order],radii_error=void_radii_error[sort_order],
+         mass=void_mass[sort_order],mass_error=void_mass_error[sort_order],
+         ra=void_ra[sort_order],dec=void_dec[sort_order],
+         z=void_z[sort_order],dist=void_dist[sort_order],
+         snr=void_snr[sort_order],cat_frac=void_cat_frac[sort_order],
+         delta_central=void_delta_central[sort_order],
+         delta_central_error=void_delta_central_error[sort_order],
+         delta_average=void_delta_average[sort_order],
+         delta_average_error=void_delta_average_error[sort_order])
+
+np.savez(data_folder + "combined_catalogue_unfiltered.npz",
+         catalogue=cat300.finalCat)
+
+
+
 
 #-------------------------------------------------------------------------------
 # COMPUTE VOID STACKS APPLYING DIFFERENT CONDITIONS
@@ -1065,8 +1203,9 @@ plot_void_counts_radius(mean_radii_mcmc[0],radius_bins,
                         noConstraintsDict['radii'],ax=ax,do_errors=True,
                         radii_errors = all_radii_mcmc,
                         label="MCMC catalogue ($68\%$)",
-                        lcdm_label="$\\Lambda$-CDM ($95\%$)",
-                        weight_model="bootstrap",mcmc_interval=68)
+                        lcdm_label="$\\Lambda$-CDM ($68\%$)",
+                        weight_model="bootstrap",mcmc_interval=68,
+                        confidence=0.68)
 
 ax.tick_params(axis='both',which='major',labelsize=fontsize)
 ax.tick_params(axis='both',which='minor',labelsize=fontsize)
