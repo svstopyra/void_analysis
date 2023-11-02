@@ -601,11 +601,30 @@ all_catalogues = [{'radii':cat300.radiusListShort[ns],
                    'ids':np.arange(0,cat300.ahCounts[ns])+1}
                    for ns in range(0,cat300.numCats)]
 
+all_catalogues_rand = [{
+    'radii':cat300Rand.radiusListShort[ns],
+    'mass':cat300Rand.massListShort[ns],
+    'centre':cat300Rand.centresListShort[ns],
+    'dist':np.sqrt(np.sum(cat300Rand.centresListShort[ns]**2,1)),
+    'delta_central':cat300Rand.deltaCentralListShort[ns],
+    'delta_average':cat300Rand.deltaAverageListShort[ns],
+    'snr':snrAllCatsList[ns][cat300Rand.indexListShort[ns]],
+    'ids':np.arange(0,cat300Rand.ahCounts[ns])+1}
+    for ns in range(0,cat300Rand.numCats)]
+
 # Save each catalogue as an npz file:
 
 for ns in range(0,cat300.numCats):
-    savename = data_folder + "antihalo_catalogue_sample_" + str(ns) + ".npz"
+    # MCMC catalogues:
+    savename = data_folder + "antihalo_catalogue_sample_" + str(ns+1) + ".npz"
     cat = all_catalogues[ns]
+    np.savez(savename,radii=cat['radii'],mass=cat['mass'],centre=cat['centre'],
+             dist=cat['dist'],delta_central=cat['delta_central'],
+             delta_average=cat['delta_average'],snr=cat['snr'],ids=cat['ids'])
+    # Random catalogues:
+    savename = data_folder + "antihalo_catalogue_rand_sample_" + str(ns+1) \
+        + ".npz"
+    cat = all_catalogues_rand[ns]
     np.savez(savename,radii=cat['radii'],mass=cat['mass'],centre=cat['centre'],
              dist=cat['dist'],delta_central=cat['delta_central'],
              delta_average=cat['delta_average'],snr=cat['snr'],ids=cat['ids'])
@@ -621,7 +640,8 @@ titles_dict = {'ID':"ID",'radii':"Radius $(h^{-1}\mathrm{Mpc})$",
                'delta_average':"Average Density Constrast",
                'snr':"Signal-to-Noise Ratio"}
 for ns in range(0,cat300.numCats):
-    savename = data_folder + "antihalo_catalogue_sample_" + str(ns) + ".csv"
+    # MCMC catalogues:
+    savename = data_folder + "antihalo_catalogue_sample_" + str(ns+1) + ".csv"
     cat = all_catalogues[ns]
     dictionaries = [{'ids':str(cat['ids'][k]),
                      'radii':("%.3g" % cat['radii'][k]),
@@ -635,6 +655,22 @@ for ns in range(0,cat300.numCats):
                      'snr':("%.3g" % cat['snr'][k])}
                     for k in range(0,cat300.ahCounts[ns])]
     dictionary_to_csv(dictionaries,savename,titles_dictionary=titles_dict)
+    # Random catalogues:
+    savename = data_folder + "antihalo_catalogue_rand_sample_" + str(ns+1) \
+        + ".csv"
+    cat = all_catalogues_rand[ns]
+    dictionaries = [{'ids':str(cat['ids'][k]),
+                     'radii':("%.3g" % cat['radii'][k]),
+                     'mass':("%.3g" % cat['mass'][k]),
+                     'centre_x':("%.3g" % cat['centre'][k,0]),
+                     'centre_y':("%.3g" % cat['centre'][k,1]),
+                     'centre_z':("%.3g" % cat['centre'][k,2]),
+                     'dist':("%.3g" % cat['dist'][k]),
+                     'delta_central':("%.3g" % cat['delta_central'][k]),
+                     'delta_average':("%.3g" % cat['delta_average'][k]),
+                     'snr':("%.3g" % cat['snr'][k])}
+                    for k in range(0,cat300Rand.ahCounts[ns])]
+    dictionary_to_csv(dictionaries,savename,titles_dictionary=titles_dict)
 
 # Saving the final catalogue:
 
@@ -647,7 +683,7 @@ dictionaries_final_unfiltered = [{str(ns):str(cat300.finalCat[k,ns])
                                 for ns in range(0,cat300.numCats)}
                                 for k in range(0,len(cat300.finalCat))]
 
-titles_dict_final = {str(ns):"Sample " + str(ns) 
+titles_dict_final = {str(ns):"Sample " + str(ns+1) 
                      for ns in range(0,cat300.numCats)}
 
 dictionary_to_csv(dictionaries_final_filtered,data_folder + 
