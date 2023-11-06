@@ -1387,7 +1387,9 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         antiHaloLabel = 'haloID',dpi=300,shrink=0.5,pad=0.05,\
         cbarLabel='$\\rho/\\bar{\\rho}$',ax=None,arrowAnnotations=True,\
         doColorbar=True,sub=None,showLegend=True,reuse_axes=False,
-        positions=None,cmap_hpx = "PuOr_r",cbar_aspect= 30,cbar_y_pos=0.3):
+        positions=None,cmap_hpx = "PuOr_r",cbar_aspect= 30,cbar_y_pos=0.3,
+        cluster_key = 'Observed locations',borg_key='BORG halo locations',
+        zoa_key = 'Zone of Avoidance',void_key='Large anti-halos'):
     if hpxMap is None:
         rhobar = (np.sum(snap['mass'])/\
             (snap.properties['boxsize']**3)).in_units("Msol h**2 Mpc**-3")
@@ -1490,16 +1492,16 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         polygon = plotZoA(ax=ax,galacticCentreZOA = galacticCentreZOA,\
             nPointsZOA=nPointsZOA,bRangeCentre = bRangeCentre,bRange = bRange,\
             nPointsEdgeZOA = nPointsEdgeZOA,\
-            fc='grey',ec=None,alpha=0.5,label='Zone of Avoidance')
+            fc='grey',ec=None,alpha=0.5,label=zoa_key)
     # Legend:
     handles = []
     if haloCentres is not None:
         haloMarkerHandle = mlines.Line2D([],[],color=haloColour,
-            marker='x',linestyle='',label='BORG halo locations')
+            marker='x',linestyle='',label=borg_key)
         handles.append(haloMarkerHandle)
     if coordAbell is not None:
         clusterMarkerHandle = mlines.Line2D([],[],linestyle='',marker='o',
-            mec=haloColour,mfc=None,label='Observed locations')
+            mec=haloColour,mfc=None,label=cluster_key)
         handles.append(clusterMarkerHandle)
     if includeZOA:
         handles.append(polygon)
@@ -1507,11 +1509,11 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         if type(voidColour) is list:
             fakeVoid = patches.Polygon(np.array([[0,1,-1],[0,-1,-1]]).T,
                 fc='b',ec='None',alpha=0.5,
-                label='Large anti-halos')
+                label=void_key)
         else:
             fakeVoid = patches.Polygon(np.array([[0,1,-1],[0,-1,-1]]).T,
                 fc=voidColour,ec='None',alpha=0.5,
-                label='Large anti-halos')
+                label=void_key)
         handles.append(fakeVoid)
     if showLegend:
         ax.legend(handles=handles,frameon=False,

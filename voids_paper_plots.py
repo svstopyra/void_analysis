@@ -1472,6 +1472,31 @@ for ns in range(0,len(snapNumList)):
         cbar_aspect=10,shrink=0.35,cbar_y_pos=0.17)
     plt.show()
 
+# Actual skyplot to show:
+ns = 1
+plt.clf()
+plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
+    alpha_shapes = asListAll[ns],\
+    largeAntihalos = laListAll[ns],hr=hrList[ns],\
+    coordAbell = coordCombinedAbellSphere,\
+    abellListLocation = clusterIndMain,\
+    nameListLargeClusters = [name[0] for name in clusterNames],\
+    ha = ha,va= va, annotationPos = annotationPos,\
+    title = 'Most consistently-reproduced voids (anti-halos) within $' + \
+    str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",\
+    vmin=1e-2,vmax=1e2,legLoc = 'lower left',\
+    bbox_to_anchor = (-0.1,-0.2),\
+    snapsort = snapSortList[ns],antihaloCentres = None,\
+    figOut = figuresFolder + "/skyplot.pdf",\
+    showFig=False,figsize = (scale*textwidth,scale*ratio*textwidth),\
+    voidColour = colourListAll[ns],antiHaloLabel=labelListAll[ns],\
+    bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
+    galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
+    voidAlpha = 0.6,margins=None,hpxMap = hpx_map_list[ns],pad=0.05,
+    cbar_aspect=10,shrink=0.35,cbar_y_pos=0.17)
+plt.show()
+
+
 # Animation:
 imgs = [
     figuresFolder + "ah_match_sample_" +str(ns) + ".png" 
