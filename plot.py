@@ -3301,7 +3301,8 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,
         linking_length=0.2,showTheory=True,returnHandles=False,
         massErrors=False,listMode="average",errorType="bar",
         error_type="standard",hmf_interval=68,mass_errors=None,
-        all_masses=None,weight_model="Gaussian",error_interval=68):
+        all_masses=None,weight_model="Gaussian",error_interval=68,
+        powerRange=0,xticks=None):
     [dndm,m] = cosmology.TMF_from_hmf(massLower,massUpper,\
         h=h,Om0=Om0,Delta=Delta,delta_wrt=delta_wrt,\
         mass_function=mass_function,sigma8=sigma8,Ob0 = Ob0,\
@@ -3404,14 +3405,22 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,
     ax.set_title(title,fontsize=fontsize,fontfamily=font)
     ax.set_xlabel(xlabel,fontsize=fontsize,fontfamily=font)
     ax.set_ylabel(ylabel,fontsize=fontsize,fontfamily=font)
+    # Axis scale and ranges:
+    ax.set_ylim(ylim)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    # re-process y ticks for better looking format:
+    yticks = ax.get_yticks()
+    ax.set_yticks(yticks,labels=[
+        plot.scientificNotation(y,powerRange=powerRange) for y in yticks])
+    # Minor ticks and formatting:
     ax.tick_params(axis='both',labelsize=fontsize,\
         labelright=tickRight,right=tickRight)
     ax.tick_params(axis='both',which='minor',bottom=True,labelsize=fontsize)
     ax.tick_params(axis='y',which='minor')
     ax.yaxis.grid(color='grey',linestyle=':',alpha=0.5)
-    ax.set_ylim(ylim)
-    ax.set_xscale('log')
-    ax.set_yscale('log')
+    if xticks is not None:
+        ax.set_xticks(xticks)
     if savename is not None:
         plt.tight_layout()
         plt.savefig(savename)

@@ -977,7 +977,7 @@ for k in range(0,len(dictionaries)):
 fig.add_subplot(111,frameon=False)
 plt.tick_params(labelcolor='none', which='both', top=False, bottom=False, 
                 left=False, right=False)
-plt.xlabel('$R/R_{\\mathrm{eff}}$',fontsize=8)
+plt.xlabel('$r/r_{\\mathrm{eff}}$',fontsize=8)
 plt.ylabel('$\\rho/\\bar{\\rho}$',fontsize=8)
 ax[1,1].legend(prop={"size":fontsize,"family":"serif"},frameon=False,\
     loc="lower right")
@@ -1026,7 +1026,7 @@ for k in range(0,len(dictionaries)):
 fig.add_subplot(111,frameon=False)
 plt.tick_params(labelcolor='none', which='both', top=False, bottom=False, 
                 left=False, right=False)
-plt.xlabel('$R/R_{\\mathrm{eff}}$',fontsize=8)
+plt.xlabel('$r/r_{\\mathrm{eff}}$',fontsize=8)
 plt.ylabel('$\\rho/\\bar{\\rho}$',fontsize=8)
 ax[1].legend(prop={"size":fontsize,"family":"serif"},frameon=False,\
     loc="lower right")
