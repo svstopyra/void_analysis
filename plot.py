@@ -3406,9 +3406,9 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,
     ax.set_xlabel(xlabel,fontsize=fontsize,fontfamily=font)
     ax.set_ylabel(ylabel,fontsize=fontsize,fontfamily=font)
     # Axis scale and ranges:
-    ax.set_ylim(ylim)
     ax.set_xscale('log')
     ax.set_yscale('log')
+    ax.set_ylim(ylim)
     # re-process y ticks for better looking format:
     yticks = ax.get_yticks()
     ax.set_yticks(yticks,labels=[
