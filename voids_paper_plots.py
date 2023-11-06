@@ -1197,7 +1197,7 @@ if doCat:
         + " \n(well-constrained voids only)",
         labelRight  ="Combined catalogue ($68\%$) " 
         + "\n(well-constrained voids only)",
-        ylabel="Number of antihalos",savename=figuresFolder + 
+        ylabel="Number of anti-halos",savename=figuresFolder + 
         "mass_function_combined_300vs135_test.pdf",massLower=mLower,
         ylim=[1,1000],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,
         fontsize=8,massUpper = mUpper,

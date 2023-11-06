@@ -3838,6 +3838,10 @@ def plot_void_counts_radius(sample_radii,radius_bins,lambda_cdm_samples,
     ax.legend(prop={"size":fontsize,"family":fontfamily},frameon=False)
     if logy:
         ax.set_yscale('log')
+    yticks = ax.get_yticks()
+    ax.set_yticks(yticks,labels=[
+        scientificNotation(y,powerRange=powerRange,latex=True) 
+        for y in yticks])
     if savename is not None:
         plt.savefig(savename)
     if show:
