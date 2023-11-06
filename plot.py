@@ -3463,7 +3463,7 @@ def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
         Ob0=Ob0,mass_function=mass_function,delta_wrt=delta_wrt,\
         massLower=massLower,title=titleLeft,\
         massUpper=massUpper,marker=marker,linestyle=linestyle,\
-        color=color,colorTheory = colorTheory,\
+        color=color,colorTheory = colorTheory,ylabel=ylabel,\
         nBins=nBins,poisson_interval = poisson_interval,legendLoc=legendLoc,\
         label=labelLeft,transfer_model=transfer_model,ylim=ylim,\
         savename=saveLeft,listMode=listMode,massErrors=massErrors,\
@@ -3474,7 +3474,7 @@ def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
         Ob0=Ob0,mass_function=mass_function,delta_wrt=delta_wrt,\
         massLower=massLower,title = titleRight,\
         massUpper=massUpper,marker=marker,linestyle=linestyle,\
-        color=color,colorTheory = colorTheory,\
+        color=color,colorTheory = colorTheory,ylabel=ylabel,\
         nBins=nBins,poisson_interval = poisson_interval,legendLoc=legendLoc,\
         label=labelRight,transfer_model=transfer_model,ylim=ylimRight,\
         savename=saveRight,listMode=listMode,massErrors=massErrors,\
