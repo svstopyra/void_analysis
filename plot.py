@@ -3788,7 +3788,8 @@ def plot_void_counts_radius(sample_radii,radius_bins,lambda_cdm_samples,
                             ylabel="Number of voids",fontsize=8,
                             fontfamily="serif",savename=None,show=False,
                             logy=True,do_errors=False,radii_errors=None,
-                            weight_model="Gaussian",mcmc_interval="variance"):
+                            weight_model="Gaussian",mcmc_interval="variance",
+                            powerRange=0):
     # Get lambda-cdm comparin
     [lcdm_radii_counts,interval] = compute_lcdm_vsf(lambda_cdm_samples,
                                                     radius_bins,
