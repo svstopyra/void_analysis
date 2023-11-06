@@ -3418,6 +3418,7 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,
         for y in yticks])
     ax.set_ylim(ylim)
     print(ax.get_xticks())
+    print(ax.get_xticklabels())
     # Minor ticks and formatting:
     ax.tick_params(axis='both',labelsize=fontsize,\
         labelright=tickRight,right=tickRight)
