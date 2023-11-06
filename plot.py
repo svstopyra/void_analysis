@@ -3409,18 +3409,19 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,
     ax.set_xscale('log')
     ax.set_yscale('log')
     ax.set_ylim(ylim)
+    if xticks is not None:
+        ax.set_xticks(xticks)
     # re-process y ticks for better looking format:
     yticks = ax.get_yticks()
     ax.set_yticks(yticks,labels=[
-        scientificNotation(y,powerRange=powerRange) for y in yticks])
+        scientificNotation(y,powerRange=powerRange,latex=True) 
+        for y in yticks])
     # Minor ticks and formatting:
     ax.tick_params(axis='both',labelsize=fontsize,\
         labelright=tickRight,right=tickRight)
     ax.tick_params(axis='both',which='minor',bottom=True,labelsize=fontsize)
     ax.tick_params(axis='y',which='minor')
     ax.yaxis.grid(color='grey',linestyle=':',alpha=0.5)
-    if xticks is not None:
-        ax.set_xticks(xticks)
     if savename is not None:
         plt.tight_layout()
         plt.savefig(savename)
