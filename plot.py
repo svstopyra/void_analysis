@@ -3412,7 +3412,7 @@ def plotMassFunction(masses,volSim,ax=None,Om0=0.3,h=0.8,ns=1.0,
     # re-process y ticks for better looking format:
     yticks = ax.get_yticks()
     ax.set_yticks(yticks,labels=[
-        plot.scientificNotation(y,powerRange=powerRange) for y in yticks])
+        scientificNotation(y,powerRange=powerRange) for y in yticks])
     # Minor ticks and formatting:
     ax.tick_params(axis='both',labelsize=fontsize,\
         labelright=tickRight,right=tickRight)

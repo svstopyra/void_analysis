@@ -1207,7 +1207,7 @@ if doCat:
         legendLoc="upper right",errorType="shaded",massErrors=True,
         error_type="bernoulli",hmf_interval=68,weight_model="bootstrap",
         mass_error_left = mass_error_left,mass_error_right=mass_error_right,\
-        error_interval=68,poisson_interval=0.68)
+        error_interval=68,poisson_interval=0.68,powerRange=2)
 
 
 #-------------------------------------------------------------------------------
