@@ -3789,7 +3789,7 @@ def plot_void_counts_radius(sample_radii,radius_bins,lambda_cdm_samples,
                             fontfamily="serif",savename=None,show=False,
                             logy=True,do_errors=False,radii_errors=None,
                             weight_model="Gaussian",mcmc_interval="variance",
-                            powerRange=0):
+                            powerRange=0,ylim=[1,100]):
     # Get lambda-cdm comparin
     [lcdm_radii_counts,interval] = compute_lcdm_vsf(lambda_cdm_samples,
                                                     radius_bins,
@@ -3843,6 +3843,7 @@ def plot_void_counts_radius(sample_radii,radius_bins,lambda_cdm_samples,
     ax.set_yticks(yticks,labels=[
         scientificNotation(y,powerRange=powerRange,latex=True) 
         for y in yticks])
+    ax.set_ylim(ylim)
     if savename is not None:
         plt.savefig(savename)
     if show:
