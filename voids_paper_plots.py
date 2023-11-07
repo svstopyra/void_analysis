@@ -1056,7 +1056,7 @@ permutations = []
 randomlyOrderedCats = []
 goodVoidsPerm = []
 np.random.seed(1000)
-nPerms = 10
+nPerms = 20
 numVoidsPerm = np.zeros(nPerms,dtype=int)
 for k in range(0,nPerms):
     perm = np.random.permutation(len(snapList))
