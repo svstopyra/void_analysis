@@ -1493,7 +1493,8 @@ plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
     bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
     galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
     voidAlpha = 0.6,margins=None,hpxMap = hpx_map_list[ns],pad=0.05,
-    cbar_aspect=10,shrink=0.35,cbar_y_pos=0.17)
+    cbar_aspect=10,shrink=0.35,cbar_y_pos=0.17,
+    cluster_key="Massive clusters",void_key="Void regions")
 plt.show()
 
 
