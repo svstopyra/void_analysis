@@ -5589,6 +5589,10 @@ if doClusterMasses:
                 tools.loadOrRecompute(data_folder + "mean_cluster_masses.p",\
                     getBORGClusterMassEstimates,snapNameList,clusterLoc,\
                     equatorialXYZ,_recomputeData=recomputeData)
+    [meanMasses,meanCentres,sigmaMassesVar,sigmaCentresVar,\
+            clusterMasses,clusterCentres,clusterCounterparts] = \
+                getBORGClusterMassEstimates(snapNameList,clusterLoc,\
+                    equatorialXYZ,error_type="variance")
 
 # Fornax and Virgo:
 otherClustersLocRADec = np.array([[187,10,16.5],[9,-35,19.5]])

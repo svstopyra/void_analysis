@@ -29,7 +29,7 @@ from astropy.io import fits
 # MASS CONSTRAINTS PLOT
 def showClusterMassConstraints(meanCriticalMass,stdErrorCriticalMass,\
         figOut = '.',catFolder = "../../../catalogues/",h=0.705,Om0 = 0.3111,\
-        savename = "mass_constraints_plot.pdf",savePlotData=False):
+        savename = "mass_constraints_plot.pdf",savePlotData=False,show=True):
     # Record mass constraints from different sources:
     # Norma mass from Woudt et al.:
     Mvt = 10.4e14
@@ -768,7 +768,8 @@ def showClusterMassConstraints(meanCriticalMass,stdErrorCriticalMass,\
         '($\\mathbf{r < 135 \\mathrm{\\bf\\,Mpc}}\\bf{h^{-1}}$)',\
         fontfamily=fontname,fontsize=fontsize1,fontweight='bold')
     plt.savefig(savename,dpi=500)
-    plt.show()
+    if show:
+        plt.show()
     if savePlotData:
         plotData = [plotDataMass,plotDataRange,plotDataNames,plotDataClusters]
         tools.savePickle(plotData,savename + ".data.p")

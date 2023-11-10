@@ -3448,9 +3448,10 @@ def getClusterMassEstimatesFromSnapshot(clusterLoc,snap,equatorialXYZ2MPP,\
     return [clusterMasses,clusterCentres,counterpartHalos]
 
 # Helper function to compute mass estimates from all samples:
-def getBORGClusterMassEstimates(snapList,clusterLoc,equatorialXYZ2MPP,\
-        reductions=4,iterations=20,gatherRadius=5,neighbourRadius=10,\
-        allAhProps = None,recomputeData=True,recentre=True):
+def getBORGClusterMassEstimates(snapList,clusterLoc,equatorialXYZ2MPP,
+        reductions=4,iterations=20,gatherRadius=5,neighbourRadius=10,
+        allAhProps = None,recomputeData=True,recentre=True,
+        error_type="standard"):
     clusterMasses = -np.ones((len(snapList),len(clusterLoc)))
     clusterCentres = -np.ones((len(snapList),len(clusterLoc),3))
     clusterCounterparts = -np.ones((len(snapList),len(clusterLoc)),dtype=int)
@@ -3482,11 +3483,17 @@ def getBORGClusterMassEstimates(snapList,clusterLoc,equatorialXYZ2MPP,\
     for nc in range(0,len(clusterLoc)):
         haveData = np.where(clusterMasses[:,nc] >= 0.0)[0]
         meanMasses[nc] = np.mean(clusterMasses[haveData,nc])
-        sigmaMasses[nc] = np.std(clusterMasses[haveData,nc])/\
-            np.sqrt(len(haveData))
         meanCentres[nc,:] = np.mean(clusterCentres[haveData,nc,:],0)
-        sigmaCentres[nc,:] = np.std(clusterCentres[haveData,nc,:],0)/\
-            np.sqrt(len(haveData))
+        if error_type == "standard":
+            sigmaMasses[nc] = np.std(clusterMasses[haveData,nc])/\
+                np.sqrt(len(haveData))
+            sigmaCentres[nc,:] = np.std(clusterCentres[haveData,nc,:],0)/\
+                np.sqrt(len(haveData))
+        elif error_type == "variance":
+            sigmaMasses[nc] = np.std(clusterMasses[haveData,nc])
+            sigmaCentres[nc,:] = np.std(clusterCentres[haveData,nc,:],0)
+        else:
+            raise Exception("Error type not recognised.")
     return [meanMasses,meanCentres,sigmaMasses,sigmaCentres,\
         clusterMasses,clusterCentres,clusterCounterparts]
 
