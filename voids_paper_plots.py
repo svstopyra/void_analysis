@@ -561,7 +561,7 @@ table_titles = {'ID':"ID",'rad':"Radius $(h^{-1}\mathrm{Mpc})$",
                 'mass_error':"Mass uncertainty $(10^{14}h^{-1}M_{\odot})$",
                 'ra':'R.A. (deg.)','dec':"Dec. (deg.)",
                 'z':"z",'dist':"Distance $(h^{-1}\\mathrm{Mpc})$",
-                'snr':"SNR",'cat_frac':"Catalogue Fraction"}
+                'snr':"SNR",'cat_frac':"Reproducibility Score"}
 
 save_name = data_folder + "void_catalogue.csv"
 save_name_titled = data_folder + "void_catalogue_titled.csv"

@@ -5951,6 +5951,28 @@ if doClusterMasses:
         savename = figuresFolder + "mass_constraints_plot.pdf",\
         savePlotData=True)
 
+# Plot showing actual mass distributions:
+import seaborn
+
+plt.clf()
+massconstraintsplot.showClusterMassConstraints(\
+        meanMasses,sigmaMasses,\
+        figOut = figuresFolder,catFolder = "./catalogues/",h=h,Om0 = Om0,\
+        savePlotData=False,show=False)
+
+sortedClusters = np.argsort(meanMasses)
+
+fig = plt.gcf()
+ax = fig.axes
+for k in range(0,9):
+    ks = sortedClusters[k]
+    seaborn.kdeplot(data=clusterMasses[:,ks],color='grey',alpha=0.5,
+        label='KDE of means',ax=ax[k],fill=True)
+
+plt.savefig(figuresFolder + "mass_constraints_with_distributions.pdf")
+plt.show()
+
+
 #-------------------------------------------------------------------------------
 # MASS FUNCTIONS PLOT 135 VS 300
 
