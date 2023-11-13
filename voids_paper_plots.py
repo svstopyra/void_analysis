@@ -25,6 +25,11 @@ import scipy
 import os
 import sys
 
+# Set global figure font:
+import matplotlib.pyplot as plt
+fontfamily = "Times New Roman"
+plt.rcParams["font.family"] = fontfamily
+
 figuresFolder = "borg-antihalos_paper_figures/all_samples/"
 #figuresFolder = "borg-antihalos_paper_figures/batch5-2/"
 #figuresFolder = "borg-antihalos_paper_figures/batch5-4/"
@@ -964,9 +969,12 @@ for k in range(0,len(dictionaries)):
     plot.formatPlotGrid(ax,i,j,0,None,0,None,n_rows,ylim,\
         fontsize=fontsize)
     axij.set_xlim([0,3])
-    axij.set_title(labels[k],y=1.0,pad=-3,fontsize=8,va="top")
-    axij.tick_params(axis='both',which='major',labelsize=fontsize)
-    axij.tick_params(axis='both',which='minor',labelsize=fontsize)
+    axij.set_title(labels[k],y=1.0,pad=-3,fontsize=8,va="top",
+                   fontfamily=fontfamily)
+    axij.tick_params(axis='both',which='major',labelsize=fontsize,
+                     labelfontfamily=fontfamily)
+    axij.tick_params(axis='both',which='minor',labelsize=fontsize,
+                     labelfontfamily=fontfamily)
     # Adjust the tick labels to prevent annoying overlaps:
     if i > 0:
         axij.set_yticks(axij.get_yticks()[0:-1])
@@ -977,9 +985,9 @@ for k in range(0,len(dictionaries)):
 fig.add_subplot(111,frameon=False)
 plt.tick_params(labelcolor='none', which='both', top=False, bottom=False, 
                 left=False, right=False)
-plt.xlabel('$r/r_{\\mathrm{eff}}$',fontsize=8)
-plt.ylabel('$\\rho/\\bar{\\rho}$',fontsize=8)
-ax[1,1].legend(prop={"size":fontsize,"family":"serif"},frameon=False,\
+plt.xlabel('$r/r_{\\mathrm{eff}}$',fontsize=8,fontfamily=fontfamily)
+plt.ylabel('$\\rho/\\bar{\\rho}$',fontsize=8,fontfamily=fontfamily)
+ax[1,1].legend(prop={"size":fontsize,"family":fontfamily},frameon=False,\
     loc="lower right")
 #plt.tight_layout()
 plt.subplots_adjust(hspace=0.0,wspace=0.0,left = 0.08,right=0.98,top=0.98,
@@ -1014,8 +1022,10 @@ for k in range(0,len(dictionaries)):
         fontsize=fontsize)
     axij.set_xlim([0,3])
     axij.set_title(labels[k],y=1.0,pad=-3,fontsize=8,va="top")
-    axij.tick_params(axis='both',which='major',labelsize=fontsize)
-    axij.tick_params(axis='both',which='minor',labelsize=fontsize)
+    axij.tick_params(axis='both',which='major',labelsize=fontsize,
+                     labelfontfamily=fontfamily)
+    axij.tick_params(axis='both',which='minor',labelsize=fontsize,
+                     labelfontfamily=fontfamily)
     # Adjust the tick labels to prevent annoying overlaps:
     if i > 0:
         axij.set_yticks(axij.get_yticks()[0:-1])
@@ -1026,9 +1036,9 @@ for k in range(0,len(dictionaries)):
 fig.add_subplot(111,frameon=False)
 plt.tick_params(labelcolor='none', which='both', top=False, bottom=False, 
                 left=False, right=False)
-plt.xlabel('$r/r_{\\mathrm{eff}}$',fontsize=8)
-plt.ylabel('$\\rho/\\bar{\\rho}$',fontsize=8)
-ax[1].legend(prop={"size":fontsize,"family":"serif"},frameon=False,\
+plt.xlabel('$r/r_{\\mathrm{eff}}$',fontsize=8,fontfamily=fontfamily)
+plt.ylabel('$\\rho/\\bar{\\rho}$',fontsize=8,fontfamily=fontfamily)
+ax[1].legend(prop={"size":fontsize,"family":fontfamily},frameon=False,\
     loc="lower right")
 #plt.tight_layout()
 plt.subplots_adjust(hspace=0.0,wspace=0.0,left = 0.08,right=0.98,top=0.98,
@@ -1200,7 +1210,7 @@ if doCat:
         ylabel="Number of anti-halos",savename=figuresFolder + 
         "mass_function_combined_300vs135.pdf",massLower=mLower,
         ylim=[1,1000],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,
-        fontsize=8,massUpper = mUpper,
+        fontsize=8,massUpper = mUpper,font=fontfamily,
         titleLeft = "Combined catalogue, $<135\\,\\mathrm{Mpc}h^{-1}$",
         titleRight = "Combined catalogue, $<300\\,\\mathrm{Mpc}h^{-1}$",
         volSimRight = 4*np.pi*300**3/3,ylimRight=[1,1000],
@@ -1244,8 +1254,10 @@ plot_void_counts_radius(mean_radii_mcmc[0],radius_bins,
                         weight_model="bootstrap",mcmc_interval=68,
                         confidence=0.68,powerRange=1,ylim=[1,100])
 
-ax.tick_params(axis='both',which='major',labelsize=fontsize)
-ax.tick_params(axis='both',which='minor',labelsize=fontsize)
+ax.tick_params(axis='both',which='major',labelsize=fontsize,
+               labelfontfamily=fontfamily)
+ax.tick_params(axis='both',which='minor',labelsize=fontsize,
+               labelfontfamily=fontfamily)
 plt.subplots_adjust(left = 0.17,right=0.97,bottom = 0.15,top = 0.97)
 plt.savefig(figuresFolder + "void_size_function.pdf")
 #plt.savefig(figuresFolder + "void_size_function_test.pdf")
@@ -1745,13 +1757,13 @@ for i in range(0,nRows):
             axij.set_xlim([1e13,1e15])
         plot.formatPlotGrid(ax,i,j,None,None,None,None,nRows,ylims[j],\
             fontsize=fontsize)
-        axij.set_xlabel(xlabels[j],fontsize=fontsize,fontfamily = "serif")
+        axij.set_xlabel(xlabels[j],fontsize=fontsize,fontfamily = fontfamily)
         axij.set_ylabel('Probability Density',fontsize=fontsize,\
-            fontfamily = "serif")
+            fontfamily = fontfamily)
         axij.set_xlim(xlims[j])
         if i == 0:
             axij.set_title(colText[i],fontsize = fontsize,\
-                fontfamily = "serif")
+                fontfamily = fontfamily)
         axij.tick_params(axis='both',which='major',labelsize=fontsize)
         axij.tick_params(axis='both',which='minor',labelsize=fontsize)
         # Adjust the tick labels to prevent annoying overlaps:
@@ -1773,7 +1785,7 @@ start = 1/(2*nRows)
 for l in range(0,nRows):
     fig.text(right + 0.025,top + (bottom - top)*(start + l*spacing),\
              rowText[l],\
-             fontsize=fontsize,fontfamily="serif",ha='center',\
+             fontsize=fontsize,fontfamily=fontfamily,ha='center',\
              rotation='vertical',va='center')
 
 plt.subplots_adjust(wspace=wspace,hspace=hspace,left=left,right=right,
