@@ -3454,7 +3454,7 @@ def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
                            errorType="shaded",mass_error_left=None,
                            mass_error_right=None,**kwargs):
     if ax is None:
-        fig, ax = plt.subplots(rows,cols,figsize=(8,4))
+        fig, ax = plt.subplots(rows,cols,figsize=figsize)
     if volSimRight is None:
         volSimRight = volSim
     if ylimRight is None:

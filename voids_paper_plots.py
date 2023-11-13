@@ -1198,7 +1198,7 @@ if doCat:
         labelRight  ="Combined catalogue ($68\%$) " 
         + "\n(well-constrained voids only)",
         ylabel="Number of anti-halos",savename=figuresFolder + 
-        "mass_function_combined_300vs135_test.pdf",massLower=mLower,
+        "mass_function_combined_300vs135.pdf",massLower=mLower,
         ylim=[1,1000],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,
         fontsize=8,massUpper = mUpper,
         titleLeft = "Combined catalogue, $<135\\,\\mathrm{Mpc}h^{-1}$",
@@ -1208,7 +1208,7 @@ if doCat:
         error_type="bernoulli",hmf_interval=68,weight_model="bootstrap",
         mass_error_left = mass_error_left,mass_error_right=mass_error_right,\
         error_interval=68,poisson_interval=0.68,powerRange=1,
-        xticks=[2e14,1e15])
+        xticks=[2e14,1e15],figsize=(textwidth,0.45*textwidth))
 
 
 #-------------------------------------------------------------------------------
