@@ -611,8 +611,7 @@ def plotMollweide(hpxMap,radius=None,galaxyAngles=None,galaxyDistances=None,
         plt.colorbar(sm,location='bottom',label=cbarLabel,\
             shrink=shrink,pad=pad)
         cbarax = plt.gca()
-        cbarax.tick_params(axis='both',labelsize=fontsize,
-                           labelfontfamily=fontname)
+        cbarax.tick_params(axis='both',labelsize=fontsize)
         #cbax = fig.add_axes([figsize[0]/4,0.05,figsize[0]/2,figsize[0]/16])
         #cbar = plt.colorbar(sm, orientation="horizontal",
         #    pad=pad,label=cbarLabel,shrink=shrink,\
@@ -1535,8 +1534,7 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         cbar = plt.colorbar(
             sm, orientation="horizontal",pad=pad,
             label='$\\rho/\\bar{\\rho}$',shrink=shrink,aspect = cbar_aspect)
-        cbar.ax.tick_params(axis='both',labelsize=legendFontSize,
-                            labelfontfamily=fontname)
+        cbar.ax.tick_params(axis='both',labelsize=legendFontSize)
         cbar.set_label(label = '$\\rho/\\bar{\\rho}$',
                        fontsize = legendFontSize,fontfamily = fontname)
         cbar.ax.set_position(
