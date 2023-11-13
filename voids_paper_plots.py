@@ -31,6 +31,10 @@ fontfamily = "Times New Roman"
 plt.rcParams["font.family"] = "serif"
 plt.rcParams['font.serif'] = ["DeJavu serif"]
 
+# Data export options:
+save_plot_data = True
+load_plot_data = True
+
 figuresFolder = "borg-antihalos_paper_figures/all_samples/"
 #figuresFolder = "borg-antihalos_paper_figures/batch5-2/"
 #figuresFolder = "borg-antihalos_paper_figures/batch5-4/"
@@ -1001,12 +1005,25 @@ plt.show()
 #-------------------------------------------------------------------------------
 # ALL VOID PROFILES IN A 2-PANEL PLOT
 
+if save_plot_data:
+    tools.savePickle([noConstraintsDict,regionAndVoidDensityConditionDict,
+                     rBinStackCentres,nbar,rhoMCMCToUse,sigmaRhoMCMCToUse],
+                     data_folder + "profile_plot_data.p")
+
+if load_plot_data:
+    [noConstraintsDict,regionAndVoidDensityConditionDict,
+     rBinStackCentres,nbar,rhoMCMCToUse,sigmaRhoMCMCToUse] = \
+         tools.loadPickle(data_folder + "profile_plot_data.p")
+
+
+
 labels = ['Comparison with random catalogues',
-          'Compairosn including environment selection']
+          'Comparison including environment selection']
 dictionaries = [noConstraintsDict,regionAndVoidDensityConditionDict]
 n_cols = 2
 n_rows = 1
 ylim = [0,1.2]
+
 
 plt.clf()
 fig, ax = plt.subplots(n_rows,n_cols,figsize=(textwidth,0.35*textwidth))
@@ -1014,7 +1031,8 @@ for k in range(0,len(dictionaries)):
     [i,j] = get_axis_indices(k,n_cols)
     axij = get_axis_handle(i,j,n_rows,n_cols,ax)
     plotConditionedProfile(rBinStackCentres,dictionaries[k],nbar,ax=axij,\
-                           intervals=[68],alphas=[1.0],ec='grey',color='None')
+                           intervals=[68],alphas=[1.0],ec='grey',color='None',
+                           hatch="XXXX")
     plotMCMCProfile(rBinStackCentres,rhoMCMCToUse,sigmaRhoMCMCToUse,nbar,
                     ax = axij)
     axij.axvline(1.0,color='grey',linestyle=':')
@@ -1022,11 +1040,9 @@ for k in range(0,len(dictionaries)):
     plot.formatPlotGrid(ax,i,j,0,None,0,None,n_rows,ylim,\
         fontsize=fontsize)
     axij.set_xlim([0,3])
-    axij.set_title(labels[k],y=1.0,pad=-3,fontsize=8,va="top")
-    axij.tick_params(axis='both',which='major',labelsize=fontsize,
-                     labelfontfamily=fontfamily)
-    axij.tick_params(axis='both',which='minor',labelsize=fontsize,
-                     labelfontfamily=fontfamily)
+    axij.set_title(labels[k],y=1.1,pad=-3,fontsize=8,va="top")
+    axij.tick_params(axis='both',which='major',labelsize=fontsize)
+    axij.tick_params(axis='both',which='minor',labelsize=fontsize)
     # Adjust the tick labels to prevent annoying overlaps:
     if i > 0:
         axij.set_yticks(axij.get_yticks()[0:-1])
@@ -1042,8 +1058,8 @@ plt.ylabel('$\\rho/\\bar{\\rho}$',fontsize=8,fontfamily=fontfamily)
 ax[1].legend(prop={"size":fontsize,"family":fontfamily},frameon=False,\
     loc="lower right")
 #plt.tight_layout()
-plt.subplots_adjust(hspace=0.0,wspace=0.0,left = 0.08,right=0.98,top=0.98,
-                    bottom = 0.15)
+plt.subplots_adjust(hspace=0.0,wspace=0.0,left = 0.08,right=0.98,top=0.93,
+                    bottom = 0.18)
 plt.savefig(figuresFolder + "profile_constraint_progression_2panels.pdf")
 plt.show()
 
@@ -1137,12 +1153,12 @@ vsfPerm300 = [cat.getMeanProperty("radii")[0][filt] \
 #-------------------------------------------------------------------------------
 # MASS FUNCTIONS PLOT
 
-
 # Mass functions:
 leftFilter = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
     (distances300 < 135) & (cat300.finalCatFrac > thresholds300)
 rightFilter = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
     (distances300 < 300) & (cat300.finalCatFrac > thresholds300)
+
 
 nBins = 8
 Om = referenceSnap.properties['omegaM0']
@@ -1199,6 +1215,19 @@ mass_error_right = cat300.getAllProperties('mass',void_filter=rightFilter)
 #mass_error_left = None
 #mass_error_right = None
 
+
+if save_plot_data:
+    tools.savePickle([mass_samples_left,mass_samples_right,
+                     mass_error_left,mass_error_right],
+                     data_folder + "mass_functions_plot_data.p")
+
+
+if load_plot_data:
+    [mass_samples_left,mass_samples_right,
+     mass_error_left,mass_error_right] = \
+        tools.loadPickle(data_folder + "mass_functions_plot_data.p")
+
+
 plt.clf()
 doCat = True
 if doCat:
@@ -1236,7 +1265,7 @@ rightFilter = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
     (distances300 < 300) & (cat300.finalCatFrac > thresholds300)
 
 
-radius_bins = np.linspace(10,21,7)
+
 
 
 
@@ -1246,6 +1275,17 @@ all_radii_mcmc = cat300.getAllProperties('radii',void_filter=leftFilter)
 #mean_radii_mcmc = cat300test.getMeanProperty('radii',
 #                                             void_filter=cat300test.filter)
 #mean_radii_mcmc = vsfPerm135
+
+radius_bins = np.linspace(10,21,7)
+
+if save_plot_data:
+    tools.savePickle(
+        [mean_radii_mcmc,noConstraintsDict,all_radii_mcmc],
+        data_folder + "vsf_plot_data.p")
+
+if load_plot_data:
+    [mean_radii_mcmc,noConstraintsDict,all_radii_mcmc] = \
+        tools.loadPickle(data_folder + "vsf_plot_data.p")
 
 plt.clf()
 fig, ax = plt.subplots(figsize=(0.45*textwidth,0.4*textwidth))
@@ -1388,18 +1428,6 @@ labelListAll = []
 plotFormat='.png'
 #plotFormat='.pdf'
 
-textwidth=7.1014
-textheight=9.0971
-scale = 1.18
-ratio = 0.58
-width = textwidth
-height = ratio*textwidth
-cropPoint = ((scale -1)/2)*np.array([width,height]) + \
-    np.array([0,0])
-bound_box = transforms.Bbox([[cropPoint[0], cropPoint[1]],
-    [cropPoint[0] + width, cropPoint[1] + height]])
-
-
 for ns in range(0,len(snapNameList)):
     asList = []
     colourList = []
@@ -1435,9 +1463,42 @@ for k in range(0,np.min([nVoidsToShow,len(selection)])):
     labelListTot.append(str(k+1))
     print("Done for void " + str(k+1))
 
+
+
+hpx_map_list = [plot.sphericalSlice(
+    snap,rCut/2,thickness=rCut,fillZeros=vmin*rhobar,centre=np.array([0,0,0]),
+    nside=nside)/rhobar for snap in snapList]
+
+if save_plot_data:
+    tools.savePickle(
+        [asListAll,laListAll,coordCombinedAbellSphere,clusterIndMain,
+        clusterNames,colourListAll,labelListAll,hpx_map_list,
+        equatorialRThetaPhi],
+        data_folder + "skyplot_plot_data.p")
+
+if load_plot_data:
+    [asListAll,laListAll,coordCombinedAbellSphere,clusterIndMain,
+        clusterNames,colourListAll,labelListAll,hpx_map_list,
+        equatorialRThetaPhi] = \
+        tools.loadPickle(data_folder + "skyplot_plot_data.p")
+
+
+
+
+textwidth=7.1014
+textheight=9.0971
+scale = 1.18
+ratio = 0.58
+width = textwidth
+height = ratio*textwidth
+cropPoint = ((scale -1)/2)*np.array([width,height]) + \
+    np.array([0,0])
+bound_box = transforms.Bbox([[cropPoint[0], cropPoint[1]],
+    [cropPoint[0] + width, cropPoint[1] + height]])
+
 # Pre-compute density field healpix maps, so we don't have to
 # recompute them everytime we want to make small changes:
-Om = snapList[0].properties['omegaM0']
+Om = referenceSnap.properties['omegaM0']
 rhoc = 2.7754e11
 rhobar = rhoc*Om
 vmin = 1e-2
@@ -1454,18 +1515,12 @@ annotationPos = [[-1.1,0.9],\
 nameList = [name[0] for name in clusterNames]
 
 
-
-hpx_map_list = [plot.sphericalSlice(
-    snap,rCut/2,thickness=rCut,fillZeros=vmin*rhobar,centre=np.array([0,0,0]),
-    nside=nside)/rhobar for snap in snapList]
-
-
 # All anti-halos:
 for ns in range(0,len(snapNumList)):
     plt.clf()
-    plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
+    plot.plotLocalUniverseMollweide(rCut,None,\
         alpha_shapes = asListAll[ns],\
-        largeAntihalos = laListAll[ns],hr=hrList[ns],\
+        largeAntihalos = laListAll[ns],hr=None,\
         coordAbell = coordCombinedAbellSphere,\
         abellListLocation = clusterIndMain,\
         nameListLargeClusters = [name[0] for name in clusterNames],\
@@ -1474,7 +1529,7 @@ for ns in range(0,len(snapNumList)):
         str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",\
         vmin=1e-2,vmax=1e2,legLoc = 'lower left',\
         bbox_to_anchor = (-0.1,-0.2),\
-        snapsort = snapSortList[ns],antihaloCentres = None,\
+        snapsort = None,antihaloCentres = None,\
         figOut = figuresFolder + "/ah_match_sample_" + \
         str(ns) + plotFormat,\
         showFig=False,figsize = (scale*textwidth,scale*ratio*textwidth),\
@@ -1488,9 +1543,9 @@ for ns in range(0,len(snapNumList)):
 # Actual skyplot to show:
 ns = 1
 plt.clf()
-plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
+plot.plotLocalUniverseMollweide(rCut,None,\
     alpha_shapes = asListAll[ns],\
-    largeAntihalos = laListAll[ns],hr=hrList[ns],\
+    largeAntihalos = laListAll[ns],hr=None,\
     coordAbell = coordCombinedAbellSphere,\
     abellListLocation = clusterIndMain,\
     nameListLargeClusters = [name[0] for name in clusterNames],\
@@ -1499,7 +1554,7 @@ plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
     str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",\
     vmin=1e-2,vmax=1e2,legLoc = 'lower left',\
     bbox_to_anchor = (-0.1,-0.2),\
-    snapsort = snapSortList[ns],antihaloCentres = None,\
+    snapsort = ,antihaloCentres = None,\
     figOut = figuresFolder + "/skyplot.pdf",\
     showFig=False,figsize = (scale*textwidth,scale*ratio*textwidth),\
     voidColour = colourListAll[ns],antiHaloLabel=labelListAll[ns],\
