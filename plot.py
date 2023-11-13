@@ -3454,7 +3454,9 @@ def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
                            saveRight=None,ylimRight=None,volSimRight=None,
                            listMode="average",massErrors=False,
                            errorType="shaded",mass_error_left=None,
-                           mass_error_right=None,**kwargs):
+                           mass_error_right=None,remove_hspace=False,
+                           left=0.05,right=0.95,bottom=0.05,top=0.95,
+                           hspace=0.0,wspace=0.0,**kwargs):
     if ax is None:
         fig, ax = plt.subplots(rows,cols,figsize=figsize)
     if volSimRight is None:
@@ -3483,7 +3485,15 @@ def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
         label=labelRight,transfer_model=transfer_model,ylim=ylimRight,\
         savename=saveRight,listMode=listMode,massErrors=massErrors,\
         errorType=errorType,mass_errors=mass_error_right,**kwargs)
-    plt.tight_layout()
+    if not remove_hspace:
+        plt.tight_layout()
+    else:
+        plt.subplots_adjust(left=left,right=right,top=top,bottom=bottom,
+                            hspace=hspace,wspace=wspace)
+        # Remove y-labels on the second axis, to prevent clashing:
+        ax[1].yaxis.label.set_visible(False)
+        ax[1].yaxis.set_major_formatter(NullFormatter())
+        ax[1].yaxis.set_minor_formatter(NullFormatter())
     if savename is not None:
         plt.savefig(savename)
     if show:

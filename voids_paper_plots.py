@@ -28,7 +28,8 @@ import sys
 # Set global figure font:
 import matplotlib.pyplot as plt
 fontfamily = "Times New Roman"
-plt.rcParams["font.family"] = fontfamily
+plt.rcParams["font.family"] = "serif"
+plt.rcParams['font.serif'] = ["DeJavu serif"]
 
 figuresFolder = "borg-antihalos_paper_figures/all_samples/"
 #figuresFolder = "borg-antihalos_paper_figures/batch5-2/"
@@ -1205,8 +1206,8 @@ if doCat:
         mass_samples_right,4*np.pi*135**3/3,nBins=nBins,
         labelLeft = "Combined catalogue ($68\%$)" 
         + " \n(well-constrained voids only)",
-        labelRight  ="Combined catalogue ($68\%$) " 
-        + "\n(well-constrained voids only)",
+        labelRight  ="Combined catalogue \n($68\%$) " 
+        + "(well-constrained \nvoids only)",
         ylabel="Number of anti-halos",savename=figuresFolder + 
         "mass_function_combined_300vs135.pdf",massLower=mLower,
         ylim=[1,1000],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,
