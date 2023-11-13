@@ -1206,8 +1206,8 @@ if doCat:
         mass_samples_right,4*np.pi*135**3/3,nBins=nBins,
         labelLeft = "Combined catalogue ($68\%$)" 
         + " \n(well-constrained voids only)",
-        labelRight  ="Combined catalogue \n($68\%$) " 
-        + "(well-constrained \nvoids only)",
+        labelRight  ="Combined \n catalogue ($68\%$) " 
+        + "\n(well-constrained \nvoids only)",
         ylabel="Number of anti-halos",savename=figuresFolder + 
         "mass_function_combined_300vs135.pdf",massLower=mLower,
         ylim=[1,1000],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,
@@ -1219,7 +1219,9 @@ if doCat:
         error_type="bernoulli",hmf_interval=68,weight_model="bootstrap",
         mass_error_left = mass_error_left,mass_error_right=mass_error_right,\
         error_interval=68,poisson_interval=0.68,powerRange=1,
-        xticks=[2e14,1e15],figsize=(textwidth,0.45*textwidth))
+        xticks=[2e14,1e15],figsize=(textwidth,0.35*textwidth),
+        remove_hspace=True,left=0.08,right=0.97,bottom=0.18,top=0.9,
+        hspace=0.0,wspace=0.0)
 
 
 #-------------------------------------------------------------------------------

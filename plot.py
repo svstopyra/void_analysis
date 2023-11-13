@@ -3456,7 +3456,8 @@ def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
                            errorType="shaded",mass_error_left=None,
                            mass_error_right=None,remove_hspace=False,
                            left=0.05,right=0.95,bottom=0.05,top=0.95,
-                           hspace=0.0,wspace=0.0,**kwargs):
+                           hspace=0.0,wspace=0.0,showLegend=[True,True],
+                           **kwargs):
     if ax is None:
         fig, ax = plt.subplots(rows,cols,figsize=figsize)
     if volSimRight is None:
@@ -3467,7 +3468,7 @@ def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
         Delta=Delta,sigma8=sigma8,fontsize=fontsize,\
         legendFontsize=legendFontsize,font="serif",\
         Ob0=Ob0,mass_function=mass_function,delta_wrt=delta_wrt,\
-        massLower=massLower,title=titleLeft,\
+        massLower=massLower,title=titleLeft,showLegend=showLegend[0],\
         massUpper=massUpper,marker=marker,linestyle=linestyle,\
         color=color,colorTheory = colorTheory,ylabel=ylabel,\
         nBins=nBins,poisson_interval = poisson_interval,legendLoc=legendLoc,\
@@ -3478,7 +3479,7 @@ def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
         Delta=Delta,sigma8=sigma8,fontsize=fontsize,\
         legendFontsize=legendFontsize,font="serif",\
         Ob0=Ob0,mass_function=mass_function,delta_wrt=delta_wrt,\
-        massLower=massLower,title = titleRight,\
+        massLower=massLower,title = titleRight,showLegend=showLegend[1],\
         massUpper=massUpper,marker=marker,linestyle=linestyle,\
         color=color,colorTheory = colorTheory,ylabel=ylabel,\
         nBins=nBins,poisson_interval = poisson_interval,legendLoc=legendLoc,\
