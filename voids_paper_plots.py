@@ -1001,15 +1001,15 @@ plt.show()
 #-------------------------------------------------------------------------------
 # ALL VOID PROFILES IN A 2-PANEL PLOT
 
-labels = ['No constraints',
-          'Region Density + \nVoid Central & \nAverage Density']
+labels = ['Comparison with random catalogues',
+          'Compairosn including environment selection']
 dictionaries = [noConstraintsDict,regionAndVoidDensityConditionDict]
 n_cols = 2
 n_rows = 1
 ylim = [0,1.2]
 
 plt.clf()
-fig, ax = plt.subplots(n_rows,n_cols,figsize=(textwidth,0.45*textwidth))
+fig, ax = plt.subplots(n_rows,n_cols,figsize=(textwidth,0.35*textwidth))
 for k in range(0,len(dictionaries)):
     [i,j] = get_axis_indices(k,n_cols)
     axij = get_axis_handle(i,j,n_rows,n_cols,ax)
@@ -1219,9 +1219,9 @@ if doCat:
         error_type="bernoulli",hmf_interval=68,weight_model="bootstrap",
         mass_error_left = mass_error_left,mass_error_right=mass_error_right,\
         error_interval=68,poisson_interval=0.68,powerRange=1,
-        xticks=[2e14,1e15],figsize=(textwidth,0.35*textwidth),
-        remove_hspace=True,left=0.08,right=0.97,bottom=0.18,top=0.9,
-        hspace=0.0,wspace=0.0)
+        xticks=[2e14,1e15],figsize=(textwidth,0.4*textwidth),
+        remove_hspace=True,left=0.08,right=0.98,bottom=0.18,top=0.9,
+        hspace=0.0,wspace=0.0,showLegend=[True,False])
 
 
 #-------------------------------------------------------------------------------
@@ -1248,19 +1248,17 @@ all_radii_mcmc = cat300.getAllProperties('radii',void_filter=leftFilter)
 #mean_radii_mcmc = vsfPerm135
 
 plt.clf()
-fig, ax = plt.subplots(figsize=(0.45*textwidth,0.45*textwidth))
+fig, ax = plt.subplots(figsize=(0.45*textwidth,0.4*textwidth))
 plot_void_counts_radius(mean_radii_mcmc[0],radius_bins,
                         noConstraintsDict['radii'],ax=ax,do_errors=True,
                         radii_errors = all_radii_mcmc,
                         label="MCMC catalogue ($68\%$)",
-                        lcdm_label="$\\Lambda$-CDM ($68\%$)",
+                        lcdm_label="$\\Lambda$CDM ($68\%$)",
                         weight_model="bootstrap",mcmc_interval=68,
                         confidence=0.68,powerRange=1,ylim=[1,100])
 
-ax.tick_params(axis='both',which='major',labelsize=fontsize,
-               labelfontfamily=fontfamily)
-ax.tick_params(axis='both',which='minor',labelsize=fontsize,
-               labelfontfamily=fontfamily)
+ax.tick_params(axis='both',which='major',labelsize=fontsize)
+ax.tick_params(axis='both',which='minor',labelsize=fontsize)
 plt.subplots_adjust(left = 0.17,right=0.97,bottom = 0.15,top = 0.97)
 plt.savefig(figuresFolder + "void_size_function.pdf")
 #plt.savefig(figuresFolder + "void_size_function_test.pdf")

@@ -3592,7 +3592,8 @@ def singleMassFunctionPlot(masses,mlow,mupp,nMassBins,textwidth=7.1014,\
 def plotConditionedProfile(rBinStackCentres,profileDictionary,nbar,
                            intervals=[68,95],alphas = [0.75,0.5],
                            ax = None,textwidth=7.1014,color='grey',xlim=[0,3],
-                           ylim=[0,1.2],cumulative=False,label=None,ec=None):
+                           ylim=[0,1.2],cumulative=False,label=None,ec=None,
+                           hatch = "None"):
     credibleIntervals = stacking.get_profile_interval_in_regions(
         profileDictionary,intervals = intervals,cumulative = cumulative)
     if ax is None:
@@ -3610,7 +3611,7 @@ def plotConditionedProfile(rBinStackCentres,profileDictionary,nbar,
             labelText = label
         ax.fill_between(rBinStackCentres,credibleIntervals[2*k]/nbar,\
             credibleIntervals[2*k+1]/nbar,alpha=alphas[k],color=shadeColor,\
-            label=labelText,ec=ec)
+            label=labelText,ec=ec,hatch=hatch)
 
 def plotMCMCProfile(rBinStackCentres,rhoMCMCToUse,sigmaRhoMCMCToUse,nbar,\
         ax = None,color=None,textwidth=7.1014):
