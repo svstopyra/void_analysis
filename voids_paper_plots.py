@@ -27,9 +27,10 @@ import sys
 
 # Set global figure font:
 import matplotlib.pyplot as plt
-fontfamily = "Times New Roman"
+fontfamily = "serif"
 plt.rcParams["font.family"] = "serif"
-plt.rcParams['font.serif'] = ["DeJavu serif"]
+#plt.rcParams['font.serif'] = ["Times New Roman"]
+plt.rcParams['font.serif'] = ["DejaVu Serif"]
 
 # Data export options:
 save_plot_data = True
@@ -243,7 +244,7 @@ else:
 
 ns = 0
 doSky=True
-snapToShow = pynbody.load(samplesFolder + "sample" + str(snapNumList[ns]) + \
+snapToShow = pynbody.load(samplesFolder + "sample7000" + \
     "/gadget_full_forward_512/snapshot_001")
 tools.remapBORGSimulation(snapToShow,swapXZ=False,reverse=True)
 
@@ -1239,7 +1240,7 @@ if doCat:
         + "\n(well-constrained \nvoids only)",
         ylabel="Number of anti-halos",savename=figuresFolder + 
         "mass_function_combined_300vs135.pdf",massLower=mLower,
-        ylim=[1,1000],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,
+        ylim=[1,100],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,
         fontsize=8,massUpper = mUpper,font=fontfamily,
         titleLeft = "Combined catalogue, $<135\\,\\mathrm{Mpc}h^{-1}$",
         titleRight = "Combined catalogue, $<300\\,\\mathrm{Mpc}h^{-1}$",
@@ -1249,8 +1250,8 @@ if doCat:
         mass_error_left = mass_error_left,mass_error_right=mass_error_right,\
         error_interval=68,poisson_interval=0.68,powerRange=1,
         xticks=[2e14,1e15],figsize=(textwidth,0.4*textwidth),
-        remove_hspace=True,left=0.08,right=0.98,bottom=0.18,top=0.9,
-        hspace=0.0,wspace=0.0,showLegend=[True,False])
+        remove_hspace=False,left=0.08,right=0.98,bottom=0.18,top=0.9,
+        hspace=0.1,wspace=0.2,showLegend=[True,False])
 
 
 #-------------------------------------------------------------------------------
@@ -1465,26 +1466,6 @@ for k in range(0,np.min([nVoidsToShow,len(selection)])):
 
 
 
-hpx_map_list = [plot.sphericalSlice(
-    snap,rCut/2,thickness=rCut,fillZeros=vmin*rhobar,centre=np.array([0,0,0]),
-    nside=nside)/rhobar for snap in snapList]
-
-if save_plot_data:
-    tools.savePickle(
-        [asListAll,laListAll,coordCombinedAbellSphere,clusterIndMain,
-        clusterNames,colourListAll,labelListAll,hpx_map_list,
-        equatorialRThetaPhi],
-        data_folder + "skyplot_plot_data.p")
-
-if load_plot_data:
-    [asListAll,laListAll,coordCombinedAbellSphere,clusterIndMain,
-        clusterNames,colourListAll,labelListAll,hpx_map_list,
-        equatorialRThetaPhi] = \
-        tools.loadPickle(data_folder + "skyplot_plot_data.p")
-
-
-
-
 textwidth=7.1014
 textheight=9.0971
 scale = 1.18
@@ -1514,6 +1495,31 @@ annotationPos = [[-1.1,0.9],\
         [1.5,0.05],[-1.7,0.5]]
 nameList = [name[0] for name in clusterNames]
 
+positions_all = [[
+    snapedit.unwrap(
+        snap['pos'][
+        snapSortList[ns][hrList[ns][laListAll[ns][k]+1]['iord']],:],boxsize)
+        for k in range(0,len(laListAll[ns]))]
+        for ns in range(0,len(snapList))]
+
+hpx_map_list = [plot.sphericalSlice(
+    snap,rCut/2,thickness=rCut,fillZeros=vmin*rhobar,centre=np.array([0,0,0]),
+    nside=nside)/rhobar for snap in snapList]
+
+if save_plot_data:
+    tools.savePickle(
+        [asListAll,laListAll,coordCombinedAbellSphere,clusterIndMain,
+        clusterNames,colourListAll,labelListAll,hpx_map_list,
+        equatorialRThetaPhi,positions_all],
+        data_folder + "skyplot_plot_data.p")
+
+if load_plot_data:
+    [asListAll,laListAll,coordCombinedAbellSphere,clusterIndMain,
+        clusterNames,colourListAll,labelListAll,hpx_map_list,
+        equatorialRThetaPhi,positions_all] = \
+        tools.loadPickle(data_folder + "skyplot_plot_data.p")
+
+
 
 # All anti-halos:
 for ns in range(0,len(snapNumList)):
@@ -1528,7 +1534,7 @@ for ns in range(0,len(snapNumList)):
         title = 'Sample ' +str(ns+1) + ': large voids (antihalos) within $' + \
         str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",\
         vmin=1e-2,vmax=1e2,legLoc = 'lower left',\
-        bbox_to_anchor = (-0.1,-0.2),\
+        bbox_to_anchor = (-0.1,-0.2),positions=positions_all[ns],\
         snapsort = None,antihaloCentres = None,\
         figOut = figuresFolder + "/ah_match_sample_" + \
         str(ns) + plotFormat,\
@@ -1553,8 +1559,8 @@ plot.plotLocalUniverseMollweide(rCut,None,\
     title = 'Most consistently-reproduced voids (anti-halos) within $' + \
     str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",\
     vmin=1e-2,vmax=1e2,legLoc = 'lower left',\
-    bbox_to_anchor = (-0.1,-0.2),\
-    snapsort = ,antihaloCentres = None,\
+    bbox_to_anchor = (-0.1,-0.2),positions=positions_all[ns],\
+    snapsort = None,antihaloCentres = None,\
     figOut = figuresFolder + "/skyplot.pdf",\
     showFig=False,figsize = (scale*textwidth,scale*ratio*textwidth),\
     voidColour = colourListAll[ns],antiHaloLabel=labelListAll[ns],\

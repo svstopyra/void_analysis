@@ -1433,14 +1433,14 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         mollweideScatter(anglesToPlotHalos,color=haloColour,s=s,marker=clusterMarker,
             fontsize=labelFontSize,ax=ax,arrowpad=arrowpad)
     if largeAntihalos is not None:
-        if snapsort is None:
-            snapsort = np.argsort(snap['iord'])
         boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
         cmapFunc = cm.get_cmap(cmap)
         if alpha_shapes is None:
             ahMWPos = []
             alpha_shapes = []
             h = snap.properties['h']
+            if snapsort is None:
+                snapsort = np.argsort(snap['iord'])
             for k in range(0,len(largeAntihalos)):
                 posXYZ = snapedit.unwrap(
                     snap['pos'][snapsort[hr[largeAntihalos[k]+1]['iord']],:],
@@ -3487,7 +3487,8 @@ def massFunctionComparison(massesLeft,massesRight,volSim,Om0=0.3,h=0.8,\
         savename=saveRight,listMode=listMode,massErrors=massErrors,\
         errorType=errorType,mass_errors=mass_error_right,**kwargs)
     if not remove_hspace:
-        plt.tight_layout()
+        plt.subplots_adjust(left=left,right=right,top=top,bottom=bottom,
+                            hspace=hspace,wspace=wspace)
     else:
         plt.subplots_adjust(left=left,right=right,top=top,bottom=bottom,
                             hspace=hspace,wspace=wspace)
