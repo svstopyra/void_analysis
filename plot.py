@@ -1391,7 +1391,10 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         doColorbar=True,sub=None,showLegend=True,reuse_axes=False,
         positions=None,cmap_hpx = "PuOr_r",cbar_aspect= 30,cbar_y_pos=0.3,
         cluster_key = 'Observed locations',borg_key='BORG halo locations',
-        zoa_key = 'Zone of Avoidance',void_key='Large anti-halos'):
+        zoa_key = 'Zone of Avoidance',void_key='Large anti-halos',boxsize=None,
+        h=None):
+    if boxsize is None:
+        boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
     if hpxMap is None:
         rhobar = (np.sum(snap['mass'])/\
             (snap.properties['boxsize']**3)).in_units("Msol h**2 Mpc**-3")
@@ -1433,12 +1436,12 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
         mollweideScatter(anglesToPlotHalos,color=haloColour,s=s,marker=clusterMarker,
             fontsize=labelFontSize,ax=ax,arrowpad=arrowpad)
     if largeAntihalos is not None:
-        boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
         cmapFunc = cm.get_cmap(cmap)
         if alpha_shapes is None:
             ahMWPos = []
             alpha_shapes = []
-            h = snap.properties['h']
+            if h is None:
+                h = snap.properties['h']
             if snapsort is None:
                 snapsort = np.argsort(snap['iord'])
             for k in range(0,len(largeAntihalos)):
@@ -1476,8 +1479,9 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
                         snapsort[hr[largeAntihalos[k]+1]['iord']],:],boxsize)
                 else:
                     position_list = positions[k]
-                if position_list is not None:
+                if h is None:
                     h = snap.properties['h']
+                if position_list is not None:
                     posMW = computeMollweidePositions(
                         position_list,angleUnit="deg",angleCoord="ra_dec",
                         centre=None,boxsize=boxsize,h=h)
@@ -1489,7 +1493,7 @@ def plotLocalUniverseMollweide(rCut,snap,hpxMap=None,\
                     alpha=voidAlpha,color=colourToUse,
                     text=textToUse,includePoints=False,
                     fontsize = labelFontSize,boxsize=boxsize,
-                    h=snap.properties['h'],centreMW = centreMW)
+                    h=h,centreMW = centreMW)
     if includeZOA:
         polygon = plotZoA(ax=ax,galacticCentreZOA = galacticCentreZOA,\
             nPointsZOA=nPointsZOA,bRangeCentre = bRangeCentre,bRange = bRange,\
