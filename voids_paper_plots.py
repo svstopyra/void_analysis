@@ -31,6 +31,7 @@ fontfamily = "serif"
 plt.rcParams["font.family"] = "serif"
 #plt.rcParams['font.serif'] = ["Times New Roman"]
 plt.rcParams['font.serif'] = ["DejaVu Serif"]
+plt.rcParams["mathtext.fontset"] = "stix"
 
 # Data export options:
 save_plot_data = True
@@ -60,8 +61,8 @@ snapnameOldRev = "reverse_output/snapshot_006"
 
 data_folder = figuresFolder
 
-fontsize = 8
-legendFontsize = 8
+fontsize = 9
+legendFontsize = 9
 
 #-------------------------------------------------------------------------------
 # LOAD SNAPSHOT DATA:
@@ -1033,7 +1034,7 @@ for k in range(0,len(dictionaries)):
     axij = get_axis_handle(i,j,n_rows,n_cols,ax)
     plotConditionedProfile(rBinStackCentres,dictionaries[k],nbar,ax=axij,\
                            intervals=[68],alphas=[1.0],ec='grey',color='None',
-                           hatch="XXXX")
+                           hatch="\\\\")
     plotMCMCProfile(rBinStackCentres,rhoMCMCToUse,sigmaRhoMCMCToUse,nbar,
                     ax = axij)
     axij.axvline(1.0,color='grey',linestyle=':')
@@ -1041,7 +1042,7 @@ for k in range(0,len(dictionaries)):
     plot.formatPlotGrid(ax,i,j,0,None,0,None,n_rows,ylim,\
         fontsize=fontsize)
     axij.set_xlim([0,3])
-    axij.set_title(labels[k],y=1.1,pad=-3,fontsize=8,va="top")
+    axij.set_title(labels[k],y=1.1,pad=-3,fontsize=fontsize,va="top")
     axij.tick_params(axis='both',which='major',labelsize=fontsize)
     axij.tick_params(axis='both',which='minor',labelsize=fontsize)
     # Adjust the tick labels to prevent annoying overlaps:
@@ -1054,13 +1055,13 @@ for k in range(0,len(dictionaries)):
 fig.add_subplot(111,frameon=False)
 plt.tick_params(labelcolor='none', which='both', top=False, bottom=False, 
                 left=False, right=False)
-plt.xlabel('$r/r_{\\mathrm{eff}}$',fontsize=8,fontfamily=fontfamily)
-plt.ylabel('$\\rho/\\bar{\\rho}$',fontsize=8,fontfamily=fontfamily)
+plt.xlabel('$r/r_{\\mathrm{eff}}$',fontsize=fontsize,fontfamily=fontfamily)
+plt.ylabel('$\\rho/\\bar{\\rho}$',fontsize=fontsize,fontfamily=fontfamily)
 ax[1].legend(prop={"size":fontsize,"family":fontfamily},frameon=False,\
     loc="lower right")
 #plt.tight_layout()
-plt.subplots_adjust(hspace=0.0,wspace=0.0,left = 0.08,right=0.98,top=0.93,
-                    bottom = 0.18)
+plt.subplots_adjust(hspace=0.0,wspace=0.0,left = 0.075,right=0.98,top=0.93,
+                    bottom = 0.175)
 plt.savefig(figuresFolder + "profile_constraint_progression_2panels.pdf")
 plt.show()
 
@@ -1234,14 +1235,14 @@ doCat = True
 if doCat:
     plot.massFunctionComparison(mass_samples_left,
         mass_samples_right,4*np.pi*135**3/3,nBins=nBins,
-        labelLeft = "Combined catalogue ($68\%$)" 
-        + " \n(well-constrained voids only)",
-        labelRight  ="Combined \n catalogue ($68\%$) " 
+        labelLeft = "Combined catalogue \n($68\%$," 
+        + " well-constrained \nvoids only)",
+        labelRight  ="Combined \ncatalogue ($68\%$) " 
         + "\n(well-constrained \nvoids only)",
-        ylabel="Number of anti-halos",savename=figuresFolder + 
+        ylabel="Number of anti-haloes",savename=figuresFolder + 
         "mass_function_combined_300vs135.pdf",massLower=mLower,
         ylim=[1,100],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,
-        fontsize=8,massUpper = mUpper,font=fontfamily,
+        fontsize=fontsize,massUpper = mUpper,font=fontfamily,
         titleLeft = "Combined catalogue, $<135\\,\\mathrm{Mpc}h^{-1}$",
         titleRight = "Combined catalogue, $<300\\,\\mathrm{Mpc}h^{-1}$",
         volSimRight = 4*np.pi*300**3/3,ylimRight=[1,1000],
@@ -1250,8 +1251,8 @@ if doCat:
         mass_error_left = mass_error_left,mass_error_right=mass_error_right,\
         error_interval=68,poisson_interval=0.68,powerRange=1,
         xticks=[2e14,1e15],figsize=(textwidth,0.4*textwidth),
-        remove_hspace=False,left=0.08,right=0.98,bottom=0.18,top=0.9,
-        hspace=0.1,wspace=0.2,showLegend=[True,False])
+        remove_hspace=False,top=0.925,bottom=0.165,left=0.07,right=0.99,
+        hspace=0.1,wspace=0.2,showLegend=[True,False],legendFontsize=fontsize)
 
 
 #-------------------------------------------------------------------------------
@@ -1296,11 +1297,12 @@ plot_void_counts_radius(mean_radii_mcmc[0],radius_bins,
                         label="MCMC catalogue ($68\%$)",
                         lcdm_label="$\\Lambda$CDM ($68\%$)",
                         weight_model="bootstrap",mcmc_interval=68,
-                        confidence=0.68,powerRange=1,ylim=[1,100])
+                        confidence=0.68,powerRange=1,ylim=[1,100],
+                        fontsize=fontsize)
 
 ax.tick_params(axis='both',which='major',labelsize=fontsize)
 ax.tick_params(axis='both',which='minor',labelsize=fontsize)
-plt.subplots_adjust(left = 0.17,right=0.97,bottom = 0.15,top = 0.97)
+plt.subplots_adjust(left = 0.155,right=0.97,bottom = 0.15,top = 0.97)
 plt.savefig(figuresFolder + "void_size_function.pdf")
 #plt.savefig(figuresFolder + "void_size_function_test.pdf")
 plt.show()
@@ -1497,7 +1499,7 @@ nameList = [name[0] for name in clusterNames]
 
 positions_all = [[
     snapedit.unwrap(
-        snap['pos'][
+        snapList[ns]['pos'][
         snapSortList[ns][hrList[ns][laListAll[ns][k]+1]['iord']],:],boxsize)
         for k in range(0,len(laListAll[ns]))]
         for ns in range(0,len(snapList))]
@@ -1543,7 +1545,7 @@ for ns in range(0,len(snapNumList)):
         bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
         galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
         voidAlpha = 0.6,margins=None,hpxMap = hpx_map_list[ns],pad=0.05,
-        cbar_aspect=10,shrink=0.35,cbar_y_pos=0.17)
+        cbar_aspect=10,shrink=0.35,cbar_y_pos=0.17,boxsize=boxsize,h=h)
     plt.show()
 
 # Actual skyplot to show:
@@ -1568,7 +1570,8 @@ plot.plotLocalUniverseMollweide(rCut,None,\
     galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
     voidAlpha = 0.6,margins=None,hpxMap = hpx_map_list[ns],pad=0.05,
     cbar_aspect=10,shrink=0.35,cbar_y_pos=0.17,
-    cluster_key="Massive clusters",void_key="Void regions")
+    cluster_key="Massive clusters",void_key="Void regions",boxsize=boxsize,
+    h=h,titleFontSize = fontsize,legendFontSize=fontsize,labelFontSize=fontsize)
 plt.show()
 
 
