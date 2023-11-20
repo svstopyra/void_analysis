@@ -1239,7 +1239,7 @@ if doCat:
         + " well-constrained \nvoids only)",
         labelRight  ="Combined \ncatalogue ($68\%$) " 
         + "\n(well-constrained \nvoids only)",
-        ylabel="Number of anti-haloes",savename=figuresFolder + 
+        ylabel="Number of anti-halos",savename=figuresFolder + 
         "mass_function_combined_300vs135.pdf",massLower=mLower,
         ylim=[1,100],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,
         fontsize=fontsize,massUpper = mUpper,font=fontfamily,
