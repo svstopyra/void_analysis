@@ -29,9 +29,10 @@ import sys
 import matplotlib.pyplot as plt
 fontfamily = "serif"
 plt.rcParams["font.family"] = "serif"
-#plt.rcParams['font.serif'] = ["Times New Roman"]
-plt.rcParams['font.serif'] = ["DejaVu Serif"]
+plt.rcParams['font.serif'] = ["Times New Roman"]
+#plt.rcParams['font.serif'] = ["DejaVu Serif"]
 plt.rcParams["mathtext.fontset"] = "stix"
+
 
 # Data export options:
 save_plot_data = True
@@ -564,7 +565,7 @@ void_dictionaries = [
     'z':("%.2g" % void_z[sort_order[k]]),
     'dist':("%.3g" % void_dist[sort_order[k]]),
     'snr':("%.3g" % void_snr[sort_order[k]]),
-    'cat_frac':("%.2g" % void_cat_frac[sort_order[k]])}
+    'rep_score':("%.2g" % void_cat_frac[sort_order[k]])}
     for k in range(0,num_voids)]
 
 table_titles = {'ID':"ID",'rad':"Radius $(h^{-1}\mathrm{Mpc})$",
@@ -573,7 +574,7 @@ table_titles = {'ID':"ID",'rad':"Radius $(h^{-1}\mathrm{Mpc})$",
                 'mass_error':"Mass uncertainty $(10^{14}h^{-1}M_{\odot})$",
                 'ra':'R.A. (deg.)','dec':"Dec. (deg.)",
                 'z':"z",'dist':"Distance $(h^{-1}\\mathrm{Mpc})$",
-                'snr':"SNR",'cat_frac':"Reproducibility Score"}
+                'snr':"SNR",'rep_score':"Reproducibility Score"}
 
 save_name = data_folder + "void_catalogue.csv"
 save_name_titled = data_folder + "void_catalogue_titled.csv"
@@ -715,7 +716,7 @@ final_cat_properties = [
     'z':("%.2g" % void_z[sort_order[k]]),
     'dist':("%.3g" % void_dist[sort_order[k]]),
     'snr':("%.3g" % void_snr[sort_order[k]]),
-    'cat_frac':("%.2g" % void_cat_frac[sort_order[k]]),
+    'rep_score':("%.2g" % void_cat_frac[sort_order[k]]),
     'delta_central':("%.2g" % void_delta_central[sort_order[k]]),
     'delta_central_error':("%.2g" % void_delta_central_error[sort_order[k]]),
     'delta_average':("%.2g" % void_delta_average[sort_order[k]]),
@@ -728,7 +729,7 @@ final_cat_titles = {'ID':"ID",'rad':"Radius $(h^{-1}\mathrm{Mpc})$",
                     'mass_error':"Mass uncertainty $(10^{14}h^{-1}M_{\odot})$",
                     'ra':'R.A. (deg.)','dec':"Dec. (deg.)",
                     'z':"z",'dist':"Distance $(h^{-1}\\mathrm{Mpc})$",
-                    'snr':"SNR",'cat_frac':"Catalogue Fraction",
+                    'snr':"SNR",'rep_score':"Reproducibility Score",
                     'delta_central':"Central Density Contrast",
                     'delta_central_error':"Central Density Contrast Error",
                     'delta_average':"Average Density Contrast",
@@ -745,7 +746,7 @@ np.savez(data_folder + "combined_catalogue.npz",
          mass=void_mass[sort_order],mass_error=void_mass_error[sort_order],
          ra=void_ra[sort_order],dec=void_dec[sort_order],
          z=void_z[sort_order],dist=void_dist[sort_order],
-         snr=void_snr[sort_order],cat_frac=void_cat_frac[sort_order],
+         snr=void_snr[sort_order],rep_score=void_cat_frac[sort_order],
          delta_central=void_delta_central[sort_order],
          delta_central_error=void_delta_central_error[sort_order],
          delta_average=void_delta_average[sort_order],
@@ -1298,7 +1299,8 @@ plot_void_counts_radius(mean_radii_mcmc[0],radius_bins,
                         lcdm_label="$\\Lambda$CDM ($68\%$)",
                         weight_model="bootstrap",mcmc_interval=68,
                         confidence=0.68,powerRange=1,ylim=[1,100],
-                        fontsize=fontsize)
+                        fontsize=fontsize,
+                        xlabel="$r\\, [\\mathrm{Mpc}h^{-1}$]")
 
 ax.tick_params(axis='both',which='major',labelsize=fontsize)
 ax.tick_params(axis='both',which='minor',labelsize=fontsize)
