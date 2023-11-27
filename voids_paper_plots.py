@@ -1862,5 +1862,32 @@ plt.savefig(figuresFolder + "all_density_distributions.pdf")
 plt.show()
 
 
+#-------------------------------------------------------------------------------
+# TEST INVERTING HALOS AND ANTIHALOS
+
+# Idea is to check if halo and anti-halo constraints are really different.
+# If they are, we should find different consistency of the halos compared to
+# anti-halos between simulations.
+
+hnlist = [snap.halos() for snap in snapList]
+snapsortListInverted = get_snapsort_lists(snapListRev,recompute=False)
+
+# Unfortunately, to do this, we'll need to compute voronoi densities for the 
+# reversed simulations. Which entails a lot of additional data. Will have
+# to think on this.
+
+cat300inverted = catalogue.combinedCatalogue(
+        snapNameListRev,snapNameList,\
+        muOpt,rSearchOpt,rSphere,\
+        ahProps=ahProps,hrList=hrList,max_index=None,\
+        twoWayOnly=True,blockDuplicates=True,\
+        massRange = [mMin,mMax],\
+        NWayMatch = NWayMatch,r_min=rMin,r_max=rMax,\
+        additionalFilters = snrFilter,verbose=False,\
+        refineCentres=refineCentres,sortBy=sortBy,\
+        enforceExclusive=enforceExclusive)
+
+
+
 
 
