@@ -1237,7 +1237,7 @@ def getGridPositionsAndTreeForSims(boxsize,Nden=256,perm=(2,1,0)):
 
 # Construct an SNR filter from a chain file:
 def getSNRFilterFromChainFile(chainFile,snrThresh,snapNameList,boxsize,\
-        Nden = 256,allProps=None):
+        Nden = 256,allProps=None,snrMode="void",radMode = "void"):
     [mcmcArray,num,N,NCAT,no_bias_params,bias_matrix,mean_field,\
         std_field,hmc_Elh,hmc_Eprior,hades_accept_count,\
         hades_attempt_count] = tools.loadPickle(chainFile)
@@ -1246,19 +1246,34 @@ def getSNRFilterFromChainFile(chainFile,snrThresh,snapNameList,boxsize,\
     if allProps is None:
         allProps = [tools.loadPickle(snapname + ".AHproperties.p") \
            for snapname in snapNameList]
-    antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
+    voidCentres = [tools.remapAntiHaloCentre(props[5],boxsize) \
             for props in allProps]
-    antihaloCentresUnmapped = [props[5] for props in allProps]
+    antihaloCentres = [tools.remapAntiHaloCentre(props[2],boxsize) \
+            for props in allProps]
     antihaloMasses = [props[3] for props in allProps]
-    antihaloRadii = [props[7] for props in allProps]
+    voidRadii = [props[7] for props in allProps]
+    rhoc = 2.7754e11
+    antiHaloRadii = [
+        np.cbrt(3*mass/(4*np.pi*200*rhoc)) for mass in antihaloMasses]
     # Get positions at which to compute the SNR:
     [positions,tree] = getGridPositionsAndTreeForSims(boxsize,Nden=Nden)
     # Locate the points within one anti-halo effective radii of each void
     # centre. We define the void SNR as the average SNR of these points:
+    if snrMode == "void":
+        centres = voidCentres
+    elif snrMode == "antihalo":
+        centres = antihaloCentres
+    else:
+        raise Exception("Invalid snrMode")
+    if radMode == "void":
+        radii = voidRadii
+    elif radMode == "antihalo":
+        radii = antiHaloRadii
+    else:
+        raise Exception("Invalid radMode")
     nearestPointsList = [tree.query_ball_point(\
-            snapedit.wrap(antihaloCentres[k] + boxsize/2,boxsize),\
-            antihaloRadii[k],workers=-1) \
-            for k in range(0,len(antihaloCentres))]
+            snapedit.wrap(centres[k] + boxsize/2,boxsize),\
+            radii[k],workers=-1) for k in range(0,len(centres))]
     snrAllCatsList = [np.array([np.mean(snrFieldLin[points]) \
             for points in nearestPointsList[k]]) \
             for k in range(0,len(snapNameList))]

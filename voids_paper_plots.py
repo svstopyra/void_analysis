@@ -1871,21 +1871,138 @@ plt.show()
 
 hnlist = [snap.halos() for snap in snapList]
 snapsortListInverted = get_snapsort_lists(snapListRev,recompute=False)
-
+allPropsInverted = [tools.loadPickle(snapname + ".AHproperties.p") \
+           for snapname in snapNameListRev]
+[snrFilterInverted,snrAllCatsListInverted] = getSNRFilterFromChainFile(
+    chainFile,snrThresh,snapNameListRev,boxsize,allProps=allPropsInverted,
+    snrMode = "antihalo",radMode = "antihalo")
+[snrFilterInvertedVoid,snrAllCatsListInvertedVoid] = getSNRFilterFromChainFile(
+    chainFile,snrThresh,snapNameListRev,boxsize,allProps=allPropsInverted,
+    snrMode = "void",radMode = "void")
+[snrFilterInvertedMix,snrAllCatsListInvertedMix] = getSNRFilterFromChainFile(
+    chainFile,snrThresh,snapNameListRev,boxsize,allProps=allPropsInverted,
+    snrMode = "antihalo",radMode = "void")
 # Unfortunately, to do this, we'll need to compute voronoi densities for the 
 # reversed simulations. Which entails a lot of additional data. Will have
 # to think on this.
 
-cat300inverted = catalogue.combinedCatalogue(
+cat300Inverted = catalogue.combinedCatalogue(
         snapNameListRev,snapNameList,\
         muOpt,rSearchOpt,rSphere,\
-        ahProps=ahProps,hrList=hrList,max_index=None,\
+        ahProps=allPropsInverted,hrList=hnlist,max_index=None,\
         twoWayOnly=True,blockDuplicates=True,\
         massRange = [mMin,mMax],\
         NWayMatch = NWayMatch,r_min=rMin,r_max=rMax,\
-        additionalFilters = snrFilter,verbose=False,\
+        additionalFilters = snrFilterInvertedMix,verbose=False,\
         refineCentres=refineCentres,sortBy=sortBy,\
         enforceExclusive=enforceExclusive)
+finalCat300Inverted = cat300Inverted.constructAntihaloCatalogue()
+
+cat300Inverted.set_filter_from_random_catalogue(
+    cat300Rand,radBins,r_sphere=135,r_min=10,r_max=25)
+
+cat300.set_filter_from_random_catalogue(
+    cat300Rand,radBins,r_sphere=135,r_min=10,r_max=25)
+
+
+# Actual plot:
+mean_radii_mcmc = cat300.getMeanProperty('radii',void_filter=True)
+all_radii_mcmc = cat300.getAllProperties('radii',void_filter=True)
+mean_radii_inverted = cat300Inverted.getMeanProperty('radii',void_filter=True)
+all_radii_inverted = cat300Inverted.getAllProperties('radii',void_filter=True)
+#mean_radii_mcmc = cat300test.getMeanProperty('radii',
+#                                             void_filter=cat300test.filter)
+#mean_radii_mcmc = vsfPerm135
+
+radius_bins = np.linspace(10,21,7)
+plt.clf()
+fig, ax = plt.subplots(1,2,figsize=(textwidth,0.4*textwidth))
+plot_void_counts_radius(mean_radii_mcmc[0],radius_bins,
+                        noConstraintsDict['radii'],ax=ax[0],do_errors=True,
+                        radii_errors = all_radii_mcmc,
+                        label="MCMC catalogue ($68\%$)",
+                        lcdm_label="$\\Lambda$CDM ($68\%$)",
+                        weight_model="bootstrap",mcmc_interval=68,
+                        confidence=0.68,powerRange=1,ylim=[1,100],
+                        fontsize=fontsize,
+                        xlabel="$r\\, [\\mathrm{Mpc}h^{-1}$]")
+
+plot_void_counts_radius(mean_radii_inverted[0],radius_bins,
+                        noConstraintsDict['radii'],ax=ax[1],do_errors=True,
+                        radii_errors = all_radii_inverted,
+                        label="Inverted catalogue ($68\%$)",
+                        lcdm_label="$\\Lambda$CDM ($68\%$)",
+                        weight_model="bootstrap",mcmc_interval=68,
+                        confidence=0.68,powerRange=1,ylim=[1,100],
+                        fontsize=fontsize,
+                        xlabel="$r\\, [\\mathrm{Mpc}h^{-1}$]")
+
+for axi in ax:
+    axi.tick_params(axis='both',which='major',labelsize=fontsize)
+    axi.tick_params(axis='both',which='minor',labelsize=fontsize)
+
+ax[0].set_title("Forward Catalogue",fontsize=fontsize)
+ax[1].set_title("Inverted Catalogue",fontsize=fontsize)
+
+plt.subplots_adjust(left = 0.08,right=0.97,bottom = 0.15,top = 0.9)
+plt.savefig(figuresFolder + "void_size_function_inversion_test.pdf")
+plt.show()
+
+# Signal to noise plot as a function of radius:
+
+def get_mean_snr_in_bins(radii,radius_bins,snrList,distances,
+                         cut=10,distance_cut = 135):
+    inBinsList = []
+    noInBinsList = []
+    for ns in range(0,len(radii)):
+        [inBins,noInBins] = plot.binValues(radii[ns],radius_bins)
+        inBinsList.append(inBins)
+        noInBinsList.append(noInBins)
+    snrInBins = [[snrList[ns][inBinsList[ns][k]] 
+        for ns in range(0,len(radii))]
+        for k in range(0,len(radius_bins)-1)]
+    distancesInBins = [[distances[ns][inBinsList[ns][k]] 
+        for ns in range(0,len(radii))]
+        for k in range(0,len(radius_bins)-1)]
+    filteredSNR = [[snrInBins[k][ns][(snrInBins[k][ns] > cut) & 
+        (distancesInBins[k][ns] < 135)]
+        for ns in range(0,len(radii))]
+        for k in range(0,len(radius_bins)-1)]
+    meanSNR = [np.mean(np.hstack(x)) for x in filteredSNR]
+    stdErrSNR = [scipy.stats.sem(np.hstack(x)) for x in filteredSNR]
+    return [meanSNR,stdErrSNR]
+
+centres_clusters = [tools.remapAntiHaloCentre(props[2],boxsize) \
+            for props in allPropsInverted]
+centres_voids = [tools.remapAntiHaloCentre(props[5],boxsize) \
+            for props in ahProps]
+
+distances_clusters = [np.sqrt(np.sum(x**2,1)) for x in centres_clusters]
+distances_voids = [np.sqrt(np.sum(x**2,1)) for x in centres_voids]
+
+[meanSNR, stdErrSNR] = get_mean_snr_in_bins(
+    [allPropsInverted[ns][7] for ns in range(0,len(snapList))],radius_bins,
+    snrAllCatsListInvertedMix,distances_clusters)
+
+
+[meanSNRvoids, stdErrSNRvoids] = get_mean_snr_in_bins(
+    [ahProps[ns][7] for ns in range(0,len(snapList))],radius_bins,
+    snrAllCatsList,distances_voids)
+
+plt.clf()
+rCentres = plot.binCentres(radius_bins)
+plt.errorbar(rCentres,meanSNR,yerr=stdErrSNR,linestyle='-',
+             color=seabornColormap[0],label="Clusters")
+plt.errorbar(rCentres,meanSNRvoids,yerr=stdErrSNRvoids,linestyle='-',
+             color=seabornColormap[1],label="Voids")
+plt.legend()
+plt.xlabel("$R\\, [\\mathrm{Mpc}h^{-1}]$",fontsize=fontsize)
+plt.ylabel("Mean SNR $(\\delta^2/\\sigma_{\\delta}^2)$",fontsize=fontsize)
+plt.subplots_adjust(left=0.18,bottom=0.17,top=0.97,right=0.97)
+plt.savefig(figuresFolder + "snr_voids_vs_clusters.pdf")
+plt.show()
+
+
 
 
 
