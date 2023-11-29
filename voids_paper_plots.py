@@ -2007,15 +2007,29 @@ plt.show()
 
 cat300Clusters = catalogue.combinedCatalogue(
         snapNameList,snapNameListRev,\
-        muOpt,0.2,rSphere,\
+        0.1,0.2,rSphere,\
         ahProps=ahProps,hrList=hnlist,max_index=None,\
         twoWayOnly=True,blockDuplicates=True,\
         massRange = [mMin,mMax],\
-        NWayMatch = NWayMatch,r_min=rMin,r_max=rMax,\
+        NWayMatch = NWayMatch,r_min=0,r_max=6,\
         additionalFilters = None,verbose=False,\
         refineCentres=refineCentres,sortBy=sortBy,\
         enforceExclusive=enforceExclusive,cluster_mode=True)
-finalCat300Clusters = cat300Inverted.constructAntihaloCatalogue()
+finalCat300Clusters = cat300Clusters.constructAntihaloCatalogue()
+
+
+#-------------------------------------------------------------------------------
+# SIMULATION ANIMATION!
+
+from void_analysis import mayavi_plot
+import mayavi
+
+snaplist_animation = [
+    pynbody.load("new_chain/sample10000/gadget_full_forward_256/snapshot_" + 
+    "{:0>3d}".format(k)) for k in range(0,38)]
+
+redshifts = np.array([1.0/snap.properties['a'] - 1 
+    for snap in snaplist_animation])
 
 
 
