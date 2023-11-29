@@ -2002,8 +2002,20 @@ plt.subplots_adjust(left=0.18,bottom=0.17,top=0.97,right=0.97)
 plt.savefig(figuresFolder + "snr_voids_vs_clusters.pdf")
 plt.show()
 
+# Applying the algorithm directly to clusters:
 
 
+cat300Clusters = catalogue.combinedCatalogue(
+        snapNameListRev,snapNameList,\
+        muOpt,0.2,rSphere,\
+        ahProps=allPropsInverted,hrList=hnlist,max_index=None,\
+        twoWayOnly=True,blockDuplicates=True,\
+        massRange = [mMin,mMax],\
+        NWayMatch = NWayMatch,r_min=rMin,r_max=rMax,\
+        additionalFilters = snrFilterInvertedMix,verbose=False,\
+        refineCentres=refineCentres,sortBy=sortBy,\
+        enforceExclusive=enforceExclusive)
+finalCat300Clusters = cat300Inverted.constructAntihaloCatalogue()
 
 
 

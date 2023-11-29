@@ -1113,7 +1113,7 @@ def loadSnapshots(snapList):
 # Load simulations and catalogue data so that we can combine them. If these
 # are already loaded, this function won't reload them.
 def loadCatalogueData(snapList,snapListRev,ahProps,sortMethod,snapSortList,\
-        hrList,verbose=False):
+        hrList,verbose=False,cluster_mode=False):
     snapshotsList = loadSnapshots(snapList)
     snapshotsListRev = loadSnapshots(snapListRev)
     # Load centres so that we can filter to the constrained region:
@@ -1122,14 +1122,26 @@ def loadCatalogueData(snapList,snapListRev,ahProps,sortMethod,snapSortList,\
         print("Extracting anti-halo properties...")
     if ahProps is None:
         ahProps = [tools.loadPickle(snap.filename + ".AHproperties.p") \
-            for snap in snapshotsList]
-    antihaloCentres = [tools.remapAntiHaloCentre(
-        props[5],boxsize,swapXZ  = False,reverse = True) \
-        for props in ahProps]
-    antihaloMasses = [props[3] for props in ahProps]
-    antihaloRadii = [props[7] for props in ahProps]
-    deltaCentral = [props[11] for props in ahProps]
-    deltaAverage = [props[12] for props in ahProps]
+            for snap in snapshotsListRev]
+    if cluster_mode:
+        antihaloMasses = [props[1] for props in ahProps]
+        # Apply to the clusters, not the anti-halos
+        rhoc = 2.7754e11
+        Om = snapshotsList[0].properties['omegaM0']
+        antiHaloRadii = [
+            np.cbrt(3*mass/(4*np.pi*200*rhoc)) for mass in antihaloMasses]
+        antihaloCentres = [tools.remapAntiHaloCentre(
+            props[0],boxsize,swapXZ  = False,reverse = True)]
+        deltaCentral = [(200/Om)*np.ones(len(rad)) for rad in antiHaloRadii]
+        deltaAverage = [(200/Om)*np.ones(len(rad)) for rad in antiHaloRadii]
+    else:
+        antihaloMasses = [props[3] for props in ahProps]
+        antihaloCentres = [tools.remapAntiHaloCentre(
+            props[5],boxsize,swapXZ  = False,reverse = True) \
+            for props in ahProps]
+        antihaloRadii = [props[7] for props in ahProps]
+        deltaCentral = [props[11] for props in ahProps]
+        deltaAverage = [props[12] for props in ahProps]
     if sortMethod == "volumes":
         if snapSortList is None:
             snapSortList = [np.argsort(snap['iord']) for snap in snapshotsList]
@@ -1139,7 +1151,10 @@ def loadCatalogueData(snapList,snapListRev,ahProps,sortMethod,snapSortList,\
         volumesList = [None for k in range(0,len(ahProps))]
     # Load anti-halo catalogues:
     if hrList is None:
-        hrList = [snap.halos() for snap in snapshotsListRev]
+        if cluster_mode:
+            hrList = [snap.halos() for snap in snapshotsList]
+        else:
+            hrList = [snap.halos() for snap in snapshotsListRev]
     return [snapshotsList,snapshotsListRev,boxsize,ahProps,antihaloCentres,\
         antihaloMasses,antihaloRadii,snapSortList,volumesList,hrList,\
         deltaCentral,deltaAverage]
