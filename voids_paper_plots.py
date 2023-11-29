@@ -2012,9 +2012,9 @@ cat300Clusters = catalogue.combinedCatalogue(
         twoWayOnly=True,blockDuplicates=True,\
         massRange = [mMin,mMax],\
         NWayMatch = NWayMatch,r_min=rMin,r_max=rMax,\
-        additionalFilters = snrFilterInvertedMix,verbose=False,\
+        additionalFilters = None,verbose=False,\
         refineCentres=refineCentres,sortBy=sortBy,\
-        enforceExclusive=enforceExclusive)
+        enforceExclusive=enforceExclusive,cluster_mode=True)
 finalCat300Clusters = cat300Inverted.constructAntihaloCatalogue()
 
 

@@ -1132,7 +1132,8 @@ def loadCatalogueData(snapList,snapListRev,ahProps,sortMethod,snapSortList,\
         antiHaloRadii = [
             np.cbrt(3*mass/(4*np.pi*200*rhoc)) for mass in antihaloMasses]
         antihaloCentres = [tools.remapAntiHaloCentre(
-            props[0],boxsize,swapXZ  = False,reverse = True)]
+            props[0],boxsize,swapXZ  = False,reverse = True) 
+            for props in ahProps]
         deltaCentral = [(200/Om)*np.ones(len(rad)) for rad in antiHaloRadii]
         deltaAverage = [(200/Om)*np.ones(len(rad)) for rad in antiHaloRadii]
     else:
