@@ -1129,13 +1129,13 @@ def loadCatalogueData(snapList,snapListRev,ahProps,sortMethod,snapSortList,\
         # Apply to the clusters, not the anti-halos
         rhoc = 2.7754e11
         Om = snapshotsList[0].properties['omegaM0']
-        antiHaloRadii = [
+        antihaloRadii = [
             np.cbrt(3*mass/(4*np.pi*200*rhoc)) for mass in antihaloMasses]
         antihaloCentres = [tools.remapAntiHaloCentre(
             props[0],boxsize,swapXZ  = False,reverse = True) 
             for props in ahProps]
-        deltaCentral = [(200/Om)*np.ones(len(rad)) for rad in antiHaloRadii]
-        deltaAverage = [(200/Om)*np.ones(len(rad)) for rad in antiHaloRadii]
+        deltaCentral = [(200/Om)*np.ones(len(rad)) for rad in antihaloRadii]
+        deltaAverage = [(200/Om)*np.ones(len(rad)) for rad in antihaloRadii]
     else:
         antihaloMasses = [props[3] for props in ahProps]
         antihaloCentres = [tools.remapAntiHaloCentre(
