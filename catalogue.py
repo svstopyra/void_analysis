@@ -14,7 +14,7 @@ class combinedCatalogue:
                  refineCentres=False,max_index=None,enforceExclusive=False,
                  blockDuplicates=True,iterMax=100,matchType='distance',
                  crossMatchQuantity='radius',pynbodyThresh=0.5,twoWayOnly=True,
-                 mode="fractional",overlapList = None):
+                 mode="fractional",overlapList = None,cluster_mode=False):
         self.muR = muR # Radius ratio threshold
         self.muS = muS # Search distance ratio threshold
         self.rSphere = rSphere # Radius from the centre of the simulation box
@@ -42,7 +42,8 @@ class combinedCatalogue:
             self.antihaloCentres,self.antihaloMasses,self.antihaloRadii,
             _,self.volumesList,_,self.deltaCentral,self.deltaAverage] = \
             loadCatalogueData(snapList,snapListRev,ahProps,sortMethod,
-                              snapSortList,hrList,verbose=verbose)
+                              snapSortList,hrList,verbose=verbose,
+                              cluster_mode=cluster_mode)
         self.numCats = len(snapList) # Number of catalogues
         self.enforceExclusive = enforceExclusive
         self.blockDuplicates = blockDuplicates

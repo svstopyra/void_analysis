@@ -2006,9 +2006,9 @@ plt.show()
 
 
 cat300Clusters = catalogue.combinedCatalogue(
-        snapNameListRev,snapNameList,\
+        snapNameList,snapNameListRev,\
         muOpt,0.2,rSphere,\
-        ahProps=allPropsInverted,hrList=hnlist,max_index=None,\
+        ahProps=ahProps,hrList=hnlist,max_index=None,\
         twoWayOnly=True,blockDuplicates=True,\
         massRange = [mMin,mMax],\
         NWayMatch = NWayMatch,r_min=rMin,r_max=rMax,\
