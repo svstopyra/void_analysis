@@ -2017,19 +2017,95 @@ cat300Clusters = catalogue.combinedCatalogue(
         enforceExclusive=enforceExclusive,cluster_mode=True)
 finalCat300Clusters = cat300Clusters.constructAntihaloCatalogue()
 
+masses_all_clusters = cat300Clusters.getAllProperties("mass")
+masses_mean_clusters = cat300Clusters.getMeanProperty("mass")
+mean_centres_clusters = cat300Clusters.getMeanCentres()
+distances_clusters = np.sqrt(np.sum(mean_centres_clusters**2,1))
+mass_filter_clusters = (distances_clusters < 135)
+
+# Find our clusters!
+tree_clusters = scipy.spatial.cKDTree(\
+    snapedit.wrap(mean_centres_clusters + boxsize/2,boxsize),boxsize=boxsize)
+wrappedClusterLoc = snapedit.wrap(clusterLoc + boxsize/2,boxsize)
+cands = tree_clusters.query(wrappedClusterLoc)
+estimated = masses_mean_clusters[0][cands[1]]
+
+nBins = 8
+Om = referenceSnap.properties['omegaM0']
+rhoc = 2.7754e11
+boxsize = referenceSnap.properties['boxsize'].ratio("Mpc a h**-1")
+N = int(np.cbrt(len(referenceSnap)))
+mUnit = 8*Om*rhoc*(boxsize/N)**3
+mLower = 100*mUnit
+mUpper = 2e15
+rSphere = 300
+rSphereInner = 135
+# Check mass functions:
+volSphere135 = 4*np.pi*rSphereInner**3/3
+volSphere = 4*np.pi*rSphere**3/3
+
+
+
+plot.massFunctionComparison(mass_samples_left,
+        masses_mean_clusters[0][mass_filter_clusters],4*np.pi*135**3/3,
+        nBins=nBins,
+        labelLeft = "Combined catalogue \n($68\%$," 
+        + " well-constrained \nvoids only)",
+        labelRight  ="Cluster catalogue",
+        ylabel="Number of anti-halos",savename=figuresFolder + 
+        "mass_function_voids_vs_clusters.pdf",massLower=mLower,
+        ylim=[1,100],Om0 = 0.3111,h=0.6766,sigma8=0.8128,ns=0.9667,
+        fontsize=fontsize,massUpper = mUpper,font=fontfamily,
+        titleLeft = "Combined catalogue, $<135\\,\\mathrm{Mpc}h^{-1}$",
+        titleRight = "Cluster Catalogue, $<135\\,\\mathrm{Mpc}h^{-1}$",
+        volSimRight = 4*np.pi*135**3/3,ylimRight=[1,100],
+        legendLoc="upper right",errorType="shaded",massErrors=True,
+        error_type="bernoulli",hmf_interval=68,weight_model="bootstrap",
+        mass_error_left = mass_error_left,
+        mass_error_right=masses_all_clusters[mass_filter_clusters,:],\
+        error_interval=68,poisson_interval=0.68,powerRange=1,
+        xticks=[2e14,1e15],figsize=(textwidth,0.4*textwidth),
+        remove_hspace=False,top=0.925,bottom=0.165,left=0.07,right=0.99,
+        hspace=0.1,wspace=0.2,showLegend=[True,False],legendFontsize=fontsize)
 
 #-------------------------------------------------------------------------------
 # SIMULATION ANIMATION!
 
 from void_analysis import mayavi_plot
 import mayavi
+from mayavi import mlab
+import imageio
 
 snaplist_animation = [
     pynbody.load("new_chain/sample10000/gadget_full_forward_256/snapshot_" + 
     "{:0>3d}".format(k)) for k in range(0,38)]
+filt = pynbody.filt.Sphere(20,np.array([boxsize/2]*3))
+subsnaps = [snap[filt] for snap in snaplist_animation]
 
 redshifts = np.array([1.0/snap.properties['a'] - 1 
     for snap in snaplist_animation])
+
+scaling=1
+filenames = []
+for k in range(0,len(subsnaps)):
+    filenames.append("animation_frames/frame_" + str(k+1) + ".png")
+    mayavi_plot.subsnap_scatter(subsnaps[k])
+    fig = mlab.gcf().scene
+    sceneSize = np.array(fig.get_size())*scaling
+    mlab.savefig(filenames[k],size=sceneSize)
+    mlab.show()
+    mlab.clf()
+
+
+# Construct gif:
+plot_gif_animation(filenames,"animation_frames/animation.gif")
+
+
+# Interpolate positions:
+sortlists = [np.argsort(snap['iord']) for snap in snaplist_animation]
+times = np.array([snap.properties['a'] for snap in snaplist_animation])
+positions = [snap['pos'][sort,:] 
+    for snap, sort in zip(snaplist_animation,sortlists)]
 
 
 
