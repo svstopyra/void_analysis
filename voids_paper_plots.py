@@ -2078,7 +2078,7 @@ import imageio
 
 snaplist_animation = [
     pynbody.load("new_chain/sample10000/gadget_full_forward_256/snapshot_" + 
-    "{:0>3d}".format(k)) for k in range(0,38)]
+    "{:0>3d}".format(k)) for k in range(0,37)]
 filt = pynbody.filt.Sphere(20,np.array([boxsize/2]*3))
 subsnaps = [snap[filt] for snap in snaplist_animation]
 
@@ -2104,8 +2104,24 @@ plot_gif_animation(filenames,"animation_frames/animation.gif")
 # Interpolate positions:
 sortlists = [np.argsort(snap['iord']) for snap in snaplist_animation]
 times = np.array([snap.properties['a'] for snap in snaplist_animation])
-positions = [snap['pos'][sort,:] 
-    for snap, sort in zip(snaplist_animation,sortlists)]
+positions = np.array([snap['pos'][sort,:] 
+    for snap, sort in zip(snaplist_animation,sortlists)])
+
+interpolator = scipy.interpolate.interp1d(times,positions,kind="linear",axis=0,
+    copy=False)
+
+points = interpolator(0.3)
+
+
+mfig = mlab.figure(bgcolor=(0,0,0))
+mpoints = mlab.points3d(points[:,0],points[:,1],points[:,2],
+    mode="2dvertex",color=(1,1,1),scale_factor=1.0)
+
+
+import mayavi
+from mayavi import mlab
+mfig = mlab.figure(bgcolor=(0,0,0))
+
 
 
 
