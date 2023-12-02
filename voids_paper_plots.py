@@ -2079,48 +2079,162 @@ import imageio
 snaplist_animation = [
     pynbody.load("new_chain/sample10000/gadget_full_forward_256/snapshot_" + 
     "{:0>3d}".format(k)) for k in range(0,37)]
-filt = pynbody.filt.Sphere(20,np.array([boxsize/2]*3))
-subsnaps = [snap[filt] for snap in snaplist_animation]
-
-redshifts = np.array([1.0/snap.properties['a'] - 1 
-    for snap in snaplist_animation])
-
-scaling=1
-filenames = []
-for k in range(0,len(subsnaps)):
-    filenames.append("animation_frames/frame_" + str(k+1) + ".png")
-    mayavi_plot.subsnap_scatter(subsnaps[k])
-    fig = mlab.gcf().scene
-    sceneSize = np.array(fig.get_size())*scaling
-    mlab.savefig(filenames[k],size=sceneSize)
-    mlab.show()
-    mlab.clf()
-
-
-# Construct gif:
-plot_gif_animation(filenames,"animation_frames/animation.gif")
-
+for snap in snaplist_animation:
+    tools.remapBORGSimulation(snap,swapXZ=False,reverse=True)
 
 # Interpolate positions:
 sortlists = [np.argsort(snap['iord']) for snap in snaplist_animation]
 times = np.array([snap.properties['a'] for snap in snaplist_animation])
+redshifts  =1.0/times - 1.0
 positions = np.array([snap['pos'][sort,:] 
     for snap, sort in zip(snaplist_animation,sortlists)])
 
-interpolator = scipy.interpolate.interp1d(times,positions,kind="linear",axis=0,
-    copy=False)
 
-points = interpolator(0.3)
+# Reduce the resolution of a simulation:
+def degrade_simulation(points,N,factor):
+    N2 = int(N/factor)
+    coords = snapedit.lin2coord(np.arange(0,N2**3),N2)
+    ind = snapedit.coord2lin(factor*coords,N)
+    return points[ind,:]
+
+def get_subbox_indices(points,boxsize,centre,subbox_size):
+    disp = snapedit.unwrap(points - centre,boxsize)
+    in_subbox = ((disp[:,0] > -subbox_size/2) & (disp[:,0] <= subbox_size/2) 
+        & (disp[:,1] > -subbox_size/2) & (disp[:,1] <= subbox_size/2)
+        & (disp[:,2] > -subbox_size/2) & (disp[:,2] <= subbox_size/2))
+    return in_subbox
+
+def get_subsphere_indices(points,boxsize,centre,radius):
+    dist = np.sqrt(np.sum(snapedit.unwrap(points - centre,boxsize)**2,1))
+    in_subsphere = (dist < radius)
+    return in_subsphere
+
+ics = pynbody.load("new_chain/sample10000/ic/gadget_ic_256_for.gadget2")
+tools.remapBORGSimulation(ics,swapXZ=False,reverse=True)
 
 
-mfig = mlab.figure(bgcolor=(0,0,0))
-mpoints = mlab.points3d(points[:,0],points[:,1],points[:,2],
-    mode="2dvertex",color=(1,1,1),scale_factor=1.0)
+radius = 75
+in_subsphere = get_subsphere_indices(ics['pos'],boxsize,
+                                     np.array([0]*3),radius)
+
+point_series = [pos[in_subsphere,:] for pos in positions]
+
+tlist = np.linspace(times[0] + 1e-5,1.0-1e-5,200)
+interpolator = scipy.interpolate.interp1d(times,point_series,kind="linear",
+                                          axis=0,copy=False)
+#interpolated_pos = interpolator(tlist)
+
+# Setup cosmology:
+cosmo = astropy.cosmology.FlatLambdaCDM(H0=100*h, Om0=Om0, Tcmb0=2.725)
+# Get times:
+times_list = np.linspace(0.05,cosmo.age(0).value,201)
+# Time since big bang:
+lookback_times = cosmo.age(0).value - times_list
+# Redshifts at these times:
+zvals = np.zeros(lookback_times.shape)
+zvals[0:-1] = astropy.cosmology.z_at_value(
+    cosmo.lookback_time,lookback_times[0:-1]*astropy.units.Gyr).value
+zvals[-1] = 0
+# Scale factors:
+avals = 1.0/(zvals + 1.0)
+# Particle positions:
+interpolated_pos = interpolator(avals)
+
+# Cluster locations:
+clusterNamesOnly = np.array(['Perseus-Fiskarna','Hercules B','Coma',
+                             'Norma','Shapley','A548',
+                             'Hercules A','Hercules C','Leo'])
+
+cluster_dist = np.sqrt(np.sum(clusterLoc**2,1))
+in_radius = cluster_dist < radius
+cluster_pos = np.vstack([clusterLoc[in_radius],np.array([0]*3)])
+cluster_names = np.hstack([clusterNamesOnly[in_radius],'Vintergatan']).flatten()
+
+def plot_animation(points_series,delay=100,avals=None,omega = 0.5,
+                   fullscreen=True,fig=None,points=None,title=True,
+                   cosmo=None,cluster_pos=None,cluster_names=None,
+                   cluster_colour=(1,0,0),cluster_scale=1,text_scale=10,
+                   title_size=5,lookbacks = None,view_dist = 500,
+                   outdir = "./"):
+    if cosmo is None:
+        # Assume a default cosmology:
+        cosmo = astropy.cosmology.FlatLambdaCDM(H0=70, Om0=0.3, Tcmb0=2.725)
+    # Create a figure
+    if fig is None:
+        fig = mlab.figure(bgcolor=(0,0,0))
+    # Extract the number of time steps
+    num_steps = len(points_series)
+    # Create initial scatter plot
+    if points is None:
+        points = mlab.points3d(points_series[0][:, 0], 
+                               points_series[0][:, 1],
+                               points_series[0][:, 2],color=(1, 1, 1),
+                               mode='point', scale_factor=0.1)
+    if (cluster_pos is not None) and (cluster_names is not None):
+        # Plot cluster locations:
+        mlab.points3d(cluster_pos[:,0],cluster_pos[:,1],cluster_pos[:,2],
+                      mode="sphere",scale_factor=cluster_scale,
+                      color=cluster_colour)
+        for k in range(0,len(cluster_names)):
+            mlab.text3d(cluster_pos[k,0],cluster_pos[k,1],cluster_pos[k,2],
+                    cluster_names[k],scale=text_scale,color=cluster_colour)
+    if avals is None:
+        avals = np.array(range(0, num_steps)) * 360 / num_steps
+    # Set view:
+    azimuth, elevation, distance, centre = mlab.view()
+    mlab.view(azimuth, elevation, view_dist)
+    @mlab.animate(delay=delay)
+    def update_animation(avals):
+        for i in range(1, num_steps):
+            # Update point positions
+            points.mlab_source.set(x=points_series[i][:, 0],
+                                   y=points_series[i][:, 1],
+                                   z=points_series[i][:, 2])
+            # Rotate 360 degrees over the animation
+            angle = omega * (avals[i] - avals[i-1])
+            azimuth, elevation, distance, centre = mlab.view()
+            mlab.view(azimuth + angle, elevation, distance)
+            # Set the title to show the current time step
+            if title:
+                if lookbacks is None:
+                    mlab.title(f'Time Step: {i}/{num_steps - 1}')
+                else:
+                    mlab.title(("%.3g" % lookbacks[i]) + " miljarder  år sedan.",
+                           size=title_size)
+                #mlab.title(f'Time Step: {i}/{num_steps - 1}')
+            # Save:
+            mlab.savefig(outdir + f"frame_{i:03d}.png")
+            # Yield to render the frame
+            yield
+    # Enable full-screen mode:
+    # Set the window to appear full-screen
+    if fullscreen:
+        mlab.options.offscreen = False  # Disable offscreen rendering
+        # Switch to the Envisage backend for window management
+        #mlab.options.backend = 'envisage' 
+        mlab.options.fullscreen = True  # Set fullscreen mode
+    # Run the animation
+    update_animation(avals)
+    mlab.show()
+
+fig = mlab.figure(bgcolor=(0,0,0),size=(1200,1200))
+points = mlab.points3d(interpolated_pos[0][:, 0], 
+                       interpolated_pos[0][:, 1],
+                       interpolated_pos[0][:, 2],color=(1, 1, 1),
+                       mode='point', scale_factor=0.1)
+plot_animation(interpolated_pos,fig=fig,points=points,cosmo=cosmo,
+               cluster_pos=cluster_pos,cluster_names=cluster_names,
+               avals = avals,omega=50,cluster_scale=5,text_scale=5,
+               title_size=0.5,cluster_colour=(1,1,0),delay=100,
+               lookbacks=lookback_times,view_dist=300,
+               outdir="animation_of_universe/")
+
+# Save gif:
+imgs = [f"animation_of_universe/frame_{i:03d}.png" 
+    for i in range(1,len(interpolated_pos))]
+plot_gif_animation(imgs,"animation_of_universe/animation.gif")
 
 
-import mayavi
-from mayavi import mlab
-mfig = mlab.figure(bgcolor=(0,0,0))
 
 
 
