@@ -359,6 +359,26 @@ thresholds300 = cat300.getAllThresholds(percentilesCat300[0],radBins)
 filter300 = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
     (distances300 < 135) & (cat300.finalCatFrac > thresholds300)
 
+# Try a range of bin values:
+filter_lists = []
+for nbins in range(2,21):
+    radBins_n = np.linspace(rLower,rUpper,nbins)
+    percentiles = cat300Rand.getThresholdsInBins(radBins_n,99)[0]
+    thresholds = cat300.getAllThresholds(percentiles,radBins_n)
+    filter_n = (radiiMean300 > 10) & (radiiMean300 <= 25) & \
+        (distances300 < 135) & (cat300.finalCatFrac > thresholds)
+    filter_lists.append(np.where(filter_n)[0])
+
+# Check which voids are in common:
+base_indices = np.where(filter300)[0]
+incommon = [np.intersect1d(base_indices,new_list) for new_list in filter_lists]
+excluded = [np.setdiff1d(base_indices,new_list) for new_list in filter_lists]
+new = [np.setdiff1d(new_list,base_indices) for new_list in filter_lists]
+
+shared_counts = np.array([len(x) for x in incommon])
+excluded_counts = np.array([len(x) for x in excluded])
+new_counts = np.array([len(x) for x in new])
+
 # Central and average densities:
 [deltaCentralMean,deltaCentralSigma] = cat300.getMeanProperty('deltaCentral')
 [deltaAverageMean,deltaAverageSigma] = cat300.getMeanProperty('deltaAverage')

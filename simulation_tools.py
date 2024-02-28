@@ -615,9 +615,18 @@ def getNonOverlappingCentres(centresList,rSep,boxsize,returnIndices=False):
 
 def get_mcmc_supervolume_densities(snap_list,r_sphere=135):
     boxsize = snap_list[0].properties['boxsize'].ratio("Mpc a h**-1")
-    deltaMCMCList = np.array(\
-        [density_from_snapshot(snap,np.array([boxsize/2]*3),r_sphere) \
-         for snap in snap_list])
+    if np.isscalar(r_sphere):
+        deltaMCMCList = np.array(\
+            [density_from_snapshot(snap,np.array([boxsize/2]*3),r_sphere) \
+             for snap in snap_list])
+    else:
+        deltaMCMCList = [[] for snap in snap_list]
+        for snap in snap_list:
+            tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
+            deltaMCMCList[k] = [density_from_snapshot(snap,
+                np.array([boxsize/2]*3),r_sphere[k],tree=tree) 
+                for k in range(0,len(r_sphere))]
+        deltaMCMCList = np.array(deltaMCMCList)
     return deltaMCMCList
 
 def get_map_from_sample(sample):
