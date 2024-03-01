@@ -447,6 +447,11 @@ ellipticity_list_lcdm = tools.loadOrRecompute(
     data_folder + "ellipticities_lcdm.p",get_all_ellipticities,snapListUn,
     snapListRevUn,boxsize,antihaloCentresUn)
 
+rad_filters = [(rad > 10) & (rad <= 20) for rad in antihaloRadiiUn]
+
+combined_ellipticities = np.hstack([epsilon[filt] 
+    for epsilon, filt in zip(ellipticity_list_lcdm, rad_filters)])
+
 # Pure catalogue elipticities only:
 ellipticities_shortened = cat300.getShortenedQuantity(ellipticity_list,
     cat300.centralAntihalos)
@@ -454,7 +459,31 @@ ellipticities_shortened = cat300.getShortenedQuantity(ellipticity_list,
     void_filter=True)
 
 
+# Distribution of ellipticities:
+plt.clf()
+eps_bins = np.linspace(0,0.4,11)
 
+[probLCDM,sigmaLCDM,noInBinsLCDM,inBinsLCDM] = plot.computeHistogram(
+    combined_ellipticities,eps_bins,density=True,useGaussianError=True)
+[probCat,sigmaCat,noInBinsCat,inBinsCat] = plot.computeHistogram(
+    eps_mean,eps_bins,density=True,useGaussianError=True)
+
+fig, ax = plt.subplots()
+plt.hist(combined_ellipticities,bins=eps_bins,alpha=0.5,label="$\\Lambda$-CDM",
+    density=True,color=seabornColormap[0])
+#plt.hist(eps_mean,bins=eps_bins,alpha=0.5,label="Combined Catalogue",
+#    density=True,color=seabornColormap[1])
+
+#plot.histWithErrors(probLCDM,sigmaLCDM,eps_bins,ax=ax,color=seabornColormap[0],
+#    label="$\\Lambda$-CDM")
+plot.histWithErrors(probCat,sigmaCat,eps_bins,ax=ax,color=seabornColormap[1],
+    label="Combined Catalogue")
+
+plt.xlabel('Ellipticity')
+plt.ylabel('Probability Density')
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "ellipticity_distribution.pdf")
+plt.show()
 
 
 
