@@ -378,28 +378,6 @@ def get_ellipticity(points,centre=None,weights=None):
 #-------------------------------------------------------------------------------
 # ELLIPTICITY DISTRIBUTION
 
-import sys
-import time
-
-def progressbar(it, prefix="", size=60, out=sys.stdout): # Python3.6+
-    count = len(it)
-    start = time.time()
-    def show(j):
-        x = int(size*j/count)
-        remaining = ((time.time() - start) / j) * (count - j)
-        
-        mins, sec = divmod(remaining, 60)
-        time_str = f"{int(mins):02}:{sec:05.2f}"
-        
-        print(f"{prefix}[{u'█'*x}{('.'*(size-x))}] {j}/{count} " + 
-            f"Est wait {time_str}", end='\r', file=out, flush=True)
-        
-    for i, item in enumerate(it):
-        yield item
-        show(i+1)
-    print("\n", flush=True, file=out)
-
-
 # Get long lists of all ellipticities:
 def get_all_ellipticities(snapList,snapListRev,boxsize,antihaloCentres):
     ellipticity_list = []
@@ -424,7 +402,7 @@ def get_all_ellipticities(snapList,snapListRev,boxsize,antihaloCentres):
         # account for wrapping:
         print("Computing ellipticities...")
         ellipticities = np.zeros(len(antihaloCentres[ns]))
-        for k in progressbar(range(0,len(antihaloCentres[ns]))):
+        for k in tools.progressbar(range(0,len(antihaloCentres[ns]))):
             indices = hr_list[k+1]['iord']
             halo_pos = snapedit.unwrap(positions[sorted_indices[indices],:] - 
                                        antihaloCentres[ns][k],boxsize)
@@ -484,6 +462,172 @@ plt.ylabel('Probability Density')
 plt.legend(frameon=False)
 plt.savefig(figuresFolder + "ellipticity_distribution.pdf")
 plt.show()
+
+
+#-------------------------------------------------------------------------------
+# STACKED VOIDS
+
+# Stack all voids relative to their barycentre:
+
+# Get points within an ellipse of radius R, and ellipticity eps, given a z
+# position and displacement from the axis
+
+def verify_los_pos(los_pos):
+    if len(los_pos.shape) != 2:
+        raise Exception("los_pos must have two dimensions")
+    if los_pos.shape[1] != 2:
+        raise Exception("los_pos shape must have size 2")
+
+
+
+def get_points_in_ellipse(los_pos,eps,R):
+    verify_los_pos(los_pos)
+    z = los_pos[:,0]
+    d = los_pos[:,1]
+    return (d <= R/eps) & (z**2 <= R**2 - eps**2*d**2)
+
+def get_los_pos(pos,los,boxsize):
+    los_unit = los/np.sqrt(np.sum(los**2))
+    pos_rel = snapedit.unwrap(pos - los,boxsize)
+    z = np.dot(pos_rel,los_unit)
+    d = np.sqrt(np.sum(pos_rel**2,1) - z**2)
+    return np.vstack((z,d)).T
+
+def get_los_ellipticity(los_pos,weights=None):
+    verify_los_pos(los_pos)
+    z = los_pos[:,0]
+    d = los_pos[:,1]
+    if weights is None:
+        weights = np.ones(los_pos.shape[0])
+    return np.sqrt(2*np.sum(z**2*weights)/np.sum(d**2*weights))
+
+def get_los_ellipticity_in_ellipse(los_pos,eps,R,weights=None):
+    verify_los_pos(los_pos)
+    if weights is None:
+        weights = np.ones(los_pos.shape[0])
+    filt = get_points_in_ellipse(los_pos,eps,R)
+    return get_los_ellipticity(los_pos[filt],weights=weights[filt])
+
+# Check ellipticity calculation:
+ns = 0
+k = 0
+snap = pynbody.load(snapList[ns].filename)
+snap_reverse = pynbody.load(snapListRev[ns].filename)
+hr_list = snap_reverse.halos()
+indices = hr_list[k+1]['iord']
+positions = tools.remapAntiHaloCentre(snap['pos'],boxsize,swapXZ  = False,
+    reverse = True)
+pos = snapedit.unwrap(positions[sorted_indices[indices],:],boxsize)
+los = antihaloCentres[ns][0]
+
+
+los_pos = get_los_pos(pos,los,boxsize)
+eps_list = np.linspace(0,2,1001)
+
+eps_calc = np.array([get_los_ellipticity_in_ellipse(los_pos,eps,10) 
+    for eps in eps_list])
+
+plt.clf()
+plt.plot(eps_list,eps_calc,linestyle='-',color=seabornColormap[0],
+    label="Calculated ellipticity")
+plt.plot(eps_list,eps_list,linestyle='--',color=seabornColormap[0],
+    label="Equal ellipticities")
+plt.xlabel('Cut ellipticity')
+plt.ylabel('Calculated Ellipticity')
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "ellipticity_test.pdf")
+plt.show()
+
+
+def estimate_ellipticity(los_pos,limits=[1e-5,2],npoints=101,R=10):
+    eps_list = np.linspace(limits[0],limits[1],npoints)
+    eps_calc = np.array([get_los_ellipticity_in_ellipse(los_pos,eps,R) 
+        for eps in eps_list])
+    # Look for changes of sign:
+    diff = eps_calc - eps_list
+    signs = diff[1:]*diff[0:-1]
+    sign_change = np.where(signs < 0)[0]
+    if len(sign_change) == 0:
+        # No changes of sign!
+        return eps_list[np.argmin(diff**2)]
+    else:
+        # Get first change of sign:
+        lower_bound = eps_list[sign_change[0]]
+        upper_bound = eps_list[sign_change[0]+1]
+        return (lower_bound + upper_bound)/2
+
+# Scatter test:
+R=20
+eps_est = estimate_ellipticity(los_pos,R=R)
+drange = np.linspace(0,(R/eps_est)*1.1,101)
+
+plt.clf()
+plt.scatter(los_pos[:,1],los_pos[:,0],marker='.')
+plt.plot(drange,np.sqrt(R**2 - eps_est**2*drange**2),linestyle='--',color='k',
+    label="Ellipse, $R =  " + ("%.2g" % R) + ", \\epsilon = " + 
+    ("%.2g" % eps_est) + "$")
+plt.plot(drange,-np.sqrt(R**2 - eps_est**2*drange**2),linestyle='--',color='k')
+plt.xlabel('d [$\\mathrm{Mpc}h^{-1}$]')
+plt.ylabel('z [$\\mathrm{Mpc}h^{-1}$]')
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "ellipticity_scatter.pdf")
+plt.show()
+
+# Get and save the line of sight positions:
+
+
+def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres):
+    snap = pynbody.load(snapname_forward)
+    snap_reverse = pynbody.load(snapname_reverse)
+    hr_list = snap_reverse.halos()
+    boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+    # Sorted indices, to allow correct referencing of particles:
+    sorted_indices = np.argsort(snap['iord'])
+    reverse_indices = snap_reverse['iord'] # Force loading of reverse 
+    # snapshot indices
+    print("Sorting complete")
+    # Remap positions into correct equatorial co-ordinates:
+    positions = tools.remapAntiHaloCentre(snap['pos'],boxsize,
+                                          swapXZ  = False,reverse = True)
+    print("Positions computed")
+    # Get relative positions of particles in each halo, remembering to 
+    # account for wrapping:
+    print("Computing ellipticities...")
+    los_pos_all = []
+    for k in tools.progressbar(range(0,len(centres))):
+        indices = hr_list[k+1]['iord']
+        halo_pos = snapedit.unwrap(positions[sorted_indices[indices],:],
+            boxsize)
+        los_pos = get_los_pos(halo_pos,centres[k],boxsize)
+        los_pos_all.append(los_pos)
+    return los_pos_all
+
+def get_los_positions_for_all_catalogues(snapList,snapListRev,
+        antihaloCentres,recompute=False):
+    los_list = []
+    for ns in range(0,len(snapList)):
+        # Load snapshot (don't use the snapshot list, because that will force
+        # loading of all snapshot positions, using up a lot of memory, when 
+        # we only want to load these one at a time):
+        print("Doing sample " + str(ns+1) + " of " + str(len(snapList)))
+        los_pos_all = tools.loadOrRecompute(snapList[ns].filename + ".lospos.p",
+            get_los_pos_for_snapshot,snapList[ns].filename,
+            snapListRev[ns].filename,antihaloCentres[ns],
+            _recomputeData=recompute)
+        los_list.append(los_pos_all)
+    return los_list
+
+
+los_list_borg = get_los_positions_for_all_catalogues(snapList,snapListRev,
+    antihaloCentres)
+
+los_list_lcdm = get_los_positions_for_all_catalogues(snapListUn,
+    snapListRevUn,antihaloCentresUn)
+
+
+
+
+
 
 
 
