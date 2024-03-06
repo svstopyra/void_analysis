@@ -576,7 +576,8 @@ plt.show()
 # Get and save the line of sight positions:
 
 
-def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres):
+def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres,radii,
+        dist_max=20,rmin=10,rmax=20,all_particles=True):
     snap = pynbody.load(snapname_forward)
     snap_reverse = pynbody.load(snapname_reverse)
     hr_list = snap_reverse.halos()
@@ -592,18 +593,34 @@ def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres):
     print("Positions computed")
     # Get relative positions of particles in each halo, remembering to 
     # account for wrapping:
+    if all_particles:
+        print("Generating Tree")
+        tree = scipy.spatial.cKDTree(snapedit.wrap(positions,boxsize),
+            boxsize=boxsize)
     print("Computing ellipticities...")
     los_pos_all = []
+    rad_filter = (radii > rmin) & (radii <= rmax)
     for k in tools.progressbar(range(0,len(centres))):
-        indices = hr_list[k+1]['iord']
-        halo_pos = snapedit.unwrap(positions[sorted_indices[indices],:],
-            boxsize)
-        los_pos = get_los_pos(halo_pos,centres[k],boxsize)
-        los_pos_all.append(los_pos)
+        if rad_filter[k]:
+            if not all_particles:
+                indices = hr_list[k+1]['iord']
+                halo_pos = snapedit.unwrap(positions[sorted_indices[indices],:],
+                    boxsize)
+                distances = np.sqrt(
+                    np.sum(snapedit.unwrap(halo_pos - centres[k],boxsize)**2,1))
+                halo_pos = halo_pos[distances < dist_max,:]
+            else:
+                indices = tree.query_ball_point(
+                    snapedit.wrap(centres[k],boxsize),dist_max,workers=-1)
+                halo_pos = snapedit.unwrap(positions[indices,:],boxsize)
+            los_pos = get_los_pos(halo_pos,centres[k],boxsize)
+            los_pos_all.append(los_pos)
+        else:
+            los_pos_all.append(np.zeros((0,2)))
     return los_pos_all
 
 def get_los_positions_for_all_catalogues(snapList,snapListRev,
-        antihaloCentres,recompute=False):
+        antihaloCentres,antihaloRadii,recompute=False,**kwargs):
     los_list = []
     for ns in range(0,len(snapList)):
         # Load snapshot (don't use the snapshot list, because that will force
@@ -612,17 +629,59 @@ def get_los_positions_for_all_catalogues(snapList,snapListRev,
         print("Doing sample " + str(ns+1) + " of " + str(len(snapList)))
         los_pos_all = tools.loadOrRecompute(snapList[ns].filename + ".lospos.p",
             get_los_pos_for_snapshot,snapList[ns].filename,
-            snapListRev[ns].filename,antihaloCentres[ns],
-            _recomputeData=recompute)
+            snapListRev[ns].filename,antihaloCentres[ns],antihaloRadii[ns],
+            _recomputeData=recompute,**kwargs)
         los_list.append(los_pos_all)
     return los_list
 
 
 los_list_borg = get_los_positions_for_all_catalogues(snapList,snapListRev,
-    antihaloCentres)
+    antihaloCentres,antihaloRadii,dist_max=60,rmin=10,rmax=20,recompute=True)
 
 los_list_lcdm = get_los_positions_for_all_catalogues(snapListUn,
-    snapListRevUn,antihaloCentresUn)
+    snapListRevUn,antihaloCentresUn,antihaloRadiiUn,dist_max=60,rmin=10,
+    rmax=20,recompute=True)
+
+
+# Scatter of LCDM stacks:
+
+# Test case:
+#los_pos_all = los_list_lcdm[0]
+los_pos_all = tools.loadOrRecompute(snapListUn[ns].filename + ".lospos.p",
+    get_los_pos_for_snapshot,snapListUn[0].filename,snapListRevUn[0].filename,
+    antihaloCentresUn[ns],antihaloRadiiUn[ns],_recomputeData=True,dist_max=60,
+    rmin=10,rmax=20)
+
+stacked_particles_lcdm = np.vstack(los_pos_all)
+stacked_particles_lcdm_abs = np.abs(stacked_particles_lcdm)
+R=12
+eps_est = estimate_ellipticity(stacked_particles_lcdm,R=R)
+drange = np.linspace(0,(R/eps_est)*1.1,101)
+
+plt.clf()
+fig, ax = plt.subplots()
+ax.hist2d(stacked_particles_lcdm_abs[:,1],
+           stacked_particles_lcdm_abs[:,0],
+           bins=[np.linspace(0,20,31),np.linspace(0,20,31)],density=True,
+           cmap="Blues")
+
+ax.plot(drange,np.sqrt(R**2 - eps_est**2*drange**2),linestyle='--',color='k',
+    label="Ellipse, $R =  " + ("%.2g" % R) + ", \\epsilon = " + 
+    ("%.2g" % eps_est) + "$")
+ax.plot(drange,-np.sqrt(R**2 - eps_est**2*drange**2),linestyle='--',color='k')
+ax.set_xlabel('d [$\\mathrm{Mpc}h^{-1}$]')
+ax.set_ylabel('z [$\\mathrm{Mpc}h^{-1}$]')
+ax.set_xlim([0,20])
+ax.set_ylim([0,20])
+ax.set_aspect('equal')
+ax.legend(frameon=False)
+plt.savefig(figuresFolder + "ellipticity_scatter_all_lcdm.pdf")
+plt.show()
+
+
+
+
+
 
 
 
