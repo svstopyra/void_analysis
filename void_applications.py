@@ -522,9 +522,14 @@ los = antihaloCentres[ns][0]
 
 
 los_pos = get_los_pos(pos,los,boxsize)
-eps_list = np.linspace(0,2,1001)
+
+eps_list = np.linspace(0,2,101)
 
 eps_calc = np.array([get_los_ellipticity_in_ellipse(los_pos,eps,10) 
+    for eps in eps_list])
+
+eps_calc = np.array([get_los_ellipticity_in_ellipse(los_pos,eps,20,
+    weights=1.0/(2.0*np.pi*los_pos[:,1])) 
     for eps in eps_list])
 
 plt.clf()
@@ -539,10 +544,10 @@ plt.savefig(figuresFolder + "ellipticity_test.pdf")
 plt.show()
 
 
-def estimate_ellipticity(los_pos,limits=[1e-5,2],npoints=101,R=10):
+def estimate_ellipticity(los_pos,limits=[1e-5,2],npoints=101,R=10,weights=None):
     eps_list = np.linspace(limits[0],limits[1],npoints)
-    eps_calc = np.array([get_los_ellipticity_in_ellipse(los_pos,eps,R) 
-        for eps in eps_list])
+    eps_calc = np.array([get_los_ellipticity_in_ellipse(los_pos,eps,R,
+        weights=weights) for eps in eps_list])
     # Look for changes of sign:
     diff = eps_calc - eps_list
     signs = diff[1:]*diff[0:-1]
@@ -556,9 +561,16 @@ def estimate_ellipticity(los_pos,limits=[1e-5,2],npoints=101,R=10):
         upper_bound = eps_list[sign_change[0]+1]
         return (lower_bound + upper_bound)/2
 
+def solve_ellipticity(los_pos,limits=[1e-5,2],R=10,weights=None,guess=1.0):
+    func = lambda x: get_los_ellipticity_in_ellipse(los_pos,x,R,
+        weights=weights) - x
+    return scipy.optimize.fsolve(func,guess)
+
+
 # Scatter test:
 R=20
-eps_est = estimate_ellipticity(los_pos,R=R)
+#eps_est = estimate_ellipticity(los_pos,R=R)
+eps_est = solve_ellipticity(los_pos,R=R)
 drange = np.linspace(0,(R/eps_est)*1.1,101)
 
 plt.clf()
@@ -620,63 +632,199 @@ def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres,radii,
     return los_pos_all
 
 def get_los_positions_for_all_catalogues(snapList,snapListRev,
-        antihaloCentres,antihaloRadii,recompute=False,**kwargs):
+        antihaloCentres,antihaloRadii,recompute=False,filter_list=None,
+        **kwargs):
     los_list = []
     for ns in range(0,len(snapList)):
         # Load snapshot (don't use the snapshot list, because that will force
         # loading of all snapshot positions, using up a lot of memory, when 
         # we only want to load these one at a time):
         print("Doing sample " + str(ns+1) + " of " + str(len(snapList)))
-        los_pos_all = tools.loadOrRecompute(snapList[ns].filename + ".lospos.p",
-            get_los_pos_for_snapshot,snapList[ns].filename,
-            snapListRev[ns].filename,antihaloCentres[ns],antihaloRadii[ns],
-            _recomputeData=recompute,**kwargs)
+        if filter_list is None:
+            los_pos_all = tools.loadOrRecompute(
+                snapList[ns].filename + ".lospos.p",
+                get_los_pos_for_snapshot,snapList[ns].filename,
+                snapListRev[ns].filename,antihaloCentres[ns],antihaloRadii[ns],
+                _recomputeData=recompute,**kwargs)
+        else:
+            los_pos_all = tools.loadOrRecompute(
+                snapList[ns].filename + ".lospos.p",
+                get_los_pos_for_snapshot,snapList[ns].filename,
+                snapListRev[ns].filename,antihaloCentres[ns][filter_list[ns],:],
+                antihaloRadii[ns][filter_list[ns]],
+                _recomputeData=recompute,**kwargs)
         los_list.append(los_pos_all)
     return los_list
 
 
-los_list_borg = get_los_positions_for_all_catalogues(snapList,snapListRev,
-    antihaloCentres,antihaloRadii,dist_max=60,rmin=10,rmax=20,recompute=True)
+#los_list_borg = get_los_positions_for_all_catalogues(snapList,snapListRev,
+#    antihaloCentres,antihaloRadii,dist_max=60,rmin=10,rmax=20,recompute=False)
 
-los_list_lcdm = get_los_positions_for_all_catalogues(snapListUn,
-    snapListRevUn,antihaloCentresUn,antihaloRadiiUn,dist_max=60,rmin=10,
-    rmax=20,recompute=True)
+#los_list_lcdm = get_los_positions_for_all_catalogues(snapListUn,
+#    snapListRevUn,antihaloCentresUn,antihaloRadiiUn,dist_max=60,rmin=10,
+#    rmax=20,recompute=False)
+
+los_list_borg = get_los_positions_for_all_catalogues(snapList,snapListRev,
+    [cat300.getMeanCentres(void_filter=True) for ns in range(0,len(snapList))],
+    [cat300.getMeanProperty("radii",void_filter=True)[0] 
+    for ns in range(0,len(snapList))],
+    dist_max=60,rmin=10,rmax=20,recompute=False)
+
+# LCDM examples for comparison:
+distances_from_centre_lcdm = [
+    np.sqrt(np.sum(snapedit.unwrap(centres - np.array([boxsize/2]*3),
+    boxsize)**2,1)) for centres in antihaloCentresUn]
+filter_list_lcdm = [(dist < 135) & (radii > 10) & (radii <= 20) 
+    for dist, radii in zip(distances_from_centre_lcdm,antihaloRadiiUn)]
+
+los_list_lcdm = get_los_positions_for_all_catalogues(snapListUn,snapListRevUn,
+    antihaloCentresUn,antihaloRadiiUn,filter_list=filter_list_lcdm,
+    dist_max=60,rmin=10,rmax=20,recompute=False)
 
 
 # Scatter of LCDM stacks:
 
 # Test case:
 #los_pos_all = los_list_lcdm[0]
-los_pos_all = tools.loadOrRecompute(snapListUn[ns].filename + ".lospos.p",
-    get_los_pos_for_snapshot,snapListUn[0].filename,snapListRevUn[0].filename,
-    antihaloCentresUn[ns],antihaloRadiiUn[ns],_recomputeData=True,dist_max=60,
-    rmin=10,rmax=20)
+#los_pos_all = tools.loadOrRecompute(snapListUn[ns].filename + ".lospos.p",
+#    get_los_pos_for_snapshot,snapListUn[0].filename,snapListRevUn[0].filename,
+#    antihaloCentresUn[ns],antihaloRadiiUn[ns],_recomputeData=True,dist_max=60,
+#    rmin=10,rmax=20)
+
+los_pos_all = los_list_lcdm[0]
 
 stacked_particles_lcdm = np.vstack(los_pos_all)
 stacked_particles_lcdm_abs = np.abs(stacked_particles_lcdm)
-R=12
-eps_est = estimate_ellipticity(stacked_particles_lcdm,R=R)
+R=20
+eps_est = solve_ellipticity(stacked_particles_lcdm,R=R,
+    weights=1.0/(2*np.pi*stacked_particles_lcdm[:,1]))
 drange = np.linspace(0,(R/eps_est)*1.1,101)
 
 plt.clf()
 fig, ax = plt.subplots()
 ax.hist2d(stacked_particles_lcdm_abs[:,1],
            stacked_particles_lcdm_abs[:,0],
-           bins=[np.linspace(0,20,31),np.linspace(0,20,31)],density=True,
-           cmap="Blues")
+           bins=[np.linspace(0,60,31),np.linspace(0,60,31)],density=True,
+           cmap="Blues",weights=(1.0/(2*np.pi*stacked_particles_lcdm_abs[:,1])))
 
-ax.plot(drange,np.sqrt(R**2 - eps_est**2*drange**2),linestyle='--',color='k',
-    label="Ellipse, $R =  " + ("%.2g" % R) + ", \\epsilon = " + 
-    ("%.2g" % eps_est) + "$")
-ax.plot(drange,-np.sqrt(R**2 - eps_est**2*drange**2),linestyle='--',color='k')
+#ax.plot(drange,np.sqrt(R**2 - eps_est**2*drange**2),linestyle='--',color='k',
+#    label="Ellipse, $R =  " + ("%.2g" % R) + ", \\epsilon = " + 
+#    ("%.2g" % eps_est) + "$")
+#ax.plot(drange,-np.sqrt(R**2 - eps_est**2*drange**2),linestyle='--',color='k')
 ax.set_xlabel('d [$\\mathrm{Mpc}h^{-1}$]')
 ax.set_ylabel('z [$\\mathrm{Mpc}h^{-1}$]')
-ax.set_xlim([0,20])
-ax.set_ylim([0,20])
+ax.set_xlim([0,60])
+ax.set_ylim([0,60])
 ax.set_aspect('equal')
 ax.legend(frameon=False)
 plt.savefig(figuresFolder + "ellipticity_scatter_all_lcdm.pdf")
 plt.show()
+
+stacked_particles_borg = np.vstack([np.vstack(los_list) 
+    for los_list in los_list_borg])
+stacked_particles_borg_abs = np.abs(stacked_particles_borg)
+
+stacked_particles_lcdm = np.vstack([np.vstack(los_list) 
+    for los_list in los_list_lcdm ])
+stacked_particles_lcdm_abs = np.abs(stacked_particles_lcdm )
+
+def draw_ellipse(ax,R,eps,theta_bounds=[np.pi/2,0],npoints=101,color='k',
+        linestyle=':',label=None):
+    theta_vals = np.linspace(theta_bounds[0],theta_bounds[1],npoints)
+    d = R/np.sqrt(np.tan(theta_vals)**2 + eps**2)
+    z = d*np.tan(theta_vals)
+    ax.plot(d,z,color=color,linestyle=linestyle,label=label)
+
+# Plot comparing LCDM with out voids:
+
+
+plt.clf()
+fig, ax = plt.subplots(1,2)
+ax[0].hist2d(stacked_particles_lcdm_abs[:,1],
+           stacked_particles_lcdm_abs[:,0],
+           bins=[np.linspace(0,60,31),np.linspace(0,60,31)],density=True,
+           cmap="Blues",
+           weights=(1.0/(len(snapListUn)*2*np.pi*stacked_particles_lcdm_abs[:,1])))
+
+im = ax[1].hist2d(stacked_particles_borg_abs[:,1],
+           stacked_particles_borg_abs[:,0],
+           bins=[np.linspace(0,60,31),np.linspace(0,60,31)],density=True,
+           cmap="Blues",weights=
+           (1.0/((len(snapList)*2*np.pi*stacked_particles_borg_abs[:,1]))))
+
+#ax.plot(drange,np.sqrt(R**2 - eps_est**2*drange**2),linestyle='--',color='k',
+#    label="Ellipse, $R =  " + ("%.2g" % R) + ", \\epsilon = " + 
+#    ("%.2g" % eps_est) + "$")
+#ax.plot(drange,-np.sqrt(R**2 - eps_est**2*drange**2),linestyle='--',color='k')
+
+Rvals = [10,20,30,40,50,60]
+for axi in ax:
+    axi.set_xlabel('d [$\\mathrm{Mpc}h^{-1}$]')
+    axi.set_ylabel('z [$\\mathrm{Mpc}h^{-1}$]')
+    for r in Rvals:
+        draw_ellipse(axi,r,1.0)
+    axi.set_xlim([0,60])
+    axi.set_ylim([0,60])
+    axi.set_aspect('equal')
+    #axi.legend(frameon=False)
+
+#fig.colorbar(im, ax=ax.ravel().tolist(),
+#    label='Tracer density $[h^3\\mathrm{Mpc}^{-3}]$')
+plt.savefig(figuresFolder + "ellipticity_scatter_comparison.pdf")
+plt.show()
+
+
+
+
+
+
+
+
+
+# Try again, with a single los axis rather than a radial line of sight:
+
+positions = [tools.remapAntiHaloCentre(snap['pos'],boxsize,
+    swapXZ  = False,reverse = True) for snap in snapList]
+
+treeList = [scipy.spatial.cKDTree(
+    snapedit.wrap(tools.remapAntiHaloCentre(snap['pos'],boxsize,
+    swapXZ  = False,reverse = True),boxsize),boxsize=boxsize) 
+    for snap in snapList]
+
+borg_centres = cat300.getMeanCentres(void_filter=True)
+
+inds_list = [tree.query_ball_point(
+    snapedit.wrap(borg_centres,boxsize),60.0*np.ones(len(borg_centres)),
+    workers=-1) for tree in treeList]
+
+d_list = [np.sqrt(np.sum(pos[inds,0:2]**2,1)) 
+    for pos, inds in zip(positions,inds_list)]
+
+z_list = [pos[inds,2] for pos, inds in zip(positions,inds_list)]
+
+# LCDM data to compare with:
+positionsUn = [tools.remapAntiHaloCentre(snap['pos'],boxsize,
+    swapXZ  = False,reverse = True) for snap in snapListUn]
+
+treeListUn = [scipy.spatial.cKDTree(
+    snapedit.wrap(tools.remapAntiHaloCentre(snap['pos'],boxsize,
+    swapXZ  = False,reverse = True),boxsize),boxsize=boxsize) 
+    for snap in snapListUn]
+
+centresUn = [centres[filt,:] 
+    for centres,filt in zip(antihaloCentresUn,filter_list_lcdm)]
+
+
+# Get density in bins:
+
+zvals = z_list[0]
+dvals = d_list[0]
+sample = np.hstack([dvals,zvals])
+
+z_bins = np.linspace(0,60,31)
+d_bins = np.linspace(0,60,31)
+
+hist = np.histogramdd(sample,bins=(d_bins,z_bins),density=False)
 
 
 
