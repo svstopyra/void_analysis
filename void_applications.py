@@ -736,40 +736,79 @@ def draw_ellipse(ax,R,eps,theta_bounds=[np.pi/2,0],npoints=101,color='k',
     ax.plot(d,z,color=color,linestyle=linestyle,label=label)
 
 # Plot comparing LCDM with out voids:
+upper_dist = 20
+bins_z = np.linspace(0,upper_dist,21)
+bins_d = np.linspace(0,upper_dist,21)
+cell_volumes = np.outer(np.diff(bins_z),np.diff(bins_d))
+hist_lcdm = np.histogramdd(stacked_particles_lcdm_abs,bins=[bins_z,bins_d],
+                           density=False,weights = 1.0/\
+                           (2*np.pi*stacked_particles_lcdm_abs[:,1]))
+count_lcdm = len(stacked_particles_lcdm_abs)
+num_voids_lcdm = np.sum([len(x) for x in los_list_lcdm])
 
+hist_borg = np.histogramdd(stacked_particles_borg_abs,bins=[bins_z,bins_d],
+                           density=False,weights = 1.0/\
+                           (2*np.pi*stacked_particles_borg_abs[:,1]))
+count_borg = len(stacked_particles_borg_abs)
+num_voids_borg = np.sum([len(x) for x in los_list_borg]) # Not the actual number
+    # but the effective number being stacked, so the number of voids multiplied
+    # by the number of samples.
+
+
+nmean = len(snapList[0])/(boxsize**3)
 
 plt.clf()
-fig, ax = plt.subplots(1,2)
-ax[0].hist2d(stacked_particles_lcdm_abs[:,1],
-           stacked_particles_lcdm_abs[:,0],
-           bins=[np.linspace(0,60,31),np.linspace(0,60,31)],density=True,
-           cmap="Blues",
-           weights=(1.0/(len(snapListUn)*2*np.pi*stacked_particles_lcdm_abs[:,1])))
+fig, ax = plt.subplots(1,2,figsize=(textwidth,0.45*textwidth))
+#ax[0].hist2d(stacked_particles_lcdm_abs[:,1],
+#           stacked_particles_lcdm_abs[:,0],
+#           bins=[np.linspace(0,60,31),np.linspace(0,60,31)],density=True,
+#           cmap="Blues",
+#           weights=(1.0/(2*np.pi*stacked_particles_lcdm_abs[:,1])))
 
-im = ax[1].hist2d(stacked_particles_borg_abs[:,1],
-           stacked_particles_borg_abs[:,0],
-           bins=[np.linspace(0,60,31),np.linspace(0,60,31)],density=True,
-           cmap="Blues",weights=
-           (1.0/((len(snapList)*2*np.pi*stacked_particles_borg_abs[:,1]))))
+#im = ax[1].hist2d(stacked_particles_borg_abs[:,1],
+#           stacked_particles_borg_abs[:,0],
+#           bins=[np.linspace(0,60,31),np.linspace(0,60,31)],density=True,
+#           cmap="Blues",weights=
+#           (1.0/((len(snapList)*2*np.pi*stacked_particles_borg_abs[:,1]))))
+
+im1 = ax[0].imshow(hist_lcdm[0]/(2*cell_volumes*num_voids_lcdm*nmean),
+                   cmap='PuOr_r',vmin=0,vmax = 2,
+                   extent=(0,upper_dist,0,upper_dist),origin='lower')
+im2 = ax[1].imshow(hist_borg[0]/(2*cell_volumes*num_voids_borg*nmean),
+                   cmap='PuOr_r',vmin=0,vmax = 2,
+                   extent=(0,upper_dist,0,upper_dist),origin='lower')
 
 #ax.plot(drange,np.sqrt(R**2 - eps_est**2*drange**2),linestyle='--',color='k',
 #    label="Ellipse, $R =  " + ("%.2g" % R) + ", \\epsilon = " + 
 #    ("%.2g" % eps_est) + "$")
 #ax.plot(drange,-np.sqrt(R**2 - eps_est**2*drange**2),linestyle='--',color='k')
 
-Rvals = [10,20,30,40,50,60]
-for axi in ax:
-    axi.set_xlabel('d [$\\mathrm{Mpc}h^{-1}$]')
-    axi.set_ylabel('z [$\\mathrm{Mpc}h^{-1}$]')
+#Rvals = [10,20,30,40,50,60]
+Rvals = [5,10,15,20]
+titles = ['$\\Lambda$-CDM Simulations','BORG Catalogue']
+for axi, title in zip(ax,titles):
+    axi.set_xlabel('d (Perpendicular distance) [$\\mathrm{Mpc}h^{-1}$]',
+                   fontsize=fontsize,fontfamily=fontfamily)
+    axi.set_ylabel('z (LOS distance)[$\\mathrm{Mpc}h^{-1}$]',
+                   fontsize=fontsize,fontfamily=fontfamily)
     for r in Rvals:
         draw_ellipse(axi,r,1.0)
-    axi.set_xlim([0,60])
-    axi.set_ylim([0,60])
+    axi.set_xlim([0,upper_dist])
+    axi.set_ylim([0,upper_dist])
     axi.set_aspect('equal')
+    axi.set_title(title,fontsize=fontsize,fontfamily=fontfamily)
     #axi.legend(frameon=False)
 
-#fig.colorbar(im, ax=ax.ravel().tolist(),
-#    label='Tracer density $[h^3\\mathrm{Mpc}^{-3}]$')
+# Remove y labels on axis 2:
+ax[1].yaxis.label.set_visible(False)
+ax[1].yaxis.set_major_formatter(NullFormatter())
+ax[1].yaxis.set_minor_formatter(NullFormatter())
+ax[0].xaxis.get_major_ticks()[4].set_visible(False)
+
+fig.colorbar(im1, ax=ax.ravel().tolist(),shrink=0.9,
+    label='(Tracer density)/(Mean Density)')
+plt.subplots_adjust(wspace=0.0,hspace=0.0,left=0.1,right=0.75,bottom=0.15,
+                    top=0.95)
 plt.savefig(figuresFolder + "ellipticity_scatter_comparison.pdf")
 plt.show()
 
