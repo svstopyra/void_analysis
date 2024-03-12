@@ -589,7 +589,8 @@ plt.show()
 
 
 def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres,radii,
-        dist_max=20,rmin=10,rmax=20,all_particles=True,filter_list=None):
+        dist_max=20,rmin=10,rmax=20,all_particles=True,filter_list=None,
+        void_indices=None):
     snap = pynbody.load(snapname_forward)
     snap_reverse = pynbody.load(snapname_reverse)
     hr_list = snap_reverse.halos()
@@ -610,6 +611,8 @@ def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres,radii,
         tree = scipy.spatial.cKDTree(snapedit.wrap(positions,boxsize),
             boxsize=boxsize)
     print("Computing ellipticities...")
+    if void_indices is None:
+        void_indices = np.range(0,len(hr_list))
     los_pos_all = []
     if filter_list is None:
         rad_filter = (radii > rmin) & (radii <= rmax)
@@ -618,7 +621,7 @@ def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres,radii,
     for k in tools.progressbar(range(0,len(centres))):
         if rad_filter[k]:
             if not all_particles:
-                indices = hr_list[k+1]['iord']
+                indices = hr_list[void_indices[k]+1]['iord']
                 halo_pos = snapedit.unwrap(positions[sorted_indices[indices],:],
                     boxsize)
                 distances = np.sqrt(
@@ -636,10 +639,12 @@ def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres,radii,
 
 def get_los_positions_for_all_catalogues(snapList,snapListRev,
         antihaloCentres,antihaloRadii,recompute=False,filter_list=None,
-        suffix=".lospos.p",**kwargs):
+        suffix=".lospos.p",void_indices=None,**kwargs):
     los_list = []
     if suffix == "":
         raise Exception("Suffix cannot be empty.")
+    if void_indices is None:
+        void_indices = [None for ns in range(0,len(snapList))]
     for ns in range(0,len(snapList)):
         # Load snapshot (don't use the snapshot list, because that will force
         # loading of all snapshot positions, using up a lot of memory, when 
@@ -650,14 +655,14 @@ def get_los_positions_for_all_catalogues(snapList,snapListRev,
                 snapList[ns].filename + suffix,
                 get_los_pos_for_snapshot,snapList[ns].filename,
                 snapListRev[ns].filename,antihaloCentres[ns],antihaloRadii[ns],
-                _recomputeData=recompute,**kwargs)
+                _recomputeData=recompute,void_indices=void_indices[ns],**kwargs)
         else:
             los_pos_all = tools.loadOrRecompute(
                 snapList[ns].filename + suffix,
                 get_los_pos_for_snapshot,snapList[ns].filename,
                 snapListRev[ns].filename,antihaloCentres[ns],
                 antihaloRadii[ns],filter_list=filter_list[ns],
-                _recomputeData=recompute,**kwargs)
+                _recomputeData=recompute,void_indices=void_indices[ns],**kwargs)
         los_list.append(los_pos_all)
     return los_list
 
@@ -675,11 +680,21 @@ los_list_borg = get_los_positions_for_all_catalogues(snapList,snapListRev,
     for ns in range(0,len(snapList))],
     dist_max=60,rmin=10,rmax=20,recompute=False)
 
+final_cat = cat300.get_final_catalogue(void_filter=True)
+halo_indices = [-np.ones(len(final_cat),dtype=int) 
+    for ns in range(0,len(snapList))]
+for ns in range(0,len(snapList)):
+    have_void = final_cat[:,ns] >= 0
+    halo_indices[ns][have_void] = \
+        cat300.indexListShort[ns][final_cat[have_void,ns]-1]
+
+filter_list_borg = [halo_indices[ns] >= 0 for ns in range(0,len(snapList))]
 los_list_void_only_borg = get_los_positions_for_all_catalogues(snapList,
     snapListRev,
     [cat300.getMeanCentres(void_filter=True) for ns in range(0,len(snapList))],
     [cat300.getMeanProperty("radii",void_filter=True)[0] 
     for ns in range(0,len(snapList))],all_particles=False,
+    void_indices = halo_indices,filter_list=filter_list_borg,
     dist_max=60,rmin=10,rmax=20,recompute=False,suffix=".lospos_void_only.p")
 
 # LCDM examples for comparison:
@@ -841,17 +856,25 @@ plt.show()
 los_lcdm = los_list_void_only_lcdm
 los_borg = los_list_void_only_borg
 filename = "ellipticity_scatter_comparison_reff_void_only.pdf"
-density_unit = "absolute"
+density_unit = "probability"
+
+voids_used_lcdm = [np.array([len(x) for x in los]) > 0 for los in los_lcdm]
+voids_used_borg = [np.array([len(x) for x in los]) > 0 for los in los_borg]
+# Filter out any unused voids as they just cause problems:
+los_lcdm = [ [x for x in los if len(x) > 0] for los in los_lcdm]
+los_borg = [ [x for x in los if len(x) > 0] for los in los_borg]
 
 # Stacked Profile with rescaled voids:
-upper_dist_reff = 3
-bins_z_reff = np.linspace(0,upper_dist_reff,31)
-bins_d_reff = np.linspace(0,upper_dist_reff,31)
+upper_dist_reff = 2
+bins_z_reff = np.linspace(0,upper_dist_reff,41)
+bins_d_reff = np.linspace(0,upper_dist_reff,41)
+bin_z_centres = plot.binCentres(bins_z_reff)
+bin_d_centres = plot.binCentres(bins_d_reff)
 cell_volumes_reff = np.outer(np.diff(bins_z_reff),np.diff(bins_d_reff))
 
 # Get void effective radii:
 void_radii_lcdm = [rad[filt] 
-                   for rad, filt in zip(antihaloRadiiUn,filter_list_lcdm)]
+                   for rad, filt in zip(antihaloRadiiUn,voids_used_lcdm)]
 void_radii_borg = cat300.getMeanProperty("radii",void_filter=True)[0]
 # Express los co-ords in units of reff:
 los_list_reff_lcdm = [
@@ -887,7 +910,7 @@ hist_lcdm_reff = np.histogramdd(stacked_particles_reff_lcdm_abs,
                            (2*np.pi*v_weight_lcdm*
                            stacked_particles_reff_lcdm_abs[:,1]))
 count_lcdm = len(stacked_particles_reff_lcdm_abs)
-num_voids_lcdm = np.sum([len(x) for x in los_lcdm])
+num_voids_lcdm = np.sum([np.sum(x) for x in voids_used_lcdm])
 
 hist_borg_reff = np.histogramdd(stacked_particles_reff_borg_abs,
                            bins=[bins_z_reff,bins_d_reff],
@@ -895,7 +918,7 @@ hist_borg_reff = np.histogramdd(stacked_particles_reff_borg_abs,
                            (2*v_weight_borg*np.pi*
                            stacked_particles_reff_borg_abs[:,1]))
 count_borg = len(stacked_particles_reff_borg_abs)
-num_voids_borg = np.sum([len(x) for x in los_borg]) # Not the actual number
+num_voids_borg = np.sum([np.sum(x) for x in voids_used_borg]) # Not the actual number
     # but the effective number being stacked, so the number of voids multiplied
     # by the number of samples.
 nmean = len(snapList[0])/(boxsize**3)
@@ -915,33 +938,55 @@ fig, ax = plt.subplots(1,2,figsize=(textwidth,0.45*textwidth))
 #           cmap="Blues",weights=
 #           (1.0/((len(snapList)*2*np.pi*stacked_particles_borg_abs[:,1]))))
 if density_unit == "relative":
+    field_lcdm = hist_lcdm_reff[0]/(2*cell_volumes_reff*num_voids_lcdm*nmean)
+    field_borg = hist_borg_reff[0]/(2*cell_volumes_reff*num_voids_borg*nmean)
     im1 = ax[0].imshow(
-        hist_lcdm_reff[0]/(2*cell_volumes_reff*num_voids_lcdm*nmean),
-        cmap='PuOr_r',vmin=0,vmax = 1e-4,
+        field_lcdm,
+        cmap='PuOr_r',vmin=0,vmax = 2,
         extent=(0,upper_dist_reff,0,upper_dist_reff),origin='lower')
     im2 = ax[1].imshow(
-        hist_borg_reff[0]/(2*cell_volumes_reff*num_voids_borg*nmean),
-        cmap='PuOr_r',vmin=0,vmax = 1e-4,
+        field_borg,
+        cmap='PuOr_r',vmin=0,vmax = 2,
         extent=(0,upper_dist_reff,0,upper_dist_reff),origin='lower')
 elif density_unit == "absolute":
-    im1 = ax[0].imshow(hist_lcdm_reff[0]/(2*cell_volumes_reff*num_voids_lcdm),
+    field_lcdm = hist_lcdm_reff[0]/(2*cell_volumes_reff*num_voids_lcdm)
+    field_borg = hist_borg_reff[0]/(2*cell_volumes_reff*num_voids_borg)
+    im1 = ax[0].imshow(field_lcdm,
                        cmap='Blues',vmin=0,vmax = None,
                        extent=(0,upper_dist_reff,0,upper_dist_reff),
                        origin='lower')
-    im2 = ax[1].imshow(hist_borg_reff[0]/(2*cell_volumes_reff*num_voids_borg),
+    im2 = ax[1].imshow(field_borg,
                        cmap='Blues',vmin=0,vmax = None,
+                       extent=(0,upper_dist_reff,0,upper_dist_reff),
+                       origin='lower')
+elif density_unit == "probability":
+    field_lcdm = hist_lcdm_reff[0]/(2*count_lcdm*cell_volumes_reff)
+    field_borg = hist_borg_reff[0]/(2*count_borg*cell_volumes_reff)
+    im1 = ax[0].imshow(field_lcdm,cmap='Blues',vmin=0,vmax = 1e-4,
+                       extent=(0,upper_dist_reff,0,upper_dist_reff),
+                       origin='lower')
+    im2 = ax[1].imshow(field_borg,cmap='Blues',vmin=0,vmax = 1e-4,
                        extent=(0,upper_dist_reff,0,upper_dist_reff),
                        origin='lower')
 else:
     raise Exception("Unknown density_unit")
 
+contours = True
+countour_list = [1e-6,1e-5,2.5e-5,5e-5,6e-5,7e-5,8e-5,9e-5,1e-4,2e-4]
+if contours:
+    CS = ax[0].contour(bin_d_centres,bin_z_centres,field_lcdm,
+        levels=countour_list)
+    ax[0].clabel(CS, inline=True, fontsize=10)
+    CS = ax[1].contour(bin_d_centres,bin_z_centres,field_borg,
+        levels=countour_list)
+    ax[1].clabel(CS, inline=True, fontsize=10)
 #ax.plot(drange,np.sqrt(R**2 - eps_est**2*drange**2),linestyle='--',color='k',
 #    label="Ellipse, $R =  " + ("%.2g" % R) + ", \\epsilon = " + 
 #    ("%.2g" % eps_est) + "$")
 #ax.plot(drange,-np.sqrt(R**2 - eps_est**2*drange**2),linestyle='--',color='k')
 
 #Rvals = [10,20,30,40,50,60]
-Rvals = [1,2,3]
+Rvals = [1,2]
 titles = ['$\\Lambda$-CDM Simulations','BORG Catalogue']
 for axi, title in zip(ax,titles):
     axi.set_xlabel('$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
@@ -960,17 +1005,18 @@ for axi, title in zip(ax,titles):
 ax[1].yaxis.label.set_visible(False)
 ax[1].yaxis.set_major_formatter(NullFormatter())
 ax[1].yaxis.set_minor_formatter(NullFormatter())
-ax[0].xaxis.get_major_ticks()[3].set_visible(False)
+ax[0].xaxis.get_major_ticks()[4].set_visible(False)
 
 if density_unit == "absolute":
     colorbar_title = "Average Tracer density [$h^{3}\\mathrm{MPc}^{-3}$]"
-else:
+elif density_unit == "relative":
     colorbar_title = '(Tracer density)/(Mean Density)'
+elif density_unit == "probability":
+    colorbar_title = 'Probability Density [$h^{3}\\mathrm{MPc}^{-3}$]'
 
 fig.colorbar(im1, ax=ax.ravel().tolist(),shrink=0.9,
     label=colorbar_title)
-plt.subplots_adjust(wspace=0.0,hspace=0.0,left=0.1,right=0.75,bottom=0.15,
-                    top=0.95)
+plt.subplots_adjust(wspace=0.0,hspace=0.0,left=0.1,right=0.75,bottom=0.15,top=0.95)
 plt.savefig(figuresFolder + filename)
 plt.show()
 

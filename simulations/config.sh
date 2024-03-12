@@ -29,6 +29,7 @@ base_res=256
 # GADGET2 parameter file names:
 params_forward="parameters_full_forward_${resolution}.params"
 params_reverse="parameters_full_reverse_${resolution}.params"
+ics_name="gadget_ic_${resolution}"
 
 # Paths to external codes:
 dtfe_exec=${codeDir}/DTFE_source_1.1.1/build/DTFE # DTFE executable

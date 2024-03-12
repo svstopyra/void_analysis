@@ -16,13 +16,13 @@ do
         mkdir "sample${j}/${subfolders[0]}"
     fi
 # Generate reversed and forward initial conditions:
-    if [ ${generateICs} == "true" ] || [ ! -f sample${j}/ic/gadget_ic_${resolution}_for.gadget2 ] || [ ! -f sample${j}/ic/gadget_ic_${resolution}_rev.gadget2 ]; then
+    if [ ${generateICs} == "true" ] || [ ! -f sample${j}/ic/${ics_name}_for.gadget2 ] || [ ! -f sample${j}/ic/${ics_name}_rev.gadget2 ]; then
         if [ ${mode} == "constrained" ]; then
-            ${python_exec} ${simulationDir}/generate_genetIC_ics.py sample${j}/ic/gadget_ic_${resolution} --wn_file sample${j}/mcmc_${j}.h5 --Ob ${Ob} --Om ${Om} --Ol ${Ol} --ns ${ns} --hubble ${hubble} --zin ${zin} --renormalise_noise True --inverse_fourier False --flip False --reverse True --generate_reversed True --genetic_dir ${genetic_dir} --Nres ${resolution} --sample ${j} --s8 ${sigma8} --baseRes ${base_res} --boxsize ${boxsize}
+            ${python_exec} ${simulationDir}/generate_genetIC_ics.py sample${j}/ic/${ics_name} --wn_file sample${j}/mcmc_${j}.h5 --Ob ${Ob} --Om ${Om} --Ol ${Ol} --ns ${ns} --hubble ${hubble} --zin ${zin} --renormalise_noise True --inverse_fourier False --flip False --reverse True --generate_reversed True --genetic_dir ${genetic_dir} --Nres ${resolution} --sample ${j} --s8 ${sigma8} --baseRes ${base_res} --boxsize ${boxsize}
         elif [ ${mode} == "unconstrained" ]; then
-            ${python_exec} ${simulationDir}/generate_genetIC_ics.py sample${j}/ic/gadget_ic_${resolution} --Ob ${Ob} --Om ${Om} --Ol ${Ol} --ns ${ns} --hubble ${hubble} --zin ${zin} --renormalise_noise True --inverse_fourier False --flip False --reverse True --generate_reversed True --genetic_dir ${genetic_dir} --Nres ${resolution} --sample ${j} --s8 ${sigma8} --baseRes ${base_res} --boxsize ${boxsize}
+            ${python_exec} ${simulationDir}/generate_genetIC_ics.py sample${j}/ic/${ics_name} --Ob ${Ob} --Om ${Om} --Ol ${Ol} --ns ${ns} --hubble ${hubble} --zin ${zin} --renormalise_noise True --inverse_fourier False --flip False --reverse True --generate_reversed True --genetic_dir ${genetic_dir} --Nres ${resolution} --sample ${j} --s8 ${sigma8} --baseRes ${base_res} --boxsize ${boxsize}
         elif [ ${mode} == "npy" ]; then
-            ${python_exec} ${simulationDir}/generate_genetIC_ics.py sample${j}/ic/gadget_ic_${resolution} --wn_file sample${j}/wn.npy --Ob ${Ob} --Om ${Om} --Ol ${Ol} --ns ${ns} --hubble ${hubble} --zin ${zin} --renormalise_noise True --inverse_fourier False --flip False --reverse True --generate_reversed True --genetic_dir ${genetic_dir} --Nres ${resolution} --sample ${j} --s8 ${sigma8} --baseRes ${base_res} --boxsize ${boxsize}
+            ${python_exec} ${simulationDir}/generate_genetIC_ics.py sample${j}/ic/${ics_name} --wn_file sample${j}/wn.npy --Ob ${Ob} --Om ${Om} --Ol ${Ol} --ns ${ns} --hubble ${hubble} --zin ${zin} --renormalise_noise True --inverse_fourier False --flip False --reverse True --generate_reversed True --genetic_dir ${genetic_dir} --Nres ${resolution} --sample ${j} --s8 ${sigma8} --baseRes ${base_res} --boxsize ${boxsize}
         else
             echo "Variable mode is not recognised!"
             exit 1
