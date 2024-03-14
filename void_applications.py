@@ -1078,8 +1078,61 @@ d_bins = np.linspace(0,60,31)
 hist = np.histogramdd(sample,bins=(d_bins,z_bins),density=False)
 
 
+#-------------------------------------------------------------------------------
+# FITTING CONTOURS
+
+import contourpy
+import scipy.optimise
+
+# To get the contour data:
+CG = contourpy.contour_generator(bin_d_centres,bin_z_centres,field_lcdm)
+contours = CG.lines(countour_list[0])
+
+# We can then fit an ellipse to this.
+
+def data_model(d,R,eps):
+    if np.isscalar(d):
+        if d >= R/eps:
+            return 0.0
+        else:
+            return np.sqrt(R**2 - eps**2*d**2)
+    else:
+        nz = np.where(d <= R/eps)
+        result = np.zeros(d.shape)
+        result[nz] = np.sqrt(R**2 - eps**2*d[nz]**2)
+        return result
+
+def residual(z,d,params):
+    R = params[0]
+    eps = params[1]
+    return z - data_model(d,R,eps)
+
+zi = contours[0][:,0]
+di = contours[0][:,1]
+R_bounds = [0,2]
+eps_bounds = [0,2]
+lower_bounds = np.array([R_bounds[0],eps_bounds[0]])
+upper_bounds = np.array([R_bounds[1],eps_bounds[1]])
+ls_guess = scipy.optimize.least_squares(
+    lambda x: residual(zi,di,x),np.array([1.0,1.0]),
+    bounds=(lower_bounds,upper_bounds))
+
+# Check plot:
+
+plt.clf()
+fig, ax = plt.subplots()
+ax.scatter(di,zi,marker='x',color='k')
+draw_ellipse(ax,ls_guess.x[0],ls_guess.x[1])
+ax.set_xlabel('$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
+               fontsize=fontsize,fontfamily=fontfamily)
+ax.set_ylabel('$z/R_{\\mathrm{eff}}$ (LOS distance)',
+               fontsize=fontsize,fontfamily=fontfamily)
+plt.savefig(figuresFolder + "least_squares_test.pdf")
+plt.show()
 
 
+# Good for an estimate, but we really want to get errors on this, so we might
+# need to setup a likelihood and do an MCMC on the two parameters.
 
 
 
