@@ -1021,64 +1021,6 @@ plt.savefig(figuresFolder + filename)
 plt.show()
 
 #-------------------------------------------------------------------------------
-
-
-
-
-
-
-
-
-
-
-
-# Try again, with a single los axis rather than a radial line of sight:
-
-positions = [tools.remapAntiHaloCentre(snap['pos'],boxsize,
-    swapXZ  = False,reverse = True) for snap in snapList]
-
-treeList = [scipy.spatial.cKDTree(
-    snapedit.wrap(tools.remapAntiHaloCentre(snap['pos'],boxsize,
-    swapXZ  = False,reverse = True),boxsize),boxsize=boxsize) 
-    for snap in snapList]
-
-borg_centres = cat300.getMeanCentres(void_filter=True)
-
-inds_list = [tree.query_ball_point(
-    snapedit.wrap(borg_centres,boxsize),60.0*np.ones(len(borg_centres)),
-    workers=-1) for tree in treeList]
-
-d_list = [np.sqrt(np.sum(pos[inds,0:2]**2,1)) 
-    for pos, inds in zip(positions,inds_list)]
-
-z_list = [pos[inds,2] for pos, inds in zip(positions,inds_list)]
-
-# LCDM data to compare with:
-positionsUn = [tools.remapAntiHaloCentre(snap['pos'],boxsize,
-    swapXZ  = False,reverse = True) for snap in snapListUn]
-
-treeListUn = [scipy.spatial.cKDTree(
-    snapedit.wrap(tools.remapAntiHaloCentre(snap['pos'],boxsize,
-    swapXZ  = False,reverse = True),boxsize),boxsize=boxsize) 
-    for snap in snapListUn]
-
-centresUn = [centres[filt,:] 
-    for centres,filt in zip(antihaloCentresUn,filter_list_lcdm)]
-
-
-# Get density in bins:
-
-zvals = z_list[0]
-dvals = d_list[0]
-sample = np.hstack([dvals,zvals])
-
-z_bins = np.linspace(0,60,31)
-d_bins = np.linspace(0,60,31)
-
-hist = np.histogramdd(sample,bins=(d_bins,z_bins),density=False)
-
-
-#-------------------------------------------------------------------------------
 # FITTING CONTOURS
 
 import contourpy
