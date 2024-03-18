@@ -1044,10 +1044,25 @@ class combinedCatalogue:
         thresholds = random_catalogue.getThresholdsInBins(threshold_bins,
                                                           percentile)
         self.set_filter(thresholds[0],threshold_bins,**kwargs)
-    def get_final_catalogue(self,void_filter=False):
+    def get_final_catalogue(self,void_filter=False,short_list=True):
         if self.finalCat is None:
             raise Exception("Final catalogue has not yet been computed.")
-        return self.property_with_filter(self.finalCat,void_filter=void_filter)
+        if short_list:
+            # Short listed version of the catalogue
+            return self.property_with_filter(self.finalCat,
+                                             void_filter=void_filter)
+        else:
+            # Long list, where entries match that of the 
+            final_cat = self.property_with_filter(self.finalCat,
+                                                  void_filter=void_filter)
+            halo_indices = [-np.ones(len(final_cat),dtype=int) 
+                for ns in range(0,self.numCats)]
+            for ns in range(0,self.numCats):
+                have_void = final_cat[:,ns] >= 0
+                halo_indices[ns][have_void] = \
+                    self.indexListShort[ns][final_cat[have_void,ns]-1]
+            final_cat_long = np.array(halo_indices).T
+            return final_cat_long
     def get_alpha_shapes(self,snapList,snapListRev,antihaloCatalogueList=None,
                          ahProps = None,snapsortList=None,reCentreSnaps=False,
                          void_filter=False,alphaVal = 7):

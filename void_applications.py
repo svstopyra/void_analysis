@@ -1024,7 +1024,6 @@ plt.show()
 # FITTING CONTOURS
 
 import contourpy
-import scipy.optimise
 
 # To get the contour data:
 CG = contourpy.contour_generator(bin_d_centres,bin_z_centres,field_lcdm)
@@ -1076,12 +1075,180 @@ plt.show()
 # Good for an estimate, but we really want to get errors on this, so we might
 # need to setup a likelihood and do an MCMC on the two parameters.
 
+# Error estimate assuming that the error is the distance to the closest point 
+# along each dimension:
+def get_interpolation_error_estimate(contour,di,zi,tol=1e-10):
+    errors = np.zeros(contour.shape)
+    num_points = contour.shape[0]
+    for k in range(0,num_points):
+        dist_d = np.abs(di - contour[k,0])
+        dist_z = np.abs(zi - contour[k,1])
+        closest_d = np.min(dist_d[dist_d > tol])
+        closest_z = np.min(dist_z[dist_z > tol])
+        errors[k,:] = np.array([closest_d,closest_z])
+    return errors
+
+
+# Now setup an MCMC:
+
+errors = get_interpolation_error_estimate(contours[0],
+                                          bin_d_centres,bin_z_centres)
+yerr = errors[:,1]
+
+# Log likelihood function:
+def log_likelihood(theta, x, y, yerr):
+    R, eps = theta
+    model = data_model(x, R, eps)
+    sigma2 = yerr**2
+    return -0.5 * np.sum( (y - model)**2/sigma2 + np.log(sigma2) )
+
+# Priors:
+def log_prior(theta):
+    R, eps = theta
+    if (0 <= R < 2.0) & (0 <= eps < 2.0):
+        return 0.0
+    else:
+        return -np.inf
+
+def log_probability(theta,x,y,yerr):
+    lp = log_prior(theta)
+    if not np.isfinite(lp):
+        return -np.inf
+    return lp + log_likelihood(theta, x, y, yerr)
+
+
+
+# ML estimate:
+x = contours[0][:,0]
+y = contours[0][:,1]
+nll = lambda *args: -log_likelihood(*args)
+initial = np.array([1.0,1.0])
+soln = scipy.optimize.minimize(nll, initial, 
+    args=(x, y, yerr))
+R_ml, eps_ml = soln.x
+
+print("Maximum likelihood estimates:")
+print("R = {0:.3f}".format(R_ml))
+print("\\epsilon = {0:.3f}".format(eps_ml))
+
+plt.clf()
+x0 = np.linspace(0,2,101)
+fig, ax = plt.subplots()
+ax.errorbar(x, y, yerr=yerr, fmt=".k", capsize=0)
+ax.plot(x0, data_model(x0,ls_guess.x[0],ls_guess.x[1]), "--k", label="LS")
+ax.plot(x0, data_model(x0,R_ml,eps_ml), ":k", label="ML")
+ax.legend(fontsize=fontsize)
+ax.set_xlim(0,2)
+ax.set_ylim(0,2)
+ax.set_xlabel('$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
+               fontsize=fontsize,fontfamily=fontfamily)
+ax.set_ylabel('$z/R_{\\mathrm{eff}}$ (LOS distance)',
+               fontsize=fontsize,fontfamily=fontfamily)
+plt.savefig(figuresFolder + "ml_test.pdf")
+plt.show()
+
+
+# MCMC run:
+
+import emcee
+
+pos = soln.x + 1e-4*np.random.randn(32,2)
+nwalkers, ndim = pos.shape
+
+sampler = emcee.EnsembleSampler(
+    nwalkers, ndim, log_probability, args=(x, y, yerr)
+)
+sampler.run_mcmc(pos, 5000, progress=True)
+
+tau = sampler.get_autocorr_time()
+
+flat_samples = sampler.get_chain(discard=100, thin=15, flat=True)
+
+
+# Corner plot:
+import corner
+
+plt.clf()
+fig = corner.corner(flat_samples, labels=["$R$","$\\epsilon$"])
+fig.suptitle("$\\Lambda$-CDM Simulations Contour Ellipticity")
+plt.savefig(figuresFolder + "corner_plot_R_eps.pdf")
+
+
+
+def mcmc_contour_ellipticity(field,d_vals,z_vals,level,guess = 'ML',
+                             initial=np.array([1.0,1.0]),nwalkers=32,disp=1e-4,
+                             n_mcmc = 5000):
+    # Fit the contour:
+    CG = contourpy.contour_generator(d_vals,z_vals,field)
+    contours = CG.lines(level)
+    # Estimate errors for the contour:
+    errors = get_interpolation_error_estimate(contours[0],d_vals,z_vals)
+    # Data to fit:
+    yerr = errors[:,1]
+    x = contours[0][:,0]
+    y = contours[0][:,1]
+    ndims = 2
+    # Get the initial guess:
+    if guess == 'ML':
+        nll = lambda *args: -log_likelihood(*args)
+        soln = scipy.optimize.minimize(nll, initial, args=(x, y, yerr))
+        pos = soln.x + disp*np.random.randn(nwalkers,ndims)
+    elif guess == 'initial':
+        pos = initial + disp*np.random.randn(nwalkers,ndims)
+    else:
+        raise Exception("Guess not recognised.")
+    # Setup and run the sampler:
+    sampler = emcee.EnsembleSampler(
+        nwalkers, ndims, log_probability, args=(x, y, yerr)
+    )
+    sampler.run_mcmc(pos, n_mcmc, progress=True)
+    # Filter the MCMC samples to account for correlation:
+    tau = sampler.get_autocorr_time()
+    tau_max = np.max(tau)
+    flat_samples = sampler.get_chain(discard=int(3*tau_max), 
+                                     thin=int(tau_max/2), flat=True)
+    return flat_samples
+
+flat_samples_borg = mcmc_contour_ellipticity(field_borg,
+    bin_d_centres,bin_z_centres,1e-5)
+
+flat_samples_lcdm = mcmc_contour_ellipticity(field_lcdm,
+    bin_d_centres,bin_z_centres,1e-5)
+
+
+
+plt.clf()
+fig = corner.corner(flat_samples_lcdm, labels=["$R$","$\\epsilon$"])
+fig.suptitle("$\\Lambda$-CDM Simulations Contour Ellipticity")
+plt.savefig(figuresFolder + "corner_plot_R_eps.pdf")
+plt.show()
+
+
+
+plt.clf()
+fig = corner.corner(flat_samples_borg, labels=["$R$","$\\epsilon$"])
+fig.suptitle("Combined Catalogue Contour Ellipticity")
+plt.savefig(figuresFolder + "corner_plot_R_eps_borg.pdf")
+plt.show()
+
+
+#-------------------------------------------------------------------------------
+# WRONG COSMO SIMULATIONS
+
+plus_sim = pynbody.load(
+    "new_chain/sample10000/gadget_wrong_cosmo_forward_512/" + 
+    "snapshot_domegam_plus_000")
+
+ns_ref = 9
+
+regular_sim = snapList[ns_ref]
+
+final_cat = cat300.get_final_catalogue(void_filter=True)
 
 
 
 
-
-
+# Need to cross-reference the halo catalogue for this to work:
 
 
 
