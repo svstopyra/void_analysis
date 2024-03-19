@@ -1238,18 +1238,54 @@ plt.show()
 plus_sim = pynbody.load(
     "new_chain/sample10000/gadget_wrong_cosmo_forward_512/" + 
     "snapshot_domegam_plus_000")
+plus_sim_reverse = pynbody.load(
+    "new_chain/sample10000/gadget_wrong_cosmo_reverse_512/" + 
+    "snapshot_domegam_plus_000")
 
 ns_ref = 9
 
 regular_sim = snapList[ns_ref]
+regular_sim_reverse = snapListRev[ns_ref]
 
 final_cat = cat300.get_final_catalogue(void_filter=True)
+halo_indices = [-np.ones(len(final_cat),dtype=int) 
+    for ns in range(0,len(snapList))]
+for ns in range(0,len(snapList)):
+    have_void = final_cat[:,ns] >= 0
+    halo_indices[ns][have_void] = \
+        cat300.indexListShort[ns][final_cat[have_void,ns]-1]
 
+halo_indices = np.array(halo_indices).T
 
-
+clean_indices = halo_indices[halo_indices[:,ns_ref] > 0,ns_ref]
 
 # Need to cross-reference the halo catalogue for this to work:
+antihalos_reg = regular_sim_reverse.halos()
+antihalos_plus = plus_sim_reverse.halos()
 
+bridge = pynbody.bridge.OrderBridge(plus_sim,regular_sim,monotonic=False)
+
+bridge_reverse = pynbody.bridge.OrderBridge(
+    regular_sim_reverse,plus_sim_reverse,monotonic=False)
+
+match = bridge_reverse.match_catalog(min_index=1,max_index=15000,
+                                     groups_1 = antihalos_reg,
+                                     groups_2 = antihalos_plus)[1:]
+
+ah_props_plus = pickle.load(open(plus_sim.filename + ".AHproperties.p","rb"))
+
+antihalo_radii_plus = ah_props_plus[7]
+antihalo_centres_plus = tools.remapAntiHaloCentre(
+    ah_props_plus[5],boxsize,swapXZ  = False,reverse = True)
+
+successful_match = match[clean_indices] > 0
+
+radii_plus = antihalo_radii_plus[match[clean_indices][successful_match]]
+radii_reg = antihaloRadii[ns_ref][clean_indices[successful_match]]
+
+centres_plus = antihalo_centres_plus[match[clean_indices][successful_match],:]
+centres_reg = antihaloCentres[ns_ref][clean_indices[successful_match],:]
+centres_mean = cat300.getMeanCentres(void_filter=True)[halo_indices[:,ns_ref] > 0,:]
 
 
 
