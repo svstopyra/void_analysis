@@ -61,7 +61,7 @@ samplesFolderOld = "./"
 snapnameOld = "forward_output/snapshot_006"
 snapnameOldRev = "reverse_output/snapshot_006"
 
-data_folder = figuresFolder
+data_folder = "borg-antihalos_paper_figures/all_samples/"
 
 fontsize = 9
 legendFontsize = 9
@@ -1232,6 +1232,92 @@ plt.savefig(figuresFolder + "corner_plot_R_eps_borg.pdf")
 plt.show()
 
 
+# Test for the conditions void stacks:
+
+# Get conditioned regions:
+from void_analysis.simulation_tools import get_mcmc_supervolume_densities
+
+deltaMCMCList = tools.loadOrRecompute(data_folder + "delta_list.p",
+                                      get_mcmc_supervolume_densities,
+                                      snapList,r_sphere=135)
+
+# MAP value of the density of the local super-volume:
+from void_analysis.simulation_tools import get_map_from_sample
+
+deltaMAPBootstrap = scipy.stats.bootstrap((deltaMCMCList,),\
+    get_map_from_sample,confidence_level = 0.68,vectorized=False,\
+    random_state=1000)
+deltaMAPInterval = deltaMAPBootstrap.confidence_interval
+
+# Get comparable density regions:
+comparableDensityMAP = [(delta <= deltaMAPInterval[1]) & \
+    (delta > deltaMAPInterval[0]) for delta in randOverDen]
+centresToUse = [randCentres[comp] for comp in comparableDensityMAP]
+deltaToUse = [randOverDen[ns][comp] \
+    for ns, comp in zip(range(0,len(snapList)),comparableDensityMAP)]
+
+rSep = 2*135
+indicesUnderdenseNonOverlapping = simulation_tools.getNonOverlappingCentres(
+    centresToUse,rSep,boxsize,returnIndices=True)
+
+centresUnderdenseNonOverlapping = [centres[ind] \
+    for centres,ind in zip(centresToUse,indicesUnderdenseNonOverlapping)]
+
+densityListUnderdenseNonOverlapping = [density[ind] \
+    for density, ind in zip(comparableDensityMAP,\
+    indicesUnderdenseNonOverlapping)]
+
+densityUnderdenseNonOverlapping = np.hstack(
+    densityListUnderdenseNonOverlapping)
+
+
+
+# Get the stacks of voids:
+regionAndVoidDensityConditionDict = tools.loadOrRecompute(\
+    data_folder + "regionAndVoidDensityCondition_stack.p",\
+    regionAndVoidDensityConditionStack.get_random_catalogue_pair_counts,\
+    _recomputeData=False)
+
+# Which simulation each centre belongs to:
+ns_list = np.hstack([np.array([ns for k in range(0,len(centre))],dtype=int) 
+    for ns, centre in zip(range(0,len(snapList)),
+                          centresUnderdenseNonOverlapping)])
+
+# Get histograms for each of the conditioned stacks:
+
+recompute=True
+field_list = []
+histogram_list = []
+for k in range(0,len(ns_list)):
+    ns = ns_list[k]
+    void_indices = regionAndVoidDensityConditionDict['indices'][k]
+    filter_list = np.isin(np.arange(0,len(antihaloRadiiUn[ns])),
+                          regionAndVoidDensityConditionDict['indices'][k])
+    los_list_void_only = tools.loadOrRecompute(data_folder + "region_los_" + 
+        str(k) + ".p",get_los_pos_for_snapshot,snapList[ns].filename,
+        snapListRev[ns].filename,antihaloCentres[ns][void_indices],
+        antihaloRadii[ns][void_indices],filter_list=None,
+        _recomputeData=recompute,void_indices=void_indices,dist_max=60,rmin=10,
+        rmax=20)
+    void_radii = antihaloRadiiUn[ns][void_indices]
+    v_weight_lcdm = np.hstack([rad**3*np.ones(len(los))
+        for los, rad in zip(los_list_void_only,void_radii)])
+    los_list_reff = [los/rad 
+        for los, rad in zip(los_list_void_only,void_radii)]
+    stacked_particles_reff = np.vstack(los_list_reff)
+    stacked_particles_reff_abs = np.abs(stacked_particles_reff)
+    count_lcdm = len(stacked_particles_reff_abs)
+    hist_reff = np.histogramdd(stacked_particles_reff_abs,
+                           bins=[bins_z_reff,bins_d_reff],
+                           density=False,weights = 1.0/\
+                           (2*np.pi*v_weight_lcdm*
+                           stacked_particles_reff_abs[:,1]))
+    field = hist_reff[0]/(2*count_lcdm*cell_volumes_reff)
+    field_list.append(field)
+    histogram_list.append(hist_reff)
+
+
+
 #-------------------------------------------------------------------------------
 # WRONG COSMO SIMULATIONS
 
@@ -1278,14 +1364,78 @@ antihalo_radii_plus = ah_props_plus[7]
 antihalo_centres_plus = tools.remapAntiHaloCentre(
     ah_props_plus[5],boxsize,swapXZ  = False,reverse = True)
 
-successful_match = match[clean_indices] > 0
+# Get indices for the voids that we have matched for this sample:
+successful_match = match[clean_indices] >= 0
+matched_indices = match[clean_indices][successful_match]-1
 
-radii_plus = antihalo_radii_plus[match[clean_indices][successful_match]]
+# Get the change in radii:
+radii_plus = antihalo_radii_plus[matched_indices]
 radii_reg = antihaloRadii[ns_ref][clean_indices[successful_match]]
+radii_diff = radii_plus - radii_reg
 
-centres_plus = antihalo_centres_plus[match[clean_indices][successful_match],:]
+# Compare with the change in radii between MCMC samples:
+radii_all_samples = cat300.getAllProperties("radii",void_filter=True)
+radii_cleaned = radii_all_samples[halo_indices[:,ns_ref] > 0,:]
+radii_cleaned_mean = np.nanmean(radii_cleaned,1)
+radii_cleaned_std = np.nanstd(radii_cleaned,1)
+
+# Get the change in centres:
+centres_plus = antihalo_centres_plus[matched_indices,:]
 centres_reg = antihaloCentres[ns_ref][clean_indices[successful_match],:]
 centres_mean = cat300.getMeanCentres(void_filter=True)[halo_indices[:,ns_ref] > 0,:]
+
+# Compare to the change in centres between MCMC samples:
+centres_all_samples = cat300.getAllCentres(void_filter=True)
+centres_cleaned = centres_all_samples[:,halo_indices[:,ns_ref] > 0,:]
+centres_cleaned_mean = np.nanmean(centres_cleaned,0)
+centres_cleaned_std = np.nanstd(centres_cleaned,0)
+dist_cleaned = np.sqrt(np.sum((centres_cleaned - centres_cleaned_mean)**2,2))
+dist_cleaned_mean = np.nanmean(dist_cleaned,0)
+dist_cleaned_std = np.nanstd(dist_cleaned,0)
+
+centre_diff = centres_plus - centres_reg
+centre_dist = np.sqrt(np.sum(centre_diff**2,1))
+
+
+# Plots:
+
+bins_rad = np.linspace(-0.5,0.5,21)
+bins_dist = np.linspace(0,1.5,21)
+
+import seaborn
+
+plt.clf()
+fig, ax = plt.subplots(1,2,figsize=(textwidth,0.45*textwidth))
+ax[0].hist(radii_diff/radii_cleaned_std,bins=bins_rad,alpha=0.5,
+           color=seabornColormap[0])
+ax[1].hist(centre_dist/dist_cleaned_std,bins=bins_dist,alpha=0.5,
+           color=seabornColormap[0])
+
+#seaborn.kdeplot(radii_diff/radii_cleaned_std,alpha=0.5,color=seabornColormap[0],
+#            ax=ax[0])
+#seaborn.kdeplot(centre_dist/dist_cleaned_std,alpha=0.5,color=seabornColormap[0],
+#            ax=ax[1])
+ax[0].set_xlabel('$\\mathrm{\\Delta}r_{\\mathrm{eff}}/\sigma_{r_{\\mathrm{eff}}}$')
+ax[1].set_xlabel('$\\mathrm{\\Delta}d/\\sigma_{d}$')
+ax[0].set_ylabel('Number of Voids')
+ax[1].set_ylabel('Number of Voids')
+ax[0].set_xlim([-0.5,0.5])
+ax[1].set_xlim([0,1.5])
+plt.subplots_adjust(wspace=0.0,hspace=0.0,left=0.1,right=0.95,bottom=0.15,
+                    top=0.9)
+ax[0].set_title('Radii change')
+ax[1].set_title('Centre Displacement')
+plt.savefig(figuresFolder + "wrong_cosmo_displacements.pdf")
+plt.show()
+
+
+
+
+
+
+
+
+
 
 
 
