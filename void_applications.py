@@ -61,7 +61,8 @@ samplesFolderOld = "./"
 snapnameOld = "forward_output/snapshot_006"
 snapnameOldRev = "reverse_output/snapshot_006"
 
-data_folder = "borg-antihalos_paper_figures/all_samples/"
+data_folder = figuresFolder
+data_folder2 = "borg-antihalos_paper_figures/all_samples/"
 
 fontsize = 9
 legendFontsize = 9
@@ -590,23 +591,28 @@ plt.show()
 
 def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres,radii,
         dist_max=20,rmin=10,rmax=20,all_particles=True,filter_list=None,
-        void_indices=None):
-    snap = pynbody.load(snapname_forward)
-    snap_reverse = pynbody.load(snapname_reverse)
-    hr_list = snap_reverse.halos()
+        void_indices=None,sorted_indices=None,reverse_indices=None,
+        positions = None,hr_list=None,tree=None):
+    snap = tools.getPynbodySnap(snapname_forward)
+    snap_reverse = tools.getPynbodySnap(snapname_reverse)
+    if hr_list is None:
+        hr_list = snap_reverse.halos()
     boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
     # Sorted indices, to allow correct referencing of particles:
-    sorted_indices = np.argsort(snap['iord'])
-    reverse_indices = snap_reverse['iord'] # Force loading of reverse 
+    if sorted_indices is None:
+        sorted_indices = np.argsort(snap['iord'])
+    if reverse_indices is None:
+        reverse_indices = snap_reverse['iord'] # Force loading of reverse 
     # snapshot indices
     print("Sorting complete")
     # Remap positions into correct equatorial co-ordinates:
-    positions = tools.remapAntiHaloCentre(snap['pos'],boxsize,
-                                          swapXZ  = False,reverse = True)
+    if positions is None:
+        positions = tools.remapAntiHaloCentre(snap['pos'],boxsize,
+                                              swapXZ  = False,reverse = True)
     print("Positions computed")
     # Get relative positions of particles in each halo, remembering to 
     # account for wrapping:
-    if all_particles:
+    if all_particles and (tree is None):
         print("Generating Tree")
         tree = scipy.spatial.cKDTree(snapedit.wrap(positions,boxsize),
             boxsize=boxsize)
@@ -1020,6 +1026,55 @@ plt.subplots_adjust(wspace=0.0,hspace=0.0,left=0.1,right=0.75,bottom=0.15,top=0.
 plt.savefig(figuresFolder + filename)
 plt.show()
 
+def get_los_stack_field(hist,num_voids,density_unit = "probability"):
+    # Extract the bins:
+    bins_z_reff = hist[1][0]
+    bins_d_reff = hist[1][1]
+    # Get cell volumes:
+    cell_volumes_reff = np.outer(np.diff(bins_z_reff),np.diff(bins_d_reff))
+    if density_unit == "relative":
+        field = hist[0]/(2*cell_volumes_reff*num_voids*nmean)
+    elif density_unit == "absolute":
+        field = hist[0]/(2*cell_volumes_reff*num_voids)
+    elif density_unit == "probability":
+        field = hist[0]/(2*num_voids*cell_volumes_reff)
+    return field
+
+
+def plot_los_void_stack(\
+        field,contour_list=[],Rvals = [],ax=None,cmap='Blues',
+        vmin=0,vmax=1e-4,upper_dist_reff = 2,nmean=1.0,contours = True,
+        fontsize=10,xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
+        ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
+        density_unit='probability',savename=None,title=None,
+        colorbar=False,shrink=0.9,colorbar_title=None):
+    if ax is None:
+        fig, ax = plt.subplots()
+    im = ax.imshow(field,cmap=cmap,vmin=vmin,vmax = vmax,
+                   extent=(0,upper_dist_reff,0,upper_dist_reff),
+                   origin='lower')
+    if contours:
+        CS = ax.contour(bin_d_centres,bin_z_centres,field,levels=contour_list)
+        ax.clabel(CS, inline=True, fontsize=fontsize)
+    for r in Rvals:
+        draw_ellipse(ax,r,1.0)
+    # Formatting axes:
+    ax.set_xlabel(xlabel,fontsize=fontsize,fontfamily=fontfamily)
+    ax.set_ylabel(ylabel,fontsize=fontsize,fontfamily=fontfamily)
+    ax.set_xlim([0,upper_dist_reff])
+    ax.set_ylim([0,upper_dist_reff])
+    ax.set_aspect('equal')
+    if title is not None:
+        ax.set_title(title,fontsize=fontsize,fontfamily=fontfamily)
+    if colorbar:
+        fig.colorbar(im,shrink=shrink,label=colorbar_title)
+    if savename is not None:
+        plt.savefig(savename)
+    return im
+
+
+
+
 #-------------------------------------------------------------------------------
 # FITTING CONTOURS
 
@@ -1181,6 +1236,8 @@ def mcmc_contour_ellipticity(field,d_vals,z_vals,level,guess = 'ML',
     # Fit the contour:
     CG = contourpy.contour_generator(d_vals,z_vals,field)
     contours = CG.lines(level)
+    if len(contours) < 1:
+        raise Exception("Failed to find contour at level " + ("%.2g" % level))
     # Estimate errors for the contour:
     errors = get_interpolation_error_estimate(contours[0],d_vals,z_vals)
     # Data to fit:
@@ -1237,7 +1294,7 @@ plt.show()
 # Get conditioned regions:
 from void_analysis.simulation_tools import get_mcmc_supervolume_densities
 
-deltaMCMCList = tools.loadOrRecompute(data_folder + "delta_list.p",
+deltaMCMCList = tools.loadOrRecompute(data_folder2 + "delta_list.p",
                                       get_mcmc_supervolume_densities,
                                       snapList,r_sphere=135)
 
@@ -1250,6 +1307,17 @@ deltaMAPBootstrap = scipy.stats.bootstrap((deltaMCMCList,),\
 deltaMAPInterval = deltaMAPBootstrap.confidence_interval
 
 # Get comparable density regions:
+
+
+# Select random centres in the random simulations, and compute their
+# density contrast:
+[randCentres,randOverDen] = tools.loadOrRecompute(\
+    data_folder2 + "random_centres_and_densities.p",\
+    simulation_tools.get_random_centres_and_densities,rSphere,snapListUn,
+    _recomputeData=False)
+
+
+
 comparableDensityMAP = [(delta <= deltaMAPInterval[1]) & \
     (delta > deltaMAPInterval[0]) for delta in randOverDen]
 centresToUse = [randCentres[comp] for comp in comparableDensityMAP]
@@ -1273,10 +1341,8 @@ densityUnderdenseNonOverlapping = np.hstack(
 
 
 # Get the stacks of voids:
-regionAndVoidDensityConditionDict = tools.loadOrRecompute(\
-    data_folder + "regionAndVoidDensityCondition_stack.p",\
-    regionAndVoidDensityConditionStack.get_random_catalogue_pair_counts,\
-    _recomputeData=False)
+regionAndVoidDensityConditionDict = tools.loadPickle(\
+    data_folder2 + "regionAndVoidDensityCondition_stack.p")
 
 # Which simulation each centre belongs to:
 ns_list = np.hstack([np.array([ns for k in range(0,len(centre))],dtype=int) 
@@ -1288,17 +1354,30 @@ ns_list = np.hstack([np.array([ns for k in range(0,len(centre))],dtype=int)
 recompute=True
 field_list = []
 histogram_list = []
-for k in range(0,len(ns_list)):
+ns_last = -1
+for k in tools.progressbar(range(0,len(ns_list))):
     ns = ns_list[k]
+    if ns != ns_last:
+        ns_last = ns
+        snap = tools.getPynbodySnap(snapList[ns].filename)
+        snap_reverse = pynbody.load(snapListRev[ns].filename)
+        hr_list = snap_reverse.halos()
+        sorted_indices = np.argsort(snap['iord'])
+        reverse_indices = snap_reverse['iord'] # Force loading of reverse 
+            # snapshot indices
+        print("Sorting complete")
+        positions = tools.remapAntiHaloCentre(snap['pos'],boxsize,
+                                              swapXZ  = False,reverse = True)
     void_indices = regionAndVoidDensityConditionDict['indices'][k]
     filter_list = np.isin(np.arange(0,len(antihaloRadiiUn[ns])),
                           regionAndVoidDensityConditionDict['indices'][k])
-    los_list_void_only = tools.loadOrRecompute(data_folder + "region_los_" + 
-        str(k) + ".p",get_los_pos_for_snapshot,snapList[ns].filename,
-        snapListRev[ns].filename,antihaloCentres[ns][void_indices],
+    los_list_void_only = tools.loadOrRecompute(data_folder2 + "region_los_" + 
+        str(k) + ".p",get_los_pos_for_snapshot,snap,snap_reverse,
+        antihaloCentres[ns][void_indices],
         antihaloRadii[ns][void_indices],filter_list=None,
         _recomputeData=recompute,void_indices=void_indices,dist_max=60,rmin=10,
-        rmax=20)
+        rmax=20,all_particles=False,sorted_indices=sorted_indices,
+        reverse_indices=reverse_indices,positions = positions,hr_list=hr_list)
     void_radii = antihaloRadiiUn[ns][void_indices]
     v_weight_lcdm = np.hstack([rad**3*np.ones(len(los))
         for los, rad in zip(los_list_void_only,void_radii)])
@@ -1316,7 +1395,53 @@ for k in range(0,len(ns_list)):
     field_list.append(field)
     histogram_list.append(hist_reff)
 
+# Get samples:
 
+sample_list = []
+for k in range(0,len(ns_list)):
+    try:
+        mcmc_samples = mcmc_contour_ellipticity(field_list[k],
+            bin_d_centres,bin_z_centres,1e-5)
+    except:
+        mcmc_samples = None
+    sample_list.append(mcmc_samples)
+
+def get_mcmc_samples_for_fields(field_list,level,bin_d_centres,bin_z_centres):
+    sample_list = []
+    for k in range(0,len(field_list)):
+        try:
+            mcmc_samples = mcmc_contour_ellipticity(field_list[k],
+                bin_d_centres,bin_z_centres,1e-5)
+        except:
+            mcmc_samples = None
+        sample_list.append(mcmc_samples)
+    return sample_list
+
+sample_list = tools.loadOrRecomute(
+    data_folder + "mcmc_samples_conditioned_voids.p",
+    get_mcmc_samples_for_fields,field_list,level,bin_d_centres,bin_z_centres)
+
+clean_sample_list = [x for x in sample_list if x is not None]
+
+means = np.array([np.mean(x,0) for x in clean_sample_list])
+
+borg_mean = np.mean(flat_samples_borg,0)
+
+plt.clf()
+plt.hist(means[:,1],alpha=0.5,color=seabornColormap[0],
+    bins=np.linspace(0.5,1.5,21),density=True,
+    label='Conditioned\n$\\Lambda$-CDM samples')
+plt.axvline(borg_mean[1],linestyle='--',color='grey',label='Combined Catalogue')
+plt.xlabel('Ellipticity, $\\epsilon$')
+plt.ylabel('Probability Density')
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "lcdm_ellipticity_distribution_histogram.pdf")
+plt.show()
+
+# Test:
+plot_los_void_stack(field_list[0],contour_list=[1e-5],Rvals=[1,2],vmax=1e-4,
+    savename = figuresFolder + "conditioned_stack_test.pdf",colorbar=True,
+    colorbar_title = 'Probability Density [$h^{3}\\mathrm{MPc}^{-3}$]')
 
 #-------------------------------------------------------------------------------
 # WRONG COSMO SIMULATIONS
