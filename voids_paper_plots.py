@@ -775,6 +775,26 @@ np.savez(data_folder + "combined_catalogue.npz",
 np.savez(data_folder + "combined_catalogue_unfiltered.npz",
          catalogue=cat300.finalCat)
 
+bins_rep = np.arange(0.025,1.075,0.05)
+bins_rad = np.linspace(10,20,7)
+
+[binLists,noInBins] = plot_utilities.binValues(cat['radii'],bins_rad)
+
+weights = np.ones(cat['radii'].shape,dtype=float)
+for val, bins in zip(noInBins,binLists):
+    weights[bins] = 1.0/val
+
+
+
+plt.hist2d(cat['rep_score'],cat['radii'],bins=[bins_rep,bins_rad],cmap='Blues',
+    weights=None)
+plt.colorbar(label='Number of Voids')
+#plt.colorbar(label='Fraction of voids this radius')
+plt.xlabel('Reproducibility Score')
+plt.ylabel('Radius [$\\mathrm{Mpc}h^{-1}$]')
+plt.show()
+
+
 
 
 
