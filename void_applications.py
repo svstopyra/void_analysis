@@ -1351,13 +1351,19 @@ ns_list = np.hstack([np.array([ns for k in range(0,len(centre))],dtype=int)
 
 # Get histograms for each of the conditioned stacks:
 
-recompute=True
+recompute=False
 field_list = []
 histogram_list = []
 ns_last = -1
+snap = None
+snap_reverse=None
+hr_list = None
+sorted_indices = None
+reverse_indices=None
+positions=None
 for k in tools.progressbar(range(0,len(ns_list))):
     ns = ns_list[k]
-    if ns != ns_last:
+    if (ns != ns_last) and (recompute):
         ns_last = ns
         snap = tools.getPynbodySnap(snapList[ns].filename)
         snap_reverse = pynbody.load(snapListRev[ns].filename)
