@@ -1098,6 +1098,24 @@ def data_model(d,R,eps):
         result[nz] = np.sqrt(R**2 - eps**2*d[nz]**2)
         return result
 
+# A Lambda-cdm data model where we compute the expected epsilon
+# from the value of Omega_m:
+def data_model_lcdm(d,R,Om0,cosmo_fid=None,zfid = 0.01529,Dafid=None):
+    # Get cosmology
+    if cosmo_fid is None:
+        cosmo_fid = astropy.cosmology.FlatLambdaCDM(H0=0.7,Om0=0.3)
+    Om0_fid = cosmo_fid.Om0
+    H0fid = cosmo_fid.H0.value
+    cosmo_test = astropy.cosmology.FlatLambdaCDM(H0=H0fid,Om0=Om0)
+    # Get the ratio:
+    Hz = H0fid*np.sqrt(Om0*(1 + zfid)**3 + 1.0 - Om0)
+    Hzfid = H0fid*np.sqrt(Om0_fid*(1 + zfid)**3 + 1.0 - Om0_fid)
+    Da = cosmo_test.angular_diameter_distance(zfid).value
+    if Dafid is None:
+        Dafid = cosmo_fid.angular_diameter_distance(zfid).value
+    eps = Hz*Da/(Hzfid*Dafid)
+    return data_model(d,R,eps)
+
 def residual(z,d,params):
     R = params[0]
     eps = params[1]
@@ -1170,7 +1188,6 @@ def log_probability(theta,x,y,yerr):
     if not np.isfinite(lp):
         return -np.inf
     return lp + log_likelihood(theta, x, y, yerr)
-
 
 
 # ML estimate:
@@ -1423,7 +1440,7 @@ def get_mcmc_samples_for_fields(field_list,level,bin_d_centres,bin_z_centres):
         sample_list.append(mcmc_samples)
     return sample_list
 
-sample_list = tools.loadOrRecomute(
+sample_list = tools.loadOrRecompute(
     data_folder + "mcmc_samples_conditioned_voids.p",
     get_mcmc_samples_for_fields,field_list,level,bin_d_centres,bin_z_centres)
 
@@ -1448,6 +1465,12 @@ plt.show()
 plot_los_void_stack(field_list[0],contour_list=[1e-5],Rvals=[1,2],vmax=1e-4,
     savename = figuresFolder + "conditioned_stack_test.pdf",colorbar=True,
     colorbar_title = 'Probability Density [$h^{3}\\mathrm{MPc}^{-3}$]')
+
+
+
+#-------------------------------------------------------------------------------
+# COSMOLOGY CONNECTION
+
 
 #-------------------------------------------------------------------------------
 # WRONG COSMO SIMULATIONS
