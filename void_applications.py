@@ -1471,6 +1471,172 @@ plot_los_void_stack(field_list[0],contour_list=[1e-5],Rvals=[1,2],vmax=1e-4,
 #-------------------------------------------------------------------------------
 # COSMOLOGY CONNECTION
 
+# E(z)^2 function:
+def Ez2(z,Om,Or=0,Ok=0,Ol=None,**kwargs)
+    if Ol is None:
+        Ol = 1.0 - Om - Ok - Or
+    return Or*(1 + z)**4 + Om*(1 + z)**3 + Ok*(1 + z)**2 + Ol
+
+# Linear growth rate in Lambda-CDM
+def f_lcdm(z,Om,gamma=0.55,Ol=None,Ok=0,Or=0,**kwargs):
+    Ez2 = Ez2(z,Om,**kwargs)
+    return (Om*(1 + z)**3/Ez2)**gamma
+
+# Hubble rate as a function of H:
+def Hz(z,Om,h=None,Ol=None,Ok=0,Or=0,**kwargs):
+    if h is None:
+        # Use units of km/s/Mpc/h:
+        h = 1
+    return 100*h*np.sqrt(Ez2(z,Om,**kwargs))
+
+# Peculiar velocity as a function of distance from a void centre along LOS, 
+# at linear level:
+def void_los_velocity(z,Delta,r_par,r_perp,Om,f=None,**kwargs):
+    # Assume lambda-cdm if no growth rate given:
+    if f is None:
+        f = f_lcdm(z,Om,**kwargs)
+    # Hubble rate:
+    hz = Hz(z,Om,**kwargs)
+    # Distance from void centre:
+    r = np.sqrt(r_par**2 + r_perp**2)
+    # Cumulative density at this distance:
+    Dr = Delta(r)
+    return -(f/3.0)*(hz/(1.0 + z))*Dr*r_par
+
+# Derivative of the peculiar velocity with LOS distance
+def void_los_velocity_derivative(z,Delta,delta,r_par,r_perp,Om,f=None,**kwargs):
+    # Distance from void centre:
+    r = np.sqrt(r_par**2 + r_perp**2)
+    # Cumulative density at this distance:
+    Dr = Delta(r)
+    # Shell density at this distance:
+    dr = delta(r)
+    # Hubble rate:
+    hz = Hz(z,Om,**kwargs)
+    # Assume lambda-cdm if no growth rate given:
+    if f is None:
+        f = f_lcdm(z,Om,**kwargs)
+    return -(f/3.0)*(hz/(1.0 + z))*Dr - f*(r_par/r)**2*(hz/(1.0 + z))*(dr - Dr)
+
+# Derivative of LOS distance in real space vs redshift space:
+def z_space_jacobian(z,Delta,delta,r_par,r_perp,Om,
+                     linearise_jacobian=True,**kwargs):
+    # Hubble rate:
+    hz = Hz(z,Om,**kwargs)
+    dudr = void_los_velocity_derivative(z,Delta,delta,r_par,r_perp,Om,**kwargs)
+    if linearise_jacobian:
+        # Expand to first order:
+        return 1.0 -((1.0 + z)/hz)*dudr
+    else:
+        # Just compute without expanding:
+        return 1.0/(1.0 + ((1.0 + z)/hz)*dudr)
+
+# Redshift space transformation around voids:
+def to_z_space(r_par,r_perp,z,Om,Delta=None,u_par=None,f=None,**kwargs):
+    if u_par is None:
+        # Assume linear relationship:
+        r = np.sqrt(r_par**2 + r_perp**2)
+        if f is None:
+            f = f_lcdm(z,om,**kwargs)
+        s_par = (1.0  - (f/3.0)*Delta(r))*r_par
+    else:
+        # Use supplied peculiar velocity:
+        # Hubble rate:
+        hz = Hz(z,Om,**kwargs)
+        s_par = r_par + (1.0 + z)*u_par/hz
+    s_perp = r_perp
+    return [s_par,s_perp]
+
+# Transformation to real space, from redshift space:
+def to_real_space(s_par,s_perp,z,Om,Delta=None,u_par=None,f=None,N_max = 5,
+                  atol=1e-5,rtol=1e-5,**kwargs):
+    r_perp = s_perp
+    if u_par is None:
+        # Assume linear relationship:
+        if f is None:
+            f = f_lcdm(z,om,**kwargs)
+        # Need to guess at r:
+        r_par_guess = s_par
+        for k in range(0,Nmax):
+            # Iteratively improve the guess:
+            r = np.sqrt(r_par_guess**2 + r_perp**2)
+            r_par_new = s_par/(1.0  - (f/3.0)*Delta(r))
+            if (np.abs(r_par_new - r_par_guess) < atol) or \
+                (np.abs(r_par_new/r_par_guess - 1.0) < rtol):
+                break
+            r_par_guess = r_par_new
+        r_par = r_par_guess
+    else:
+        # Use supplied peculiar velocity:
+        # Hubble rate:
+        hz = Hz(z,Om,**kwargs)
+        r_par = s_par - (1.0 + z)*u_par/hz
+    return [r_par,r_perp]
+
+# Profile in redshift space:
+def z_space_profile(s_par,s_perp,rho_real,z,Om,Delta,delta,**kwargs):
+    # Get real-space co-ordinates:
+    [r_par,r_perp] = to_real_space(s_par,s_perp,z,Om,Delta=Delta,**kwargs)
+    # Get Jacobian from the transformation:
+    jacobian = z_space_jacobian(z,Delta,delta,r_par,r_perp,Om,**kwargs)
+    # Compute distance from centre of the void:
+    r = np.sqrt(r_par**2 + r_perp**2)
+    # Evaluate profile:
+    return rho_real(r)*jacobian
+
+# Compute the covariance matrix of a set of data:
+def covariance(data):
+    # data should be an (N,M) array of N data elements, each with M values.
+    # We seek to compute an M x M covariance matrix of this data
+    N, M = data.shape
+    mean = np.mean(data,0)
+    diff = data.T - mean
+    cov = np.matmul(diff,diff.T)/N
+    return cov
+
+# Estimate covariance of the profile using the jackknife method:
+def profile_jackknife_covariance(data,profile_function,**kwargs):
+    N, M = data.shape
+    jacknife_data = np.zeros(N,M)
+    for k in range(0,N):
+        sample = np.setdiff1d(range(0,N),np.array([k]))
+        jacknife_data[k,:] = profile_function(data[sample,:],**kwargs)
+    return covariance(jacknife_data)/(N-1)
+
+# Likelihood function:
+def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
+                          z,Delta,delta,rho_real,**kwargs):
+    s_par = scoords[:,0]
+    s_perp = scoords[:,1]
+    Om, f = theta
+    M = len(s_par)
+    delta_rho = np.zeros(s_par.shape)
+    # Evaluate the profile for the supplied value of the parameters:
+    for k in range(0,M):
+        delta_rho[k] = data_field[k] - z_space_profile(s_par[k],s_perp[k],
+                                                       rho_real,z,Om,Delta,
+                                                       delta,f=f,**kwargs)
+    return -0.5*np.matmul(np.matmul(data_rho,inv_cov),data_rho.T)
+
+# Prior (assuming flat prior for now):
+def log_prior_aptest(theta,theta_ranges=[[0.1,0.5],[0,1.0]]):
+    bool_array = np.aray([bounds[0] <= param < bounds[1] 
+        for bounds, param in zip(theta_ranges,theta)],dtype=bool)
+    if np.all(bool_array):
+        return 0.0
+    else:
+        return -np.inf
+
+# Posterior:
+def log_probability_aptest(theta,**kwargs):
+    lp = log_prior_aptest(theta)
+    if not np.isfinite(lp):
+        return -np.inf
+    return lp + log_likelihood_aptest(theta, **kwargs)
+
+
+
+
 
 #-------------------------------------------------------------------------------
 # WRONG COSMO SIMULATIONS
