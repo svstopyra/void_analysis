@@ -67,6 +67,8 @@ data_folder2 = "borg-antihalos_paper_figures/all_samples/"
 fontsize = 9
 legendFontsize = 9
 
+low_memory_mode = True
+
 #-------------------------------------------------------------------------------
 # LOAD SNAPSHOT DATA:
 
@@ -138,26 +140,52 @@ snapListRevUn = [pynbody.load("new_chain/unconstrained_samples/sample"
                  + str(num) + "/gadget_full_reverse_512/snapshot_001") \
                  for num in snapNumListUncon]
 
-# Properties of anti-halos:
-ahProps = [pickle.load(open(snap.filename + ".AHproperties.p","rb")) 
-           for snap in snapList]
-ahPropsUn = [pickle.load(open(snap.filename + ".AHproperties.p","rb")) 
-             for snap in snapListUn]
-# Anti-halo catalogues:
-hrList = [snap.halos() for snap in snapListRev]
-hrListUn = [snap.halos() for snap in snapListRevUn]
-# Centres, radii, and masses:
-antihaloCentresUn = [tools.remapAntiHaloCentre(props[5],boxsize) \
-            for props in ahPropsUn]
-antihaloMassesUn = [props[3] for props in ahPropsUn]
-antihaloRadiiUn = [props[7] for props in ahPropsUn]
-antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize,
-                                             swapXZ  = False,reverse = True) 
-                   for props in ahProps]
-antihaloMasses = [props[3] for props in ahProps]
-antihaloRadii = [props[7] for props in ahProps]
+
+def extract_antihalo_property(snap_list,prop):
+    properties = []
+    for snap in snap_list:
+        props_list = tools.loadPickle(snap.filename + ".AHproperties.p")
+        properties.append(props_list[prop])
+        del props_list
+        gc.collect()
+    return properties
 
 
+
+if not low_memory_mode:
+    # Properties of anti-halos:
+    ahProps = [pickle.load(open(snap.filename + ".AHproperties.p","rb")) 
+               for snap in snapList]
+    ahPropsUn = [pickle.load(open(snap.filename + ".AHproperties.p","rb")) 
+                 for snap in snapListUn]
+    # Anti-halo catalogues:
+    hrList = [snap.halos() for snap in snapListRev]
+    hrListUn = [snap.halos() for snap in snapListRevUn]
+    # Centres, radii, and masses:
+    antihaloCentresUn = [tools.remapAntiHaloCentre(props[5],boxsize) \
+                for props in ahPropsUn]
+    antihaloMassesUn = [props[3] for props in ahPropsUn]
+    antihaloRadiiUn = [props[7] for props in ahPropsUn]
+    antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize,
+                                                 swapXZ  = False,
+                                                 reverse = True)
+                       for props in ahProps]
+    antihaloMasses = [props[3] for props in ahProps]
+    antihaloRadii = [props[7] for props in ahProps]
+else:
+    antihaloCentresUn = [tools.remapAntiHaloCentre(centres,boxsize,
+                                                 swapXZ  = False,
+                                                 reverse = True)
+                       for centres in extract_antihalo_property(snapListUn,5)]
+    antihaloMassesUn = extract_antihalo_property(snapListUn,3)
+    antihaloCentres = [tools.remapAntiHaloCentre(centres,boxsize,
+                                                 swapXZ  = False,
+                                                 reverse = True)
+                       for centres in extract_antihalo_property(snapList,5)]
+    antihaloRadiiUn = extract_antihalo_property(snapListUn,7)
+    antihaloCentres = extract_antihalo_property(snapList,5)
+    antihaloMasses = extract_antihalo_property(snapList,3)
+    antihaloRadii = extract_antihalo_property(snapList,7)
 
 #-------------------------------------------------------------------------------
 # BUILDING VOID CATALOGUES FROM SCRATCH
@@ -183,10 +211,11 @@ m_unit = snapList[0]['mass'][0]*1e10
 # Signal to noise information:
 snrThresh=10
 chainFile="chain_properties.p"
-[snrFilter,snrAllCatsList] = getSNRFilterFromChainFile(chainFile,snrThresh,\
-    snapNameList,boxsize)
+if not low_memory_mode:
+    [snrFilter,snrAllCatsList] = getSNRFilterFromChainFile(
+        chainFile,snrThresh,snapNameList,boxsize)
 
-if recomputeCatalogues or (not os.path.isfile(data_folder + "cat300.p")):
+if recomputeCatalogues or (not os.path.isfile(data_folder2 + "cat300.p")):
     cat300 = catalogue.combinedCatalogue(
         snapNameList,snapNameListRev,\
         muOpt,rSearchOpt,rSphere,\
@@ -209,15 +238,15 @@ if recomputeCatalogues or (not os.path.isfile(data_folder + "cat300.p")):
         enforceExclusive=enforceExclusive)
     finalCat300test = cat300test.constructAntihaloCatalogue()
     finalCat300 = cat300.constructAntihaloCatalogue()
-    tools.savePickle(cat300,data_folder + "cat300.p")
+    tools.savePickle(cat300,data_folder2 + "cat300.p")
 else:
-    cat300 = tools.loadPickle(data_folder + "cat300.p")
+    cat300 = tools.loadPickle(data_folder2 + "cat300.p")
 
 # Random catalogues:
 snapNameListRand = [snap.filename for snap in snapListUn]
 snapNameListRandRev = [snap.filename for snap in snapListRevUn]
 
-if recomputeCatalogues or (not os.path.isfile(data_folder + "cat300Rand.p")):
+if recomputeCatalogues or (not os.path.isfile(data_folder2 + "cat300Rand.p")):
     cat300Rand = catalogue.combinedCatalogue(
         snapNameListRand,snapNameListRandRev,\
         muOpt,rSearchOpt,rSphere,\
@@ -240,9 +269,9 @@ if recomputeCatalogues or (not os.path.isfile(data_folder + "cat300Rand.p")):
         enforceExclusive=enforceExclusive)
     finalCat300RandTest = cat300RandTest.constructAntihaloCatalogue()
     finalCat300Rand = cat300Rand.constructAntihaloCatalogue()
-    tools.savePickle(cat300Rand,data_folder + "cat300Rand.p")
+    tools.savePickle(cat300Rand,data_folder2 + "cat300Rand.p")
 else:
-    cat300Rand = tools.loadPickle(data_folder + "cat300Rand.p")
+    cat300Rand = tools.loadPickle(data_folder2 + "cat300Rand.p")
 
 # Apply Catalogue filter:
 nBinEdges = 8
@@ -418,9 +447,13 @@ ellipticity_list = tools.loadOrRecompute(data_folder + "ellipticities.p",
                                          antihaloCentres)
 
 # Lambda-CDM reference:
-antihaloCentresUn = [tools.remapAntiHaloCentre(props[5],boxsize,
-                                               swapXZ  = False,reverse = True) \
-                     for props in ahPropsUn]
+if not low_memory_mode:
+    antihaloCentresUn = [tools.remapAntiHaloCentre(props[5],boxsize,
+                                                   swapXZ  = False,
+                                                   reverse = True) \
+                         for props in ahPropsUn]
+
+
 
 ellipticity_list_lcdm = tools.loadOrRecompute(
     data_folder + "ellipticities_lcdm.p",get_all_ellipticities,snapListUn,
@@ -670,6 +703,8 @@ def get_los_positions_for_all_catalogues(snapList,snapListRev,
                 antihaloRadii[ns],filter_list=filter_list[ns],
                 _recomputeData=recompute,void_indices=void_indices[ns],**kwargs)
         los_list.append(los_pos_all)
+        del los_pos_all
+        gc.collect()
     return los_list
 
 
