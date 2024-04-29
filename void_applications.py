@@ -622,10 +622,28 @@ plt.show()
 # Get and save the line of sight positions:
 
 
+def redshift_space_positions(snap,centre=None):
+    boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+    if centre is None:
+        centre = np.array([boxsize/2]*3)
+    a = snap.properties['a']
+    z = 1.0/a - 1.0
+    Om = snap.properties['omegaM0']
+    Ha = Hz(z,Om,h=1) # Hubble rate / h
+    r = snapedit.unwrap(snap['pos'] - centre,boxsize)
+    r2 = np.sum(r**2,1)
+    vr = np.sum(snap['vel']*r,1)
+    # Assume gadget units:
+    gamma = (np.sqrt(a)/Ha)/pynbody.units.Unit("km a**-1/2 s**-1 Mpc**-1 h")
+    return snapedit.wrap((1.0 + gamma*vr/r2)[:,None]*r + centre,boxsize)
+
+
+
 def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres,radii,
         dist_max=20,rmin=10,rmax=20,all_particles=True,filter_list=None,
         void_indices=None,sorted_indices=None,reverse_indices=None,
-        positions = None,hr_list=None,tree=None):
+        positions = None,hr_list=None,tree=None,zspace=False,
+        recompute_zspace=False):
     snap = tools.getPynbodySnap(snapname_forward)
     snap_reverse = tools.getPynbodySnap(snapname_reverse)
     if hr_list is None:
@@ -640,7 +658,14 @@ def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres,radii,
     print("Sorting complete")
     # Remap positions into correct equatorial co-ordinates:
     if positions is None:
-        positions = tools.remapAntiHaloCentre(snap['pos'],boxsize,
+        if zspace:
+            positions = tools.loadOrRecompute(
+                snap.filename + ".z_space_pos.p",
+                redshift_space_positions,snap,centre=np.array([boxsize/2]*3),
+                _recomputeData=recompute_zspace)
+        else:
+            positions = snap['pos']
+        positions = tools.remapAntiHaloCentre(positions,boxsize,
                                               swapXZ  = False,reverse = True)
     print("Positions computed")
     # Get relative positions of particles in each halo, remembering to 
@@ -651,7 +676,7 @@ def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres,radii,
             boxsize=boxsize)
     print("Computing ellipticities...")
     if void_indices is None:
-        void_indices = np.range(0,len(hr_list))
+        void_indices = np.arange(0,len(hr_list))
     los_pos_all = []
     if filter_list is None:
         rad_filter = (radii > rmin) & (radii <= rmax)
@@ -932,6 +957,9 @@ stacked_particles_borg_reff = np.vstack([np.vstack(los_list)
     for los_list in los_list_reff_borg ])
 stacked_particles_reff_lcdm_abs = np.abs(stacked_particles_lcdm_reff)
 stacked_particles_reff_borg_abs = np.abs(stacked_particles_borg_reff)
+
+
+stacked_particles_r_lcdm_reff = np.sqrt(np.sum(stacked_particles_lcdm_reff**2,1))
 
 # Volume weights for each particle:
 v_weight_lcdm = [
@@ -1507,7 +1535,7 @@ plot_los_void_stack(field_list[0],contour_list=[1e-5],Rvals=[1,2],vmax=1e-4,
 # COSMOLOGY CONNECTION
 
 # E(z)^2 function:
-def Ez2(z,Om,Or=0,Ok=0,Ol=None,**kwargs)
+def Ez2(z,Om,Or=0,Ok=0,Ol=None,**kwargs):
     if Ol is None:
         Ol = 1.0 - Om - Ok - Or
     return Or*(1 + z)**4 + Om*(1 + z)**3 + Ok*(1 + z)**2 + Ol
@@ -1670,7 +1698,136 @@ def log_probability_aptest(theta,**kwargs):
     return lp + log_likelihood_aptest(theta, **kwargs)
 
 
+# Get redshift space particle positions:
+# Gather all redshift space positions:
+zpos_all = []
+for snapname in snapNameList:
+    snap = tools.getPynbodySnap(snapname)
+    zpos = tools.loadOrRecompute(snapname + ".z_space_pos.p",
+                                 redshift_space_positions,snap,
+                                 centre = np.array([boxsize/2]*3))
+    zpos_all.append(zpos)
+    del snap
+    gc.collect()
 
+
+
+
+
+#los_list_lcdm = get_los_positions_for_all_catalogues(snapListUn,snapListRevUn,
+#    antihaloCentresUn,antihaloRadiiUn,filter_list=filter_list_lcdm,
+#    dist_max=60,rmin=10,rmax=20,zspace=True,recompute=False,
+#    suffix=".lospos_zspace")
+
+filter_list_borg = [halo_indices[ns] >= 0 for ns in range(0,len(snapList))]
+los_list_void_only_borg_zspace = get_los_positions_for_all_catalogues(snapList,
+    snapListRev,
+    [cat300.getMeanCentres(void_filter=True) for ns in range(0,len(snapList))],
+    [cat300.getMeanProperty("radii",void_filter=True)[0] 
+    for ns in range(0,len(snapList))],all_particles=False,
+    void_indices = halo_indices,filter_list=filter_list_borg,
+    dist_max=60,rmin=10,rmax=20,recompute=False,
+    zspace=True,recompute_zspace=True,suffix=".lospos_void_only_zspace.p")
+
+# LCDM examples for comparison:
+distances_from_centre_lcdm = [
+    np.sqrt(np.sum(snapedit.unwrap(centres - np.array([boxsize/2]*3),
+    boxsize)**2,1)) for centres in antihaloCentresUn]
+filter_list_lcdm = [(dist < 135) & (radii > 10) & (radii <= 20) 
+    for dist, radii in zip(distances_from_centre_lcdm,antihaloRadiiUn)]
+
+los_list_void_only_lcdm_zspace = get_los_positions_for_all_catalogues(
+    snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
+    all_particles=False,filter_list=filter_list_lcdm,dist_max=60,rmin=10,
+    rmax=20,recompute=False,zspace=True,recompute_zspace=True,
+    suffix=".lospos_void_only_zspace.p")
+
+def get_2d_void_stack_from_los_pos(los_pos,z_bins,d_bins,radii):
+    voids_used = [np.array([len(x) for x in los]) > 0 for los in los_pos]
+    # Filter out any unused voids as they just cause problems:
+    los_pos = [ [x for x in los if len(x) > 0] for los in los_lcdm]
+    # Cell volumes and void radii:
+    cell_volumes_reff = np.outer(np.diff(z_bins),np.diff(d_bins))
+    void_radii = [rad[filt] for rad, filt in zip(radii,voids_used)]
+    # LOS positions in units of Reff:
+    los_list_reff = [
+        [los/rad for los, rad in zip(all_los,all_radii)] 
+        for all_los, all_radii in zip(los_pos,void_radii)]
+    # Stacked particles:
+    stacked_particles_reff = np.vstack([np.vstack(los_list) 
+        for los_list in los_list_reff ])
+    return np.abs(stacked_particles_reff)
+
+los_lcdm = los_list_void_only_lcdm
+los_borg = los_list_void_only_borg
+
+# Stacked void particles in 2d (in redshift space):
+stacked_particles_reff_lcdm_abs = get_2d_void_stack_from_los_pos(
+    los_list_void_only_lcdm_zspace,bins_z_reff,bins_d_reff,antihaloRadiiUn)
+void_radii_borg = cat300.getMeanProperty("radii",void_filter=True)[0]
+stacked_particles_reff_borg_abs = get_2d_void_stack_from_los_pos(
+    los_list_void_only_borg_zspace,bins_z_reff,bins_d_reff,
+    [void_radii_borg for rad in antihaloRadii])
+
+# Stacked void_particles in 1d:
+# We can use the real space profile for this:
+stacked_particles_reff_lcdm_real = get_2d_void_stack_from_los_pos(
+    los_list_void_only_lcdm,bins_z_reff,bins_d_reff,antihaloRadiiUn)
+stacked_particles_reff_borg_real = get_2d_void_stack_from_los_pos(
+    los_list_void_only_borg,bins_z_reff,bins_d_reff,
+    [void_radii_borg for rad in antihaloRadii])
+stacked_1d_real_lcdm = np.sqrt(np.sum(stacked_particles_reff_lcdm_real,1))
+stacked_1d_real_borg = np.sqrt(np.sum(stacked_particles_reff_borg_real,1))
+
+[_,noInBins_lcdm] = plot_utilities.binValues(stacked_1d_real_lcdm,bins_d_reff)
+[_,noInBins_borg] = plot_utilities.binValues(stacked_1d_real_borg,bins_d_reff)
+
+
+# Compute_volume weights:
+def get_weights_for_stack(los_pos,void_radii,additional_weights = None):
+    if additional_weights is None:
+        v_weight = [[rad**3*np.ones(len(los)) 
+                    for los, rad in zip(all_los,all_radii)] 
+                    for all_los, all_radii in zip(los_pos,void_radii)]
+    else:
+        if type(additional_weights) == list:
+            v_weight = [[rad**3*np.ones(len(los))*weight 
+                    for los, rad, weight in zip(all_los,all_radii,all_weights)] 
+                    for all_los, all_radii, all_weights,
+                    in zip(los_pos,void_radii,additional_weights)]
+        else:
+            v_weight = [[rad**3*np.ones(len(los))*weight 
+                    for los, rad, weight 
+                    in zip(all_los,all_radii,additional_weights)]
+                    for all_los, all_radii
+                    in zip(los_pos,void_radii)]
+    return np.hstack([np.hstack(rad) for rad in v_weight])
+
+# Weights for each void in the stack:
+v_weight_borg = get_weights_for_stack(
+    los_borg,[void_radii_borg for rad in antihaloRadii])
+v_weight_lcdm = get_weights_for_stack(los_lcdm,void_radii_lcdm)
+
+
+# Fields:
+hist_lcdm_reff = np.histogramdd(stacked_particles_reff_lcdm_abs,
+                           bins=[bins_z_reff,bins_d_reff],
+                           density=False,weights = 1.0/\
+                           (2*np.pi*v_weight_lcdm*
+                           stacked_particles_reff_lcdm_abs[:,1]))
+count_lcdm = len(stacked_particles_reff_lcdm_abs)
+num_voids_lcdm = np.sum([np.sum(x) for x in voids_used_lcdm])
+
+hist_borg_reff = np.histogramdd(stacked_particles_reff_borg_abs,
+                           bins=[bins_z_reff,bins_d_reff],
+                           density=False,weights = 1.0/\
+                           (2*v_weight_borg*np.pi*
+                           stacked_particles_reff_borg_abs[:,1]))
+count_borg = len(stacked_particles_reff_borg_abs)
+num_voids_borg = np.sum([np.sum(x) for x in voids_used_borg]) # Not the actual number
+    # but the effective number being stacked, so the number of voids multiplied
+    # by the number of samples.
+nmean = len(snapList[0])/(boxsize**3)
 
 
 #-------------------------------------------------------------------------------
