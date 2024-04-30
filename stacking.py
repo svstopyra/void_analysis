@@ -801,8 +801,8 @@ def get_mean_mcmc_profile(all_pairs,all_volumes,cumulative=False):
 # Get the profiles in different regions from random simulations:
 def get_profiles_in_regions(all_pairs,all_volumes,cumulative=False):
     if cumulative:
-        rho_stacked = np.array([(np.sum(np.cumsum(all_pairs[k]),0)+1)/\
-            np.sum(np.cumsum(all_volumes[k]),0) \
+        rho_stacked = np.array([(np.sum(np.cumsum(all_pairs[k],1),0)+1)/\
+            np.sum(np.cumsum(all_volumes[k],1),0) \
             for k in range(0,len(all_volumes))])
     else:
         rho_stacked = np.array([(np.sum(all_pairs[k],0)+1)/\

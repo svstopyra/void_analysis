@@ -1105,9 +1105,10 @@ def get_los_stack_field(hist,num_voids,density_unit = "probability"):
 
 
 def plot_los_void_stack(\
-        field,contour_list=[],Rvals = [],ax=None,cmap='Blues',
-        vmin=0,vmax=1e-4,upper_dist_reff = 2,nmean=1.0,contours = True,
-        fontsize=10,xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
+        field,bin_d_centres,bin_z_centres,contour_list=[],Rvals = [],ax=None,
+        cmap='Blues',vmin=0,vmax=1e-4,upper_dist_reff = 2,nmean=1.0,
+        contours = True,fontsize=10,
+        xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
         ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
         density_unit='probability',savename=None,title=None,
         colorbar=False,shrink=0.9,colorbar_title=None):
@@ -1166,7 +1167,7 @@ def data_model(d,R,eps):
 def data_model_lcdm(d,R,Om0,cosmo_fid=None,zfid = 0.01529,Dafid=None):
     # Get cosmology
     if cosmo_fid is None:
-        cosmo_fid = astropy.cosmology.FlatLambdaCDM(H0=0.7,Om0=0.3)
+        cosmo_fid = astropy.cosmology.FlatLambdaCDM(H0=100*0.7,Om0=0.3)
     Om0_fid = cosmo_fid.Om0
     H0fid = cosmo_fid.H0.value
     cosmo_test = astropy.cosmology.FlatLambdaCDM(H0=H0fid,Om0=Om0)
@@ -1542,8 +1543,8 @@ def Ez2(z,Om,Or=0,Ok=0,Ol=None,**kwargs):
 
 # Linear growth rate in Lambda-CDM
 def f_lcdm(z,Om,gamma=0.55,Ol=None,Ok=0,Or=0,**kwargs):
-    Ez2 = Ez2(z,Om,**kwargs)
-    return (Om*(1 + z)**3/Ez2)**gamma
+    Ez2_val = Ez2(z,Om,**kwargs)
+    return (Om*(1 + z)**3/Ez2_val)**gamma
 
 # Hubble rate as a function of H:
 def Hz(z,Om,h=None,Ol=None,Ok=0,Or=0,**kwargs):
@@ -1551,6 +1552,18 @@ def Hz(z,Om,h=None,Ol=None,Ok=0,Or=0,**kwargs):
         # Use units of km/s/Mpc/h:
         h = 1
     return 100*h*np.sqrt(Ez2(z,Om,**kwargs))
+
+def ap_parameter(z,Om,Om_fid,h=0.7,h_fid = 0.7):
+    # Get cosmology
+    cosmo_fid = astropy.cosmology.FlatLambdaCDM(H0=100*h_fid,Om0=Om_fid)
+    cosmo_test = astropy.cosmology.FlatLambdaCDM(H0=100*h,Om0=Om)
+    # Get the ratio:
+    Hz = 100*h*np.sqrt(Om*(1 + z)**3 + 1.0 - Om)
+    Hzfid = H0fid*np.sqrt(Om_fid*(1 + z)**3 + 1.0 - Om_fid)
+    Da = cosmo_test.angular_diameter_distance(z).value
+    Dafid = cosmo_fid.angular_diameter_distance(z).value
+    eps = Hz*Da/(Hzfid*Dafid)
+    return eps
 
 # Peculiar velocity as a function of distance from a void centre along LOS, 
 # at linear level:
@@ -1579,7 +1592,8 @@ def void_los_velocity_derivative(z,Delta,delta,r_par,r_perp,Om,f=None,**kwargs):
     # Assume lambda-cdm if no growth rate given:
     if f is None:
         f = f_lcdm(z,Om,**kwargs)
-    return -(f/3.0)*(hz/(1.0 + z))*Dr - f*(r_par/r)**2*(hz/(1.0 + z))*(dr - Dr)
+    return -(f/3.0)*(hz/(1.0 + z))*Dr - \
+        f*(r_par/(r + 1e-12))**2*(hz/(1.0 + z))*(dr - Dr)
 
 # Derivative of LOS distance in real space vs redshift space:
 def z_space_jacobian(z,Delta,delta,r_par,r_perp,Om,
@@ -1610,31 +1624,41 @@ def to_z_space(r_par,r_perp,z,Om,Delta=None,u_par=None,f=None,**kwargs):
     s_perp = r_perp
     return [s_par,s_perp]
 
-# Transformation to real space, from redshift space:
-def to_real_space(s_par,s_perp,z,Om,Delta=None,u_par=None,f=None,N_max = 5,
-                  atol=1e-5,rtol=1e-5,**kwargs):
+# Transformation to real space, from redshift space, including geometric
+# distortions from a wrong-cosmology:
+def to_real_space(s_par,s_perp,z,Om,Om_fid=None,Delta=None,u_par=None,f=None,
+                  N_max = 5,atol=1e-5,rtol=1e-5,Nmax = 20,epsilon=None,
+                  **kwargs):
+    # Perpendicular distance is easy:
     r_perp = s_perp
+    # Get the AP parameter:
+    if epsilon is None:
+        if (Om_fid is not None):
+            epsilon = ap_parameter(z,Om,Om_fid,**kwargs)
+        else:
+            epsilon = 1.0
+    # Get the parallel distance:
     if u_par is None:
         # Assume linear relationship:
         if f is None:
-            f = f_lcdm(z,om,**kwargs)
+            f = f_lcdm(z,Om,**kwargs)
         # Need to guess at r:
         r_par_guess = s_par
         for k in range(0,Nmax):
             # Iteratively improve the guess:
-            r = np.sqrt(r_par_guess**2 + r_perp**2)
+            r = np.sqrt((r_par_guess)**2 + r_perp**2)
             r_par_new = s_par/(1.0  - (f/3.0)*Delta(r))
             if (np.abs(r_par_new - r_par_guess) < atol) or \
                 (np.abs(r_par_new/r_par_guess - 1.0) < rtol):
                 break
             r_par_guess = r_par_new
-        r_par = r_par_guess
+        r_par = r_par_guess/epsilon
     else:
         # Use supplied peculiar velocity:
         # Hubble rate:
         hz = Hz(z,Om,**kwargs)
-        r_par = s_par - (1.0 + z)*u_par/hz
-    return [r_par,r_perp]
+        r_par = (s_par - (1.0 + z)*u_par/hz)
+    return [r_par/epsilon,r_perp]
 
 # Profile in redshift space:
 def z_space_profile(s_par,s_perp,rho_real,z,Om,Delta,delta,**kwargs):
@@ -1718,7 +1742,9 @@ for snapname in snapNameList:
 #    antihaloCentresUn,antihaloRadiiUn,filter_list=filter_list_lcdm,
 #    dist_max=60,rmin=10,rmax=20,zspace=True,recompute=False,
 #    suffix=".lospos_zspace")
-
+final_cat = cat300.get_final_catalogue(void_filter=True)
+halo_indices = [-np.ones(len(final_cat),dtype=int) 
+    for ns in range(0,len(snapList))]
 filter_list_borg = [halo_indices[ns] >= 0 for ns in range(0,len(snapList))]
 los_list_void_only_borg_zspace = get_los_positions_for_all_catalogues(snapList,
     snapListRev,
@@ -1742,17 +1768,31 @@ los_list_void_only_lcdm_zspace = get_los_positions_for_all_catalogues(
     rmax=20,recompute=False,zspace=True,recompute_zspace=True,
     suffix=".lospos_void_only_zspace.p")
 
+# Real space positions:
+los_list_void_only_borg = get_los_positions_for_all_catalogues(snapList,
+    snapListRev,
+    [cat300.getMeanCentres(void_filter=True) for ns in range(0,len(snapList))],
+    [cat300.getMeanProperty("radii",void_filter=True)[0] 
+    for ns in range(0,len(snapList))],all_particles=False,
+    void_indices = halo_indices,filter_list=filter_list_borg,
+    dist_max=60,rmin=10,rmax=20,recompute=False,suffix=".lospos_void_only.p")
+los_list_void_only_lcdm = get_los_positions_for_all_catalogues(snapListUn,
+    snapListRevUn,antihaloCentresUn,antihaloRadiiUn,all_particles=False,
+    filter_list=filter_list_lcdm,dist_max=60,rmin=10,rmax=20,recompute=False,
+    suffix=".lospos_void_only.p")
+
+# 2D void stacks:
 def get_2d_void_stack_from_los_pos(los_pos,z_bins,d_bins,radii):
     voids_used = [np.array([len(x) for x in los]) > 0 for los in los_pos]
     # Filter out any unused voids as they just cause problems:
-    los_pos = [ [x for x in los if len(x) > 0] for los in los_lcdm]
+    los_pos_filtered = [ [x for x in los if len(x) > 0] for los in los_pos]
     # Cell volumes and void radii:
     cell_volumes_reff = np.outer(np.diff(z_bins),np.diff(d_bins))
     void_radii = [rad[filt] for rad, filt in zip(radii,voids_used)]
     # LOS positions in units of Reff:
     los_list_reff = [
         [los/rad for los, rad in zip(all_los,all_radii)] 
-        for all_los, all_radii in zip(los_pos,void_radii)]
+        for all_los, all_radii in zip(los_pos_filtered,void_radii)]
     # Stacked particles:
     stacked_particles_reff = np.vstack([np.vstack(los_list) 
         for los_list in los_list_reff ])
@@ -1760,6 +1800,13 @@ def get_2d_void_stack_from_los_pos(los_pos,z_bins,d_bins,radii):
 
 los_lcdm = los_list_void_only_lcdm
 los_borg = los_list_void_only_borg
+
+# Bins:
+upper_dist_reff = 2
+bins_z_reff = np.linspace(0,upper_dist_reff,41)
+bins_d_reff = np.linspace(0,upper_dist_reff,41)
+bin_z_centres = plot.binCentres(bins_z_reff)
+bin_d_centres = plot.binCentres(bins_d_reff)
 
 # Stacked void particles in 2d (in redshift space):
 stacked_particles_reff_lcdm_abs = get_2d_void_stack_from_los_pos(
@@ -1804,9 +1851,23 @@ def get_weights_for_stack(los_pos,void_radii,additional_weights = None):
     return np.hstack([np.hstack(rad) for rad in v_weight])
 
 # Weights for each void in the stack:
+voids_used_lcdm = [np.array([len(x) for x in los]) > 0 
+    for los in los_list_void_only_lcdm_zspace]
+voids_used_lcdm_ind = [np.where(x)[0] for x in voids_used_lcdm]
+voids_used_borg = [np.array([len(x) for x in los]) > 0 
+    for los in los_list_void_only_borg_zspace]
+void_radii_lcdm = [rad[filt] 
+    for rad, filt in zip(antihaloRadiiUn,voids_used_lcdm)]
+
+los_pos_lcdm = [ [los[x] for x in np.where(ind)[0]] 
+    for los, ind in zip(los_list_void_only_lcdm_zspace,voids_used_lcdm) ]
+los_pos_borg = [ [los[x] for x in np.where(ind)[0]] 
+    for los, ind in zip(los_list_void_only_borg_zspace,voids_used_borg) ]
+
+
 v_weight_borg = get_weights_for_stack(
-    los_borg,[void_radii_borg for rad in antihaloRadii])
-v_weight_lcdm = get_weights_for_stack(los_lcdm,void_radii_lcdm)
+    los_pos_borg,[void_radii_borg for rad in antihaloRadii])
+v_weight_lcdm = get_weights_for_stack(los_pos_lcdm,void_radii_lcdm)
 
 
 # Fields:
@@ -1829,6 +1890,120 @@ num_voids_borg = np.sum([np.sum(x) for x in voids_used_borg]) # Not the actual n
     # by the number of samples.
 nmean = len(snapList[0])/(boxsize**3)
 
+
+# Get the matter density fields:
+use_all_los_points = False:
+if use_all_los_points:
+    los_list_lcdm = get_los_positions_for_all_catalogues(snapListUn,
+        snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
+        filter_list=filter_list_lcdm,dist_max=60,rmin=10,rmax=20,
+        recompute=False)
+    los_pos_matter_lcdm = [ [los[x] for x in np.where(ind)[0]] 
+        for los, ind in zip(los_list_lcdm,voids_used_lcdm) ]
+    los_list_borg = get_los_positions_for_all_catalogues(snapList,snapListRev,
+        [cat300.getMeanCentres(void_filter=True) 
+        for ns in range(0,len(snapList))],
+        [cat300.getMeanProperty("radii",void_filter=True)[0] 
+        for ns in range(0,len(snapList))],
+        dist_max=60,rmin=10,rmax=20,recompute=False)
+    los_pos_matter_borg = [ [los[x] for x in np.where(ind)[0]] 
+        for los, ind in zip(los_list_borg,voids_used_borg) ]
+    stacked_particles_matter_lcdm = get_2d_void_stack_from_los_pos(
+        los_pos_matter_lcdm,bins_z_reff,bins_d_reff,void_radii_lcdm)
+    stacked_particles_matter_borg = get_2d_void_stack_from_los_pos(
+        los_list_borg,bins_z_reff,bins_d_reff,
+        [void_radii_borg for rad in antihaloRadii])
+    stacked_1d_matter_lcdm = np.sqrt(np.sum(stacked_particles_matter_lcdm,1))
+    stacked_1d_matter_borg = np.sqrt(np.sum(stacked_particles_matter_borg,1))
+    [_,noInBins_matter_lcdm] = plot_utilities.binValues(stacked_1d_matter_lcdm,
+                                                        bins_d_reff)
+    [_,noInBins_matter_borg] = plot_utilities.binValues(stacked_1d_matter_borg,
+                                                        bins_d_reff)
+    r_lcdm = [[np.sqrt(np.sum(x**2,1))/rad for x, rad in zip(los, radii)] 
+        for los, radii in zip(los_pos_matter_lcdm,void_radii_lcdm)]
+    n_lcdm = [[plot_utilities.binValues(rad,bins_d_reff)[1] for rad in radii]
+        for radii in r_lcdm]
+    shell_volumes = 4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3
+    rho_lcdm_all = [[num/(shell_volumes*nmean*rad**3) 
+        for num, rad in zip(all_nums,all_radii)] 
+        for all_nums, all_radii in zip(n_lcdm,void_radii_lcdm)]
+
+# Better, just load them directly from the pre-computed profiles:
+[noConstraintsDict,regionAndVoidDensityConditionDict,
+     rBinStackCentres,nbar,rhoMCMCToUse,sigmaRhoMCMCToUse] = \
+         tools.loadPickle(data_folder2 + "profile_plot_data.p")
+
+# Posterior profiles:
+[allPairsSample,allVolumesSample] = tools.loadPickle(
+    data_folder2 + "pair_counts_mcmc_cut_samples.p")
+[delta_borg, sigma_delta_borg] = [x/nbar 
+    for x in stacking.get_mean_mcmc_profile(
+    allPairsSample,allVolumesSample,cumulative = False)]
+[Delta_borg, sigma_Delta_borg] = [x/nbar 
+    for x in stacking.get_mean_mcmc_profile(allPairsSample,allVolumesSample,
+    cumulative = True)]
+
+# LCDM profiles:
+all_pairs = regionAndVoidDensityConditionDict['pairs']
+all_volumes = regionAndVoidDensityConditionDict['volumes']
+delta_lcdm_all = stacking.get_profiles_in_regions(all_pairs,all_volumes,
+                                              cumulative=False)
+Delta_lcdm_all = np.array([(np.sum(np.cumsum(all_pairs[k],1),0)+1)/\
+            np.sum(np.cumsum(all_volumes[k],1),0) \
+            for k in range(0,len(all_volumes))])
+delta_lcdm = np.mean(delta_lcdm_all,0)/nbar
+Delta_lcdm = np.mean(Delta_lcdm_all,0)/nbar
+
+
+# Profile function (should we use the inferred profile, or the 
+# lcdm mock profiles?):
+r_bin_centres = plot_utilities.binCentres(bins_d_reff)
+rho_r = noInBins_borg/np.sum(noInBins_borg)
+Delta_r = np.cumsum(noInBins_borg)/np.sum(noInBins_borg)
+delta_func = scipy.interpolate.interp1d(
+    rBinStackCentres,delta_borg - 1.0,kind='cubic',
+    fill_value=(delta_borg[0],delta_borg[-1]),bounds_error=False)
+Delta_func = scipy.interpolate.interp1d(
+    rBinStackCentres,Delta_borg - 1.0,kind='cubic',
+    fill_value=(Delta_borg[0],Delta_borg[-1]),bounds_error=False)
+rho_func = scipy.interpolate.interp1d(
+    r_bin_centres,rho_r,kind='cubic',
+    fill_value=(rho_r[0],rho_r[-1]),bounds_error=False)
+
+rvals = np.linspace(np.min(r_bin_centres),np.max(r_bin_centres),1000)
+
+# Test Plot:
+fig, ax = plt.subplots()
+ax.plot(rvals,delta_func(rvals),label='$\\delta(r)$')
+ax.plot(rvals,Delta_func(rvals),label='$\\Delta(r)$')
+ax.set_xlabel('r [$\\mathrm{Mpc}h^{-1}$]')
+ax.set_ylabel('$\\rho(r)$')
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "rho_real_plot.pdf")
+plt.show()
+
+# 2D profile function test (zspace):
+z = 0.0225
+profile_2d = np.zeros((len(bins_z_reff)-1,len(bins_d_reff)-1))
+Om = 0.3111
+for i in range(0,len(bins_z_reff)-1):
+    for j in range(0,len(bins_d_reff)-1):
+        spar = bin_z_centres[i]
+        sperp = bin_d_centres[j]
+        profile_2d[i,j] = z_space_profile(spar,sperp,rho_func,z,Om,Delta_func,
+                                          delta_func)
+
+# Test plot:
+plot_los_void_stack(\
+        profile_2d,bin_d_centres,bin_z_centres,
+        contour_list=[0.05,0.1],Rvals = [1,2],cmap='Blues',
+        vmin=0,vmax=0.12,fontsize=10,
+        xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
+        ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
+        density_unit='probability',
+        savename=figuresFolder + "profile_2d_test.pdf",
+        title=None,colorbar=True,shrink=0.9,
+        colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})$")
 
 #-------------------------------------------------------------------------------
 # WRONG COSMO SIMULATIONS
