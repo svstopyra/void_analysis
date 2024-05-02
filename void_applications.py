@@ -635,7 +635,8 @@ def redshift_space_positions(snap,centre=None):
     vr = np.sum(snap['vel']*r,1)
     # Assume gadget units:
     gamma = (np.sqrt(a)/Ha)/pynbody.units.Unit("km a**-1/2 s**-1 Mpc**-1 h")
-    return snapedit.wrap((1.0 + gamma*vr/r2)[:,None]*r + centre,boxsize)
+    return snapedit.wrap(
+        (1.0 + (gamma*vr/r2).in_units("1.0"))[:,None]*r + centre,boxsize)
 
 
 
@@ -1745,6 +1746,11 @@ for snapname in snapNameList:
 final_cat = cat300.get_final_catalogue(void_filter=True)
 halo_indices = [-np.ones(len(final_cat),dtype=int) 
     for ns in range(0,len(snapList))]
+for ns in range(0,len(snapList)):
+    have_void = final_cat[:,ns] >= 0
+    halo_indices[ns][have_void] = \
+        cat300.indexListShort[ns][final_cat[have_void,ns]-1]
+
 filter_list_borg = [halo_indices[ns] >= 0 for ns in range(0,len(snapList))]
 los_list_void_only_borg_zspace = get_los_positions_for_all_catalogues(snapList,
     snapListRev,
@@ -1753,7 +1759,7 @@ los_list_void_only_borg_zspace = get_los_positions_for_all_catalogues(snapList,
     for ns in range(0,len(snapList))],all_particles=False,
     void_indices = halo_indices,filter_list=filter_list_borg,
     dist_max=60,rmin=10,rmax=20,recompute=False,
-    zspace=True,recompute_zspace=True,suffix=".lospos_void_only_zspace.p")
+    zspace=True,recompute_zspace=False,suffix=".lospos_void_only_zspace.p")
 
 # LCDM examples for comparison:
 distances_from_centre_lcdm = [
@@ -1765,7 +1771,7 @@ filter_list_lcdm = [(dist < 135) & (radii > 10) & (radii <= 20)
 los_list_void_only_lcdm_zspace = get_los_positions_for_all_catalogues(
     snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
     all_particles=False,filter_list=filter_list_lcdm,dist_max=60,rmin=10,
-    rmax=20,recompute=False,zspace=True,recompute_zspace=True,
+    rmax=20,recompute=False,zspace=True,recompute_zspace=False,
     suffix=".lospos_void_only_zspace.p")
 
 # Real space positions:
@@ -1823,8 +1829,8 @@ stacked_particles_reff_lcdm_real = get_2d_void_stack_from_los_pos(
 stacked_particles_reff_borg_real = get_2d_void_stack_from_los_pos(
     los_list_void_only_borg,bins_z_reff,bins_d_reff,
     [void_radii_borg for rad in antihaloRadii])
-stacked_1d_real_lcdm = np.sqrt(np.sum(stacked_particles_reff_lcdm_real,1))
-stacked_1d_real_borg = np.sqrt(np.sum(stacked_particles_reff_borg_real,1))
+stacked_1d_real_lcdm = np.sqrt(np.sum(stacked_particles_reff_lcdm_real**2,1))
+stacked_1d_real_borg = np.sqrt(np.sum(stacked_particles_reff_borg_real**2,1))
 
 [_,noInBins_lcdm] = plot_utilities.binValues(stacked_1d_real_lcdm,bins_d_reff)
 [_,noInBins_borg] = plot_utilities.binValues(stacked_1d_real_borg,bins_d_reff)
@@ -1871,6 +1877,7 @@ v_weight_lcdm = get_weights_for_stack(los_pos_lcdm,void_radii_lcdm)
 
 
 # Fields:
+cell_volumes_reff = np.outer(np.diff(bins_z_reff),np.diff(bins_d_reff))
 hist_lcdm_reff = np.histogramdd(stacked_particles_reff_lcdm_abs,
                            bins=[bins_z_reff,bins_d_reff],
                            density=False,weights = 1.0/\
@@ -1878,6 +1885,7 @@ hist_lcdm_reff = np.histogramdd(stacked_particles_reff_lcdm_abs,
                            stacked_particles_reff_lcdm_abs[:,1]))
 count_lcdm = len(stacked_particles_reff_lcdm_abs)
 num_voids_lcdm = np.sum([np.sum(x) for x in voids_used_lcdm])
+field_lcdm = hist_lcdm_reff[0]/(2*count_lcdm*cell_volumes_reff)
 
 hist_borg_reff = np.histogramdd(stacked_particles_reff_borg_abs,
                            bins=[bins_z_reff,bins_d_reff],
@@ -1889,10 +1897,10 @@ num_voids_borg = np.sum([np.sum(x) for x in voids_used_borg]) # Not the actual n
     # but the effective number being stacked, so the number of voids multiplied
     # by the number of samples.
 nmean = len(snapList[0])/(boxsize**3)
-
+field_borg = hist_borg_reff[0]/(2*count_borg*cell_volumes_reff)
 
 # Get the matter density fields:
-use_all_los_points = False:
+use_all_los_points = False
 if use_all_los_points:
     los_list_lcdm = get_los_positions_for_all_catalogues(snapListUn,
         snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
@@ -1958,7 +1966,11 @@ Delta_lcdm = np.mean(Delta_lcdm_all,0)/nbar
 # Profile function (should we use the inferred profile, or the 
 # lcdm mock profiles?):
 r_bin_centres = plot_utilities.binCentres(bins_d_reff)
-rho_r = noInBins_borg/np.sum(noInBins_borg)
+#rho_r = noInBins_borg/np.sum(noInBins_borg)
+rho_r = noInBins_lcdm/(np.sum(noInBins_lcdm)*\
+    4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
+rho_borg_r = noInBins_borg/(np.sum(noInBins_borg)*\
+    4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
 Delta_r = np.cumsum(noInBins_borg)/np.sum(noInBins_borg)
 delta_func = scipy.interpolate.interp1d(
     rBinStackCentres,delta_borg - 1.0,kind='cubic',
@@ -1969,8 +1981,15 @@ Delta_func = scipy.interpolate.interp1d(
 rho_func = scipy.interpolate.interp1d(
     r_bin_centres,rho_r,kind='cubic',
     fill_value=(rho_r[0],rho_r[-1]),bounds_error=False)
-
+rho_func_borg = scipy.interpolate.interp1d(
+    r_bin_centres,rho_borg_r,kind='cubic',
+    fill_value=(rho_borg_r[0],rho_borg_r[-1]),bounds_error=False)
 rvals = np.linspace(np.min(r_bin_centres),np.max(r_bin_centres),1000)
+
+rho_func_lcdm_z0 = scipy.interpolate.interp1d(
+    r_bin_centres,field_lcdm[0],kind='cubic',
+    fill_value=(field_lcdm[0][0],field_lcdm[0][-1]),
+    bounds_error=False)
 
 # Test Plot:
 fig, ax = plt.subplots()
@@ -1980,6 +1999,22 @@ ax.set_xlabel('r [$\\mathrm{Mpc}h^{-1}$]')
 ax.set_ylabel('$\\rho(r)$')
 plt.legend(frameon=False)
 plt.savefig(figuresFolder + "rho_real_plot.pdf")
+plt.show()
+
+start_values = np.linspace(0,0.5,101)
+
+fig, ax = plt.subplots()
+ax.plot(rvals,rho_func(rvals)/np.mean(rho_func(start_values)),
+    label='$\\rho(r)$')
+ax.plot(rvals,rho_func_borg(rvals)/np.mean(rho_func_borg(start_values)),
+    label='$\\rho_{\\mathrm{borg}}(r)$')
+ax.plot(rvals,rho_func_lcdm_z0(rvals)/np.mean(rho_func_lcdm_z0(start_values)),
+    label='$\\rho_{\\mathrm{2d}}(0,d)$')
+ax.set_xlabel('r [$\\mathrm{Mpc}h^{-1}$]')
+ax.set_ylabel('$\\rho(r)$')
+ax.set_yscale('log')
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "rho_real_plot_void_only.pdf")
 plt.show()
 
 # 2D profile function test (zspace):
@@ -2002,6 +2037,17 @@ plot_los_void_stack(\
         ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
         density_unit='probability',
         savename=figuresFolder + "profile_2d_test.pdf",
+        title=None,colorbar=True,shrink=0.9,
+        colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})$")
+
+plot_los_void_stack(\
+        field_lcdm,bin_d_centres,bin_z_centres,
+        contour_list=[0.05,0.1],Rvals = [1,2],cmap='Blues',
+        vmin=0,vmax=1e-4,fontsize=10,
+        xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
+        ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
+        density_unit='probability',
+        savename=figuresFolder + "profile_2d_test_data_lcdm.pdf",
         title=None,colorbar=True,shrink=0.9,
         colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})$")
 
