@@ -562,6 +562,21 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
                             z,Om,Delta,delta,f=f,**kwargs)
     return -0.5*np.matmul(np.matmul(delta_rho,inv_cov),delta_rho.T)
 
+# Likelihood function, parallelised. Requires global variables!:
+def log_likelihood_aptest_parallel(theta,z,**kwargs):
+    s_par = scoords[:,0]
+    s_perp = scoords[:,1]
+    Om, f , A = theta
+    M = len(s_par)
+    delta_rho = np.zeros(s_par.shape)
+    # Evaluate the profile for the supplied value of the parameters:
+    for k in range(0,M):
+        delta_rho[k] = data_field[k] - \
+            z_space_profile(s_par[k],s_perp[k],lambda r: rho_real(r,A),
+                            z,Om,Delta_func,delta_func,f=f,**kwargs)
+    return -0.5*np.matmul(np.matmul(delta_rho,inv_cov),delta_rho.T)
+
+
 # Un-normalised log prior:
 
 def log_flat_prior_single(theta,theta_range):
@@ -599,20 +614,11 @@ def log_probability_aptest(theta,*args,**kwargs):
         return -np.inf
     return lp + log_likelihood_aptest(theta,*args,**kwargs)
 
-
-# Get redshift space particle positions:
-# Gather all redshift space positions:
-zpos_all = []
-for snapname in snapNameList:
-    snap = tools.getPynbodySnap(snapname)
-    zpos = tools.loadOrRecompute(snapname + ".z_space_pos.p",
-                                 redshift_space_positions,snap,
-                                 centre = np.array([boxsize/2]*3))
-    zpos_all.append(zpos)
-    del snap
-    gc.collect()
-
-
+def log_probability_aptest_parallel(theta,*args,**kwargs):
+    lp = log_prior_aptest(theta,**kwargs)
+    if not np.isfinite(lp):
+        return -np.inf
+    return lp + log_likelihood_aptest_parallel(theta,*args,**kwargs)
 
 
 
@@ -722,7 +728,7 @@ def get_weights_for_stack(los_pos,void_radii,additional_weights = None,
                           stacked = True):
     if additional_weights is None:
         v_weight = [[rad**3*np.ones(len(los)) 
-                    for lolos_valss, rad in zip(all_los,all_radii)] 
+                    for los, rad in zip(all_los,all_radii)] 
                     for all_los, all_radii in zip(los_pos,void_radii)]
     else:
         if type(additional_weights) == list:
@@ -755,9 +761,12 @@ los_pos_lcdm = [ [los[x] for x in np.where(ind)[0]]
 los_pos_borg = [ [los[x] for x in np.where(ind)[0]] 
     for los, ind in zip(los_list_void_only_borg_zspace,voids_used_borg) ]
 
+rep_scores = void_cat_frac = cat300.property_with_filter(
+    cat300.finalCatFrac,void_filter=True)
 
 v_weight_borg = get_weights_for_stack(
-    los_pos_borg,[void_radii_borg for rad in antihaloRadii])
+    los_pos_borg,[void_radii_borg for rad in antihaloRadii],
+    additional_weights = rep_scores/np.sum(rep_scores))
 v_weight_lcdm = get_weights_for_stack(los_pos_lcdm,void_radii_lcdm)
 
 def get_field_from_los_data(los_data,z_bins,d_bins,v_weight):
@@ -905,7 +914,8 @@ los_list_reff_borg = get_2d_void_stack_from_los_pos(
     [void_radii_borg for rad in antihaloRadii],stacked=False)
 
 v_weights_all_borg = get_weights_for_stack(
-    los_pos_borg,[void_radii_borg for rad in antihaloRadii],stacked=False)
+    los_pos_borg,[void_radii_borg for rad in antihaloRadii],stacked=False,
+    additional_weights = rep_scores/np.sum(rep_scores))
 
 all_fields_borg = [[
     get_field_from_los_data(los,bins_z_reff,bins_d_reff,v_weight) 
@@ -929,7 +939,7 @@ symmetric_cov = (stacked_cov + stacked_cov.T)/2
 
 lambda_reg = 1e-20
 regularised_cov = symmetric_cov + lambda_reg*np.identity(symmetric_cov.shape[0])
-tools.minmax(np.real(np.linalg.eig(regularised_cov)[0]))
+#tools.minmax(np.real(np.linalg.eig(regularised_cov)[0]))
 eigen = np.real(np.linalg.eig(regularised_cov)[0])
 
 L = np.linalg.cholesky(regularised_cov)
@@ -944,7 +954,10 @@ sperp = np.hstack([plot.binCentres(bins_d_reff)
     for s in plot.binCentres(bins_z_reff)])
 scoords = np.vstack([spar,sperp]).T
 z = 0.0225
-rho_real = lambda r, A : A*rho_func(r)/rho_func(0)
+
+def rho_real(r,A):
+    return A*rho_func(r)/rho_func(0)
+
 
 # Covariances plot:
 plt.clf()
@@ -954,8 +967,6 @@ plt.show()
 
 # 
 
-inv_cov = np.linalg.inv(stacked_cov)
-
 theta_initial_guess = np.array([0.3,f_lcdm(z,0.3),1e-5])
 logp = log_probability_aptest(theta_initial_guess,data_field,scoords,inv_cov,
                           z,Delta_func,delta_func,rho_real,Om_fid = 0.3111)
@@ -963,19 +974,21 @@ logp = log_probability_aptest(theta_initial_guess,data_field,scoords,inv_cov,
 # Run the inference:
 import emcee
 import h5py
-nwalkers = 32
+nwalkers = 64
 ndims = 3
 n_mcmc = 5000
 disp = 1e-4
 initial = theta_initial_guess + disp*np.random.randn(nwalkers,ndims)
-filename = data_folder + "inference.h5"
+filename = data_folder + "inference_weighted.h5"
 backend = emcee.backends.HDFBackend(filename)
 backend.reset(nwalkers, ndims)
 
-sampler = emcee.EnsembleSampler(
-    nwalkers, ndims, log_probability_aptest, args=(data_field,scoords,inv_cov,
-    z,Delta_func,delta_func,rho_real),kwargs={'Om_fid':0.3111},backend=backend)
-sampler.run_mcmc(initial,n_mcmc , progress=True)
+with Pool() as pool:
+    sampler = emcee.EnsembleSampler(
+        nwalkers, ndims, log_probability_aptest_parallel, 
+        args=(z,),kwargs={'Om_fid':0.3111},backend=backend,pool=pool)
+    sampler.run_mcmc(initial,n_mcmc , progress=True)
+
 # Filter the MCMC samples to account for correlation:
 tau = sampler.get_autocorr_time()
 tau_max = np.max(tau)
