@@ -1560,7 +1560,7 @@ def ap_parameter(z,Om,Om_fid,h=0.7,h_fid = 0.7):
     cosmo_test = astropy.cosmology.FlatLambdaCDM(H0=100*h,Om0=Om)
     # Get the ratio:
     Hz = 100*h*np.sqrt(Om*(1 + z)**3 + 1.0 - Om)
-    Hzfid = H0fid*np.sqrt(Om_fid*(1 + z)**3 + 1.0 - Om_fid)
+    Hzfid = 100*h_fid*np.sqrt(Om_fid*(1 + z)**3 + 1.0 - Om_fid)
     Da = cosmo_test.angular_diameter_distance(z).value
     Dafid = cosmo_fid.angular_diameter_distance(z).value
     eps = Hz*Da/(Hzfid*Dafid)
@@ -1628,7 +1628,7 @@ def to_z_space(r_par,r_perp,z,Om,Delta=None,u_par=None,f=None,**kwargs):
 # Transformation to real space, from redshift space, including geometric
 # distortions from a wrong-cosmology:
 def to_real_space(s_par,s_perp,z,Om,Om_fid=None,Delta=None,u_par=None,f=None,
-                  N_max = 5,atol=1e-5,rtol=1e-5,Nmax = 20,epsilon=None,
+                  N_max = 5,atol=1e-5,rtol=1e-5,epsilon=None,
                   **kwargs):
     # Perpendicular distance is easy:
     r_perp = s_perp
@@ -1645,7 +1645,7 @@ def to_real_space(s_par,s_perp,z,Om,Om_fid=None,Delta=None,u_par=None,f=None,
             f = f_lcdm(z,Om,**kwargs)
         # Need to guess at r:
         r_par_guess = s_par
-        for k in range(0,Nmax):
+        for k in range(0,N_max):
             # Iteratively improve the guess:
             r = np.sqrt((r_par_guess)**2 + r_perp**2)
             r_par_new = s_par/(1.0  - (f/3.0)*Delta(r))
@@ -1696,18 +1696,26 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
                           z,Delta,delta,rho_real,**kwargs):
     s_par = scoords[:,0]
     s_perp = scoords[:,1]
-    Om, f = theta
+    Om, f , A = theta
     M = len(s_par)
     delta_rho = np.zeros(s_par.shape)
     # Evaluate the profile for the supplied value of the parameters:
     for k in range(0,M):
-        delta_rho[k] = data_field[k] - z_space_profile(s_par[k],s_perp[k],
-                                                       rho_real,z,Om,Delta,
-                                                       delta,f=f,**kwargs)
-    return -0.5*np.matmul(np.matmul(data_rho,inv_cov),data_rho.T)
+        delta_rho[k] = data_field[k] - \
+            z_space_profile(s_par[k],s_perp[k],lambda r: rho_real(r,A),
+                            z,Om,Delta,delta,f=f,**kwargs)
+    return -0.5*np.matmul(np.matmul(delta_rho,inv_cov),delta_rho.T)
 
-# Prior (assuming flat prior for now):
-def log_prior_aptest(theta,theta_ranges=[[0.1,0.5],[0,1.0]]):
+# Un-normalised log prior:
+
+def log_flat_prior_single(theta,theta_range):
+    in_range = (theta_range[0] <= theta < theta_range[1])
+    if in_range:
+        return 0.0
+    else:
+        return -np.inf
+
+def log_flat_prior(theta,theta_ranges):
     bool_array = np.aray([bounds[0] <= param < bounds[1] 
         for bounds, param in zip(theta_ranges,theta)],dtype=bool)
     if np.all(bool_array):
@@ -1715,12 +1723,25 @@ def log_prior_aptest(theta,theta_ranges=[[0.1,0.5],[0,1.0]]):
     else:
         return -np.inf
 
-# Posterior:
-def log_probability_aptest(theta,**kwargs):
-    lp = log_prior_aptest(theta)
+# Prior (assuming flat prior for now):
+def log_prior_aptest(theta,theta_ranges=[[0.1,0.5],[0,1.0],[-np.inf,np.inf]],
+        **kwargs):
+    log_prior_array = np.zeros(theta.shape)
+    flat_priors = [0,1]
+    theta_flat = [theta[k] for k in flat_priors]
+    theta_ranges_flat = [theta_ranges[k] for k in flat_priors]
+    for k in flat_priors:
+        log_prior_array[k] = log_flat_prior_single(theta[k],theta_ranges[k])
+    # Amplitude prior (Jeffries):
+    log_prior_array[2] = -np.log(theta[2])
+    return np.sum(log_prior_array)
+
+# Posterior (unnormalised):
+def log_probability_aptest(theta,*args,**kwargs):
+    lp = log_prior_aptest(theta,**kwargs)
     if not np.isfinite(lp):
         return -np.inf
-    return lp + log_likelihood_aptest(theta, **kwargs)
+    return lp + log_likelihood_aptest(theta,*args,**kwargs)
 
 
 # Get redshift space particle positions:
@@ -1788,7 +1809,7 @@ los_list_void_only_lcdm = get_los_positions_for_all_catalogues(snapListUn,
     suffix=".lospos_void_only.p")
 
 # 2D void stacks:
-def get_2d_void_stack_from_los_pos(los_pos,z_bins,d_bins,radii):
+def get_2d_void_stack_from_los_pos(los_pos,z_bins,d_bins,radii,stacked=True):
     voids_used = [np.array([len(x) for x in los]) > 0 for los in los_pos]
     # Filter out any unused voids as they just cause problems:
     los_pos_filtered = [ [x for x in los if len(x) > 0] for los in los_pos]
@@ -1797,12 +1818,16 @@ def get_2d_void_stack_from_los_pos(los_pos,z_bins,d_bins,radii):
     void_radii = [rad[filt] for rad, filt in zip(radii,voids_used)]
     # LOS positions in units of Reff:
     los_list_reff = [
-        [los/rad for los, rad in zip(all_los,all_radii)] 
+        [np.abs(los/rad) for los, rad in zip(all_los,all_radii)] 
         for all_los, all_radii in zip(los_pos_filtered,void_radii)]
     # Stacked particles:
-    stacked_particles_reff = np.vstack([np.vstack(los_list) 
-        for los_list in los_list_reff ])
-    return np.abs(stacked_particles_reff)
+    if stacked:
+        stacked_particles_reff = np.vstack([np.vstack(los_list) 
+            for los_list in los_list_reff ])
+        return stacked_particles_reff
+    else:
+        return los_list_reff
+
 
 los_lcdm = los_list_void_only_lcdm
 los_borg = los_list_void_only_borg
@@ -1837,10 +1862,11 @@ stacked_1d_real_borg = np.sqrt(np.sum(stacked_particles_reff_borg_real**2,1))
 
 
 # Compute_volume weights:
-def get_weights_for_stack(los_pos,void_radii,additional_weights = None):
+def get_weights_for_stack(los_pos,void_radii,additional_weights = None,
+                          stacked = True):
     if additional_weights is None:
         v_weight = [[rad**3*np.ones(len(los)) 
-                    for los, rad in zip(all_los,all_radii)] 
+                    for lolos_valss, rad in zip(all_los,all_radii)] 
                     for all_los, all_radii in zip(los_pos,void_radii)]
     else:
         if type(additional_weights) == list:
@@ -1854,7 +1880,10 @@ def get_weights_for_stack(los_pos,void_radii,additional_weights = None):
                     in zip(all_los,all_radii,additional_weights)]
                     for all_los, all_radii
                     in zip(los_pos,void_radii)]
-    return np.hstack([np.hstack(rad) for rad in v_weight])
+    if stacked:
+        return np.hstack([np.hstack(rad) for rad in v_weight])
+    else:
+        return v_weight
 
 # Weights for each void in the stack:
 voids_used_lcdm = [np.array([len(x) for x in los]) > 0 
@@ -1875,29 +1904,25 @@ v_weight_borg = get_weights_for_stack(
     los_pos_borg,[void_radii_borg for rad in antihaloRadii])
 v_weight_lcdm = get_weights_for_stack(los_pos_lcdm,void_radii_lcdm)
 
+def get_field_from_los_data(los_data,z_bins,d_bins,v_weight):
+    cell_volumes_reff = np.outer(np.diff(z_bins),np.diff(d_bins))
+    hist = np.histogramdd(los_data,bins=[z_bins,d_bins],density=False,
+                          weights = 1.0/(2*np.pi*v_weight*los_data[:,1]))
+    count = len(los_data)
+    return hist[0]/(2*count*cell_volumes_reff)
 
 # Fields:
 cell_volumes_reff = np.outer(np.diff(bins_z_reff),np.diff(bins_d_reff))
-hist_lcdm_reff = np.histogramdd(stacked_particles_reff_lcdm_abs,
-                           bins=[bins_z_reff,bins_d_reff],
-                           density=False,weights = 1.0/\
-                           (2*np.pi*v_weight_lcdm*
-                           stacked_particles_reff_lcdm_abs[:,1]))
-count_lcdm = len(stacked_particles_reff_lcdm_abs)
-num_voids_lcdm = np.sum([np.sum(x) for x in voids_used_lcdm])
-field_lcdm = hist_lcdm_reff[0]/(2*count_lcdm*cell_volumes_reff)
+field_lcdm = get_field_from_los_data(stacked_particles_reff_lcdm_abs,
+                                     bins_z_reff,bins_d_reff,v_weight_lcdm)
 
-hist_borg_reff = np.histogramdd(stacked_particles_reff_borg_abs,
-                           bins=[bins_z_reff,bins_d_reff],
-                           density=False,weights = 1.0/\
-                           (2*v_weight_borg*np.pi*
-                           stacked_particles_reff_borg_abs[:,1]))
-count_borg = len(stacked_particles_reff_borg_abs)
 num_voids_borg = np.sum([np.sum(x) for x in voids_used_borg]) # Not the actual number
     # but the effective number being stacked, so the number of voids multiplied
     # by the number of samples.
 nmean = len(snapList[0])/(boxsize**3)
-field_borg = hist_borg_reff[0]/(2*count_borg*cell_volumes_reff)
+
+field_borg = get_field_from_los_data(stacked_particles_reff_borg_abs,
+                                     bins_z_reff,bins_d_reff,v_weight_borg)
 
 # Get the matter density fields:
 use_all_los_points = False
@@ -2050,6 +2075,93 @@ plot_los_void_stack(\
         savename=figuresFolder + "profile_2d_test_data_lcdm.pdf",
         title=None,colorbar=True,shrink=0.9,
         colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})$")
+
+# Inference:
+
+# Estimate BORG data covariance:
+
+los_list_reff_borg = get_2d_void_stack_from_los_pos(
+    los_list_void_only_borg_zspace,bins_z_reff,bins_d_reff,
+    [void_radii_borg for rad in antihaloRadii],stacked=False)
+
+v_weights_all_borg = get_weights_for_stack(
+    los_pos_borg,[void_radii_borg for rad in antihaloRadii],stacked=False)
+
+all_fields_borg = [[
+    get_field_from_los_data(los,bins_z_reff,bins_d_reff,v_weight) 
+    for los, v_weight in zip(los_vals,v_weights)] 
+    for los_vals, v_weights in zip(los_list_reff_borg,v_weights_all_borg)]
+
+f_lengths = [np.array([len(los) for los in all_los])
+    for all_los in los_list_reff_borg]
+f_totals = np.array([np.sum(x) for x in f_lengths])
+
+f_weights = [length/total for length, total in zip(f_lengths,f_totals)]
+
+cov_data = [np.cov(np.vstack([x.flatten() for x in fields]).T,
+    aweights = weights) for fields, weights in zip(all_fields_borg,f_weights)]
+
+stacked_weights = np.hstack(f_lengths)/np.sum(f_totals)
+stacked_fields = np.vstack([np.vstack([x.flatten() for x in fields]) 
+    for fields in all_fields_borg]).T
+stacked_cov = np.cov(stacked_fields,aweights = stacked_weights)
+symmetric_cov = (stacked_cov + stacked_cov.T)/2
+
+lambda_reg = 1e-20
+regularised_cov = symmetric_cov + lambda_reg*np.identity(symmetric_cov.shape[0])
+tools.minmax(np.real(np.linalg.eig(regularised_cov)[0]))
+eigen = np.real(np.linalg.eig(regularised_cov)[0])
+
+L = np.linalg.cholesky(regularised_cov)
+P = np.linalg.inv(L)
+inv_cov = np.matmul(P,P.T)
+
+# Data to compare to:
+data_field = field_borg.flatten()
+spar = np.hstack([s*np.ones(field_borg.shape[1]) 
+    for s in plot.binCentres(bins_z_reff)])
+sperp = np.hstack([plot.binCentres(bins_d_reff) 
+    for s in plot.binCentres(bins_z_reff)])
+scoords = np.vstack([spar,sperp]).T
+z = 0.0225
+rho_real = lambda r, A : A*rho_func(r)/rho_func(0)
+
+# Covariances plot:
+plt.clf()
+plt.imshow(stacked_cov,vmin=-1e-9,vmax=1e-9,cmap='PuOr_r')
+plt.savefig(figuresFolder + "covariance_plot.pdf")
+plt.show()
+
+# 
+
+inv_cov = np.linalg.inv(stacked_cov)
+
+theta_initial_guess = np.array([0.3,f_lcdm(z,0.3),1e-5])
+logp = log_probability_aptest(theta_initial_guess,data_field,scoords,inv_cov,
+                          z,Delta_func,delta_func,rho_real,Om_fid = 0.3111)
+
+# Run the inference:
+import emcee
+import h5py
+nwalkers = 32
+ndims = 3
+n_mcmc = 5000
+disp = 1e-4
+initial = theta_initial_guess + disp*np.random.randn(nwalkers,ndims)
+filename = data_folder + "inference.h5"
+backend = emcee.backends.HDFBackend(filename)
+backend.reset(nwalkers, ndims)
+
+sampler = emcee.EnsembleSampler(
+    nwalkers, ndims, log_probability_aptest, args=(data_field,scoords,inv_cov,
+    z,Delta_func,delta_func,rho_real),kwargs={'Om_fid':0.3111},backend=backend)
+sampler.run_mcmc(initial,n_mcmc , progress=True)
+# Filter the MCMC samples to account for correlation:
+tau = sampler.get_autocorr_time()
+tau_max = np.max(tau)
+flat_samples = sampler.get_chain(discard=int(3*tau_max), 
+                                 thin=int(tau_max/2), flat=True)
+
 
 #-------------------------------------------------------------------------------
 # WRONG COSMO SIMULATIONS
