@@ -982,11 +982,19 @@ initial = theta_initial_guess + disp*np.random.randn(nwalkers,ndims)
 filename = data_folder + "inference_weighted.h5"
 backend = emcee.backends.HDFBackend(filename)
 backend.reset(nwalkers, ndims)
+parallel = False
 
-with Pool() as pool:
+if parallel:
+    with Pool() as pool:
+        sampler = emcee.EnsembleSampler(
+            nwalkers, ndims, log_probability_aptest_parallel, 
+            args=(z,),kwargs={'Om_fid':0.3111},backend=backend,pool=pool)
+        sampler.run_mcmc(initial,n_mcmc , progress=True)
+else:
     sampler = emcee.EnsembleSampler(
-        nwalkers, ndims, log_probability_aptest_parallel, 
-        args=(z,),kwargs={'Om_fid':0.3111},backend=backend,pool=pool)
+        nwalkers, ndims, log_probability_aptest, 
+        args=(data_field,scoords,inv_cov,z,Delta_func,delta_func,rho_real),
+        kwargs={'Om_fid':0.3111},backend=backend)
     sampler.run_mcmc(initial,n_mcmc , progress=True)
 
 # Filter the MCMC samples to account for correlation:
