@@ -635,3 +635,123 @@ def get_map_from_sample(sample):
         np.mean(sample)).x[0]
 
 
+
+# Get the positions of a snapshot in redshift space:
+def redshift_space_positions(snap,centre=None):
+    boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+    if centre is None:
+        centre = np.array([boxsize/2]*3)
+    a = snap.properties['a']
+    z = 1.0/a - 1.0
+    Om = snap.properties['omegaM0']
+    Ha = Hz(z,Om,h=1) # Hubble rate / h
+    r = snapedit.unwrap(snap['pos'] - centre,boxsize)
+    r2 = np.sum(r**2,1)
+    vr = np.sum(snap['vel']*r,1)
+    # Assume gadget units:
+    gamma = (np.sqrt(a)/Ha)/pynbody.units.Unit("km a**-1/2 s**-1 Mpc**-1 h")
+    return snapedit.wrap(
+        (1.0 + (gamma*vr/r2).in_units("1.0"))[:,None]*r + centre,boxsize)
+
+# Get the line of sight (los) co-ordinates of selected particles in a snapshot:
+def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres,radii,
+        dist_max=20,rmin=10,rmax=20,all_particles=True,filter_list=None,
+        void_indices=None,sorted_indices=None,reverse_indices=None,
+        positions = None,hr_list=None,tree=None,zspace=False,
+        recompute_zspace=False):
+    snap = tools.getPynbodySnap(snapname_forward)
+    snap_reverse = tools.getPynbodySnap(snapname_reverse)
+    if hr_list is None:
+        hr_list = snap_reverse.halos()
+    boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+    # Sorted indices, to allow correct referencing of particles:
+    if sorted_indices is None:
+        sorted_indices = np.argsort(snap['iord'])
+    if reverse_indices is None:
+        reverse_indices = snap_reverse['iord'] # Force loading of reverse 
+    # snapshot indices
+    print("Sorting complete")
+    # Remap positions into correct equatorial co-ordinates:
+    if positions is None:
+        if zspace:
+            positions = tools.loadOrRecompute(
+                snap.filename + ".z_space_pos.p",
+                redshift_space_positions,snap,centre=np.array([boxsize/2]*3),
+                _recomputeData=recompute_zspace)
+        else:
+            positions = snap['pos']
+        positions = tools.remapAntiHaloCentre(positions,boxsize,
+                                              swapXZ  = False,reverse = True)
+    print("Positions computed")
+    # Get relative positions of particles in each halo, remembering to 
+    # account for wrapping:
+    if all_particles and (tree is None):
+        print("Generating Tree")
+        tree = scipy.spatial.cKDTree(snapedit.wrap(positions,boxsize),
+            boxsize=boxsize)
+    print("Computing ellipticities...")
+    if void_indices is None:
+        void_indices = np.arange(0,len(hr_list))
+    los_pos_all = []
+    if filter_list is None:
+        rad_filter = (radii > rmin) & (radii <= rmax)
+    else:
+        rad_filter = filter_list & (radii > rmin) & (radii <= rmax)
+    for k in tools.progressbar(range(0,len(centres))):
+        if rad_filter[k]:
+            if not all_particles:
+                indices = hr_list[void_indices[k]+1]['iord']
+                halo_pos = snapedit.unwrap(positions[sorted_indices[indices],:],
+                    boxsize)
+                distances = np.sqrt(
+                    np.sum(snapedit.unwrap(halo_pos - centres[k],boxsize)**2,1))
+                halo_pos = halo_pos[distances < dist_max,:]
+            else:
+                indices = tree.query_ball_point(
+                    snapedit.wrap(centres[k],boxsize),dist_max,workers=-1)
+                halo_pos = snapedit.unwrap(positions[indices,:],boxsize)
+            los_pos = get_los_pos(halo_pos,centres[k],boxsize)
+            los_pos_all.append(los_pos)
+        else:
+            los_pos_all.append(np.zeros((0,2)))
+    return los_pos_all
+
+# The the los positions for selected particles in the group of snapshots
+def get_los_positions_for_all_catalogues(snapList,snapListRev,
+        antihaloCentres,antihaloRadii,recompute=False,filter_list=None,
+        suffix=".lospos.p",void_indices=None,**kwargs):
+    los_list = []
+    if suffix == "":
+        raise Exception("Suffix cannot be empty.")
+    if void_indices is None:
+        void_indices = [None for ns in range(0,len(snapList))]
+    for ns in range(0,len(snapList)):
+        # Load snapshot (don't use the snapshot list, because that will force
+        # loading of all snapshot positions, using up a lot of memory, when 
+        # we only want to load these one at a time):
+        print("Doing sample " + str(ns+1) + " of " + str(len(snapList)))
+        if filter_list is None:
+            los_pos_all = tools.loadOrRecompute(
+                snapList[ns].filename + suffix,
+                get_los_pos_for_snapshot,snapList[ns].filename,
+                snapListRev[ns].filename,antihaloCentres[ns],antihaloRadii[ns],
+                _recomputeData=recompute,void_indices=void_indices[ns],**kwargs)
+        else:
+            los_pos_all = tools.loadOrRecompute(
+                snapList[ns].filename + suffix,
+                get_los_pos_for_snapshot,snapList[ns].filename,
+                snapListRev[ns].filename,antihaloCentres[ns],
+                antihaloRadii[ns],filter_list=filter_list[ns],
+                _recomputeData=recompute,void_indices=void_indices[ns],**kwargs)
+        los_list.append(los_pos_all)
+        del los_pos_all
+        gc.collect()
+    return los_list
+
+
+
+
+
+
+
+

@@ -3870,8 +3870,46 @@ def plot_void_counts_radius(sample_radii,radius_bins,lambda_cdm_samples,
     if show:
         plt.show()
 
+def draw_ellipse(ax,R,eps,theta_bounds=[np.pi/2,0],npoints=101,color='k',
+        linestyle=':',label=None):
+    theta_vals = np.linspace(theta_bounds[0],theta_bounds[1],npoints)
+    d = R/np.sqrt(np.tan(theta_vals)**2 + eps**2)
+    z = d*np.tan(theta_vals)
+    ax.plot(d,z,color=color,linestyle=linestyle,label=label)
 
 
+
+def plot_los_void_stack(\
+        field,bin_d_centres,bin_z_centres,contour_list=[],Rvals = [],ax=None,
+        cmap='Blues',vmin=0,vmax=1e-4,upper_dist_reff = 2,nmean=1.0,
+        contours = True,fontsize=10,
+        xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
+        ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
+        density_unit='probability',savename=None,title=None,
+        colorbar=False,shrink=0.9,colorbar_title=None):
+    if ax is None:
+        fig, ax = plt.subplots()
+    im = ax.imshow(field,cmap=cmap,vmin=vmin,vmax = vmax,
+                   extent=(0,upper_dist_reff,0,upper_dist_reff),
+                   origin='lower')
+    if contours:
+        CS = ax.contour(bin_d_centres,bin_z_centres,field,levels=contour_list)
+        ax.clabel(CS, inline=True, fontsize=fontsize)
+    for r in Rvals:
+        draw_ellipse(ax,r,1.0)
+    # Formatting axes:
+    ax.set_xlabel(xlabel,fontsize=fontsize,fontfamily=fontfamily)
+    ax.set_ylabel(ylabel,fontsize=fontsize,fontfamily=fontfamily)
+    ax.set_xlim([0,upper_dist_reff])
+    ax.set_ylim([0,upper_dist_reff])
+    ax.set_aspect('equal')
+    if title is not None:
+        ax.set_title(title,fontsize=fontsize,fontfamily=fontfamily)
+    if colorbar:
+        fig.colorbar(im,shrink=shrink,label=colorbar_title)
+    if savename is not None:
+        plt.savefig(savename)
+    return im
 
 
 
