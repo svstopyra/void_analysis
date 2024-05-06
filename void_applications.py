@@ -549,18 +549,21 @@ def profile_jackknife_covariance(data,profile_function,**kwargs):
 
 # Likelihood function:
 def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
-                          z,Delta,delta,rho_real,**kwargs):
-    s_par = scoords[:,0]
-    s_perp = scoords[:,1]
+                          z,Delta,delta,rho_real,data_filter=None,**kwargs):
+    if data_filter is None:
+        data_filter = range(0,len(data_field))
+    s_par = scoords[data_filter,0]
+    s_perp = scoords[data_filter,1]
     Om, f , A = theta
     M = len(s_par)
     delta_rho = np.zeros(s_par.shape)
+    inv_cov_filtered = inv_cov[data_filter,:][:,data_filter]
     # Evaluate the profile for the supplied value of the parameters:
     for k in range(0,M):
-        delta_rho[k] = data_field[k] - \
+        delta_rho[k] = data_field[data_filter[k]] - \
             z_space_profile(s_par[k],s_perp[k],lambda r: rho_real(r,A),
                             z,Om,Delta,delta,f=f,**kwargs)
-    return -0.5*np.matmul(np.matmul(delta_rho,inv_cov),delta_rho.T)
+    return -0.5*np.matmul(np.matmul(delta_rho,inv_cov_filtered),delta_rho.T)
 
 # Likelihood function, parallelised. Requires global variables!:
 def log_likelihood_aptest_parallel(theta,z,**kwargs):
@@ -844,6 +847,10 @@ rho_func_lcdm_z0 = scipy.interpolate.interp1d(
     r_bin_centres,field_lcdm[0],kind='cubic',
     fill_value=(field_lcdm[0][0],field_lcdm[0][-1]),
     bounds_error=False)
+rho_func_borg_z0 = scipy.interpolate.interp1d(
+    r_bin_centres,field_borg[0],kind='cubic',
+    fill_value=(field_borg[0][0],field_borg[0][-1]),
+    bounds_error=False)
 
 # Test Plot:
 fig, ax = plt.subplots()
@@ -864,7 +871,7 @@ ax.plot(rvals,rho_func_borg(rvals)/np.mean(rho_func_borg(start_values)),
     label='$\\rho_{\\mathrm{borg}}(r)$')
 ax.plot(rvals,rho_func_lcdm_z0(rvals)/np.mean(rho_func_lcdm_z0(start_values)),
     label='$\\rho_{\\mathrm{2d}}(0,d)$')
-ax.set_xlabel('r [$\\mathrm{Mpc}h^{-1}$]')
+ax.set_xlabel('$r/r_{\\mathrm{eff}}$')
 ax.set_ylabel('$\\rho(r)$')
 ax.set_yscale('log')
 plt.legend(frameon=False)
@@ -874,25 +881,44 @@ plt.show()
 # 2D profile function test (zspace):
 z = 0.0225
 profile_2d = np.zeros((len(bins_z_reff)-1,len(bins_d_reff)-1))
+Om = soln.x[0]
+f = soln.x[1]
+A = soln.x[2]
+
 Om = 0.3111
+f = f_lcdm(z,Om)
+
 for i in range(0,len(bins_z_reff)-1):
     for j in range(0,len(bins_d_reff)-1):
         spar = bin_z_centres[i]
         sperp = bin_d_centres[j]
-        profile_2d[i,j] = z_space_profile(spar,sperp,rho_func,z,Om,Delta_func,
-                                          delta_func)
+        profile_2d[i,j] = z_space_profile(spar,sperp,lambda r: rho_real(r,A),
+                                          z,Om,Delta_func,delta_func,
+                                          Om_fid=0.3111,f=f)
 
 # Test plot:
 plot_los_void_stack(\
         profile_2d,bin_d_centres,bin_z_centres,
         contour_list=[0.05,0.1],Rvals = [1,2],cmap='Blues',
-        vmin=0,vmax=0.12,fontsize=10,
+        vmin=0,vmax=0.015,fontsize=10,
         xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
         ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
         density_unit='probability',
         savename=figuresFolder + "profile_2d_test.pdf",
         title=None,colorbar=True,shrink=0.9,
         colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})$")
+
+plot_los_void_stack(\
+        profile_2d/field_borg,bin_d_centres,bin_z_centres,
+        contour_list=[0.05,0.1],Rvals = [1,2],cmap='PuOr_r',
+        vmin=0,vmax=200,fontsize=10,norm=colors.LogNorm(vmin=1e-2,vmax=1e2),
+        xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
+        ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
+        density_unit='probability',
+        savename=figuresFolder + "profile_2d_test_diff.pdf",
+        title=None,colorbar=True,shrink=0.9,
+        colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})" + \
+        "/\\tilde{\\rho}(s_{\\parallel},s_{\\perp})$")
 
 plot_los_void_stack(\
         field_lcdm,bin_d_centres,bin_z_centres,
@@ -904,6 +930,32 @@ plot_los_void_stack(\
         savename=figuresFolder + "profile_2d_test_data_lcdm.pdf",
         title=None,colorbar=True,shrink=0.9,
         colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})$")
+
+
+plot_los_void_stack(\
+        field_borg,bin_d_centres,bin_z_centres,
+        contour_list=[0.05,0.1],Rvals = [1,2],cmap='Blues',
+        vmin=0,vmax=0.015,fontsize=10,
+        xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
+        ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
+        density_unit='probability',
+        savename=figuresFolder + "profile_2d_test_data_borg.pdf",
+        title=None,colorbar=True,shrink=0.9,
+        colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})$")
+
+
+plot_los_void_stack(\
+        profile_2d,bin_d_centres,bin_z_centres,
+        contour_list=[0.05,0.1],Rvals = [1,2],cmap='Blues',
+        vmin=0,vmax=0.015,fontsize=10,
+        xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
+        ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
+        density_unit='probability',
+        savename=figuresFolder + "profile_2d_theory_borg.pdf",
+        title=None,colorbar=True,shrink=0.9,
+        colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})$")
+
+
 
 # Inference:
 
@@ -934,6 +986,8 @@ cov_data = [np.cov(np.vstack([x.flatten() for x in fields]).T,
 stacked_weights = np.hstack(f_lengths)/np.sum(f_totals)
 stacked_fields = np.vstack([np.vstack([x.flatten() for x in fields]) 
     for fields in all_fields_borg]).T
+mean_fields = np.average(stacked_fields,axis=1,weights=stacked_weights)
+mean_products = np.outer(mean_fields,mean_fields)
 stacked_cov = np.cov(stacked_fields,aweights = stacked_weights)
 symmetric_cov = (stacked_cov + stacked_cov.T)/2
 
@@ -942,9 +996,28 @@ regularised_cov = symmetric_cov + lambda_reg*np.identity(symmetric_cov.shape[0])
 #tools.minmax(np.real(np.linalg.eig(regularised_cov)[0]))
 eigen = np.real(np.linalg.eig(regularised_cov)[0])
 
+normalised_cov = regularised_cov/mean_products
+
 L = np.linalg.cholesky(regularised_cov)
 P = np.linalg.inv(L)
 inv_cov = np.matmul(P,P.T)
+
+plt.clf()
+C_diag = np.diag(normalised_cov).reshape((40,40))
+plt.imshow(1.0/C_diag,cmap='PuOr_r',norm=colors.LogNorm(vmin=1e-3,vmax=1e3),
+           extent=(0,upper_dist_reff,0,upper_dist_reff),origin='lower')
+plt.xlabel('$s_{\\mathrm{\\perp}}/R_{\\mathrm{eff}}$')
+plt.ylabel('$s_{\\mathrm{\\parallel}}/R_{\\mathrm{eff}}$')
+#plt.colorbar(label="$C_{ii} = \\frac{\\langle\\rho(s_{\\mathrm{\\perp},i}," + 
+#    "s_{\\mathrm{\\parallel},i})\\rho(s_{\\mathrm{\\perp},i}," + 
+#    "s_{\\mathrm{\\parallel},i})\\rangle}{\\langle\\rho(s_{\\mathrm{\\perp},i}," + 
+#    "s_{\\mathrm{\\parallel},i})\\rangle\\langle\\rho(s_{\\mathrm{\\perp},i}," + 
+#    "s_{\\mathrm{\\parallel},i})\\rangle}$")
+plt.colorbar(label='S/N ratio')
+plt.title("Estimated covariance of $\\rho(s_{\\mathrm{\\perp}}," + 
+    "s_{\\mathrm{\\parallel}}$)")
+plt.savefig(figuresFolder + "covariance_distribution.pdf")
+plt.show()
 
 # Data to compare to:
 data_field = field_borg.flatten()
@@ -1002,6 +1075,47 @@ tau = sampler.get_autocorr_time()
 tau_max = np.max(tau)
 flat_samples = sampler.get_chain(discard=int(3*tau_max), 
                                  thin=int(tau_max/2), flat=True)
+
+
+
+
+# Fix the amplitude, and plot the likelihood:
+
+args = (data_field,scoords,inv_cov,z,Delta_func,delta_func,rho_real)
+data_filter = np.where(1.0/np.sqrt(np.diag(normalised_cov)) > 0.5)[0]
+kwargs={'Om_fid':0.3111,'data_filter':data_filter}
+nll = lambda *theta: -log_likelihood_aptest(*theta,*args,**kwargs)
+soln = scipy.optimize.minimize(nll, theta_initial_guess,bounds=[(0.1,0.5),(0,1.0),(None,None)])
+
+
+
+Om_range = np.linspace(0.1,0.5,41)
+f_range = np.linspace(0,1,41)
+
+log_like_ap = np.zeros((40,40))
+A = soln.x[2]
+for i in tools.progressbar(range(0,len(Om_range)-1)):
+    for j in range(0,len(f_range)-1):
+        theta = np.array([Om_range[i],f_range[j],A])
+        log_like_ap[i,j] = log_likelihood_aptest(theta,*args,**kwargs)
+
+plt.clf()
+plt.imshow(-log_like_ap,
+           extent=(Om_range[0],Om_range[-1],f_range[0],f_range[-1]),
+           norm=colors.LogNorm(vmin=1e13,vmax=1e14),cmap='Blues',
+           aspect='equal')
+plt.xlabel('$\Omega_m$')
+plt.ylabel('$f$')
+plt.colorbar(label='Negative Log Likelihood')
+plt.savefig(figuresFolder + "likelihood_test_plot.pdf")
+plt.show()
+
+
+
+# Fit a multi-parameter model to the profile:
+
+def profile_fit(r,A0,k,r0):
+    return A0*(1.0 + k*r + (k*r)**2/(2.0 + k*r0))*np.exp(-k*r)
 
 
 

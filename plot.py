@@ -3882,14 +3882,16 @@ def draw_ellipse(ax,R,eps,theta_bounds=[np.pi/2,0],npoints=101,color='k',
 def plot_los_void_stack(\
         field,bin_d_centres,bin_z_centres,contour_list=[],Rvals = [],ax=None,
         cmap='Blues',vmin=0,vmax=1e-4,upper_dist_reff = 2,nmean=1.0,
-        contours = True,fontsize=10,
+        contours = True,fontsize=10,norm=None,
         xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
         ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
         density_unit='probability',savename=None,title=None,
         colorbar=False,shrink=0.9,colorbar_title=None):
     if ax is None:
         fig, ax = plt.subplots()
-    im = ax.imshow(field,cmap=cmap,vmin=vmin,vmax = vmax,
+    if norm is None:
+        norm = colors.Normalize(vmin=vmin,vmax=vmax)
+    im = ax.imshow(field,cmap=cmap,norm=norm,
                    extent=(0,upper_dist_reff,0,upper_dist_reff),
                    origin='lower')
     if contours:
