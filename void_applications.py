@@ -410,7 +410,7 @@ def Hz(z,Om,h=None,Ol=None,Ok=0,Or=0,**kwargs):
         h = 1
     return 100*h*np.sqrt(Ez2(z,Om,**kwargs))
 
-def ap_parameter(z,Om,Om_fid,h=0.7,h_fid = 0.7):
+def ap_parameter(z,Om,Om_fid,h=0.7,h_fid = 0.7,**kwargs):
     # Get cosmology
     cosmo_fid = astropy.cosmology.FlatLambdaCDM(H0=100*h_fid,Om0=Om_fid)
     cosmo_test = astropy.cosmology.FlatLambdaCDM(H0=100*h,Om0=Om)
@@ -481,10 +481,23 @@ def to_z_space(r_par,r_perp,z,Om,Delta=None,u_par=None,f=None,**kwargs):
     s_perp = r_perp
     return [s_par,s_perp]
 
+def iterative_zspace_inverse(s_par,f,Delta,N_max):
+    r_par_guess = s_par
+    for k in range(0,N_max):
+        # Iteratively improve the guess:
+        r = np.sqrt((r_par_guess)**2 + r_perp**2)
+        r_par_new = s_par/(1.0  - (f/3.0)*Delta(r))
+        if (np.abs(r_par_new - r_par_guess) < atol) or \
+            (np.abs(r_par_new/r_par_guess - 1.0) < rtol):
+            break
+        r_par_guess = r_par_new
+    r_par = r_par_guess
+    return r_par
+
 # Transformation to real space, from redshift space, including geometric
 # distortions from a wrong-cosmology:
 def to_real_space(s_par,s_perp,z,Om,Om_fid=None,Delta=None,u_par=None,f=None,
-                  N_max = 5,atol=1e-5,rtol=1e-5,epsilon=None,
+                  N_max = 5,atol=1e-5,rtol=1e-5,epsilon=None,F_inv=None,
                   **kwargs):
     # Perpendicular distance is easy:
     r_perp = s_perp
@@ -500,16 +513,23 @@ def to_real_space(s_par,s_perp,z,Om,Om_fid=None,Delta=None,u_par=None,f=None,
         if f is None:
             f = f_lcdm(z,Om,**kwargs)
         # Need to guess at r:
-        r_par_guess = s_par
-        for k in range(0,N_max):
-            # Iteratively improve the guess:
-            r = np.sqrt((r_par_guess)**2 + r_perp**2)
-            r_par_new = s_par/(1.0  - (f/3.0)*Delta(r))
-            if (np.abs(r_par_new - r_par_guess) < atol) or \
-                (np.abs(r_par_new/r_par_guess - 1.0) < rtol):
-                break
-            r_par_guess = r_par_new
-        r_par = r_par_guess/epsilon
+        if F_inv is None:
+            # Manually invert:
+            if not np.isscalar(s_par):
+                raise Exception("Must be a scalar to perform manual inversion")
+            r_par_guess = s_par
+            for k in range(0,N_max):
+                # Iteratively improve the guess:
+                r = np.sqrt((r_par_guess)**2 + r_perp**2)
+                r_par_new = s_par/(1.0  - (f/3.0)*Delta(r))
+                if (np.abs(r_par_new - r_par_guess) < atol) or \
+                    (np.abs(r_par_new/r_par_guess - 1.0) < rtol):
+                    break
+                r_par_guess = r_par_new
+            r_par = r_par_guess
+        else:
+            # Use the tabulated inverse:
+            r_par = F_inv(s_perp,s_par)
     else:
         # Use supplied peculiar velocity:
         # Hubble rate:
@@ -549,7 +569,9 @@ def profile_jackknife_covariance(data,profile_function,**kwargs):
 
 # Likelihood function:
 def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
-                          z,Delta,delta,rho_real,data_filter=None,**kwargs):
+                          z,Delta,delta,rho_real,data_filter=None,
+                          cholesky=False,normalised=False,tabulate_inverse=True,
+                          ntab = 10,**kwargs):
     if data_filter is None:
         data_filter = range(0,len(data_field))
     s_par = scoords[data_filter,0]
@@ -559,11 +581,47 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
     delta_rho = np.zeros(s_par.shape)
     inv_cov_filtered = inv_cov[data_filter,:][:,data_filter]
     # Evaluate the profile for the supplied value of the parameters:
-    for k in range(0,M):
-        delta_rho[k] = data_field[data_filter[k]] - \
-            z_space_profile(s_par[k],s_perp[k],lambda r: rho_real(r,A),
-                            z,Om,Delta,delta,f=f,**kwargs)
-    return -0.5*np.matmul(np.matmul(delta_rho,inv_cov_filtered),delta_rho.T)
+    if tabulate_inverse:
+        # Tabulate an inverse function and then evaluate an interpolated
+        # inverse, rather than repeatedly inverting:
+        data_val = data_field[data_filter]
+        svals = np.linspace(np.min(s_par),np.max(s_par),ntab)
+        rperp_vals = np.linspace(np.min(s_perp),np.max(s_perp),ntab)
+        rvals = np.zeros((ntab,ntab))
+        for i in range(0,ntab):
+            for j in range(0,ntab):
+                F = (lambda r: r - r*(f/3)*\
+                    Delta(np.sqrt(r**2 + rperp_vals[i]**2)) \
+                    - svals[j])
+                rvals[i,j] = scipy.optimize.fsolve(F,svals[j])
+        F_inv = lambda x, y: scipy.interpolate.interpn((rperp_vals,svals),rvals,
+                                                       np.vstack((x,y)).T,
+                                                       method='cubic')
+        theory_val = z_space_profile(s_par,s_perp,
+                                     lambda r: rho_real(r,A),z,Om,Delta,
+                                     delta,f=f,F_inv=F_inv,**kwargs)
+        if normalised:
+            delta_rho = 1.0 - theory_val/data_val
+        else:
+            delta_rho = data_val - theory_val
+    else:
+        for k in range(0,M):
+            data_val = data_field[data_filter[k]]
+            theory_val = z_space_profile(s_par[k],s_perp[k],
+                                         lambda r: rho_real(r,A),z,Om,Delta,
+                                         delta,f=f,**kwargs)
+            if normalised:
+                delta_rho[k] = 1.0 - theory_val/data_val
+            else:
+                delta_rho[k] = data_val - theory_val
+    if cholesky:
+        # We assume that the covariance is given in it's lower triangular form,
+        # rather than an explicit covariance. We then solve this rather than
+        # actually computing 
+        x = scipy.linalg.cho_solve((inv_cov_filtered,True),delta_rho)
+        return -0.5*np.sum(x**2)
+    else:
+        return -0.5*np.matmul(np.matmul(delta_rho,inv_cov_filtered),delta_rho.T)
 
 # Likelihood function, parallelised. Requires global variables!:
 def log_likelihood_aptest_parallel(theta,z,**kwargs):
@@ -826,6 +884,8 @@ r_bin_centres = plot_utilities.binCentres(bins_d_reff)
 #rho_r = noInBins_borg/np.sum(noInBins_borg)
 rho_r = noInBins_lcdm/(np.sum(noInBins_lcdm)*\
     4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
+rho_r_error = np.sqrt(noInBins_lcdm)/(np.sum(noInBins_lcdm)*\
+    4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
 rho_borg_r = noInBins_borg/(np.sum(noInBins_borg)*\
     4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
 Delta_r = np.cumsum(noInBins_borg)/np.sum(noInBins_borg)
@@ -881,12 +941,16 @@ plt.show()
 # 2D profile function test (zspace):
 z = 0.0225
 profile_2d = np.zeros((len(bins_z_reff)-1,len(bins_d_reff)-1))
-Om = soln.x[0]
-f = soln.x[1]
-A = soln.x[2]
 
 Om = 0.3111
 f = f_lcdm(z,Om)
+A = 0.013
+
+
+def rho_real(r,A):
+    return A*rho_func(r)/rho_func(0)
+
+
 
 for i in range(0,len(bins_z_reff)-1):
     for j in range(0,len(bins_d_reff)-1):
@@ -965,14 +1029,20 @@ los_list_reff_borg = get_2d_void_stack_from_los_pos(
     los_list_void_only_borg_zspace,bins_z_reff,bins_d_reff,
     [void_radii_borg for rad in antihaloRadii],stacked=False)
 
+
+
 v_weights_all_borg = get_weights_for_stack(
     los_pos_borg,[void_radii_borg for rad in antihaloRadii],stacked=False,
     additional_weights = rep_scores/np.sum(rep_scores))
+
+
 
 all_fields_borg = [[
     get_field_from_los_data(los,bins_z_reff,bins_d_reff,v_weight) 
     for los, v_weight in zip(los_vals,v_weights)] 
     for los_vals, v_weights in zip(los_list_reff_borg,v_weights_all_borg)]
+
+sample_fields_borg = 
 
 f_lengths = [np.array([len(los) for los in all_los])
     for all_los in los_list_reff_borg]
@@ -1002,9 +1072,50 @@ L = np.linalg.cholesky(regularised_cov)
 P = np.linalg.inv(L)
 inv_cov = np.matmul(P,P.T)
 
+def tikhonov_regularisation(mat,lambda_reg=1e-10):
+    return mat + lambda_reg*np.identity(mat.shape[0])
+
+def regularise_covariance(cov,lambda_reg=1e-10):
+    symmetric_cov = (cov + cov.T)/2
+    regularised_cov = tikhonov_regularisation(symmetric_cov,
+                                              lambda_reg=lambda_reg)
+    return regularised_cov
+
+def get_inverse_covariance(cov,lambda_reg=1e-10):
+    regularised_cov = regularise_covariance(cov,lambda_reg=lambda_reg)
+    L = np.linalg.cholesky(regularised_cov)
+    P = np.linalg.inv(L)
+    inv_cov = np.matmul(P,P.T)
+    return inv_cov
+
+# Covariance over all posterior samples:
+los_list_sample_borg = [np.vstack(los) for los in los_list_reff_borg]
+v_weights_sample_borg = [np.hstack(weights) for weights in v_weights_all_borg]
+sample_fields_borg = np.array([
+    get_field_from_los_data(los,bins_z_reff,bins_d_reff,v_weight) 
+    for los, v_weight in zip(los_list_sample_borg,v_weights_sample_borg)])
+
+jackknife_samples = np.array([np.mean(sample_fields_borg[
+    np.setdiff1d(range(0,sample_fields_borg.shape[0]),k),:,:],0).flatten() 
+    for k in range(0,sample_fields_borg.shape[0])]).T
+
+jackknife_cov = np.cov(jackknife_samples)
+jackknife_mean = np.mean(jackknife_samples,1)
+norm_cov = jackknife_cov/np.outer(jackknife_mean,jackknife_mean)
+reg_norm_cov = regularise_covariance(norm_cov,lambda_reg= 1e-10)
+reg_cov = regularise_covariance(jackknife_cov,lambda_reg= 1e-12)
+cholesky_cov = scipy.linalg.cholesky(reg_cov,lower=True)
+
+inv_cov = get_inverse_covariance(norm_cov,lambda_reg = 1e-10)
+eigen = np.real(np.linalg.eig(norm_cov)[0])
+
+
+
+
+
 plt.clf()
-C_diag = np.diag(normalised_cov).reshape((40,40))
-plt.imshow(1.0/C_diag,cmap='PuOr_r',norm=colors.LogNorm(vmin=1e-3,vmax=1e3),
+C_diag = np.diag(reg_norm_cov).reshape((40,40))
+plt.imshow(np.sqrt(1.0/C_diag),cmap='PuOr_r',norm=colors.LogNorm(vmin=1e-3,vmax=1e3),
            extent=(0,upper_dist_reff,0,upper_dist_reff),origin='lower')
 plt.xlabel('$s_{\\mathrm{\\perp}}/R_{\\mathrm{eff}}$')
 plt.ylabel('$s_{\\mathrm{\\parallel}}/R_{\\mathrm{eff}}$')
@@ -1028,21 +1139,27 @@ sperp = np.hstack([plot.binCentres(bins_d_reff)
 scoords = np.vstack([spar,sperp]).T
 z = 0.0225
 
-def rho_real(r,A):
-    return A*rho_func(r)/rho_func(0)
-
-
 # Covariances plot:
 plt.clf()
-plt.imshow(stacked_cov,vmin=-1e-9,vmax=1e-9,cmap='PuOr_r')
+plt.imshow(reg_norm_cov,vmin=-1e-3,vmax=1e-3,cmap='PuOr_r')
 plt.savefig(figuresFolder + "covariance_plot.pdf")
 plt.show()
 
 # 
 
-theta_initial_guess = np.array([0.3,f_lcdm(z,0.3),1e-5])
-logp = log_probability_aptest(theta_initial_guess,data_field,scoords,inv_cov,
-                          z,Delta_func,delta_func,rho_real,Om_fid = 0.3111)
+theta_initial_guess = np.array([0.3,f_lcdm(z,0.3),0.01])
+test = False
+
+if test:
+    import time:
+    t0 = time.time()
+    for k in tools.progressbar(range(0,100)):
+        logp = log_probability_aptest(theta_initial_guess,data_field,scoords,
+                                      cholesky_cov,z,Delta_func,delta_func,
+                                      rho_real,Om_fid = 0.3111,cholesky=True,
+                                      tabulate_inverse=True)
+    t1 = time.time()
+    average_time = (t1 - t0)/100
 
 # Run the inference:
 import emcee
@@ -1061,13 +1178,16 @@ if parallel:
     with Pool() as pool:
         sampler = emcee.EnsembleSampler(
             nwalkers, ndims, log_probability_aptest_parallel, 
-            args=(z,),kwargs={'Om_fid':0.3111},backend=backend,pool=pool)
+            args=(z,),
+            kwargs={'Om_fid':0.3111,'cholesky':True,'tabulate_inverse':True},
+            backend=backend,pool=pool)
         sampler.run_mcmc(initial,n_mcmc , progress=True)
 else:
     sampler = emcee.EnsembleSampler(
         nwalkers, ndims, log_probability_aptest, 
-        args=(data_field,scoords,inv_cov,z,Delta_func,delta_func,rho_real),
-        kwargs={'Om_fid':0.3111},backend=backend)
+        args=(data_field,scoords,cholesky_cov,z,Delta_func,delta_func,rho_real),
+        kwargs={'Om_fid':0.3111,'cholesky':True,'tabulate_inverse':True},
+        backend=backend)
     sampler.run_mcmc(initial,n_mcmc , progress=True)
 
 # Filter the MCMC samples to account for correlation:
@@ -1081,11 +1201,13 @@ flat_samples = sampler.get_chain(discard=int(3*tau_max),
 
 # Fix the amplitude, and plot the likelihood:
 
-args = (data_field,scoords,inv_cov,z,Delta_func,delta_func,rho_real)
+args = (data_field,scoords,cholesky_cov,z,Delta_func,delta_func,rho_real)
 data_filter = np.where(1.0/np.sqrt(np.diag(normalised_cov)) > 0.5)[0]
-kwargs={'Om_fid':0.3111,'data_filter':data_filter}
+#kwargs={'Om_fid':0.3111,'data_filter':data_filter}
+kwargs={'Om_fid':0.3111,'cholesky':True,'tabulate_invers':True}
 nll = lambda *theta: -log_likelihood_aptest(*theta,*args,**kwargs)
-soln = scipy.optimize.minimize(nll, theta_initial_guess,bounds=[(0.1,0.5),(0,1.0),(None,None)])
+soln = scipy.optimize.minimize(nll, theta_initial_guess,
+    bounds=[(0.1,0.5),(0,1.0),(None,None)])
 
 
 
@@ -1114,12 +1236,78 @@ plt.show()
 
 # Fit a multi-parameter model to the profile:
 
-def profile_fit(r,A0,k,r0):
-    return A0*(1.0 + k*r + (k*r)**2/(2.0 + k*r0))*np.exp(-k*r)
+def profile_fit(r,A,k,r0):
+    return A*(1.0 + k*r + (k*r)**2/(2.0 - k*r0))*np.exp(-k*r)
+
+def log_profile_fit(r,A,k,r0):
+    return np.log(A) + np.log(1.0 + k*r + (k*r)**2/(2.0 - k*r0)) - k*r
+
+# MLE of the profile fit:
+
+def log_likelihood(theta, x, y, yerr):
+    A, k, r0 = theta
+    model = log_profile_fit(x, A, k, r0)
+    sigma2 = yerr**2
+    return -0.5 * np.sum( (y - model)**2/sigma2 + np.log(sigma2) )
+
+# Priors:
+def log_prior(theta):
+    A, k, r0 = theta
+    if (0 <= r0 < 2.0):
+        # Jeffries priors:
+        return -np.log(A) - np.log(k)
+    else:
+        return -np.inf
+
+def log_probability(theta,x,y,yerr):
+    lp = log_prior(theta)
+    if not np.isfinite(lp):
+        return -np.inf
+    return lp + log_likelihood(theta, x, y, yerr)
+
+nll1 = lambda *theta: -log_likelihood(*theta)
+initial = np.array([0.1,3.5,1.0])
+sol1 = scipy.optimize.minimize(nll1, initial, bounds = [(0,None),(0,None),(0,None)],
+    args=(r_bin_centres, np.log(rho_r),
+    0.5*np.log((rho_r + rho_r_error)/(rho_r - rho_r_error))) )
+
+A = sol1.x[0]
+k = sol1.x[1]
+r0 = sol1.x[2]
+
+
+import emcee
+pos = sol1.x + 1e-4*np.random.randn(32,3)
+nwalkers, ndim = pos.shape
+
+sampler = emcee.EnsembleSampler(
+    nwalkers, ndim, log_probability, args=(r_bin_centres, np.log(rho_r),
+    0.5*np.log((rho_r + rho_r_error)/(rho_r - rho_r_error)))
+)
+sampler.run_mcmc(pos, 10000, progress=True)
+
+tau = sampler.get_autocorr_time()
+
+flat_samples = sampler.get_chain(discard=100, thin=15, flat=True)
+
+A, k, r0 = np.mean(flat_samples,0)
 
 
 
+A = 0.1
+k = 3.5
+r0 = 0.5
 
+rho_r_fit_vals = profile_fit(r_bin_centres,A,k,r0)
+plt.clf()
+plt.errorbar(r_bin_centres,rho_r,yerr=rho_r_error,linestyle='-',color='k')
+plt.plot(r_bin_centres,rho_r_fit_vals,
+         linestyle=':',color='b')
+plt.xlabel('$r/r_{\\mathrm{eff}}$')
+plt.ylabel('$\\rho(r)$')
+plt.yscale('log')
+plt.savefig(figuresFolder + "profile_fit_test.pdf")
+plt.show()
 
 
 
