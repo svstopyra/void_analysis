@@ -1042,7 +1042,6 @@ all_fields_borg = [[
     for los, v_weight in zip(los_vals,v_weights)] 
     for los_vals, v_weights in zip(los_list_reff_borg,v_weights_all_borg)]
 
-sample_fields_borg = 
 
 f_lengths = [np.array([len(los) for los in all_los])
     for all_los in los_list_reff_borg]
@@ -1149,9 +1148,9 @@ plt.show()
 
 theta_initial_guess = np.array([0.3,f_lcdm(z,0.3),0.01])
 test = False
+import time
 
 if test:
-    import time:
     t0 = time.time()
     for k in tools.progressbar(range(0,100)):
         logp = log_probability_aptest(theta_initial_guess,data_field,scoords,
