@@ -950,40 +950,7 @@ A = 0.013
 def rho_real(r,A):
     return A*rho_func(r)/rho_func(0)
 
-
-
-for i in range(0,len(bins_z_reff)-1):
-    for j in range(0,len(bins_d_reff)-1):
-        spar = bin_z_centres[i]
-        sperp = bin_d_centres[j]
-        profile_2d[i,j] = z_space_profile(spar,sperp,lambda r: rho_real(r,A),
-                                          z,Om,Delta_func,delta_func,
-                                          Om_fid=0.3111,f=f)
-
 # Test plot:
-plot_los_void_stack(\
-        profile_2d,bin_d_centres,bin_z_centres,
-        contour_list=[0.05,0.1],Rvals = [1,2],cmap='Blues',
-        vmin=0,vmax=0.015,fontsize=10,
-        xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
-        ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
-        density_unit='probability',
-        savename=figuresFolder + "profile_2d_test.pdf",
-        title=None,colorbar=True,shrink=0.9,
-        colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})$")
-
-plot_los_void_stack(\
-        profile_2d/field_borg,bin_d_centres,bin_z_centres,
-        contour_list=[0.05,0.1],Rvals = [1,2],cmap='PuOr_r',
-        vmin=0,vmax=200,fontsize=10,norm=colors.LogNorm(vmin=1e-2,vmax=1e2),
-        xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
-        ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
-        density_unit='probability',
-        savename=figuresFolder + "profile_2d_test_diff.pdf",
-        title=None,colorbar=True,shrink=0.9,
-        colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})" + \
-        "/\\tilde{\\rho}(s_{\\parallel},s_{\\perp})$")
-
 plot_los_void_stack(\
         field_lcdm,bin_d_centres,bin_z_centres,
         contour_list=[0.05,0.1],Rvals = [1,2],cmap='Blues',
@@ -1006,19 +973,6 @@ plot_los_void_stack(\
         savename=figuresFolder + "profile_2d_test_data_borg.pdf",
         title=None,colorbar=True,shrink=0.9,
         colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})$")
-
-
-plot_los_void_stack(\
-        profile_2d,bin_d_centres,bin_z_centres,
-        contour_list=[0.05,0.1],Rvals = [1,2],cmap='Blues',
-        vmin=0,vmax=0.015,fontsize=10,
-        xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
-        ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
-        density_unit='probability',
-        savename=figuresFolder + "profile_2d_theory_borg.pdf",
-        title=None,colorbar=True,shrink=0.9,
-        colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})$")
-
 
 
 # Inference:
@@ -1108,8 +1062,39 @@ cholesky_cov = scipy.linalg.cholesky(reg_cov,lower=True)
 inv_cov = get_inverse_covariance(norm_cov,lambda_reg = 1e-10)
 eigen = np.real(np.linalg.eig(norm_cov)[0])
 
+# Jackknife over all voids:
+
+def range_excluding(kmin,kmax,exclude):
+    return np.setdiff1d(range(kmin,kmax),exclude)
+
+num_voids = stacked_fields.shape[1]
+
+jackknife_samples_all = np.array([np.average(
+    stacked_fields[:,range_excluding(0,num_voids,k)],axis=1,
+    weights=stacked_weights[range_excluding(0,num_voids,k)]) 
+    for k in range(0,num_voids)]).T
+jackknife_cov = np.cov(jackknife_samples)
+jackknife_mean = np.mean(jackknife_samples,1)
+norm_cov = jackknife_cov/np.outer(jackknife_mean,jackknife_mean)
+reg_norm_cov = regularise_covariance(norm_cov,lambda_reg= 1e-10)
 
 
+# Bootstrap over all voids:
+n_boot = 10000
+np.random.seed(42)
+bootstrap_samples = np.random.choice(num_voids,size=(num_voids,n_boot))
+bootstrap_stacks = np.array([np.average(
+    stacked_fields[:,bootstrap_samples[:,k]],
+    axis=1,weights=stacked_weights[bootstrap_samples[:,k]]) 
+    for k in tools.progressbar(range(0,n_boot))]).T
+jackknife_cov = np.cov(bootstrap_stacks)
+jackknife_mean = np.mean(bootstrap_stacks,1)
+norm_cov = jackknife_cov/np.outer(jackknife_mean,jackknife_mean)
+reg_norm_cov = regularise_covariance(norm_cov,lambda_reg= 1e-10)
+reg_cov = regularise_covariance(jackknife_cov,lambda_reg= 1e-12)
+cholesky_cov = scipy.linalg.cholesky(reg_cov,lower=True)
+
+inv_cov = get_inverse_covariance(norm_cov,lambda_reg = 1e-10)
 
 
 plt.clf()
@@ -1172,6 +1157,7 @@ filename = data_folder + "inference_weighted.h5"
 backend = emcee.backends.HDFBackend(filename)
 backend.reset(nwalkers, ndims)
 parallel = False
+data_filter = np.where(np.sqrt(np.sum(scoords**2,1)) < 1.5)[0]
 
 if parallel:
     with Pool() as pool:
@@ -1185,8 +1171,8 @@ else:
     sampler = emcee.EnsembleSampler(
         nwalkers, ndims, log_probability_aptest, 
         args=(data_field,scoords,cholesky_cov,z,Delta_func,delta_func,rho_real),
-        kwargs={'Om_fid':0.3111,'cholesky':True,'tabulate_inverse':True},
-        backend=backend)
+        kwargs={'Om_fid':0.3111,'cholesky':True,'tabulate_inverse':True,
+        'data_filter':data_filter},backend=backend)
     sampler.run_mcmc(initial,n_mcmc , progress=True)
 
 # Filter the MCMC samples to account for correlation:
@@ -1201,9 +1187,11 @@ flat_samples = sampler.get_chain(discard=int(3*tau_max),
 # Fix the amplitude, and plot the likelihood:
 
 args = (data_field,scoords,cholesky_cov,z,Delta_func,delta_func,rho_real)
-data_filter = np.where(1.0/np.sqrt(np.diag(normalised_cov)) > 0.5)[0]
+#data_filter = np.where(1.0/np.sqrt(np.diag(normalised_cov)) > 0.5)[0]
+data_filter = np.where(np.sqrt(np.sum(scoords**2,1)) < 1.5)[0]
 #kwargs={'Om_fid':0.3111,'data_filter':data_filter}
-kwargs={'Om_fid':0.3111,'cholesky':True,'tabulate_invers':True}
+kwargs={'Om_fid':0.3111,'cholesky':True,'tabulate_invers':True,
+    'data_filter':data_filter}
 nll = lambda *theta: -log_likelihood_aptest(*theta,*args,**kwargs)
 soln = scipy.optimize.minimize(nll, theta_initial_guess,
     bounds=[(0.1,0.5),(0,1.0),(None,None)])
@@ -1212,24 +1200,96 @@ soln = scipy.optimize.minimize(nll, theta_initial_guess,
 
 Om_range = np.linspace(0.1,0.5,41)
 f_range = np.linspace(0,1,41)
+f_range_centres = plot.binCentres(f_range)
+Om_range_centres = plot.binCentres(Om_range)
 
 log_like_ap = np.zeros((40,40))
 A = soln.x[2]
-for i in tools.progressbar(range(0,len(Om_range)-1)):
-    for j in range(0,len(f_range)-1):
-        theta = np.array([Om_range[i],f_range[j],A])
+for i in tools.progressbar(range(0,len(Om_range_centres))):
+    for j in range(0,len(f_range_centres)):
+        theta = np.array([Om_range_centres[i],f_range_centres[j],A])
         log_like_ap[i,j] = log_likelihood_aptest(theta,*args,**kwargs)
 
 plt.clf()
-plt.imshow(-log_like_ap,
+plt.imshow(-log_like_ap.T,
            extent=(Om_range[0],Om_range[-1],f_range[0],f_range[-1]),
-           norm=colors.LogNorm(vmin=1e13,vmax=1e14),cmap='Blues',
-           aspect='equal')
+           norm=colors.LogNorm(vmin=4.5e15,vmax=5.5e15),cmap='Blues',
+           aspect='equal',origin='lower')
 plt.xlabel('$\Omega_m$')
 plt.ylabel('$f$')
 plt.colorbar(label='Negative Log Likelihood')
 plt.savefig(figuresFolder + "likelihood_test_plot.pdf")
 plt.show()
+
+plt.clf()
+plt.plot(f_range_centres,log_like_ap[20,:])
+plt.xlabel('f')
+plt.ylabel('Log Likelihood')
+plt.savefig(figuresFolder + "nll_plot_f.pdf")
+plt.show()
+
+
+Om = soln.x[0]
+f = soln.x[1]
+A = soln.x[2]
+
+for i in range(0,len(bins_z_reff)-1):
+    for j in range(0,len(bins_d_reff)-1):
+        spar = bin_z_centres[i]
+        sperp = bin_d_centres[j]
+        profile_2d[i,j] = z_space_profile(spar,sperp,lambda r: rho_real(r,A),
+                                          z,Om,Delta_func,delta_func,
+                                          Om_fid=0.3111,f=f)
+
+plot_los_void_stack(\
+        profile_2d,bin_d_centres,bin_z_centres,
+        contour_list=[0.05,0.1],Rvals = [1,2],cmap='Blues',
+        vmin=0,vmax=0.015,fontsize=10,
+        xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
+        ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
+        density_unit='probability',
+        savename=figuresFolder + "profile_2d_test.pdf",
+        title=None,colorbar=True,shrink=0.9,
+        colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})$")
+
+plot_los_void_stack(\
+        profile_2d/field_borg,bin_d_centres,bin_z_centres,
+        contour_list=[0.05,0.1],Rvals = [1,2],cmap='PuOr_r',
+        vmin=0,vmax=200,fontsize=10,norm=colors.LogNorm(vmin=1e-2,vmax=1e2),
+        xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
+        ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
+        density_unit='probability',
+        savename=figuresFolder + "profile_2d_test_diff.pdf",
+        title=None,colorbar=True,shrink=0.9,
+        colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})" + \
+        "/\\tilde{\\rho}(s_{\\parallel},s_{\\perp})$")
+
+
+plot_los_void_stack(\
+        profile_2d - field_borg,bin_d_centres,bin_z_centres,
+        contour_list=[0.05,0.1],Rvals = [1,2],cmap='PuOr_r',
+        vmin=0,vmax=200,fontsize=10,norm=colors.Normalize(vmin=-3e-3,vmax=3e-3),
+        xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
+        ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
+        density_unit='probability',
+        savename=figuresFolder + "profile_2d_test_diff_abs.pdf",
+        title=None,colorbar=True,shrink=0.9,
+        colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})" + \
+        " - \\tilde{\\rho}(s_{\\parallel},s_{\\perp})$")
+
+
+
+plot_los_void_stack(\
+        profile_2d,bin_d_centres,bin_z_centres,
+        contour_list=[0.05,0.1],Rvals = [1,2],cmap='Blues',
+        vmin=0,vmax=0.015,fontsize=10,
+        xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
+        ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
+        density_unit='probability',
+        savename=figuresFolder + "profile_2d_theory_borg.pdf",
+        title=None,colorbar=True,shrink=0.9,
+        colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})$")
+
 
 
 
