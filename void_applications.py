@@ -1185,37 +1185,48 @@ if test:
     average_time = (t1 - t0)/100
 
 # Run the inference:
+theta_ranges=[[0.1,0.5],[0,1.0],[-np.inf,np.inf]]
+theta_ranges_epsilon=[[0.9,1.10],[0,1.0],[-np.inf,np.inf]]
 redo_chain = False
 continue_chain = False
 import emcee
 import h5py
 nwalkers = 64
 ndims = 3
-n_mcmc = 5000
+n_mcmc = 10000
 disp = 1e-4
-initial = theta_initial_guess + disp*np.random.randn(nwalkers,ndims)
+Om_fid = 0.3111
+eps_initial_guess = [1.0,f_lcdm(z,Om_fid),0.01]
+initial = eps_initial_guess + disp*np.random.randn(nwalkers,ndims)
 filename = data_folder + "inference_weighted.h5"
 backend = emcee.backends.HDFBackend(filename)
 if redo_chain:
     backend.reset(nwalkers, ndims)
 
 parallel = False
-data_filter = np.where(np.sqrt(np.sum(scoords**2,1)) < 1.5)[0]
+#data_filter = np.where(np.sqrt(np.sum(scoords**2,1)) < 1.5)[0]
 
 if parallel:
     with Pool() as pool:
         sampler = emcee.EnsembleSampler(
             nwalkers, ndims, log_probability_aptest_parallel, 
             args=(z,),
-            kwargs={'Om_fid':0.3111,'cholesky':True,'tabulate_inverse':True},
+            kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
+                    'sample_epsilon':True},
             backend=backend,pool=pool)
         sampler.run_mcmc(initial,n_mcmc , progress=True)
 else:
+    data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
+        (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
+    reg_cov_filtered = reg_cov[data_filter,:][:,data_filter]
+    cholesky_cov_filtered = scipy.linalg.cholesky(reg_cov_filtered,lower=True)
     sampler = emcee.EnsembleSampler(
         nwalkers, ndims, log_probability_aptest, 
-        args=(data_field,scoords,cholesky_cov,z,Delta_func,delta_func,rho_real),
-        kwargs={'Om_fid':0.3111,'cholesky':True,'tabulate_inverse':True,
-        'data_filter':data_filter},backend=backend)
+        args=(data_field[data_filter],scoords[data_filter,:],
+              cholesky_cov_filtered,z,Delta_func,delta_func,rho_real),
+        kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
+                'sample_epsilon':True,'theta_ranges':theta_ranges_epsilon},
+                backend=backend)
     sampler.run_mcmc(initial,n_mcmc , progress=True)
 
 # Filter the MCMC samples to account for correlation:
@@ -1243,7 +1254,7 @@ A_opt = sol_A.x
 
 # Fix the amplitude, and plot the likelihood:
 data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
-    (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
+        (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
 reg_cov_filtered = reg_cov[data_filter,:][:,data_filter]
 cholesky_cov_filtered = scipy.linalg.cholesky(reg_cov_filtered,lower=True)
 args = (data_field[data_filter],scoords[data_filter,:],cholesky_cov_filtered,
