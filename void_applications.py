@@ -497,16 +497,10 @@ def iterative_zspace_inverse(s_par,f,Delta,N_max):
 # Transformation to real space, from redshift space, including geometric
 # distortions from a wrong-cosmology:
 def to_real_space(s_par,s_perp,z,Om,Om_fid=None,Delta=None,u_par=None,f=None,
-                  N_max = 5,atol=1e-5,rtol=1e-5,epsilon=None,F_inv=None,
+                  N_max = 5,atol=1e-5,rtol=1e-5,F_inv=None,
                   **kwargs):
     # Perpendicular distance is easy:
     r_perp = s_perp
-    # Get the AP parameter:
-    if epsilon is None:
-        if (Om_fid is not None):
-            epsilon = ap_parameter(z,Om,Om_fid,**kwargs)
-        else:
-            epsilon = 1.0
     # Get the parallel distance:
     if u_par is None:
         # Assume linear relationship:
@@ -535,12 +529,38 @@ def to_real_space(s_par,s_perp,z,Om,Om_fid=None,Delta=None,u_par=None,f=None,
         # Hubble rate:
         hz = Hz(z,Om,**kwargs)
         r_par = (s_par - (1.0 + z)*u_par/hz)
-    return [r_par/epsilon,r_perp]
+    return [r_par,r_perp]
+
+# Correct the geometry to account for miss-specified cosmology:
+def geometry_correction(s_par,s_perp,epsilon,**kwargs):
+    if epsilon is None:
+        epsilon = 1.0
+    s = np.sqrt(s_par**2 + s_perp**2)
+    mus = s_par/s
+    # Distance correction, accounting for change in void size:
+    s_factor = np.sqrt(1.0 + epsilon**2*(1.0/mus**2 - 1.0))
+    s_new = s*mus*epsilon**(-2.0/3.0)*s_factor
+    # Angle correction:
+    mus_new = np.sign(mus)/s_factor
+    # New co-ordinates:
+    s_par_new = mus_new*s_new
+    s_perp_new = np.sign(s_perp)*s_new*np.sqrt(1.0 - mus_new**2)
+    return s_par_new, s_perp_new
 
 # Profile in redshift space:
-def z_space_profile(s_par,s_perp,rho_real,z,Om,Delta,delta,**kwargs):
+def z_space_profile(s_par,s_perp,rho_real,z,Om,Delta,delta,Om_fid = 0.3111,
+                    epsilon=None,apply_geometry=False,**kwargs):
+    # Apply geometric correction:
+    if apply_geometry:
+        if epsilon is None:
+            epsilon = ap_parameter(z,Om,Om_fid,**kwargs)
+        s_par_new, s_perp_new = geometry_correction(s_par,s_perp,epsilon)
+    else:
+        s_par_new = s_par
+        s_perp_new = s_perp
     # Get real-space co-ordinates:
-    [r_par,r_perp] = to_real_space(s_par,s_perp,z,Om,Delta=Delta,**kwargs)
+    [r_par,r_perp] = to_real_space(s_par_new,s_perp_new,z,Om,Delta=Delta,
+                                   **kwargs)
     # Get Jacobian from the transformation:
     jacobian = z_space_jacobian(z,Delta,delta,r_par,r_perp,Om,**kwargs)
     # Compute distance from centre of the void:
@@ -571,22 +591,32 @@ def profile_jackknife_covariance(data,profile_function,**kwargs):
 def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
                           z,Delta,delta,rho_real,data_filter=None,
                           cholesky=False,normalised=False,tabulate_inverse=True,
-                          ntab = 10,**kwargs):
-    if data_filter is None:
-        data_filter = range(0,len(data_field))
-    s_par = scoords[data_filter,0]
-    s_perp = scoords[data_filter,1]
-    Om, f , A = theta
+                          ntab = 10,sample_epsilon=False,Om_fid=None,**kwargs):
+    s_par = scoords[:,0]
+    s_perp = scoords[:,1]
+    if sample_epsilon:
+        epsilon, f, A = theta
+        if Om_fid is not None:
+            Om = Om_fid
+        else:
+            Om = 0.3
+    else:
+        Om, f , A = theta
+        if Om_fid is not None:
+            epsilon = ap_parameter(z,Om,Om_fid,**kwargs)
+        else:
+            epsilon = 1.0
     M = len(s_par)
     delta_rho = np.zeros(s_par.shape)
-    inv_cov_filtered = inv_cov[data_filter,:][:,data_filter]
+    # Apply geometric correction to account for miss-specified cosmology:
+    s_par_new, s_perp_new = geometry_correction(s_par,s_perp,epsilon)
     # Evaluate the profile for the supplied value of the parameters:
     if tabulate_inverse:
         # Tabulate an inverse function and then evaluate an interpolated
         # inverse, rather than repeatedly inverting:
-        data_val = data_field[data_filter]
-        svals = np.linspace(np.min(s_par),np.max(s_par),ntab)
-        rperp_vals = np.linspace(np.min(s_perp),np.max(s_perp),ntab)
+        data_val = data_field
+        svals = np.linspace(np.min(s_par_new),np.max(s_par_new),ntab)
+        rperp_vals = np.linspace(np.min(s_perp_new),np.max(s_perp_new),ntab)
         rvals = np.zeros((ntab,ntab))
         for i in range(0,ntab):
             for j in range(0,ntab):
@@ -597,17 +627,18 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
         F_inv = lambda x, y: scipy.interpolate.interpn((rperp_vals,svals),rvals,
                                                        np.vstack((x,y)).T,
                                                        method='cubic')
-        theory_val = z_space_profile(s_par,s_perp,
+        theory_val = z_space_profile(s_par_new,s_perp_new,
                                      lambda r: rho_real(r,A),z,Om,Delta,
-                                     delta,f=f,F_inv=F_inv,**kwargs)
+                                     delta,f=f,F_inv=F_inv,
+                                     **kwargs)
         if normalised:
             delta_rho = 1.0 - theory_val/data_val
         else:
             delta_rho = data_val - theory_val
     else:
         for k in range(0,M):
-            data_val = data_field[data_filter[k]]
-            theory_val = z_space_profile(s_par[k],s_perp[k],
+            data_val = data_field[k]
+            theory_val = z_space_profile(s_par_new[k],s_perp_new[k],
                                          lambda r: rho_real(r,A),z,Om,Delta,
                                          delta,f=f,**kwargs)
             if normalised:
@@ -618,10 +649,11 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
         # We assume that the covariance is given in it's lower triangular form,
         # rather than an explicit covariance. We then solve this rather than
         # actually computing 
-        x = scipy.linalg.cho_solve((inv_cov_filtered,True),delta_rho)
-        return -0.5*np.sum(x**2)
+        x = scipy.linalg.cho_solve((inv_cov,True),delta_rho)
+        return -0.5*np.sum(x**2)  - (M/2)*np.log(2*np.pi) - \
+             np.sum(np.log(np.diag(inv_cov)))
     else:
-        return -0.5*np.matmul(np.matmul(delta_rho,inv_cov_filtered),delta_rho.T)
+        return -0.5*np.matmul(np.matmul(delta_rho,inv_cov),delta_rho.T)
 
 # Likelihood function, parallelised. Requires global variables!:
 def log_likelihood_aptest_parallel(theta,z,**kwargs):
@@ -788,17 +820,17 @@ stacked_1d_real_borg = np.sqrt(np.sum(stacked_particles_reff_borg_real**2,1))
 def get_weights_for_stack(los_pos,void_radii,additional_weights = None,
                           stacked = True):
     if additional_weights is None:
-        v_weight = [[rad**3*np.ones(len(los)) 
+        v_weight = [[(1.0/rad)**3*np.ones(len(los)) 
                     for los, rad in zip(all_los,all_radii)] 
                     for all_los, all_radii in zip(los_pos,void_radii)]
     else:
         if type(additional_weights) == list:
-            v_weight = [[rad**3*np.ones(len(los))*weight 
+            v_weight = [[(1.0/rad)**3*np.ones(len(los))*weight 
                     for los, rad, weight in zip(all_los,all_radii,all_weights)] 
                     for all_los, all_radii, all_weights,
                     in zip(los_pos,void_radii,additional_weights)]
         else:
-            v_weight = [[rad**3*np.ones(len(los))*weight 
+            v_weight = [[(1.0/rad)**3*np.ones(len(los))*weight 
                     for los, rad, weight 
                     in zip(all_los,all_radii,additional_weights)]
                     for all_los, all_radii
@@ -825,30 +857,34 @@ los_pos_borg = [ [los[x] for x in np.where(ind)[0]]
 rep_scores = void_cat_frac = cat300.property_with_filter(
     cat300.finalCatFrac,void_filter=True)
 
+all_rep_scores = np.hstack([rep_scores[used] for used in voids_used_borg])
 v_weight_borg = get_weights_for_stack(
-    los_pos_borg,[void_radii_borg for rad in antihaloRadii],
-    additional_weights = rep_scores/np.sum(rep_scores))
+    los_pos_borg,[void_radii_borg[used] for used in voids_used_borg],
+    additional_weights = [rep_scores[used]/np.sum(all_rep_scores) 
+    for used in voids_used_borg])
 v_weight_lcdm = get_weights_for_stack(los_pos_lcdm,void_radii_lcdm)
 
-def get_field_from_los_data(los_data,z_bins,d_bins,v_weight):
+def get_field_from_los_data(los_data,z_bins,d_bins,v_weight,void_count):
     cell_volumes_reff = np.outer(np.diff(z_bins),np.diff(d_bins))
     hist = np.histogramdd(los_data,bins=[z_bins,d_bins],density=False,
-                          weights = 1.0/(2*np.pi*v_weight*los_data[:,1]))
-    count = len(los_data)
-    return hist[0]/(2*count*cell_volumes_reff)
+                          weights = v_weight/(2*np.pi*los_data[:,1]))
+    return hist[0]/(2*void_count*cell_volumes_reff)
 
 # Fields:
+num_voids_lcdm = np.sum([np.sum(x) for x in voids_used_lcdm]) 
 cell_volumes_reff = np.outer(np.diff(bins_z_reff),np.diff(bins_d_reff))
 field_lcdm = get_field_from_los_data(stacked_particles_reff_lcdm_abs,
-                                     bins_z_reff,bins_d_reff,v_weight_lcdm)
+                                     bins_z_reff,bins_d_reff,v_weight_lcdm,
+                                     num_voids_lcdm)
 
-num_voids_borg = np.sum([np.sum(x) for x in voids_used_borg]) # Not the actual number
+num_voids_sample_borg = np.array([np.sum(x) for x in voids_used_borg])
+num_voids_borg = np.sum(num_voids_sample_borg) # Not the actual number
     # but the effective number being stacked, so the number of voids multiplied
     # by the number of samples.
 nmean = len(snapList[0])/(boxsize**3)
 
 field_borg = get_field_from_los_data(stacked_particles_reff_borg_abs,
-                                     bins_z_reff,bins_d_reff,v_weight_borg)
+                                     bins_z_reff,bins_d_reff,v_weight_borg,1)
 
 # Get the matter density fields:
 # Better, just load them directly from the pre-computed profiles:
@@ -948,15 +984,15 @@ A = 0.013
 
 
 def rho_real(r,A):
-    return A*rho_func(r)/rho_func(0)
+    return A*rho_func_borg(r)/rho_func_borg(0)
 
 # Test plot:
 plot_los_void_stack(\
         field_lcdm,bin_d_centres,bin_z_centres,
-        contour_list=[0.05,0.1],Rvals = [1,2],cmap='Blues',
-        vmin=0,vmax=1e-4,fontsize=10,
-        xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
-        ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
+        cmap='Blues',
+        vmin=0,vmax=1e-1,fontsize=10,
+        xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$ (Perpendicular distance)',
+        ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$ (LOS distance)',
         density_unit='probability',
         savename=figuresFolder + "profile_2d_test_data_lcdm.pdf",
         title=None,colorbar=True,shrink=0.9,
@@ -965,10 +1001,11 @@ plot_los_void_stack(\
 
 plot_los_void_stack(\
         field_borg,bin_d_centres,bin_z_centres,
-        contour_list=[0.05,0.1],Rvals = [1,2],cmap='Blues',
-        vmin=0,vmax=0.015,fontsize=10,
-        xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
-        ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
+        cmap='Blues',
+        vmin=0,vmax=0.1,fontsize=10,
+        xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$ (Perpendicular distance)',
+        ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$ (LOS distance)',
+        fontfamily='serif',
         density_unit='probability',
         savename=figuresFolder + "profile_2d_test_data_borg.pdf",
         title=None,colorbar=True,shrink=0.9,
@@ -986,13 +1023,14 @@ los_list_reff_borg = get_2d_void_stack_from_los_pos(
 
 
 v_weights_all_borg = get_weights_for_stack(
-    los_pos_borg,[void_radii_borg for rad in antihaloRadii],stacked=False,
-    additional_weights = rep_scores/np.sum(rep_scores))
+    los_pos_borg,[void_radii_borg[used] for used in voids_used_borg],
+    additional_weights = [rep_scores[used]/np.sum(all_rep_scores) 
+    for used in voids_used_borg],stacked=False)
 
 
 
 all_fields_borg = [[
-    get_field_from_los_data(los,bins_z_reff,bins_d_reff,v_weight) 
+    get_field_from_los_data(los,bins_z_reff,bins_d_reff,v_weight,1) 
     for los, v_weight in zip(los_vals,v_weights)] 
     for los_vals, v_weights in zip(los_list_reff_borg,v_weights_all_borg)]
 
@@ -1045,8 +1083,9 @@ def get_inverse_covariance(cov,lambda_reg=1e-10):
 los_list_sample_borg = [np.vstack(los) for los in los_list_reff_borg]
 v_weights_sample_borg = [np.hstack(weights) for weights in v_weights_all_borg]
 sample_fields_borg = np.array([
-    get_field_from_los_data(los,bins_z_reff,bins_d_reff,v_weight) 
-    for los, v_weight in zip(los_list_sample_borg,v_weights_sample_borg)])
+    get_field_from_los_data(los,bins_z_reff,bins_d_reff,v_weight,1) 
+    for los, v_weight, count in zip(los_list_sample_borg,v_weights_sample_borg,
+    num_voids_sample_borg)])
 
 jackknife_samples = np.array([np.mean(sample_fields_borg[
     np.setdiff1d(range(0,sample_fields_borg.shape[0]),k),:,:],0).flatten() 
@@ -1099,7 +1138,7 @@ inv_cov = get_inverse_covariance(norm_cov,lambda_reg = 1e-10)
 
 plt.clf()
 C_diag = np.diag(reg_norm_cov).reshape((40,40))
-plt.imshow(np.sqrt(1.0/C_diag),cmap='PuOr_r',norm=colors.LogNorm(vmin=1e-3,vmax=1e3),
+plt.imshow(np.sqrt(1.0/C_diag),cmap='PuOr_r',norm=colors.LogNorm(vmin=1/50,vmax=50),
            extent=(0,upper_dist_reff,0,upper_dist_reff),origin='lower')
 plt.xlabel('$s_{\\mathrm{\\perp}}/R_{\\mathrm{eff}}$')
 plt.ylabel('$s_{\\mathrm{\\parallel}}/R_{\\mathrm{eff}}$')
@@ -1146,6 +1185,8 @@ if test:
     average_time = (t1 - t0)/100
 
 # Run the inference:
+redo_chain = False
+continue_chain = False
 import emcee
 import h5py
 nwalkers = 64
@@ -1155,7 +1196,9 @@ disp = 1e-4
 initial = theta_initial_guess + disp*np.random.randn(nwalkers,ndims)
 filename = data_folder + "inference_weighted.h5"
 backend = emcee.backends.HDFBackend(filename)
-backend.reset(nwalkers, ndims)
+if redo_chain:
+    backend.reset(nwalkers, ndims)
+
 parallel = False
 data_filter = np.where(np.sqrt(np.sum(scoords**2,1)) < 1.5)[0]
 
@@ -1181,52 +1224,137 @@ tau_max = np.max(tau)
 flat_samples = sampler.get_chain(discard=int(3*tau_max), 
                                  thin=int(tau_max/2), flat=True)
 
+import corner
 
+plt.clf()
+fig = corner.corner(flat_samples, labels=["$\\Omega_{m}$","$f$","A"])
+fig.suptitle("$\\Lambda$-CDM Inference from Void Catalogue")
+plt.savefig(figuresFolder + "corner_plot_cosmo_inference.pdf")
+plt.show()
 
+# Optimal A:
+args2 = (data_field,scoords,np.identity(1600),z,Delta_func,delta_func,rho_real)
+kwargs2={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
+    'data_filter':data_filter,'sample_epsilon':False,'normalised':True}
+sol_A = scipy.optimize.minimize_scalar(
+    lambda A: -log_likelihood_aptest(np.array([Om_fid,f_lcdm(z,Om_fid),A]),
+    *args2,**kwargs2))
+A_opt = sol_A.x
 
 # Fix the amplitude, and plot the likelihood:
-
-args = (data_field,scoords,cholesky_cov,z,Delta_func,delta_func,rho_real)
-#data_filter = np.where(1.0/np.sqrt(np.diag(normalised_cov)) > 0.5)[0]
-data_filter = np.where(np.sqrt(np.sum(scoords**2,1)) < 1.5)[0]
+data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
+    (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
+reg_cov_filtered = reg_cov[data_filter,:][:,data_filter]
+cholesky_cov_filtered = scipy.linalg.cholesky(reg_cov_filtered,lower=True)
+args = (data_field[data_filter],scoords[data_filter,:],cholesky_cov_filtered,
+        z,Delta_func,delta_func,rho_real)
+#data_filter = np.where(np.sqrt(np.sum(scoords**2,1)) < 2.0)[0]
 #kwargs={'Om_fid':0.3111,'data_filter':data_filter}
-kwargs={'Om_fid':0.3111,'cholesky':True,'tabulate_invers':True,
-    'data_filter':data_filter}
+Om_fid = 0.3111
+kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
+    'sample_epsilon':True}
+eps_initial_guess = [1.0,f_lcdm(z,Om_fid),0.01]
 nll = lambda *theta: -log_likelihood_aptest(*theta,*args,**kwargs)
-soln = scipy.optimize.minimize(nll, theta_initial_guess,
-    bounds=[(0.1,0.5),(0,1.0),(None,None)])
-
+#nll = lambda *theta: -log_likelihood_aptest(np.hstack([*theta,A_opt]),
+#                                            *args,**kwargs)
+soln = scipy.optimize.minimize(nll, eps_initial_guess,
+    bounds=[(0.98,1.02),(0,1.0),(None,None)])
+#soln = scipy.optimize.minimize(nll, theta_initial_guess,
+#    bounds=[(0.1,0.5),(0,1.0),(None,None)])
+theta_initial_guess2 = np.array([Om_fid,f_lcdm(z,Om_fid)])
+#soln = scipy.optimize.minimize(nll, theta_initial_guess2,
+#    bounds=[(0.1,0.5),(0,1.0)])
+#soln = scipy.optimize.minimize(nll, eps_initial_guess,
+#    bounds=[(0.9,1.1),(0,1.0)])
 
 
 Om_range = np.linspace(0.1,0.5,41)
 f_range = np.linspace(0,1,41)
 f_range_centres = plot.binCentres(f_range)
 Om_range_centres = plot.binCentres(Om_range)
+eps_range = np.linspace(0.9,1.1,41)
 
 log_like_ap = np.zeros((40,40))
 A = soln.x[2]
+#A = A_opt
 for i in tools.progressbar(range(0,len(Om_range_centres))):
     for j in range(0,len(f_range_centres)):
-        theta = np.array([Om_range_centres[i],f_range_centres[j],A])
+        if kwargs['sample_epsilon']:
+            theta = np.array([eps_range[i],f_range_centres[j],A])
+        else:
+            theta = np.array([Om_range_centres[i],f_range_centres[j],A])
         log_like_ap[i,j] = log_likelihood_aptest(theta,*args,**kwargs)
 
-plt.clf()
-plt.imshow(-log_like_ap.T,
-           extent=(Om_range[0],Om_range[-1],f_range[0],f_range[-1]),
-           norm=colors.LogNorm(vmin=4.5e15,vmax=5.5e15),cmap='Blues',
-           aspect='equal',origin='lower')
-plt.xlabel('$\Omega_m$')
-plt.ylabel('$f$')
-plt.colorbar(label='Negative Log Likelihood')
-plt.savefig(figuresFolder + "likelihood_test_plot.pdf")
-plt.show()
+
+if kwargs['sample_epsilon']:
+    plt.clf()
+    plt.imshow(-log_like_ap.T,
+               extent=(eps_range[0],eps_range[-1],f_range[0],f_range[-1]),
+               norm=colors.LogNorm(vmin=1e20,vmax=5e20),cmap='Blues',
+               aspect='auto',origin='lower')
+    plt.xlabel('$\\epsilon$')
+    plt.ylabel('$f$')
+    plt.colorbar(label='Negative Log Likelihood')
+    plt.savefig(figuresFolder + "likelihood_test_plot_eps.pdf")
+    plt.show()
+else:
+    plt.clf()
+    plt.imshow(-log_like_ap.T,
+               extent=(Om_range[0],Om_range[-1],f_range[0],f_range[-1]),
+               norm=colors.LogNorm(vmin=1e21,vmax=3e22),cmap='Blues',
+               aspect='auto',origin='lower')
+    plt.xlabel('$\Omega_m$')
+    plt.ylabel('$f$')
+    plt.colorbar(label='Negative Log Likelihood')
+    plt.savefig(figuresFolder + "likelihood_test_plot.pdf")
+    plt.show()
 
 plt.clf()
 plt.plot(f_range_centres,log_like_ap[20,:])
 plt.xlabel('f')
 plt.ylabel('Log Likelihood')
+plt.title("Likelihood at $\\epsilon = " + ("%.2g" % eps_range[20]) + "$")
 plt.savefig(figuresFolder + "nll_plot_f.pdf")
 plt.show()
+
+
+plt.clf()
+plt.plot(eps_range[0:-1],log_like_ap[:,20])
+plt.axvline(ap_parameter(z,0.0,Om_fid),linestyle=':',color='k',
+    label='$\\Omega_m=0$')
+plt.axvline(ap_parameter(z,1.0,Om_fid),linestyle='--',color='k',
+    label='$\\Omega_m=1.0$')
+plt.xlabel('$\\epsilon$')
+plt.ylabel('Log Likelihood')
+plt.title("Likelihood at $f = " + ("%.2g" % f_range_centres[20]) + "$")
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "nll_plot_eps.pdf")
+plt.show()
+
+
+
+# Range of A values:
+Om = 0.3111
+f = f_lcdm(z,Om)
+Arange = np.logspace(-5,1,101)
+log_like_ap = np.zeros(Arange.shape)
+log_like_ap2 = np.zeros(Arange.shape)
+
+for i in tools.progressbar(range(0,len(Arange))):
+    theta = np.array([Om,f,Arange[i]])
+    log_like_ap[i] = log_likelihood_aptest(theta,*args,**kwargs)
+    #log_like_ap2[i] = log_likelihood_aptest(theta,*args2,**kwargs2)
+
+plt.clf()
+plt.loglog(Arange,-log_like_ap,label='With Covariance')
+#plt.loglog(Arange,-log_like_ap2,label='Least Squares')
+plt.xlabel('A')
+plt.ylabel('Negative log likelihood')
+plt.title("Likelihood with $\\Omega_m = 0.3111, f = f_{\\mathrm{lcdm}}$")
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "A_likelihood_plot.pdf")
+plt.show()
+
 
 
 Om = soln.x[0]
@@ -1243,10 +1371,9 @@ for i in range(0,len(bins_z_reff)-1):
 
 plot_los_void_stack(\
         profile_2d,bin_d_centres,bin_z_centres,
-        contour_list=[0.05,0.1],Rvals = [1,2],cmap='Blues',
-        vmin=0,vmax=0.015,fontsize=10,
-        xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
-        ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
+        cmap='Blues',vmin=0,vmax=0.06,fontsize=10,
+        xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$ (Perpendicular distance)',
+        ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$ (LOS distance)',
         density_unit='probability',
         savename=figuresFolder + "profile_2d_test.pdf",
         title=None,colorbar=True,shrink=0.9,
@@ -1254,10 +1381,10 @@ plot_los_void_stack(\
 
 plot_los_void_stack(\
         profile_2d/field_borg,bin_d_centres,bin_z_centres,
-        contour_list=[0.05,0.1],Rvals = [1,2],cmap='PuOr_r',
+        cmap='PuOr_r',
         vmin=0,vmax=200,fontsize=10,norm=colors.LogNorm(vmin=1e-2,vmax=1e2),
-        xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
-        ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
+        xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$ (Perpendicular distance)',
+        ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$ (LOS distance)',
         density_unit='probability',
         savename=figuresFolder + "profile_2d_test_diff.pdf",
         title=None,colorbar=True,shrink=0.9,
@@ -1267,10 +1394,10 @@ plot_los_void_stack(\
 
 plot_los_void_stack(\
         profile_2d - field_borg,bin_d_centres,bin_z_centres,
-        contour_list=[0.05,0.1],Rvals = [1,2],cmap='PuOr_r',
+        cmap='PuOr_r',
         vmin=0,vmax=200,fontsize=10,norm=colors.Normalize(vmin=-3e-3,vmax=3e-3),
-        xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
-        ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
+        xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$ (Perpendicular distance)',
+        ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$ (LOS distance)',
         density_unit='probability',
         savename=figuresFolder + "profile_2d_test_diff_abs.pdf",
         title=None,colorbar=True,shrink=0.9,
@@ -1281,10 +1408,10 @@ plot_los_void_stack(\
 
 plot_los_void_stack(\
         profile_2d,bin_d_centres,bin_z_centres,
-        contour_list=[0.05,0.1],Rvals = [1,2],cmap='Blues',
-        vmin=0,vmax=0.015,fontsize=10,
-        xlabel = '$d/R_{\\mathrm{eff}}$ (Perpendicular distance)',
-        ylabel = '$z/R_{\\mathrm{eff}}$ (LOS distance)',fontfamily='serif',
+        cmap='Blues',
+        vmin=0,vmax=0.06,fontsize=10,
+        xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$ (Perpendicular distance)',
+        ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$ (LOS distance)',
         density_unit='probability',
         savename=figuresFolder + "profile_2d_theory_borg.pdf",
         title=None,colorbar=True,shrink=0.9,
