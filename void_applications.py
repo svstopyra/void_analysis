@@ -1188,7 +1188,7 @@ if test:
 theta_ranges=[[0.1,0.5],[0,1.0],[-np.inf,np.inf]]
 theta_ranges_epsilon=[[0.9,1.10],[0,1.0],[-np.inf,np.inf]]
 redo_chain = False
-continue_chain = False
+continue_chain = True
 import emcee
 import h5py
 nwalkers = 64
@@ -1196,6 +1196,7 @@ ndims = 3
 n_mcmc = 10000
 disp = 1e-4
 Om_fid = 0.3111
+max_n = 1000000
 eps_initial_guess = [1.0,f_lcdm(z,Om_fid),0.01]
 initial = eps_initial_guess + disp*np.random.randn(nwalkers,ndims)
 filename = data_folder + "inference_weighted.h5"
@@ -1204,6 +1205,8 @@ if redo_chain:
     backend.reset(nwalkers, ndims)
 
 parallel = False
+autocorr = np.zeros((3,int(max_n/100)))
+old_tau = np.inf
 #data_filter = np.where(np.sqrt(np.sum(scoords**2,1)) < 1.5)[0]
 
 if parallel:
@@ -1221,16 +1224,31 @@ else:
     reg_cov_filtered = reg_cov[data_filter,:][:,data_filter]
     cholesky_cov_filtered = scipy.linalg.cholesky(reg_cov_filtered,lower=True)
     sampler = emcee.EnsembleSampler(
-        nwalkers, ndims, log_probability_aptest, 
-        args=(data_field[data_filter],scoords[data_filter,:],
-              cholesky_cov_filtered,z,Delta_func,delta_func,rho_real),
-        kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
-                'sample_epsilon':True,'theta_ranges':theta_ranges_epsilon},
-                backend=backend)
-    sampler.run_mcmc(initial,n_mcmc , progress=True)
+            nwalkers, ndims, log_probability_aptest, 
+            args=(data_field[data_filter],scoords[data_filter,:],
+                  cholesky_cov_filtered,z,Delta_func,delta_func,rho_real),
+            kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
+                    'sample_epsilon':True,'theta_ranges':theta_ranges_epsilon},
+                    backend=backend)
+    if redo_chain:
+        sampler.run_mcmc(initial,n_mcmc , progress=True)
+    else:
+        for sample in sampler.sample(initial, iterations=max_n, progress=True):
+            # Only check convergence every 100 steps
+            if sampler.iteration % 100:
+                continue
+            tau = sampler.get_autocorr_time(tol=0)
+            autocorr[:,index] = tau
+            index += 1
+            # Check convergence
+            converged = np.all(tau * 100 < sampler.iteration)
+            converged &= np.all(np.abs(old_tau - tau) / tau < 0.01)
+            if converged:
+                break
+            old_tau = tau
 
 # Filter the MCMC samples to account for correlation:
-tau = sampler.get_autocorr_time()
+tau = sampler.get_autocorr_time(tol=0)
 tau_max = np.max(tau)
 flat_samples = sampler.get_chain(discard=int(3*tau_max), 
                                  thin=int(tau_max/2), flat=True)
