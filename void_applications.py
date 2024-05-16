@@ -1189,6 +1189,7 @@ theta_ranges=[[0.1,0.5],[0,1.0],[-np.inf,np.inf]]
 theta_ranges_epsilon=[[0.9,1.10],[0,1.0],[-np.inf,np.inf]]
 redo_chain = False
 continue_chain = True
+backup_start = True
 import emcee
 import h5py
 nwalkers = 64
@@ -1200,12 +1201,18 @@ max_n = 1000000
 eps_initial_guess = [1.0,f_lcdm(z,Om_fid),0.01]
 initial = eps_initial_guess + disp*np.random.randn(nwalkers,ndims)
 filename = data_folder + "inference_weighted.h5"
+filename_initial = data_folder + "inference_old_state.h5"
+if backup_start:
+    os.system("cp " + filename + " " + filename_initial)
 backend = emcee.backends.HDFBackend(filename)
 if redo_chain:
     backend.reset(nwalkers, ndims)
 
 parallel = False
-autocorr = np.zeros((3,int(max_n/100)))
+
+batch_size = 100
+n_batches = 100
+autocorr = np.zeros((3,n_batches*batch_size))
 old_tau = np.inf
 #data_filter = np.where(np.sqrt(np.sum(scoords**2,1)) < 1.5)[0]
 
@@ -1233,13 +1240,10 @@ else:
     if redo_chain:
         sampler.run_mcmc(initial,n_mcmc , progress=True)
     else:
-        for sample in sampler.sample(initial, iterations=max_n, progress=True):
-            # Only check convergence every 100 steps
-            if sampler.iteration % 100:
-                continue
+        for k in range(0,n_batches):
+            sampler.run_mcmc(None,batch_size,progress=True)
             tau = sampler.get_autocorr_time(tol=0)
-            autocorr[:,index] = tau
-            index += 1
+            autocorr[:,k] = tau
             # Check convergence
             converged = np.all(tau * 100 < sampler.iteration)
             converged &= np.all(np.abs(old_tau - tau) / tau < 0.01)
