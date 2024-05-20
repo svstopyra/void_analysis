@@ -653,6 +653,17 @@ def redshift_space_positions(snap,centre=None):
     return snapedit.wrap(
         (1.0 + (gamma*vr/r2).in_units("1.0"))[:,None]*r + centre,boxsize)
 
+# Convert to los co-ordinates:
+def get_los_pos(pos,los,boxsize):
+    los_unit = los/np.sqrt(np.sum(los**2))
+    pos_rel = snapedit.unwrap(pos - los,boxsize)
+    z = np.dot(pos_rel,los_unit)
+    d = np.sqrt(np.sum(pos_rel**2,1) - z**2)
+    return np.vstack((z,d)).T
+
+
+
+
 # Get the line of sight (los) co-ordinates of selected particles in a snapshot:
 def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres,radii,
         dist_max=20,rmin=10,rmax=20,all_particles=True,filter_list=None,

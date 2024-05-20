@@ -649,7 +649,7 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
         # We assume that the covariance is given in it's lower triangular form,
         # rather than an explicit covariance. We then solve this rather than
         # actually computing 
-        x = scipy.linalg.cho_solve((inv_cov,True),delta_rho)
+        x = scipy.linalg.solve_triangular(inv_cov,delta_rho,lower=True)
         return -0.5*np.sum(x**2)  - (M/2)*np.log(2*np.pi) - \
              np.sum(np.log(np.diag(inv_cov)))
     else:
@@ -749,6 +749,50 @@ los_list_void_only_lcdm_zspace = get_los_positions_for_all_catalogues(
     all_particles=False,filter_list=filter_list_lcdm,dist_max=60,rmin=10,
     rmax=20,recompute=False,zspace=True,recompute_zspace=False,
     suffix=".lospos_void_only_zspace.p")
+
+# Get LOS list for selection-effect-processed regions:
+[randCentres,randOverDen] = tools.loadOrRecompute(data_folder2 + \
+    "random_centres_and_densities.p")
+deltaMCMCList = tools.loadPickle(data_folder2 + "delta_list.p")
+from void_analysis.simulation_tools import get_map_from_sample
+deltaMAPBootstrap = scipy.stats.bootstrap(
+    (deltaMCMCList,),get_map_from_sample,confidence_level = 0.68,
+    vectorized=False,random_state=1000)
+deltaMAPInterval = deltaMAPBootstrap.confidence_interval
+comparableDensityMAP = [(delta <= deltaMAPInterval[1]) & \
+    (delta > deltaMAPInterval[0]) for delta in randOverDen]
+centresToUse = [randCentres[comp] for comp in comparableDensityMAP]
+deltaToUse = [randOverDen[ns][comp] \
+    for ns, comp in zip(range(0,len(snapList)),comparableDensityMAP)]
+rSep = 2*135
+indicesUnderdenseNonOverlapping = simulation_tools.getNonOverlappingCentres(
+    centresToUse,rSep,boxsize,returnIndices=True)
+centresUnderdenseNonOverlapping = [centres[ind] \
+    for centres,ind in zip(centresToUse,indicesUnderdenseNonOverlapping)]
+densityListUnderdenseNonOverlapping = [density[ind] \
+    for density, ind in zip(comparableDensityMAP,\
+    indicesUnderdenseNonOverlapping)]
+densityUnderdenseNonOverlapping = np.hstack(
+    densityListUnderdenseNonOverlapping)
+
+distances_from_centre_lcdm_selected = [[
+    np.sqrt(np.sum(snapedit.unwrap(centres - sphere_centre,boxsize)**2,1))
+    for sphere_centre in selected_regions]
+    for centres, selected_regions in zip(antihaloCentresUn,
+    centresUnderdenseNonOverlapping)]
+
+filter_list_lcdm_selected = [np.any(np.array([
+    (dist < 135) & (radii > 10) & (radii <= 20) 
+    for dist in all_dists]),0)
+    for all_dists, radii in 
+    zip(distances_from_centre_lcdm_selected,antihaloRadiiUn)]
+
+los_list_void_only_selected_lcdm = get_los_positions_for_all_catalogues(
+    snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
+    all_particles=False,filter_list=filter_list_lcdm_selected,dist_max=60,
+    rmin=10,rmax=20,recompute=False,suffix=".lospos_void_only_selected.p")
+
+
 
 # Real space positions:
 los_list_void_only_borg = get_los_positions_for_all_catalogues(snapList,
@@ -984,7 +1028,7 @@ A = 0.013
 
 
 def rho_real(r,A):
-    return A*rho_func_borg(r)/rho_func_borg(0)
+    return A*rho_func(r)/rho_func(0)
 
 # Test plot:
 plot_los_void_stack(\
@@ -1130,11 +1174,195 @@ jackknife_cov = np.cov(bootstrap_stacks)
 jackknife_mean = np.mean(bootstrap_stacks,1)
 norm_cov = jackknife_cov/np.outer(jackknife_mean,jackknife_mean)
 reg_norm_cov = regularise_covariance(norm_cov,lambda_reg= 1e-10)
-reg_cov = regularise_covariance(jackknife_cov,lambda_reg= 1e-12)
+reg_cov = regularise_covariance(jackknife_cov,lambda_reg= 1e-27)
 cholesky_cov = scipy.linalg.cholesky(reg_cov,lower=True)
 
 inv_cov = get_inverse_covariance(norm_cov,lambda_reg = 1e-10)
 
+# Eigenalue distribution:
+eig, U = scipy.linalg.eigh(reg_cov)
+eigen = np.real(np.linalg.eig(jackknife_cov)[0])
+
+plt.clf()
+bins = np.logspace(-30,-9,21)
+plt.hist(eig,bins=bins,alpha=0.5,color=seabornColormap[1],cumulative=True,
+         label="Cumulative eigenvalues")
+plt.hist(eig,bins=bins,alpha=0.5,color=seabornColormap[0],
+         label='Eigenvalues by bin')
+plt.xlabel('Eigenvalue, $\\lambda$')
+plt.ylabel('Number of eigenvectors')
+plt.xscale('log')
+plt.yscale('log')
+plt.axhline(1600 - 1529,linestyle=':',color='k',label='Possibly singular d.o.f')
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "eigenvalue_distribution.pdf")
+plt.show()
+
+# Eigenalue distribution (notmalised):
+eig, U = scipy.linalg.eigh(reg_norm_cov)
+
+plt.clf()
+bins = np.logspace(-11,10,21)
+plt.hist(eig,bins=bins,alpha=0.5,color=seabornColormap[1],cumulative=True,
+         label="Cumulative eigenvalues")
+plt.hist(eig,bins=bins,alpha=0.5,color=seabornColormap[0],
+         label='Eigenvalues by bin')
+plt.xlabel('Eigenvalue, $\\lambda$')
+plt.ylabel('Number of eigenvectors')
+plt.xscale('log')
+plt.yscale('log')
+#plt.axhline(1600 - 1529,linestyle=':',color='k',label='Possibly singular d.o.f')
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "eigenvalue_distribution_normalised.pdf")
+plt.show()
+
+
+
+
+# Normality test:
+import seaborn
+i = 0
+mu = jackknife_mean[i]
+sigma = np.sqrt(jackknife_cov[i,i])
+x_samples = np.linspace(mu - 3*sigma,mu + 3*sigma,1001)
+y_samples = np.exp(-(x_samples - mu)**2/(2*sigma**2))/np.sqrt(2*np.pi*sigma**2)
+
+plt.clf()
+seaborn.kdeplot(bootstrap_stacks[i,:],color=seabornColormap[0],alpha=0.5,
+                label = "")
+plt.plot(x_samples,y_samples,linestyle=':',color='k',label='Gaussian fit')
+plt.legend(frameon=False)
+plt.xlabel('$\\rho [h^3\\mathrm{Mpc}^{-3}]$')
+plt.ylabel('Probability Density')
+plt.savefig(figuresFolder + "gaussian_test.pdf")
+plt.show()
+
+# Mardia's Test of normality:
+
+def compute_chi2_ij(samples,L,xbar):
+    n = samples.shape[1]
+    k = samples.shape[0]
+    residual = samples - xbar[:,None]
+    solved_residuals = np.array(
+        [scipy.linalg.solve_triangular(L,residual[:,i],lower=True) 
+        for i in tools.progressbar(range(0,n))]).T
+    Ai = np.array(
+        [np.sum(np.sum((solved_residuals[:,i][:,None]*solved_residuals),0)**3)
+        for i in tools.progressbar(range(0,n))])
+    A = np.sum(Ai)/(6*n)
+    dof = k*(k+1)*(k+2)/6
+    pvalue = scipy.stats.chi2.sf(A,dof)
+    B = np.sqrt(n/(8*k*(k+2)))*(np.sum(np.sum(solved_residuals**2,0)**2)/n \
+                                - k*(k+2))
+    return [A,B]
+
+
+# Singular Gaussian likelihood:
+
+def get_nonsingular_subspace(C,lambda_reg,lambda_cut = None,
+                             normalised_cov=False,mu=None):
+    reg_cov = regularise_covariance(C,lambda_reg= lambda_reg)
+    if normalised_cov:
+        if mu is None:
+            raise Exception("Mean not provided.")
+        else:
+            norm_cov = C/np.outer(mu,mu)
+            norm_reg_cov = regularise_covariance(norm_cov,
+                                                 lambda_reg= lambda_reg)
+            eig, U = scipy.linalg.eigh(norm_reg_cov)
+    else:
+        eig, U = scipy.linalg.eigh(reg_cov)
+    if lambda_cut is None:
+        lambda_cut = 10*lambda_reg
+    bad_eig = np.where(eig < lambda_cut)[0]
+    good_eig = np.where(eig >= lambda_cut)[0]
+    #D = np.diag(eig[good_eig])
+    Umap = (U.T)[good_eig,:]
+    #Ctilde = np.matmul(Umap.T,np.matmul(D,Umap))
+    #Ctilde = (Ctilde.T + Ctilde)/2
+    return Umap, eig[good_eig]
+
+
+Umap, good_eig = get_nonsingular_subspace(jackknife_cov,1e-27,lambda_cut=5e-2,
+                                          normalised_cov = True,
+                                          mu=jackknife_mean)
+
+def compute_singular_log_likelihood(x,Umap,good_eig):
+    u = np.matmul(Umap,x)
+    Du = u/good_eig
+    uDu = np.sum(u*Du)
+    N = len(good_eig)
+    return -0.5*uDu - (N/2)*np.log(2*np.pi) - 0.5*np.sum(np.log(good_eig))
+
+singular = True
+normalised_cov = True
+n = n_boot
+samples = bootstrap_stacks
+xbar = jackknife_mean
+if not singular:
+    if normalised_cov:
+        residual = samples/xbar[:,None] - 1.0
+    else:
+        residual = samples - xbar[:,None]
+    L = cholesky_cov
+    solved_residuals = np.array(
+        [scipy.linalg.solve_triangular(L,residual[:,i],lower=True) 
+        for i in tools.progressbar(range(0,n))]).T
+else:
+    if normalised_cov:
+        residual = np.matmul(Umap,samples/xbar[:,None] - 1.0)
+    else:
+        residual = np.matmul(Umap,samples - xbar[:,None])
+    solved_residuals = residual/np.sqrt(good_eig[:,None])
+
+k = solved_residuals.shape[0]
+low_memory_sum = False
+
+if low_memory_sum:
+    Ai = np.array(
+        [np.sum(np.sum((solved_residuals[:,i][:,None]*solved_residuals),0)**3)
+        for i in tools.progressbar(range(0,n))])
+    A = np.sum(Ai)/(6*n)
+else:
+    product = np.matmul(solved_residuals.T,solved_residuals)
+    A = np.sum(product**3)/(6*n)
+
+
+dof = k*(k+1)*(k+2)/6
+pvalue = scipy.stats.chi2.sf(A,dof)
+B = np.sqrt(n/(8*k*(k+2)))*(np.sum(np.sum(solved_residuals**2,0)**2)/n \
+                            - k*(k+2))
+
+# Chi2 distribution:
+chi2 = np.sum(solved_residuals**2,0)
+estimated_chi2_mean = int(np.round(np.mean(chi2)))
+xvals = np.logspace(-4,4,10000)
+yvals_1600 = scipy.stats.chi2.pdf(xvals,1600)
+yvals_mean = scipy.stats.chi2.pdf(xvals,estimated_chi2_mean)
+
+plt.clf()
+seaborn.kdeplot(chi2,color=seabornColormap[0],alpha=0.5,
+                label = "Chi^2 values")
+plt.plot(xvals,yvals_1600,linestyle=':',color='b',label='k=1600')
+plt.plot(xvals,yvals_mean,linestyle='--',color='r',
+         label='k=' + ("%.4g" % estimated_chi2_mean))
+plt.xlabel('$\\chi^2$')
+plt.ylabel('Probability Density')
+plt.xscale('log')
+plt.yscale('log')
+plt.ylim([1e-8,1])
+plt.xlim([1000,2000])
+plt.legend()
+plt.savefig(figuresFolder + "chi_squared_plot.pdf")
+plt.show()
+
+# chi2 for each variable:
+chi2_dist = np.mean(solved_residuals**2,1)
+plt.clf()
+seaborn.kdeplot(chi2_dist,color=seabornColormap[0],alpha=0.5,
+                label = "Chi^2 values",log_scale=True)
+plt.savefig(figuresFolder + "chi2_each_dof.pdf")
+plt.show()
 
 plt.clf()
 C_diag = np.diag(reg_norm_cov).reshape((40,40))
@@ -1204,6 +1432,7 @@ filename = data_folder + "inference_weighted.h5"
 filename_initial = data_folder + "inference_old_state.h5"
 if backup_start:
     os.system("cp " + filename + " " + filename_initial)
+
 backend = emcee.backends.HDFBackend(filename)
 if redo_chain:
     backend.reset(nwalkers, ndims)
