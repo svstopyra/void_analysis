@@ -663,7 +663,8 @@ def get_los_pos(pos,los,boxsize):
 
 # Get LOS positions, but only for the filtered voids:
 def get_los_pos_with_filter(centres,filt,hr_list,void_indices,positions,
-                            sorted_indices,boxsize,dist_max,all_particles=True):
+                            sorted_indices,boxsize,dist_max,tree,
+                            all_particles=True):
     los_pos_all = []
     for k in tools.progressbar(range(0,len(centres))):
         if filt[k]:
@@ -736,13 +737,13 @@ def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres,radii,
             lost_pos_list = get_los_pos_with_filter(centres,filt,hr_list,
                                               void_indices,positions,
                                               sorted_indices,boxsize,dist_max,
-                                              all_particles=True)
+                                              tree,all_particles=all_particles)
             los_pos_all.append(lost_pos_list)
     else:
         los_pos_all = get_los_pos_with_filter(centres,rad_filter,hr_list,
                                               void_indices,positions,
                                               sorted_indices,boxsize,dist_max,
-                                              all_particles=True)
+                                              tree,all_particles=all_particles)
     return los_pos_all
 
 # The the los positions for selected particles in the group of snapshots

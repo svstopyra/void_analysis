@@ -795,14 +795,40 @@ filter_list_lcdm_selected = [np.any(np.array([
 
 los_list_void_only_selected_lcdm = get_los_positions_for_all_catalogues(
     snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
-    all_particles=False,filter_list=filter_list_lcdm_selected,dist_max=60,
+    all_particles=False,filter_list=filter_list_lcdm_by_region,dist_max=60,
     rmin=10,rmax=20,recompute=False,suffix=".lospos_void_only_selected.p")
+
+# Function to combine lists of void los-coords in the same simulation into 
+# a single list.
+def combine_los_lists(los_lists):
+    lengths = np.array([len(x) for x in los_lists],dtype=int)
+    if not np.all(lengths == lengths[0]):
+        raise Exception("Cannot combine los lists with different lengths.")
+    new_list = []
+    num_parts = np.vstack([np.array([len(x) for x in los_list],dtype=int) 
+        for los_list in los_lists]).T
+    to_use = -np.ones(lengths[0],dtype=int)
+    num_lists = len(los_lists)
+    for k in range(0,num_lists):
+        to_use[num_parts[:,k] > 0] = k
+    for k in range(0,lengths[0]):
+        if to_use[k] >= 0:
+            new_list.append(los_lists[to_use[k]][k])
+        else:
+            new_list.append(np.zeros((0,2)))
+    return new_list
+
+los_list_void_only_combined_lcdm = [combine_los_lists(los_list) 
+    for los_list in los_list_void_only_selected_lcdm]
 
 los_list_void_only_lcdm_zspace_selected = get_los_positions_for_all_catalogues(
     snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
-    all_particles=False,filter_list=filter_list_lcdm_selected,dist_max=60,
+    all_particles=False,filter_list=filter_list_lcdm_by_region,dist_max=60,
     rmin=10,rmax=20,recompute=False,zspace=True,recompute_zspace=False,
     suffix=".lospos_void_only_zspace_selected.p")
+
+los_list_void_only_combined_lcdm_zspace = [combine_los_lists(los_list) 
+    for los_list in los_list_void_only_lcdm_zspace_selected]
 
 # Real space positions:
 los_list_void_only_borg = get_los_positions_for_all_catalogues(snapList,
@@ -838,7 +864,7 @@ def get_2d_void_stack_from_los_pos(los_pos,z_bins,d_bins,radii,stacked=True):
         return los_list_reff
 
 
-los_lcdm = los_list_void_only_selected_lcdm
+los_lcdm = los_list_void_only_combined_lcdm
 los_borg = los_list_void_only_borg
 
 # Bins:
