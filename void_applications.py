@@ -781,6 +781,12 @@ distances_from_centre_lcdm_selected = [[
     for centres, selected_regions in zip(antihaloCentresUn,
     centresUnderdenseNonOverlapping)]
 
+filter_list_lcdm_by_region = [[
+    (dist < 135) & (radii > 10) & (radii <= 20) 
+    for dist in all_dists]
+    for all_dists, radii in 
+    zip(distances_from_centre_lcdm_selected,antihaloRadiiUn)]
+
 filter_list_lcdm_selected = [np.any(np.array([
     (dist < 135) & (radii > 10) & (radii <= 20) 
     for dist in all_dists]),0)
@@ -792,7 +798,11 @@ los_list_void_only_selected_lcdm = get_los_positions_for_all_catalogues(
     all_particles=False,filter_list=filter_list_lcdm_selected,dist_max=60,
     rmin=10,rmax=20,recompute=False,suffix=".lospos_void_only_selected.p")
 
-
+los_list_void_only_lcdm_zspace_selected = get_los_positions_for_all_catalogues(
+    snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
+    all_particles=False,filter_list=filter_list_lcdm_selected,dist_max=60,
+    rmin=10,rmax=20,recompute=False,zspace=True,recompute_zspace=False,
+    suffix=".lospos_void_only_zspace_selected.p")
 
 # Real space positions:
 los_list_void_only_borg = get_los_positions_for_all_catalogues(snapList,
@@ -828,7 +838,7 @@ def get_2d_void_stack_from_los_pos(los_pos,z_bins,d_bins,radii,stacked=True):
         return los_list_reff
 
 
-los_lcdm = los_list_void_only_lcdm
+los_lcdm = los_list_void_only_selected_lcdm
 los_borg = los_list_void_only_borg
 
 # Bins:
@@ -840,7 +850,8 @@ bin_d_centres = plot.binCentres(bins_d_reff)
 
 # Stacked void particles in 2d (in redshift space):
 stacked_particles_reff_lcdm_abs = get_2d_void_stack_from_los_pos(
-    los_list_void_only_lcdm_zspace,bins_z_reff,bins_d_reff,antihaloRadiiUn)
+    los_list_void_only_lcdm_zspace_selected,bins_z_reff,bins_d_reff,
+    antihaloRadiiUn)
 void_radii_borg = cat300.getMeanProperty("radii",void_filter=True)[0]
 stacked_particles_reff_borg_abs = get_2d_void_stack_from_los_pos(
     los_list_void_only_borg_zspace,bins_z_reff,bins_d_reff,
@@ -849,7 +860,7 @@ stacked_particles_reff_borg_abs = get_2d_void_stack_from_los_pos(
 # Stacked void_particles in 1d:
 # We can use the real space profile for this:
 stacked_particles_reff_lcdm_real = get_2d_void_stack_from_los_pos(
-    los_list_void_only_lcdm,bins_z_reff,bins_d_reff,antihaloRadiiUn)
+    los_lcdm,bins_z_reff,bins_d_reff,antihaloRadiiUn)
 stacked_particles_reff_borg_real = get_2d_void_stack_from_los_pos(
     los_list_void_only_borg,bins_z_reff,bins_d_reff,
     [void_radii_borg for rad in antihaloRadii])
@@ -886,7 +897,7 @@ def get_weights_for_stack(los_pos,void_radii,additional_weights = None,
 
 # Weights for each void in the stack:
 voids_used_lcdm = [np.array([len(x) for x in los]) > 0 
-    for los in los_list_void_only_lcdm_zspace]
+    for los in los_list_void_only_lcdm_zspace_selected]
 voids_used_lcdm_ind = [np.where(x)[0] for x in voids_used_lcdm]
 voids_used_borg = [np.array([len(x) for x in los]) > 0 
     for los in los_list_void_only_borg_zspace]
@@ -894,7 +905,7 @@ void_radii_lcdm = [rad[filt]
     for rad, filt in zip(antihaloRadiiUn,voids_used_lcdm)]
 
 los_pos_lcdm = [ [los[x] for x in np.where(ind)[0]] 
-    for los, ind in zip(los_list_void_only_lcdm_zspace,voids_used_lcdm) ]
+    for los, ind in zip(los_list_void_only_lcdm_zspace_selected,voids_used_lcdm) ]
 los_pos_borg = [ [los[x] for x in np.where(ind)[0]] 
     for los, ind in zip(los_list_void_only_borg_zspace,voids_used_borg) ]
 
@@ -906,6 +917,9 @@ v_weight_borg = get_weights_for_stack(
     los_pos_borg,[void_radii_borg[used] for used in voids_used_borg],
     additional_weights = [rep_scores[used]/np.sum(all_rep_scores) 
     for used in voids_used_borg])
+v_weight_borg_unweighted = get_weights_for_stack(
+    los_pos_borg,[void_radii_borg[used] for used in voids_used_borg],
+    additional_weights = None)
 v_weight_lcdm = get_weights_for_stack(los_pos_lcdm,void_radii_lcdm)
 
 def get_field_from_los_data(los_data,z_bins,d_bins,v_weight,void_count):
@@ -929,6 +943,13 @@ nmean = len(snapList[0])/(boxsize**3)
 
 field_borg = get_field_from_los_data(stacked_particles_reff_borg_abs,
                                      bins_z_reff,bins_d_reff,v_weight_borg,1)
+
+
+field_borg_unweighted = get_field_from_los_data(
+    stacked_particles_reff_borg_abs,bins_z_reff,bins_d_reff,
+    v_weight_borg_unweighted,num_voids_borg)
+
+
 
 # Get the matter density fields:
 # Better, just load them directly from the pre-computed profiles:
@@ -1009,7 +1030,7 @@ ax.plot(rvals,rho_func(rvals)/np.mean(rho_func(start_values)),
     label='$\\rho(r)$')
 ax.plot(rvals,rho_func_borg(rvals)/np.mean(rho_func_borg(start_values)),
     label='$\\rho_{\\mathrm{borg}}(r)$')
-ax.plot(rvals,rho_func_lcdm_z0(rvals)/np.mean(rho_func_lcdm_z0(start_values)),
+ax.plot(rvals,rho_func_borg_z0(rvals)/np.mean(rho_func_borg_z0(start_values)),
     label='$\\rho_{\\mathrm{2d}}(0,d)$')
 ax.set_xlabel('$r/r_{\\mathrm{eff}}$')
 ax.set_ylabel('$\\rho(r)$')
@@ -1055,6 +1076,57 @@ plot_los_void_stack(\
         title=None,colorbar=True,shrink=0.9,
         colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})$")
 
+plt.clf()
+fig, ax = plt.subplots(1,2,figsize=(textwidth,0.45*textwidth))
+plot_los_void_stack(\
+        field_borg_unweighted,bin_d_centres,bin_z_centres,
+        cmap='Blues',ax= ax[0],
+        vmin=0,vmax=0.1,fontsize=10,
+        xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$',
+        ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$ (LOS distance)',
+        fontfamily='serif',
+        density_unit='probability',
+        savename=None,
+        title=None,colorbar=False,shrink=0.9,
+        colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})$")
+im = plot_los_void_stack(\
+        field_borg,bin_d_centres,bin_z_centres,
+        cmap='Blues',ax= ax[1],
+        vmin=0,vmax=0.1,fontsize=10,
+        xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$',
+        ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$ (LOS distance)',
+        fontfamily='serif',
+        density_unit='probability',
+        savename=None,
+        title=None,colorbar=False,shrink=0.9,
+        colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})$")
+plt.subplots_adjust(hspace=0.0,wspace=0.0,
+                    left=0.12,right=0.95,bottom=0.15,top=0.95)
+fig.colorbar(im,shrink=0.9,label="$\\rho(s_{\\parallel},s_{\\perp})$",
+             ax=ax.ravel().tolist())
+ax[1].yaxis.label.set_visible(False)
+ax[1].yaxis.set_major_formatter(NullFormatter())
+ax[1].yaxis.set_minor_formatter(NullFormatter())
+ax[0].set_title("Unweighted Stack")
+ax[1].set_title("Weighted Stack")
+plt.savefig(figuresFolder + "profile_2d_weighting_comparison.pdf")
+plt.show()
+
+plt.clf()
+plot_los_void_stack(\
+        (field_borg - field_borg_unweighted)/field_borg_unweighted,
+        bin_d_centres,bin_z_centres,
+        cmap='PuOr_r',
+        vmin=-0.5,vmax=0.5,fontsize=10,
+        xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$',
+        ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$ (LOS distance)',
+        fontfamily='serif',
+        density_unit='probability',
+        savename=figuresFolder + "profile_2d_weighted-unweighted.pdf",
+        title=None,colorbar=True,shrink=0.9,
+        colorbar_title="$\\Delta\\rho(s_{\\parallel},s_{\\perp})/" + \
+        "\\rho(s_{\\parallel},s_{\\perp})$")
+plt.show()
 
 # Inference:
 
@@ -1283,8 +1355,8 @@ def get_nonsingular_subspace(C,lambda_reg,lambda_cut = None,
     return Umap, eig[good_eig]
 
 
-Umap, good_eig = get_nonsingular_subspace(jackknife_cov,1e-27,lambda_cut=5e-2,
-                                          normalised_cov = True,
+Umap, good_eig = get_nonsingular_subspace(jackknife_cov,1e-27,lambda_cut=1e-23,
+                                          normalised_cov = False,
                                           mu=jackknife_mean)
 
 def compute_singular_log_likelihood(x,Umap,good_eig):
@@ -1295,7 +1367,7 @@ def compute_singular_log_likelihood(x,Umap,good_eig):
     return -0.5*uDu - (N/2)*np.log(2*np.pi) - 0.5*np.sum(np.log(good_eig))
 
 singular = True
-normalised_cov = True
+normalised_cov = False
 n = n_boot
 samples = bootstrap_stacks
 xbar = jackknife_mean
@@ -1684,24 +1756,25 @@ plot_los_void_stack(\
 
 # Fit a multi-parameter model to the profile:
 
-def profile_fit(r,A,k,r0):
-    return A*(1.0 + k*r + (k*r)**2/(2.0 - k*r0))*np.exp(-k*r)
+def profile_fit(r,rho0,p,C,rb):
+    #return A*(1.0 + k*r + (k*r)**2/(2.0 - k*r0))*np.exp(-k*r)
+    return np.exp(np.log(rho0) + (p*C/2)*rb*r - C*r**p)
 
-def log_profile_fit(r,A,k,r0):
-    return np.log(A) + np.log(1.0 + k*r + (k*r)**2/(2.0 - k*r0)) - k*r
+def log_profile_fit(r,rho0,p,C,rb):
+    return np.log(rho0) + (p*C/2)*rb*r - C*r**p
 
 # MLE of the profile fit:
 
 def log_likelihood(theta, x, y, yerr):
-    A, k, r0 = theta
-    model = log_profile_fit(x, A, k, r0)
+    rho0,p,C,rb = theta
+    model = log_profile_fit(x, rho0,p,C,rb)
     sigma2 = yerr**2
     return -0.5 * np.sum( (y - model)**2/sigma2 + np.log(sigma2) )
 
 # Priors:
 def log_prior(theta):
-    A, k, r0 = theta
-    if (0 <= r0 < 2.0):
+    rho0,p,C,rb = theta
+    if (0 <= r0 < 2.0) or (p <= 2):
         # Jeffries priors:
         return -np.log(A) - np.log(k)
     else:
@@ -1714,14 +1787,13 @@ def log_probability(theta,x,y,yerr):
     return lp + log_likelihood(theta, x, y, yerr)
 
 nll1 = lambda *theta: -log_likelihood(*theta)
-initial = np.array([0.1,3.5,1.0])
-sol1 = scipy.optimize.minimize(nll1, initial, bounds = [(0,None),(0,None),(0,None)],
+initial = np.array([0.1,3,3,1])
+sol1 = scipy.optimize.minimize(nll1, initial, 
+    bounds = [(0,None),(0,None),(2,None),(0,2)],
     args=(r_bin_centres, np.log(rho_r),
     0.5*np.log((rho_r + rho_r_error)/(rho_r - rho_r_error))) )
 
-A = sol1.x[0]
-k = sol1.x[1]
-r0 = sol1.x[2]
+rho0,p,C,rb = sol1.x
 
 
 import emcee
@@ -1746,7 +1818,7 @@ A = 0.1
 k = 3.5
 r0 = 0.5
 
-rho_r_fit_vals = profile_fit(r_bin_centres,A,k,r0)
+rho_r_fit_vals = profile_fit(r_bin_centres,rho0,p,C,rb)
 plt.clf()
 plt.errorbar(r_bin_centres,rho_r,yerr=rho_r_error,linestyle='-',color='k')
 plt.plot(r_bin_centres,rho_r_fit_vals,
@@ -1754,6 +1826,7 @@ plt.plot(r_bin_centres,rho_r_fit_vals,
 plt.xlabel('$r/r_{\\mathrm{eff}}$')
 plt.ylabel('$\\rho(r)$')
 plt.yscale('log')
+plt.xscale('log')
 plt.savefig(figuresFolder + "profile_fit_test.pdf")
 plt.show()
 

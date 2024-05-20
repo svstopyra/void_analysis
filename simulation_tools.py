@@ -661,8 +661,28 @@ def get_los_pos(pos,los,boxsize):
     d = np.sqrt(np.sum(pos_rel**2,1) - z**2)
     return np.vstack((z,d)).T
 
-
-
+# Get LOS positions, but only for the filtered voids:
+def get_los_pos_with_filter(centres,filt,hr_list,void_indices,positions,
+                            sorted_indices,boxsize,dist_max,all_particles=True):
+    los_pos_all = []
+    for k in tools.progressbar(range(0,len(centres))):
+        if filt[k]:
+            if not all_particles:
+                indices = hr_list[void_indices[k]+1]['iord']
+                halo_pos = snapedit.unwrap(positions[sorted_indices[indices],:],
+                    boxsize)
+                distances = np.sqrt(
+                    np.sum(snapedit.unwrap(halo_pos - centres[k],boxsize)**2,1))
+                halo_pos = halo_pos[distances < dist_max,:]
+            else:
+                indices = tree.query_ball_point(
+                    snapedit.wrap(centres[k],boxsize),dist_max,workers=-1)
+                halo_pos = snapedit.unwrap(positions[indices,:],boxsize)
+            los_pos = get_los_pos(halo_pos,centres[k],boxsize)
+            los_pos_all.append(los_pos)
+        else:
+            los_pos_all.append(np.zeros((0,2)))
+    return los_pos_all
 
 # Get the line of sight (los) co-ordinates of selected particles in a snapshot:
 def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres,radii,
@@ -703,28 +723,26 @@ def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres,radii,
     print("Computing ellipticities...")
     if void_indices is None:
         void_indices = np.arange(0,len(hr_list))
-    los_pos_all = []
     if filter_list is None:
         rad_filter = (radii > rmin) & (radii <= rmax)
+    elif type(filter_list) is list:
+        rad_filter = [filt & (radii > rmin) & (radii <= rmax) 
+            for filt in filter_list]
     else:
         rad_filter = filter_list & (radii > rmin) & (radii <= rmax)
-    for k in tools.progressbar(range(0,len(centres))):
-        if rad_filter[k]:
-            if not all_particles:
-                indices = hr_list[void_indices[k]+1]['iord']
-                halo_pos = snapedit.unwrap(positions[sorted_indices[indices],:],
-                    boxsize)
-                distances = np.sqrt(
-                    np.sum(snapedit.unwrap(halo_pos - centres[k],boxsize)**2,1))
-                halo_pos = halo_pos[distances < dist_max,:]
-            else:
-                indices = tree.query_ball_point(
-                    snapedit.wrap(centres[k],boxsize),dist_max,workers=-1)
-                halo_pos = snapedit.unwrap(positions[indices,:],boxsize)
-            los_pos = get_los_pos(halo_pos,centres[k],boxsize)
-            los_pos_all.append(los_pos)
-        else:
-            los_pos_all.append(np.zeros((0,2)))
+    if type(rad_filter) is list:
+        los_pos_all = []
+        for filt in rad_filter:
+            lost_pos_list = get_los_pos_with_filter(centres,filt,hr_list,
+                                              void_indices,positions,
+                                              sorted_indices,boxsize,dist_max,
+                                              all_particles=True)
+            los_pos_all.append(lost_pos_list)
+    else:
+        los_pos_all = get_los_pos_with_filter(centres,rad_filter,hr_list,
+                                              void_indices,positions,
+                                              sorted_indices,boxsize,dist_max,
+                                              all_particles=True)
     return los_pos_all
 
 # The the los positions for selected particles in the group of snapshots
