@@ -587,21 +587,32 @@ def profile_jackknife_covariance(data,profile_function,**kwargs):
         jacknife_data[k,:] = profile_function(data[sample,:],**kwargs)
     return covariance(jacknife_data)/(N-1)
 
+
+def compute_singular_log_likelihood(x,Umap,good_eig):
+    u = np.matmul(Umap,x)
+    Du = u/good_eig
+    uDu = np.sum(u*Du)
+    N = len(good_eig)
+    return -0.5*uDu - (N/2)*np.log(2*np.pi) - 0.5*np.sum(np.log(good_eig))
+
+
+
 # Likelihood function:
 def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
                           z,Delta,delta,rho_real,data_filter=None,
                           cholesky=False,normalised=False,tabulate_inverse=True,
-                          ntab = 10,sample_epsilon=False,Om_fid=None,**kwargs):
+                          ntab = 10,sample_epsilon=False,Om_fid=None,
+                          singular=False,Umap=None,good_eig=None,**kwargs):
     s_par = scoords[:,0]
     s_perp = scoords[:,1]
     if sample_epsilon:
-        epsilon, f, A = theta
+        epsilon, f, A, r0, c1,f1, B = theta
         if Om_fid is not None:
             Om = Om_fid
         else:
             Om = 0.3
     else:
-        Om, f , A = theta
+        Om, f , A, r0, c1,f1, B = theta
         if Om_fid is not None:
             epsilon = ap_parameter(z,Om,Om_fid,**kwargs)
         else:
@@ -628,8 +639,8 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
                                                        np.vstack((x,y)).T,
                                                        method='cubic')
         theory_val = z_space_profile(s_par_new,s_perp_new,
-                                     lambda r: rho_real(r,A),z,Om,Delta,
-                                     delta,f=f,F_inv=F_inv,
+                                     lambda r: rho_real(r,A,r0,c1,f1,B),
+                                     z,Om,Delta,delta,f=f,F_inv=F_inv,
                                      **kwargs)
         if normalised:
             delta_rho = 1.0 - theory_val/data_val
@@ -639,8 +650,8 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
         for k in range(0,M):
             data_val = data_field[k]
             theory_val = z_space_profile(s_par_new[k],s_perp_new[k],
-                                         lambda r: rho_real(r,A),z,Om,Delta,
-                                         delta,f=f,**kwargs)
+                                         lambda r: rho_real(r,A,r0,c1,f1,B),
+                                         z,Om,Delta,delta,f=f,**kwargs)
             if normalised:
                 delta_rho[k] = 1.0 - theory_val/data_val
             else:
@@ -652,6 +663,11 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
         x = scipy.linalg.solve_triangular(inv_cov,delta_rho,lower=True)
         return -0.5*np.sum(x**2)  - (M/2)*np.log(2*np.pi) - \
              np.sum(np.log(np.diag(inv_cov)))
+    elif singular:
+        if (Umap is None) or (good_eig is None):
+            raise Exception("Must provide Umap and good_eigenvalues for " + 
+                "handling singular covariance matrices")
+        return compute_singular_log_likelihood(delta_rho,Umap,good_eig)
     else:
         return -0.5*np.matmul(np.matmul(delta_rho,inv_cov),delta_rho.T)
 
@@ -688,10 +704,12 @@ def log_flat_prior(theta,theta_ranges):
         return -np.inf
 
 # Prior (assuming flat prior for now):
-def log_prior_aptest(theta,theta_ranges=[[0.1,0.5],[0,1.0],[-np.inf,np.inf]],
-        **kwargs):
+def log_prior_aptest(theta,
+                     theta_ranges=[[0.1,0.5],[0,1.0],[-np.inf,np.inf],[0,2],
+                                   [-np.inf,0],[0,np.inf],[-1,1]],
+                    **kwargs):
     log_prior_array = np.zeros(theta.shape)
-    flat_priors = [0,1]
+    flat_priors = [0,1,3,4,5,6]
     theta_flat = [theta[k] for k in flat_priors]
     theta_ranges_flat = [theta_ranges[k] for k in flat_priors]
     for k in flat_priors:
@@ -751,7 +769,7 @@ los_list_void_only_lcdm_zspace = get_los_positions_for_all_catalogues(
     suffix=".lospos_void_only_zspace.p")
 
 # Get LOS list for selection-effect-processed regions:
-[randCentres,randOverDen] = tools.loadOrRecompute(data_folder2 + \
+[randCentres,randOverDen] = tools.loadPickle(data_folder2 + \
     "random_centres_and_densities.p")
 deltaMCMCList = tools.loadPickle(data_folder2 + "delta_list.p")
 from void_analysis.simulation_tools import get_map_from_sample
@@ -793,10 +811,12 @@ filter_list_lcdm_selected = [np.any(np.array([
     for all_dists, radii in 
     zip(distances_from_centre_lcdm_selected,antihaloRadiiUn)]
 
-los_list_void_only_selected_lcdm = get_los_positions_for_all_catalogues(
+los_list_void_only_selected_lcdm = [x 
+    for y in get_los_positions_for_all_catalogues(
     snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
     all_particles=False,filter_list=filter_list_lcdm_by_region,dist_max=60,
-    rmin=10,rmax=20,recompute=False,suffix=".lospos_void_only_selected.p")
+    rmin=10,rmax=20,recompute=False,suffix=".lospos_void_only_selected.p") 
+    for x in y]
 
 # Function to combine lists of void los-coords in the same simulation into 
 # a single list.
@@ -876,9 +896,10 @@ bin_d_centres = plot.binCentres(bins_d_reff)
 
 # Stacked void particles in 2d (in redshift space):
 stacked_particles_reff_lcdm_abs = get_2d_void_stack_from_los_pos(
-    los_list_void_only_lcdm_zspace_selected,bins_z_reff,bins_d_reff,
+    los_list_void_only_combined_lcdm_zspace,bins_z_reff,bins_d_reff,
     antihaloRadiiUn)
 void_radii_borg = cat300.getMeanProperty("radii",void_filter=True)[0]
+void_individual_radii_borg = cat300.getAllProperties("radii",void_filter=True)
 stacked_particles_reff_borg_abs = get_2d_void_stack_from_los_pos(
     los_list_void_only_borg_zspace,bins_z_reff,bins_d_reff,
     [void_radii_borg for rad in antihaloRadii])
@@ -887,14 +908,35 @@ stacked_particles_reff_borg_abs = get_2d_void_stack_from_los_pos(
 # We can use the real space profile for this:
 stacked_particles_reff_lcdm_real = get_2d_void_stack_from_los_pos(
     los_lcdm,bins_z_reff,bins_d_reff,antihaloRadiiUn)
+radlist = [antihaloRadiiUn[k] 
+    for k in range(0,20) for x in filter_list_lcdm_by_region[k]]
+stacked_particles_reff_lcdm_real_all = [get_2d_void_stack_from_los_pos(
+    [los],bins_z_reff,bins_d_reff,[rad])
+    for los, rad in zip(los_list_void_only_selected_lcdm,radlist)]
+#stacked_particles_reff_borg_real = get_2d_void_stack_from_los_pos(
+#    los_list_void_only_borg,bins_z_reff,bins_d_reff,
+#    [void_radii_borg for rad in antihaloRadii])
 stacked_particles_reff_borg_real = get_2d_void_stack_from_los_pos(
     los_list_void_only_borg,bins_z_reff,bins_d_reff,
-    [void_radii_borg for rad in antihaloRadii])
+    [void_individual_radii_borg[:,k] for k in range(0,20)])
+stacked_particles_reff_borg_real_all = [get_2d_void_stack_from_los_pos(
+    [los_list_void_only_borg[k]],bins_z_reff,bins_d_reff,
+    [void_individual_radii_borg[:,k]]) for k in range(0,len(snapList))]
 stacked_1d_real_lcdm = np.sqrt(np.sum(stacked_particles_reff_lcdm_real**2,1))
 stacked_1d_real_borg = np.sqrt(np.sum(stacked_particles_reff_borg_real**2,1))
+stacked_1d_real_lcdm_all = [np.sqrt(np.sum(stacked_los**2,1)) 
+    for stacked_los in stacked_particles_reff_lcdm_real_all]
+stacked_1d_real_borg_all = [np.sqrt(np.sum(stacked_los**2,1)) 
+    for stacked_los in stacked_particles_reff_borg_real_all]
 
+# Unweighted bin counts:
 [_,noInBins_lcdm] = plot_utilities.binValues(stacked_1d_real_lcdm,bins_d_reff)
 [_,noInBins_borg] = plot_utilities.binValues(stacked_1d_real_borg,bins_d_reff)
+
+noInBins_lcdm_all = [plot_utilities.binValues(stacked_dist,bins_d_reff)[1]
+    for stacked_dist in stacked_1d_real_lcdm_all]
+noInBins_borg_all = [plot_utilities.binValues(stacked_dist,bins_d_reff)[1]
+    for stacked_dist in stacked_1d_real_borg_all]
 
 
 # Compute_volume weights:
@@ -923,17 +965,27 @@ def get_weights_for_stack(los_pos,void_radii,additional_weights = None,
 
 # Weights for each void in the stack:
 voids_used_lcdm = [np.array([len(x) for x in los]) > 0 
-    for los in los_list_void_only_lcdm_zspace_selected]
+    for los in los_list_void_only_combined_lcdm_zspace]
+voids_used_lcdm_all = [np.array([len(x) for x in los]) > 0 
+    for los in los_list_void_only_selected_lcdm]
 voids_used_lcdm_ind = [np.where(x)[0] for x in voids_used_lcdm]
 voids_used_borg = [np.array([len(x) for x in los]) > 0 
     for los in los_list_void_only_borg_zspace]
 void_radii_lcdm = [rad[filt] 
     for rad, filt in zip(antihaloRadiiUn,voids_used_lcdm)]
+void_radii_lcdm_all = [rad[filt] 
+    for rad, filt in zip(radlist,voids_used_lcdm_all)]
+
 
 los_pos_lcdm = [ [los[x] for x in np.where(ind)[0]] 
-    for los, ind in zip(los_list_void_only_lcdm_zspace_selected,voids_used_lcdm) ]
+    for los, ind in zip(los_list_void_only_combined_lcdm_zspace,voids_used_lcdm) ]
 los_pos_borg = [ [los[x] for x in np.where(ind)[0]] 
     for los, ind in zip(los_list_void_only_borg_zspace,voids_used_borg) ]
+los_pos_borg_real = [ [los[x] for x in np.where(ind)[0]] 
+    for los, ind in zip(los_list_void_only_borg,voids_used_borg) ]
+los_pos_lcdm_all = [ [los[x] for x in np.where(ind)[0]] 
+    for los, ind in 
+    zip(los_list_void_only_selected_lcdm,voids_used_lcdm_all) ]
 
 rep_scores = void_cat_frac = cat300.property_with_filter(
     cat300.finalCatFrac,void_filter=True)
@@ -947,6 +999,26 @@ v_weight_borg_unweighted = get_weights_for_stack(
     los_pos_borg,[void_radii_borg[used] for used in voids_used_borg],
     additional_weights = None)
 v_weight_lcdm = get_weights_for_stack(los_pos_lcdm,void_radii_lcdm)
+
+
+# Weighted bin counts:
+v_weight_borg_all = [get_weights_for_stack(
+    [los_pos_borg_real[k]],[void_individual_radii_borg[voids_used_borg[k],k]],
+    additional_weights = [rep_scores[voids_used_borg[k]]/\
+    np.sum(rep_scores[voids_used_borg[k]])]) for k in range(0,len(snapList))]
+v_weight_lcdm_all = [get_weights_for_stack(
+    [los_pos_lcdm_all[k]],[void_radii_lcdm_all[k]],
+    additional_weights = \
+    [np.ones(len(void_radii_lcdm_all[k]))/len(void_radii_lcdm_all[k])])
+    for k in range(0,len(void_radii_lcdm_all))]
+
+
+weighted_counts_borg = np.array([
+    np.histogram(dist,bins=bins_d_reff,weights=weights)[0]
+    for dist, weights in zip(stacked_1d_real_borg_all,v_weight_borg_all)])
+weighted_counts_lcdm = np.array([
+    np.histogram(dist,bins=bins_d_reff,weights=weights)[0]
+    for dist, weights in zip(stacked_1d_real_lcdm_all,v_weight_lcdm_all)])
 
 def get_field_from_los_data(los_data,z_bins,d_bins,v_weight,void_count):
     cell_volumes_reff = np.outer(np.diff(z_bins),np.diff(d_bins))
@@ -1013,8 +1085,31 @@ rho_r = noInBins_lcdm/(np.sum(noInBins_lcdm)*\
     4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
 rho_r_error = np.sqrt(noInBins_lcdm)/(np.sum(noInBins_lcdm)*\
     4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
+
+
+#rho_r_all = np.array([n/(np.sum(n)*\
+#    4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
+#    for n in noInBins_lcdm_all])
+
+rho_r_all = weighted_counts_lcdm/\
+    (4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
+
+rho_r_std = np.std(rho_r_all,0)
+rho_r_mean = np.mean(rho_r_all,0)
+
 rho_borg_r = noInBins_borg/(np.sum(noInBins_borg)*\
     4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
+rho_borg_r_error = np.sqrt(noInBins_borg)/(np.sum(noInBins_borg)*\
+    4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
+
+#rho_r_borg_all = np.array([n/(np.sum(n)*\
+#    4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
+#    for n in noInBins_borg_all])
+rho_r_borg_all =  weighted_counts_borg/\
+    (4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
+rho_r_borg_std = np.std(rho_r_borg_all,0)
+rho_r_borg_mean = np.mean(rho_r_borg_all,0)
+
 Delta_r = np.cumsum(noInBins_borg)/np.sum(noInBins_borg)
 delta_func = scipy.interpolate.interp1d(
     rBinStackCentres,delta_borg - 1.0,kind='cubic',
@@ -1051,16 +1146,35 @@ plt.show()
 
 start_values = np.linspace(0,0.5,101)
 
+x = r_bin_centres
+y = rho_r_mean
+
+fit_large = np.polyfit(np.log(x[x > 1.5]),np.log(y[x > 1.5]),1)
+fit_small = np.polyfit(np.log(x[x < 0.5]),np.log(y[x < 0.5]),1)
+
+plt.clf()
 fig, ax = plt.subplots()
-ax.plot(rvals,rho_func(rvals)/np.mean(rho_func(start_values)),
-    label='$\\rho(r)$')
-ax.plot(rvals,rho_func_borg(rvals)/np.mean(rho_func_borg(start_values)),
-    label='$\\rho_{\\mathrm{borg}}(r)$')
-ax.plot(rvals,rho_func_borg_z0(rvals)/np.mean(rho_func_borg_z0(start_values)),
-    label='$\\rho_{\\mathrm{2d}}(0,d)$')
+ax.fill_between(r_bin_centres,rho_r_mean - rho_r_std,rho_r_mean + rho_r_std,
+    alpha=0.5,color=seabornColormap[0],label='$\\rho(r)$')
+ax.errorbar(r_bin_centres,rho_r_borg_mean,
+    yerr=rho_r_borg_std,
+    label='$\\rho_{\\mathrm{borg}}(r)$',color=seabornColormap[1])
+#ax.plot(r_bin_centres,field_borg[0]/np.mean(rho_func_borg_z0(start_values)),
+#    label='$\\rho_{\\mathrm{2d}}(0,d)$')
+ax.plot(rvals,np.exp(fit_large[0]*np.log(rvals) + fit_large[1]),
+        linestyle=':',color='k',
+        label="$\\rho = " + ("%.2g" % (np.exp(fit_large[1]))) + "\\cdot " + 
+        "r^{" + ("%.2g" % (fit_large[0])) + "}$")
+ax.plot(rvals,np.exp(fit_small[0]*np.log(rvals) + fit_small[1]),
+        linestyle='--',color='k',
+        label="$\\rho = " + ("%.2g" % (np.exp(fit_small[1]))) + "\\cdot " + 
+        "r^{" + ("%.2g" % (fit_small[0])) + "}$")
 ax.set_xlabel('$r/r_{\\mathrm{eff}}$')
 ax.set_ylabel('$\\rho(r)$')
-ax.set_yscale('log')
+#ax.set_yscale('log')
+#ax.set_xscale('log')
+ax.set_ylim([1e-3,0.1])
+ax.set_xlim([0,2])
 plt.legend(frameon=False)
 plt.savefig(figuresFolder + "rho_real_plot_void_only.pdf")
 plt.show()
@@ -1074,8 +1188,16 @@ f = f_lcdm(z,Om)
 A = 0.013
 
 
-def rho_real(r,A):
-    return A*rho_func(r)/rho_func(0)
+def profile_broken_power_log(r,A,r0,c1,f1,B):
+    return np.log(np.abs(A + B*(r/r0)**2 + (r/r0)**4)) + \
+        ((c1 - 4)/f1)*np.log(1 + (r/r0)**f1)
+
+def profile_broken_power(r,A,r0,c1,f1,B):
+    return np.exp(profile_broken_power_log(r,A,r0,c1,f1,B))
+
+
+def rho_real(r,A,r0,c1,f1,B):
+    return profile_broken_power(r,A,r0,c1,f1,B)
 
 # Test plot:
 plot_los_void_stack(\
@@ -1275,7 +1397,7 @@ reg_norm_cov = regularise_covariance(norm_cov,lambda_reg= 1e-10)
 reg_cov = regularise_covariance(jackknife_cov,lambda_reg= 1e-27)
 cholesky_cov = scipy.linalg.cholesky(reg_cov,lower=True)
 
-inv_cov = get_inverse_covariance(norm_cov,lambda_reg = 1e-10)
+inv_cov = get_inverse_covariance(reg_cov,lambda_reg = 1e-23)
 
 # Eigenalue distribution:
 eig, U = scipy.linalg.eigh(reg_cov)
@@ -1384,13 +1506,6 @@ def get_nonsingular_subspace(C,lambda_reg,lambda_cut = None,
 Umap, good_eig = get_nonsingular_subspace(jackknife_cov,1e-27,lambda_cut=1e-23,
                                           normalised_cov = False,
                                           mu=jackknife_mean)
-
-def compute_singular_log_likelihood(x,Umap,good_eig):
-    u = np.matmul(Umap,x)
-    Du = u/good_eig
-    uDu = np.sum(u*Du)
-    N = len(good_eig)
-    return -0.5*uDu - (N/2)*np.log(2*np.pi) - 0.5*np.sum(np.log(good_eig))
 
 singular = True
 normalised_cov = False
@@ -1510,21 +1625,46 @@ if test:
     t1 = time.time()
     average_time = (t1 - t0)/100
 
+
+# Start with a MLE guess of the 1d profile parameters:
+def log_likelihood(theta, x, y, yerr):
+    #rho0,p,C,rb = theta
+    A,r0,c1,f1,B = theta
+    model = profile_broken_power_log(x, A,r0,c1,f1,B)
+    sigma2 = yerr**2
+    return -0.5 * np.sum( (y - model)**2/sigma2 + np.log(sigma2) )
+
+
+nll1 = lambda *theta: -log_likelihood(*theta)
+initial = np.array([0.1,0.9,-9.5,3.5,0.01])
+
+sol2 = scipy.optimize.minimize(nll1, initial, 
+    bounds = [(0,None),(0,2),(None,0),(0,None),(-1,1)],
+    args=(r_bin_centres, np.log(rho_r_borg_mean),
+    0.5*np.log((rho_r_borg_mean + rho_r_borg_std)/\
+    (rho_r_borg_mean - rho_r_borg_std))) )
+
+A,r0,c1,f1,B = sol2.x
+
 # Run the inference:
-theta_ranges=[[0.1,0.5],[0,1.0],[-np.inf,np.inf]]
-theta_ranges_epsilon=[[0.9,1.10],[0,1.0],[-np.inf,np.inf]]
+theta_ranges=[[0.1,0.5],[0,1.0],[-np.inf,np.inf],[0,2],
+                                   [-np.inf,0],[0,np.inf],[-1,1]]
+theta_ranges_epsilon = [[0.9,1.10],[0,1.0],[-np.inf,np.inf],[0,2],
+                                   [-np.inf,0],[0,np.inf],[-1,1]]
 redo_chain = False
 continue_chain = True
 backup_start = True
 import emcee
 import h5py
 nwalkers = 64
-ndims = 3
+ndims = 7
 n_mcmc = 10000
 disp = 1e-4
 Om_fid = 0.3111
 max_n = 1000000
-eps_initial_guess = [1.0,f_lcdm(z,Om_fid),0.01]
+z = 0.0225
+eps_initial_guess = np.array([1.0,f_lcdm(z,Om_fid),A,r0,c1,f1,B])
+theta_initial_guess = np.array([0.3,f_lcdm(z,0.3),A,r0,c1,f1,B])
 initial = eps_initial_guess + disp*np.random.randn(nwalkers,ndims)
 filename = data_folder + "inference_weighted.h5"
 filename_initial = data_folder + "inference_old_state.h5"
@@ -1543,6 +1683,9 @@ autocorr = np.zeros((3,n_batches*batch_size))
 old_tau = np.inf
 #data_filter = np.where(np.sqrt(np.sum(scoords**2,1)) < 1.5)[0]
 
+
+
+
 if parallel:
     with Pool() as pool:
         sampler = emcee.EnsembleSampler(
@@ -1553,16 +1696,17 @@ if parallel:
             backend=backend,pool=pool)
         sampler.run_mcmc(initial,n_mcmc , progress=True)
 else:
-    data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
-        (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
-    reg_cov_filtered = reg_cov[data_filter,:][:,data_filter]
-    cholesky_cov_filtered = scipy.linalg.cholesky(reg_cov_filtered,lower=True)
+    #data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
+    #    (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
+    #reg_cov_filtered = reg_cov[data_filter,:][:,data_filter]
+    #cholesky_cov_filtered = scipy.linalg.cholesky(reg_cov_filtered,lower=True)
     sampler = emcee.EnsembleSampler(
             nwalkers, ndims, log_probability_aptest, 
-            args=(data_field[data_filter],scoords[data_filter,:],
-                  cholesky_cov_filtered,z,Delta_func,delta_func,rho_real),
-            kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
-                    'sample_epsilon':True,'theta_ranges':theta_ranges_epsilon},
+            args=(data_field,scoords,
+                  inv_cov,z,Delta_func,delta_func,rho_real),
+            kwargs={'Om_fid':Om_fid,'cholesky':False,'tabulate_inverse':True,
+                    'sample_epsilon':True,'theta_ranges':theta_ranges_epsilon,
+                    'singular':True,'Umap':Umap,'good_eig':good_eig},
                     backend=backend)
     if redo_chain:
         sampler.run_mcmc(initial,n_mcmc , progress=True)
@@ -1782,6 +1926,8 @@ plot_los_void_stack(\
 
 # Fit a multi-parameter model to the profile:
 
+
+
 def profile_fit(r,rho0,p,C,rb):
     #return A*(1.0 + k*r + (k*r)**2/(2.0 - k*r0))*np.exp(-k*r)
     return np.exp(np.log(rho0) + (p*C/2)*rb*r - C*r**p)
@@ -1792,17 +1938,18 @@ def log_profile_fit(r,rho0,p,C,rb):
 # MLE of the profile fit:
 
 def log_likelihood(theta, x, y, yerr):
-    rho0,p,C,rb = theta
-    model = log_profile_fit(x, rho0,p,C,rb)
+    #rho0,p,C,rb = theta
+    A,r0,c1,f1,B = theta
+    model = profile_broken_power_log(x, A,r0,c1,f1,B)
     sigma2 = yerr**2
     return -0.5 * np.sum( (y - model)**2/sigma2 + np.log(sigma2) )
 
 # Priors:
 def log_prior(theta):
-    rho0,p,C,rb = theta
-    if (0 <= r0 < 2.0) or (p <= 2):
+    A,r0,c1,f1,B = theta
+    if (0 <= r0 < 2.0) and (c1 < 0) and (f1 > 0):
         # Jeffries priors:
-        return -np.log(A) - np.log(k)
+        return -np.log(A)
     else:
         return -np.inf
 
@@ -1813,47 +1960,127 @@ def log_probability(theta,x,y,yerr):
     return lp + log_likelihood(theta, x, y, yerr)
 
 nll1 = lambda *theta: -log_likelihood(*theta)
-initial = np.array([0.1,3,3,1])
+initial = np.array([0.1,0.9,-9.5,3.5,0.01])
 sol1 = scipy.optimize.minimize(nll1, initial, 
-    bounds = [(0,None),(0,None),(2,None),(0,2)],
-    args=(r_bin_centres, np.log(rho_r),
-    0.5*np.log((rho_r + rho_r_error)/(rho_r - rho_r_error))) )
+    bounds = [(0,None),(0,2),(None,0),(0,None),(-1,1)],
+    args=(r_bin_centres, np.log(rho_r_mean),
+    0.5*np.log((rho_r_mean + rho_r_std)/(rho_r_mean - rho_r_std))) )
 
-rho0,p,C,rb = sol1.x
+sol2 = scipy.optimize.minimize(nll1, initial, 
+    bounds = [(0,None),(0,2),(None,0),(0,None),(-1,1)],
+    args=(r_bin_centres, np.log(rho_r_borg_mean),
+    0.5*np.log((rho_r_borg_mean + rho_r_borg_std)/\
+    (rho_r_borg_mean - rho_r_borg_std))) )
+
+A1,r01,c11,f11,B1 = sol1.x
+A2,r02,c12,f12,B2 = sol2.x
 
 
 import emcee
-pos = sol1.x + 1e-4*np.random.randn(32,3)
+pos = sol1.x + 1e-4*np.random.randn(32,5)
 nwalkers, ndim = pos.shape
 
 sampler = emcee.EnsembleSampler(
-    nwalkers, ndim, log_probability, args=(r_bin_centres, np.log(rho_r),
-    0.5*np.log((rho_r + rho_r_error)/(rho_r - rho_r_error)))
+    nwalkers, ndim, log_probability, args=(r_bin_centres, np.log(rho_r_mean),
+    0.5*np.log((rho_r_mean + rho_r_std)/\
+    (rho_r_mean - rho_r_std)))
 )
 sampler.run_mcmc(pos, 10000, progress=True)
 
 tau = sampler.get_autocorr_time()
 
-flat_samples = sampler.get_chain(discard=100, thin=15, flat=True)
+flat_samples = sampler.get_chain(discard=int(3*np.max(tau)), 
+                                 thin=int(np.max(tau)), flat=True)
 
-A, k, r0 = np.mean(flat_samples,0)
+A1, r01, c11,f11,B1 = np.mean(flat_samples,0)
+
+
+sampler2 = emcee.EnsembleSampler(
+    nwalkers, ndim, log_probability, args=(r_bin_centres, np.log(rho_r_borg_mean),
+    0.5*np.log((rho_r_borg_mean + rho_r_borg_std)/\
+    (rho_r_borg_mean - rho_r_borg_std)))
+)
+sampler2.run_mcmc(pos, 10000, progress=True)
+tau2 = sampler2.get_autocorr_time()
+
+flat_samples2 = sampler2.get_chain(discard=int(3*np.max(tau2)), 
+                                 thin=int(np.max(tau2)), flat=True)
+
+
+# Corner plot:
+import corner
+
+plt.clf()
+fig = corner.corner(flat_samples, labels=["$A$","$r_0$","$c_1$","$f_1$","$B$"])
+fig.suptitle("$\\Lambda$-CDM Simulations Contour Ellipticity")
+plt.savefig(figuresFolder + "corner_plot_profile_fit.pdf")
+plt.show()
 
 
 
 A = 0.1
-k = 3.5
-r0 = 0.5
+c1 = -9.5
+f1 = 3.5
+r0 = 0.9
+r1 = 1
 
-rho_r_fit_vals = profile_fit(r_bin_centres,rho0,p,C,rb)
+rho_r_fit_samples = np.vstack([
+    profile_broken_power(r_bin_centres,A,r0,c1,f1,B) 
+    for A,r0,c1,f1,B in flat_samples])
+
+rho_r_fit_samples_mean = np.mean(rho_r_fit_samples,0)
+rho_r_fit_samples_std = np.std(rho_r_fit_samples,0)
+
+rho_r_borg_fit_samples = np.vstack([
+    profile_broken_power(r_bin_centres,A,r0,c1,f1,B) 
+    for A,r0,c1,f1,B in flat_samples2])
+
+rho_r_borg_fit_samples_mean = np.mean(rho_r_borg_fit_samples,0)
+rho_r_borg_fit_samples_std = np.std(rho_r_borg_fit_samples,0)
+
+
+#rho_r_fit_vals = profile_broken_power(r_bin_centres,A1,r01,c11,f11,B1)
+rho_r_fit_vals = profile_broken_power(r_bin_centres,A,r0,c1,f1,B)
+rho_r_fit_vals_borg = profile_broken_power(r_bin_centres,A2,r02,c12,f12,B2)
 plt.clf()
-plt.errorbar(r_bin_centres,rho_r,yerr=rho_r_error,linestyle='-',color='k')
-plt.plot(r_bin_centres,rho_r_fit_vals,
-         linestyle=':',color='b')
+plt.errorbar(r_bin_centres,rho_r_mean,yerr=rho_r_std,linestyle='-',
+             color=seabornColormap[0],label="$\\Lambda$-CDM profile")
+plt.fill_between(r_bin_centres,rho_r_fit_samples_mean-rho_r_fit_samples_std,
+                 rho_r_fit_samples_mean + rho_r_fit_samples_std,alpha=0.5,
+                 color=seabornColormap[0],label="$\\Lambda$-CDM profile")
+plt.errorbar(r_bin_centres,rho_r_borg_mean,yerr=rho_r_borg_std,linestyle='-',
+             color=seabornColormap[1],label="BORG profile")
+plt.fill_between(r_bin_centres,
+                 rho_r_borg_fit_samples_mean-rho_r_borg_fit_samples_std,
+                 rho_r_borg_fit_samples_mean + rho_r_borg_fit_samples_std,
+                 alpha=0.5,color=seabornColormap[1],
+                 label="$\\Lambda$-CDM profile")
+#plt.plot(r_bin_centres,rho_r_fit_vals,
+#         linestyle=':',color=seabornColormap[0])
+#plt.plot(r_bin_centres,rho_r_fit_vals_borg,
+#         linestyle=':',color=seabornColormap[1])
 plt.xlabel('$r/r_{\\mathrm{eff}}$')
 plt.ylabel('$\\rho(r)$')
-plt.yscale('log')
-plt.xscale('log')
+#plt.yscale('log')
+#plt.xscale('log')
 plt.savefig(figuresFolder + "profile_fit_test.pdf")
+plt.show()
+
+
+plt.clf()
+plt.errorbar(r_bin_centres,(rho_r_mean - rho_r_fit_vals)/rho_r_fit_vals,
+             yerr=rho_r_std/rho_r_fit_vals,linestyle='-',color=seabornColormap[0],
+             label="$\\Lambda$-CDM profile")
+plt.errorbar(r_bin_centres,
+             (rho_r_borg_mean - rho_r_fit_vals_borg)/rho_r_fit_vals_borg,
+             yerr=rho_r_borg_std/rho_r_fit_vals_borg,linestyle='-',
+             color=seabornColormap[1],label="BORG profile")
+plt.xlabel('$r/r_{\\mathrm{eff}}$')
+plt.ylabel('$\\Delta\\rho(r)/\\rho(r)$')
+#plt.yscale('log')
+#plt.xscale('log')
+plt.ylim([-0.1,0.1])
+plt.savefig(figuresFolder + "profile_fit_test_diff.pdf")
 plt.show()
 
 
