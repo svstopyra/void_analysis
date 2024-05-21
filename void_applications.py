@@ -811,12 +811,13 @@ filter_list_lcdm_selected = [np.any(np.array([
     for all_dists, radii in 
     zip(distances_from_centre_lcdm_selected,antihaloRadiiUn)]
 
-los_list_void_only_selected_lcdm = [x 
-    for y in get_los_positions_for_all_catalogues(
+los_list_void_only_selected_lcdm = get_los_positions_for_all_catalogues(
     snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
     all_particles=False,filter_list=filter_list_lcdm_by_region,dist_max=60,
-    rmin=10,rmax=20,recompute=False,suffix=".lospos_void_only_selected.p") 
-    for x in y]
+    rmin=10,rmax=20,recompute=False,suffix=".lospos_void_only_selected.p")
+
+los_list_void_only_selected_lcdm_flat = [x 
+    for y in los_list_void_only_selected_lcdm for x in y]
 
 # Function to combine lists of void los-coords in the same simulation into 
 # a single list.
