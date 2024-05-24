@@ -745,15 +745,50 @@ for ns in range(0,len(snapList)):
     halo_indices[ns][have_void] = \
         cat300.indexListShort[ns][final_cat[have_void,ns]-1]
 
+from void_analysis import context
+#hrList = [snap.halos() for snap in snapListRev]
+def get_zspace_centres(halo_indices,snap_list,snap_list_rev,hrlist=None,
+                       recompute_zspace=False):
+    if len(halo_indices) != len(snap_list):
+        raise Exception("halo_indices list does not match snapshot list.")
+    num_samples = len(halo_indices)
+    centres = [np.ones((len(x),3))*np.nan for x in halo_indices]
+    for ns in range(0,num_samples):
+        snap = snap_list[ns]
+        if os.path.isfile(snap.filename + ".snapsort.p"):
+            sorted_indices = tools.loadPickle(snap.filename + ".snapsort.p")
+        else:
+            sorted_indices = np.argsort(snap['iord'])
+        if hrlist is None:
+            halos = snap_list_rev[ns].halos()
+        else:
+            halos = hrlist[ns]
+        boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+        positions = tools.loadOrRecompute(
+                snap.filename + ".z_space_pos.p",
+                simulation_tools.redshift_space_positions,
+                snap,centre=np.array([boxsize/2]*3),
+                _recomputeData=recompute_zspace)
+        for k in tools.progressbar(range(0,len(halo_indices[ns]))):
+            if halo_indices[ns][k] >= 0:
+                indices = halos[halo_indices[ns][k]+1]['iord']
+                centres[ns][k,:] = tools.remapAntiHaloCentre(
+                    context.computePeriodicCentreWeighted(
+                    positions[sorted_indices[indices],:],periodicity=boxsize),
+                    boxsize,swapXZ  = False,reverse = True)
+    return centres
+
+# Convert void centres to redshift space:
+zcentres = tools.loadOrRecompute(data_folder + "zspace_centres.p",
+                                 get_zspace_centres,halo_indices,snapList,
+                                 snapListRev,hrlist=hrList,_recomputeData=False)
+
 filter_list_borg = [halo_indices[ns] >= 0 for ns in range(0,len(snapList))]
 los_list_void_only_borg_zspace = get_los_positions_for_all_catalogues(snapList,
-    snapListRev,
-    [cat300.getMeanCentres(void_filter=True) for ns in range(0,len(snapList))],
-    [cat300.getMeanProperty("radii",void_filter=True)[0] 
-    for ns in range(0,len(snapList))],all_particles=False,
-    void_indices = halo_indices,filter_list=filter_list_borg,
-    dist_max=60,rmin=10,rmax=20,recompute=False,
-    zspace=True,recompute_zspace=False,suffix=".lospos_void_only_zspace.p")
+    snapListRev,zcentres,cat300.getAllProperties("radii",void_filter=True).T,
+    all_particles=False,void_indices = halo_indices,
+    filter_list=filter_list_borg,dist_max=60,rmin=10,rmax=20,recompute=False,
+    zspace=True,recompute_zspace=False,suffix=".lospos_void_only_zspace2.p")
 
 # LCDM examples for comparison:
 distances_from_centre_lcdm = [
@@ -854,11 +889,12 @@ los_list_void_only_combined_lcdm_zspace = [combine_los_lists(los_list)
 # Real space positions:
 los_list_void_only_borg = get_los_positions_for_all_catalogues(snapList,
     snapListRev,
-    [cat300.getMeanCentres(void_filter=True) for ns in range(0,len(snapList))],
-    [cat300.getMeanProperty("radii",void_filter=True)[0] 
-    for ns in range(0,len(snapList))],all_particles=False,
+    cat300.getAllCentres(void_filter=True),
+    cat300.getAllProperties("radii",void_filter=True).T,all_particles=False,
     void_indices = halo_indices,filter_list=filter_list_borg,
-    dist_max=60,rmin=10,rmax=20,recompute=False,suffix=".lospos_void_only.p")
+    dist_max=60,rmin=10,rmax=20,recompute=False,suffix=".lospos_void_only2.p")
+
+
 los_list_void_only_lcdm = get_los_positions_for_all_catalogues(snapListUn,
     snapListRevUn,antihaloCentresUn,antihaloRadiiUn,all_particles=False,
     filter_list=filter_list_lcdm,dist_max=60,rmin=10,rmax=20,recompute=False,
@@ -913,7 +949,7 @@ radlist = [antihaloRadiiUn[k]
     for k in range(0,20) for x in filter_list_lcdm_by_region[k]]
 stacked_particles_reff_lcdm_real_all = [get_2d_void_stack_from_los_pos(
     [los],bins_z_reff,bins_d_reff,[rad])
-    for los, rad in zip(los_list_void_only_selected_lcdm,radlist)]
+    for los, rad in zip(los_list_void_only_selected_lcdm_flat,radlist)]
 #stacked_particles_reff_borg_real = get_2d_void_stack_from_los_pos(
 #    los_list_void_only_borg,bins_z_reff,bins_d_reff,
 #    [void_radii_borg for rad in antihaloRadii])
@@ -968,7 +1004,7 @@ def get_weights_for_stack(los_pos,void_radii,additional_weights = None,
 voids_used_lcdm = [np.array([len(x) for x in los]) > 0 
     for los in los_list_void_only_combined_lcdm_zspace]
 voids_used_lcdm_all = [np.array([len(x) for x in los]) > 0 
-    for los in los_list_void_only_selected_lcdm]
+    for los in los_list_void_only_selected_lcdm_flat]
 voids_used_lcdm_ind = [np.where(x)[0] for x in voids_used_lcdm]
 voids_used_borg = [np.array([len(x) for x in los]) > 0 
     for los in los_list_void_only_borg_zspace]
@@ -986,7 +1022,7 @@ los_pos_borg_real = [ [los[x] for x in np.where(ind)[0]]
     for los, ind in zip(los_list_void_only_borg,voids_used_borg) ]
 los_pos_lcdm_all = [ [los[x] for x in np.where(ind)[0]] 
     for los, ind in 
-    zip(los_list_void_only_selected_lcdm,voids_used_lcdm_all) ]
+    zip(los_list_void_only_selected_lcdm_flat,voids_used_lcdm_all) ]
 
 rep_scores = void_cat_frac = cat300.property_with_filter(
     cat300.finalCatFrac,void_filter=True)
@@ -1097,6 +1133,9 @@ rho_r_all = weighted_counts_lcdm/\
 
 rho_r_std = np.std(rho_r_all,0)
 rho_r_mean = np.mean(rho_r_all,0)
+rho_r_range_1sigma = np.percentile(rho_r_all,[16,84],axis=0)
+rho_r_range_2sigma = np.percentile(rho_r_all,[2.5,97.5],axis=0)
+
 
 rho_borg_r = noInBins_borg/(np.sum(noInBins_borg)*\
     4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
@@ -1110,6 +1149,8 @@ rho_r_borg_all =  weighted_counts_borg/\
     (4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
 rho_r_borg_std = np.std(rho_r_borg_all,0)
 rho_r_borg_mean = np.mean(rho_r_borg_all,0)
+rho_r_borg_range_1sigma = np.percentile(rho_r_borg_all,[16,84],axis=0)
+rho_r_borg_range_2sigma = np.percentile(rho_r_borg_all,[2.5,97.5],axis=0)
 
 Delta_r = np.cumsum(noInBins_borg)/np.sum(noInBins_borg)
 delta_func = scipy.interpolate.interp1d(
@@ -1155,10 +1196,14 @@ fit_small = np.polyfit(np.log(x[x < 0.5]),np.log(y[x < 0.5]),1)
 
 plt.clf()
 fig, ax = plt.subplots()
-ax.fill_between(r_bin_centres,rho_r_mean - rho_r_std,rho_r_mean + rho_r_std,
-    alpha=0.5,color=seabornColormap[0],label='$\\rho(r)$')
+ax.fill_between(r_bin_centres,rho_r_range_2sigma[0,:],rho_r_range_2sigma[1,:],
+    alpha=0.25,color=seabornColormap[0],ec=None,
+    label='$\\rho_{\\Lambda\\mathrm{CDM}}(r), 95\\%$')
+ax.fill_between(r_bin_centres,rho_r_range_1sigma[0,:],rho_r_range_1sigma[1,:],
+    alpha=0.5,color=seabornColormap[0],ec=None,
+    label='$\\rho_{\\Lambda\\mathrm{CDM}}(r), 68\\%$')
 ax.errorbar(r_bin_centres,rho_r_borg_mean,
-    yerr=rho_r_borg_std,
+    yerr=np.abs(rho_r_borg_range_1sigma - rho_r_borg_mean),
     label='$\\rho_{\\mathrm{borg}}(r)$',color=seabornColormap[1])
 #ax.plot(r_bin_centres,field_borg[0]/np.mean(rho_func_borg_z0(start_values)),
 #    label='$\\rho_{\\mathrm{2d}}(0,d)$')
@@ -1292,7 +1337,8 @@ v_weights_all_borg = get_weights_for_stack(
     additional_weights = [rep_scores[used]/np.sum(all_rep_scores) 
     for used in voids_used_borg],stacked=False)
 
-
+v_weights_all_borg_scalar = np.hstack([np.array([x[0] for x in y]) 
+    for y in v_weights_all_borg])
 
 all_fields_borg = [[
     get_field_from_los_data(los,bins_z_reff,bins_d_reff,v_weight,1) 
@@ -1309,7 +1355,8 @@ f_weights = [length/total for length, total in zip(f_lengths,f_totals)]
 cov_data = [np.cov(np.vstack([x.flatten() for x in fields]).T,
     aweights = weights) for fields, weights in zip(all_fields_borg,f_weights)]
 
-stacked_weights = np.hstack(f_lengths)/np.sum(f_totals)
+stacked_weights = (np.hstack(f_lengths)/np.sum(f_totals))*\
+    v_weights_all_borg_scalar
 stacked_fields = np.vstack([np.vstack([x.flatten() for x in fields]) 
     for fields in all_fields_borg]).T
 mean_fields = np.average(stacked_fields,axis=1,weights=stacked_weights)
@@ -1364,7 +1411,7 @@ reg_cov = regularise_covariance(jackknife_cov,lambda_reg= 1e-12)
 cholesky_cov = scipy.linalg.cholesky(reg_cov,lower=True)
 
 inv_cov = get_inverse_covariance(norm_cov,lambda_reg = 1e-10)
-eigen = np.real(np.linalg.eig(norm_cov)[0])
+#eigen = np.real(np.linalg.eig(norm_cov)[0])
 
 # Jackknife over all voids:
 
@@ -1399,6 +1446,45 @@ reg_cov = regularise_covariance(jackknife_cov,lambda_reg= 1e-27)
 cholesky_cov = scipy.linalg.cholesky(reg_cov,lower=True)
 
 inv_cov = get_inverse_covariance(reg_cov,lambda_reg = 1e-23)
+
+#logrho_mean = np.mean(np.log(bootstrap_stacks),1)
+
+log_samples = np.log(bootstrap_stacks)
+finite_samples = np.where(np.all(np.isfinite(log_samples),0))[0]
+#if np.min(bootstrap_stacks) > 0:
+logrho_mean = np.mean(log_samples[:,finite_samples],1)
+logrho_cov = np.cov(log_samples[:,finite_samples])
+#else:
+#    logrho_mean = np.array(np.ma.mean(np.ma.masked_invalid(log_samples,1)))
+#    logrho_cov = np.array(np.ma.cov(np.ma.masked_invalid(log_samples)))
+
+logrho_reg_cov = regularise_covariance(logrho_cov,lambda_reg= 1e-27)
+
+#logrho_mean = np.mean(log_samples,1)
+#logrho_cov = np.cov(log_samples)
+#logrho_reg_cov = regularise_covariance(logrho_cov,lambda_reg= 1e-27)
+
+
+# Eigenalue distribution:
+eig, U = scipy.linalg.eigh(logrho_reg_cov)
+eigen = np.real(np.linalg.eig(logrho_cov)[0])
+
+plt.clf()
+bins = np.logspace(-10,1,21)
+plt.hist(eig,bins=bins,alpha=0.5,color=seabornColormap[1],cumulative=True,
+         label="Cumulative eigenvalues")
+plt.hist(eig,bins=bins,alpha=0.5,color=seabornColormap[0],
+         label='Eigenvalues by bin')
+plt.xlabel('Eigenvalue, $\\lambda$')
+plt.ylabel('Number of eigenvectors')
+plt.xscale('log')
+plt.yscale('log')
+plt.axhline(1600 - 1529,linestyle=':',color='k',label='Possibly singular d.o.f')
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "eigenvalue_distribution_log.pdf")
+plt.show()
+
+
 
 # Eigenalue distribution:
 eig, U = scipy.linalg.eigh(reg_cov)
@@ -1460,22 +1546,7 @@ plt.show()
 
 # Mardia's Test of normality:
 
-def compute_chi2_ij(samples,L,xbar):
-    n = samples.shape[1]
-    k = samples.shape[0]
-    residual = samples - xbar[:,None]
-    solved_residuals = np.array(
-        [scipy.linalg.solve_triangular(L,residual[:,i],lower=True) 
-        for i in tools.progressbar(range(0,n))]).T
-    Ai = np.array(
-        [np.sum(np.sum((solved_residuals[:,i][:,None]*solved_residuals),0)**3)
-        for i in tools.progressbar(range(0,n))])
-    A = np.sum(Ai)/(6*n)
-    dof = k*(k+1)*(k+2)/6
-    pvalue = scipy.stats.chi2.sf(A,dof)
-    B = np.sqrt(n/(8*k*(k+2)))*(np.sum(np.sum(solved_residuals**2,0)**2)/n \
-                                - k*(k+2))
-    return [A,B]
+
 
 
 # Singular Gaussian likelihood:
@@ -1508,44 +1579,107 @@ Umap, good_eig = get_nonsingular_subspace(jackknife_cov,1e-27,lambda_cut=1e-23,
                                           normalised_cov = False,
                                           mu=jackknife_mean)
 
-singular = True
-normalised_cov = False
-n = n_boot
-samples = bootstrap_stacks
-xbar = jackknife_mean
-if not singular:
-    if normalised_cov:
-        residual = samples/xbar[:,None] - 1.0
+
+#Umap, good_eig = get_nonsingular_subspace(logrho_cov,1e-27,lambda_cut=1e-23,
+#                                          normalised_cov = False,
+#                                          mu=logrho_mean)
+
+def get_solved_residuals(samples,covariance,xbar,singular=False,
+                         normalised_cov=False,L=None,lambda_cut=1e-23,
+                         lambda_reg=1e-27,Umap=None,good_eig=None):
+    if not singular:
+        if normalised_cov:
+                residual = samples/xbar[:,None] - 1.0
+        else:
+            residual = samples - xbar[:,None]
+        if L is None:
+            reg_cov = regularise_covariance(covariance,lambda_reg= lambda_reg)
+            L = scipy.linalg.cholesky(reg_cov,lower=True)
+        solved_residuals = np.array(
+            [scipy.linalg.solve_triangular(L,residual[:,i],lower=True) 
+            for i in tools.progressbar(range(0,n))]).T
     else:
-        residual = samples - xbar[:,None]
-    L = cholesky_cov
-    solved_residuals = np.array(
-        [scipy.linalg.solve_triangular(L,residual[:,i],lower=True) 
-        for i in tools.progressbar(range(0,n))]).T
-else:
-    if normalised_cov:
-        residual = np.matmul(Umap,samples/xbar[:,None] - 1.0)
+        if (Umap is None) or (good_eig is None):
+            Umap, good_eig = get_nonsingular_subspace(covariance,lambda_reg,
+                                                      lambda_cut=lambda_cut,
+                                                      normalised_cov = False,
+                                                      mu=xbar)
+        if normalised_cov:
+            residual = np.matmul(Umap,samples/xbar[:,None] - 1.0)
+        else:
+            residual = np.matmul(Umap,samples - xbar[:,None])
+        solved_residuals = residual/np.sqrt(good_eig[:,None])
+    return solved_residuals
+
+def compute_normality_test_statistics(samples,covariance=None,xbar=None,
+                                      solved_residuals=None,
+                                      low_memory_sum = False,**kwargs):
+    n = samples.shape[1]
+    k = samples.shape[0]
+    if covariance is None:
+        covariance = np.cov(samples)
+    if xbar is None:
+        xbar = np.mean(samples,1)
+    if solved_residuals is None:
+        solved_residuals = get_solved_residuals(samples, covariance,xbar,
+                                                **kwargs)
+    # Compute Skewness:
+    if low_memory_sum:
+        Ai = np.array(
+            [np.sum(
+            np.sum((solved_residuals[:,i][:,None]*solved_residuals),0)**3)
+            for i in tools.progressbar(range(0,n))])
+        A = np.sum(Ai)/(6*n)
     else:
-        residual = np.matmul(Umap,samples - xbar[:,None])
-    solved_residuals = residual/np.sqrt(good_eig[:,None])
-
-k = solved_residuals.shape[0]
-low_memory_sum = False
-
-if low_memory_sum:
-    Ai = np.array(
-        [np.sum(np.sum((solved_residuals[:,i][:,None]*solved_residuals),0)**3)
-        for i in tools.progressbar(range(0,n))])
-    A = np.sum(Ai)/(6*n)
-else:
-    product = np.matmul(solved_residuals.T,solved_residuals)
-    A = np.sum(product**3)/(6*n)
-
-
-dof = k*(k+1)*(k+2)/6
-pvalue = scipy.stats.chi2.sf(A,dof)
-B = np.sqrt(n/(8*k*(k+2)))*(np.sum(np.sum(solved_residuals**2,0)**2)/n \
+        product = np.matmul(solved_residuals.T,solved_residuals)
+        A = np.sum(product**3)/(6*n)
+    B = np.sqrt(n/(8*k*(k+2)))*(np.sum(np.sum(solved_residuals**2,0)**2)/n \
                             - k*(k+2))
+    return [A,B]
+
+singular = True
+
+
+spar = np.hstack([s*np.ones(field_borg.shape[1]) 
+    for s in plot.binCentres(bins_z_reff)])
+sperp = np.hstack([plot.binCentres(bins_d_reff) 
+    for s in plot.binCentres(bins_z_reff)])
+scoords = np.vstack([spar,sperp]).T
+
+data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
+        (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
+#data_filter = np.array(range(0,bootstrap_stacks.shape[0]))
+
+
+solved_residuals = get_solved_residuals(
+    bootstrap_stacks[data_filter,:],jackknife_cov[data_filter,:][:,data_filter],
+    jackknife_mean[data_filter],singular=True)
+[A_test,B_test] = compute_normality_test_statistics(
+    bootstrap_stacks[data_filter,:],
+    covariance=jackknife_cov[data_filter,:][:,data_filter],
+    xbar=jackknife_mean[data_filter],singular=True,
+    solved_residuals=solved_residuals)
+
+k, n = solved_residuals.shape
+dof = k*(k+1)*(k+2)/6
+pvalue = scipy.stats.chi2.sf(A_test,dof)
+chi2_deviations = (dof - A_test)/np.sqrt(2*k)
+
+sample_filter = np.where(np.all(np.isfinite(log_samples[data_filter,:]),0))[0]
+solved_residuals_log = get_solved_residuals(
+    log_samples[data_filter,:][:,sample_filter],
+    logrho_cov[data_filter,:][:,data_filter],
+    logrho_mean[data_filter],singular=True)
+[A_log,B_log] = compute_normality_test_statistics(
+    log_samples[data_filter,:][:,sample_filter],
+    covariance=logrho_cov[data_filter,:][:,data_filter],
+    xbar=logrho_mean[data_filter],singular=True,
+    solved_residuals=solved_residuals_log)
+k, n = solved_residuals_log.shape
+dof = k*(k+1)*(k+2)/6
+pvalue = scipy.stats.chi2.sf(A_log,dof)
+chi2_deviations = (dof - A_log)/np.sqrt(2*k)
+
 
 # Chi2 distribution:
 chi2 = np.sum(solved_residuals**2,0)
@@ -1557,17 +1691,38 @@ yvals_mean = scipy.stats.chi2.pdf(xvals,estimated_chi2_mean)
 plt.clf()
 seaborn.kdeplot(chi2,color=seabornColormap[0],alpha=0.5,
                 label = "Chi^2 values")
-plt.plot(xvals,yvals_1600,linestyle=':',color='b',label='k=1600')
+#plt.plot(xvals,yvals_1600,linestyle=':',color='b',label='k=1600')
 plt.plot(xvals,yvals_mean,linestyle='--',color='r',
          label='k=' + ("%.4g" % estimated_chi2_mean))
 plt.xlabel('$\\chi^2$')
 plt.ylabel('Probability Density')
 plt.xscale('log')
 plt.yscale('log')
-plt.ylim([1e-8,1])
-plt.xlim([1000,2000])
+plt.ylim([1e-8,3e-2])
+#plt.xlim([1000,2000])
+plt.xlim([100,1000])
 plt.legend()
 plt.savefig(figuresFolder + "chi_squared_plot.pdf")
+plt.show()
+
+chi2_log = np.sum(solved_residuals_log**2,0)
+estimated_chi2_mean = int(np.round(np.mean(chi2_log)))
+yvals_mean = scipy.stats.chi2.pdf(xvals,estimated_chi2_mean)
+plt.clf()
+seaborn.kdeplot(chi2_log,color=seabornColormap[0],alpha=0.5,
+                label = "Chi^2 values")
+#plt.plot(xvals,yvals_1600,linestyle=':',color='b',label='k=1600')
+plt.plot(xvals,yvals_mean,linestyle='--',color='r',
+         label='k=' + ("%.4g" % estimated_chi2_mean))
+plt.xlabel('$\\chi^2$')
+plt.ylabel('Probability Density')
+plt.xscale('log')
+plt.yscale('log')
+plt.ylim([1e-8,3e-2])
+#plt.xlim([1000,2000])
+plt.xlim([100,1000])
+plt.legend()
+plt.savefig(figuresFolder + "chi_squared_plot_log.pdf")
 plt.show()
 
 # chi2 for each variable:
@@ -1579,7 +1734,7 @@ plt.savefig(figuresFolder + "chi2_each_dof.pdf")
 plt.show()
 
 plt.clf()
-C_diag = np.diag(reg_norm_cov).reshape((40,40))
+C_diag = np.diag(reg_norm_cov).reshape((len(bin_d_centres),len(bin_z_centres)))
 plt.imshow(np.sqrt(1.0/C_diag),cmap='PuOr_r',norm=colors.LogNorm(vmin=1/50,vmax=50),
            extent=(0,upper_dist_reff,0,upper_dist_reff),origin='lower')
 plt.xlabel('$s_{\\mathrm{\\perp}}/R_{\\mathrm{eff}}$')
@@ -2019,11 +2174,11 @@ plt.show()
 
 
 
-A = 0.1
-c1 = -9.5
-f1 = 3.5
-r0 = 0.9
-r1 = 1
+#A = 0.1
+#c1 = -9.5
+#f1 = 3.5
+#r0 = 0.9
+#r1 = 1
 
 rho_r_fit_samples = np.vstack([
     profile_broken_power(r_bin_centres,A,r0,c1,f1,B) 
@@ -2041,34 +2196,43 @@ rho_r_borg_fit_samples_std = np.std(rho_r_borg_fit_samples,0)
 
 
 #rho_r_fit_vals = profile_broken_power(r_bin_centres,A1,r01,c11,f11,B1)
-rho_r_fit_vals = profile_broken_power(r_bin_centres,A,r0,c1,f1,B)
+rho_r_fit_vals = profile_broken_power(r_bin_centres,A1,r01,c11,f11,B1)
 rho_r_fit_vals_borg = profile_broken_power(r_bin_centres,A2,r02,c12,f12,B2)
 plt.clf()
+fig, ax = plt.subplots(figsize=(textwidth,0.45*textwidth))
 plt.errorbar(r_bin_centres,rho_r_mean,yerr=rho_r_std,linestyle='-',
              color=seabornColormap[0],label="$\\Lambda$-CDM profile")
 plt.fill_between(r_bin_centres,rho_r_fit_samples_mean-rho_r_fit_samples_std,
                  rho_r_fit_samples_mean + rho_r_fit_samples_std,alpha=0.5,
-                 color=seabornColormap[0],label="$\\Lambda$-CDM profile")
+                 color=seabornColormap[0],
+                 label="Fitting-formula, $\\Lambda$CDM-profile fit")
 plt.errorbar(r_bin_centres,rho_r_borg_mean,yerr=rho_r_borg_std,linestyle='-',
              color=seabornColormap[1],label="BORG profile")
 plt.fill_between(r_bin_centres,
                  rho_r_borg_fit_samples_mean-rho_r_borg_fit_samples_std,
                  rho_r_borg_fit_samples_mean + rho_r_borg_fit_samples_std,
                  alpha=0.5,color=seabornColormap[1],
-                 label="$\\Lambda$-CDM profile")
+                 label="Fitting-formula, BORG-profile fit")
 #plt.plot(r_bin_centres,rho_r_fit_vals,
 #         linestyle=':',color=seabornColormap[0])
 #plt.plot(r_bin_centres,rho_r_fit_vals_borg,
 #         linestyle=':',color=seabornColormap[1])
+#plt.plot(bin_d_centres,field_borg[0],linestyle='-',color='k',
+#    label="$\\rho_{\\mathrm{BORG}}(s_{\\perp},0)$")
+#plt.plot(bin_d_centres,field_lcdm[0],linestyle='--',color='k',
+#    label="$\\rho_{\\Lambda\\mathrm{CDM}}(s_{\\perp},0)$")
 plt.xlabel('$r/r_{\\mathrm{eff}}$')
 plt.ylabel('$\\rho(r)$')
 #plt.yscale('log')
 #plt.xscale('log')
+plt.legend(frameon=False,loc="upper right")
+plt.tight_layout()
 plt.savefig(figuresFolder + "profile_fit_test.pdf")
 plt.show()
 
 
 plt.clf()
+fig, ax = plt.subplots(figsize=(textwidth,0.45*textwidth))
 plt.errorbar(r_bin_centres,(rho_r_mean - rho_r_fit_vals)/rho_r_fit_vals,
              yerr=rho_r_std/rho_r_fit_vals,linestyle='-',color=seabornColormap[0],
              label="$\\Lambda$-CDM profile")
@@ -2081,6 +2245,8 @@ plt.ylabel('$\\Delta\\rho(r)/\\rho(r)$')
 #plt.yscale('log')
 #plt.xscale('log')
 plt.ylim([-0.1,0.1])
+plt.legend(frameon=False,loc="upper center")
+plt.tight_layout()
 plt.savefig(figuresFolder + "profile_fit_test_diff.pdf")
 plt.show()
 

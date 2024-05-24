@@ -698,7 +698,10 @@ def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres,radii,
     boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
     # Sorted indices, to allow correct referencing of particles:
     if sorted_indices is None:
-        sorted_indices = np.argsort(snap['iord'])
+        if os.path.isfile(snap.filename + ".snapsort.p"):
+            sorted_indices = tools.loadPickle(snap.filename + ".snapsort.p")
+        else:
+            sorted_indices = np.argsort(snap['iord'])
     if reverse_indices is None:
         reverse_indices = snap_reverse['iord'] # Force loading of reverse 
     # snapshot indices
