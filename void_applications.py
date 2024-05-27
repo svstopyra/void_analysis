@@ -781,7 +781,7 @@ def get_zspace_centres(halo_indices,snap_list,snap_list_rev,hrlist=None,
 # Convert void centres to redshift space:
 zcentres = tools.loadOrRecompute(data_folder + "zspace_centres.p",
                                  get_zspace_centres,halo_indices,snapList,
-                                 snapListRev,hrlist=hrList,_recomputeData=False)
+                                 snapListRev,hrlist=None,_recomputeData=False)
 
 filter_list_borg = [halo_indices[ns] >= 0 for ns in range(0,len(snapList))]
 los_list_void_only_borg_zspace = get_los_positions_for_all_catalogues(snapList,
@@ -926,8 +926,8 @@ los_borg = los_list_void_only_borg
 
 # Bins:
 upper_dist_reff = 2
-bins_z_reff = np.linspace(0,upper_dist_reff,41)
-bins_d_reff = np.linspace(0,upper_dist_reff,41)
+bins_z_reff = np.linspace(0,upper_dist_reff,21)
+bins_d_reff = np.linspace(0,upper_dist_reff,21)
 bin_z_centres = plot.binCentres(bins_z_reff)
 bin_d_centres = plot.binCentres(bins_d_reff)
 
@@ -1646,8 +1646,8 @@ sperp = np.hstack([plot.binCentres(bins_d_reff)
     for s in plot.binCentres(bins_z_reff)])
 scoords = np.vstack([spar,sperp]).T
 
-data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
-        (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
+data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 10) & \
+        (np.sqrt(np.sum(scoords**2,1)) < 1) )[0]
 #data_filter = np.array(range(0,bootstrap_stacks.shape[0]))
 
 
@@ -1663,7 +1663,7 @@ solved_residuals = get_solved_residuals(
 k, n = solved_residuals.shape
 dof = k*(k+1)*(k+2)/6
 pvalue = scipy.stats.chi2.sf(A_test,dof)
-chi2_deviations = (dof - A_test)/np.sqrt(2*k)
+chi2_deviations = (A_test - dof)/np.sqrt(2*dof)
 
 sample_filter = np.where(np.all(np.isfinite(log_samples[data_filter,:]),0))[0]
 solved_residuals_log = get_solved_residuals(
@@ -1678,7 +1678,134 @@ solved_residuals_log = get_solved_residuals(
 k, n = solved_residuals_log.shape
 dof = k*(k+1)*(k+2)/6
 pvalue = scipy.stats.chi2.sf(A_log,dof)
-chi2_deviations = (dof - A_log)/np.sqrt(2*k)
+chi2_deviations_log = (A_log - dof)/np.sqrt(2*dof)
+
+
+# Tests per dof:
+
+test_values = np.zeros((len(data_filter),2))
+for k in tools.progressbar(range(0,len(data_filter))):
+    data = bootstrap_stacks[data_filter[k],:]
+    n = len(data)
+    xbar = np.mean(data)
+    sigma = np.std(data)
+    residuals = (data - xbar)/sigma
+    product = np.outer(residuals,residuals)
+    A = np.mean(residuals**3)
+    B = np.sqrt(n/(24))*(np.sum(residuals**4)/n - 3)
+    dof = 1
+    test_values[k,0] = A
+    test_values[k,1] = B
+
+plt.clf()
+fig, ax = plt.subplots(1,2)
+xvals0 = np.linspace(-1,1,1001)
+xvals1 = np.linspace(-6,6,1001)
+seaborn.kdeplot(test_values[:,0],color=seabornColormap[0],ax=ax[0],
+                alpha=0.5,fill=True,cut=0)
+seaborn.kdeplot(test_values[:,1],color=seabornColormap[0],ax=ax[1],
+                alpha=0.5,fill=True,cut=0)
+ax[0].plot(xvals0,scipy.stats.norm.pdf(xvals0,0,1),linestyle='--',color='k')
+ax[1].plot(xvals1,scipy.stats.norm.pdf(xvals1,0,1),linestyle='--',color='k')
+ax[0].set_xlabel('Skewness $\\times \\sqrt{n/24}$')
+ax[1].set_xlabel('Kurtosis $\\times \\sqrt{n/6}$')
+#ax[0].set_yscale('log')
+#ax[0].set_xscale('log')
+plt.savefig(figuresFolder + "AB_distribution.pdf")
+plt.show()
+
+
+# Sample distribution plots:
+
+plt.clf()
+fig, ax = plt.subplots(1,2)
+seaborn.kdeplot(bootstrap_stacks[data_filter,:].flatten(),
+                color=seabornColormap[0],alpha=0.5,fill=True,
+                label='Density distribution',ax=ax[0])
+seaborn.kdeplot(log_samples[data_filter,:][:,sample_filter].flatten(),
+                color=seabornColormap[0],alpha=0.5,fill=True,
+                label='Log Density distribution',ax=ax[1])
+ax[0].set_xlabel('$\\rho(s_{\\perp},s_{\\parallel})$')
+ax[1].set_xlabel('$\\log(\\rho(s_{\\perp},s_{\\parallel}))$')
+ax[0].set_ylabel('Probability Density')
+ax[1].set_ylabel('Probability Density')
+ax[0].set_title('Density')
+ax[1].set_title('Log Density')
+plt.tight_layout()
+plt.savefig(figuresFolder + "density_distribution.pdf")
+plt.show()
+
+
+plt.clf()
+nrows = 4
+ncols = 4
+sample = bootstrap_stacks[data_filter,:]
+#selection = np.array(range(0,16),dtype=int).reshape((nrows,ncols))
+#np.random.seed(42)
+#selection = np.random.choice(sample.shape[0],
+#                             size=16,replace=False).reshape((nrows,ncols))
+sort  = np.flip(np.argsort(test_values[np.where(test_values[:,1] > 4)[0],1]))
+selection = np.where(test_values[:,1] > 4)[0][sort][0:16].reshape((nrows,ncols))
+selected_samples = sample[selection,:]
+cumulative = False
+width = 3e-5
+fig, ax = plt.subplots(nrows,ncols)
+for i in range(0,nrows):
+    for j in range(0,ncols):
+        axij = ax[i,j]
+        xmean = np.mean(selected_samples[i,j,:])
+        xstd = np.std(selected_samples[i,j,:])
+        xmin = -5
+        xmax = +5
+        if cumulative:
+            ymin = 0
+            ymax = 1
+        else:
+            ymin = 0
+            ymax = 0.5
+        seaborn.kdeplot((selected_samples[i,j,:] - xmean)/xstd,
+                color=seabornColormap[0],alpha=0.5,fill=False,
+                ax=ax[i,j],cumulative=cumulative)
+        #xvals = np.linspace(np.min(selected_samples[i,j,:]),
+        #                    np.max(selected_samples[i,j,:]),101)
+        xvals = np.linspace(xmin,xmax,1001)
+        xbar = np.mean(selected_samples[i,j,:])
+        sigma = np.std(selected_samples[i,j,:])
+        axij.set_xlim([xmin,xmax])
+        axij.set_ylim([ymin,ymax])
+        axij.set_title("Skew. " + ("%.2g" % test_values[selection[i,j],0]) + 
+                       "\nKurt. " + ("%.2g" % test_values[selection[i,j],1]),
+                       pad=-20,fontsize=8)
+        if cumulative:
+            ax[i,j].plot(xvals,
+                0.5 + 0.5*scipy.special.erf((xvals - xbar)/(np.sqrt(2)*sigma)),
+                linestyle='--',color='k')
+        else:
+            ax[i,j].plot(xvals,
+                np.exp(-0.5*(xvals**2))/np.sqrt(2*np.pi),
+                linestyle='--',color='k')
+        if j > 0:
+            axij.yaxis.label.set_visible(False)
+            axij.yaxis.set_major_formatter(NullFormatter())
+            axij.yaxis.set_minor_formatter(NullFormatter())
+        if i < nrows - 1:
+            axij.xaxis.label.set_visible(False)
+            axij.xaxis.set_major_formatter(NullFormatter())
+            axij.xaxis.set_minor_formatter(NullFormatter())
+
+fig.supxlabel('$\\rho(s_{\\perp},s_{\\parallel})$')
+#fig.supylabel('Probability Density')
+plt.subplots_adjust(wspace=0.0,hspace=0.0,left=0.15,bottom=0.15,
+                    top=0.95,right=0.95)
+if cumulative:
+    plt.savefig(figuresFolder + "gaussians_plot_cumulative.pdf")
+else:
+    plt.savefig(figuresFolder + "gaussians_plot.pdf")
+
+plt.show()
+
+
+
 
 
 # Chi2 distribution:
