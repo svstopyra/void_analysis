@@ -1972,7 +1972,7 @@ parallel = False
 
 batch_size = 100
 n_batches = 100
-autocorr = np.zeros((3,n_batches*batch_size))
+autocorr = np.zeros((ndims,n_batches*batch_size))
 old_tau = np.inf
 #data_filter = np.where(np.sqrt(np.sum(scoords**2,1)) < 1.5)[0]
 data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
@@ -2043,10 +2043,15 @@ tau_max = np.max(tau)
 flat_samples = sampler.get_chain(discard=int(3*tau_max), 
                                  thin=int(tau_max/2), flat=True)
 
+
+
+
 import corner
 
 plt.clf()
-fig = corner.corner(flat_samples, labels=["$\\Omega_{m}$","$f$","A"])
+#fig = corner.corner(flat_samples, labels=["$\\Omega_{m}$","$f$","A"])
+fig = corner.corner(flat_samples, labels=["$\\epsilon$","$f$","$A$","$r_0$",
+    "$c_1$","$f_1$","$B$"])
 fig.suptitle("$\\Lambda$-CDM Inference from Void Catalogue")
 plt.savefig(figuresFolder + "corner_plot_cosmo_inference.pdf")
 plt.show()
