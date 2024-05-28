@@ -523,7 +523,7 @@ def to_real_space(s_par,s_perp,z,Om,Om_fid=None,Delta=None,u_par=None,f=None,
             r_par = r_par_guess
         else:
             # Use the tabulated inverse:
-            r_par = F_inv(s_perp,s_par)
+            r_par = F_inv(s_perp,s_par,f*np.ones(s_perp.shape))
     else:
         # Use supplied peculiar velocity:
         # Hubble rate:
@@ -602,7 +602,8 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
                           z,Delta,delta,rho_real,data_filter=None,
                           cholesky=False,normalised=False,tabulate_inverse=True,
                           ntab = 10,sample_epsilon=False,Om_fid=None,
-                          singular=False,Umap=None,good_eig=None,**kwargs):
+                          singular=False,Umap=None,good_eig=None,
+                          F_inv=None,**kwargs):
     s_par = scoords[:,0]
     s_perp = scoords[:,1]
     if sample_epsilon:
@@ -626,22 +627,30 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
         # Tabulate an inverse function and then evaluate an interpolated
         # inverse, rather than repeatedly inverting:
         data_val = data_field
-        svals = np.linspace(np.min(s_par_new),np.max(s_par_new),ntab)
-        rperp_vals = np.linspace(np.min(s_perp_new),np.max(s_perp_new),ntab)
-        rvals = np.zeros((ntab,ntab))
-        for i in range(0,ntab):
-            for j in range(0,ntab):
-                F = (lambda r: r - r*(f/3)*\
-                    Delta(np.sqrt(r**2 + rperp_vals[i]**2)) \
-                    - svals[j])
-                rvals[i,j] = scipy.optimize.fsolve(F,svals[j])
-        F_inv = lambda x, y: scipy.interpolate.interpn((rperp_vals,svals),rvals,
-                                                       np.vstack((x,y)).T,
-                                                       method='cubic')
-        theory_val = z_space_profile(s_par_new,s_perp_new,
-                                     lambda r: rho_real(r,A,r0,c1,f1,B),
-                                     z,Om,Delta,delta,f=f,F_inv=F_inv,
-                                     **kwargs)
+        if F_inv is None:
+            svals = np.linspace(np.min(s_par_new),np.max(s_par_new),ntab)
+            rperp_vals = np.linspace(np.min(s_perp_new),np.max(s_perp_new),ntab)
+            rvals = np.zeros((ntab,ntab))
+            for i in range(0,ntab):
+                for j in range(0,ntab):
+                    F = (lambda r: r - r*(f/3)*\
+                        Delta(np.sqrt(r**2 + rperp_vals[i]**2)) \
+                        - svals[j])
+                    rvals[i,j] = scipy.optimize.fsolve(F,svals[j])
+            F_inv = lambda x, y: scipy.interpolate.interpn((rperp_vals,svals),
+                                                           rvals,
+                                                           np.vstack((x,y)).T,
+                                                           method='cubic')
+            theory_val = z_space_profile(s_par_new,s_perp_new,
+                                         lambda r: rho_real(r,A,r0,c1,f1,B),
+                                         z,Om,Delta,delta,f=f,F_inv=F_inv,
+                                         **kwargs)
+        else:
+            theory_val = z_space_profile(s_par_new,s_perp_new,
+                                         lambda r: rho_real(r,A,r0,c1,f1,B),
+                                         z,Om,Delta,delta,f=f,
+                                         F_inv=lambda x, y, z: F_inv(x,y,z),
+                                         **kwargs)
         if normalised:
             delta_rho = 1.0 - theory_val/data_val
         else:
@@ -1646,8 +1655,8 @@ sperp = np.hstack([plot.binCentres(bins_d_reff)
     for s in plot.binCentres(bins_z_reff)])
 scoords = np.vstack([spar,sperp]).T
 
-data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 10) & \
-        (np.sqrt(np.sum(scoords**2,1)) < 1) )[0]
+data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
+        (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
 #data_filter = np.array(range(0,bootstrap_stacks.shape[0]))
 
 
@@ -1741,11 +1750,11 @@ nrows = 4
 ncols = 4
 sample = bootstrap_stacks[data_filter,:]
 #selection = np.array(range(0,16),dtype=int).reshape((nrows,ncols))
-#np.random.seed(42)
-#selection = np.random.choice(sample.shape[0],
-#                             size=16,replace=False).reshape((nrows,ncols))
+np.random.seed(42)
+selection = np.random.choice(sample.shape[0],
+                             size=16,replace=False).reshape((nrows,ncols))
 sort  = np.flip(np.argsort(test_values[np.where(test_values[:,1] > 4)[0],1]))
-selection = np.where(test_values[:,1] > 4)[0][sort][0:16].reshape((nrows,ncols))
+#selection = np.where(test_values[:,1] > 4)[0][sort][0:16].reshape((nrows,ncols))
 selected_samples = sample[selection,:]
 cumulative = False
 width = 3e-5
@@ -1772,10 +1781,11 @@ for i in range(0,nrows):
         xbar = np.mean(selected_samples[i,j,:])
         sigma = np.std(selected_samples[i,j,:])
         axij.set_xlim([xmin,xmax])
-        axij.set_ylim([ymin,ymax])
+        axij.set_ylim([0,ymax])
+        #axij.set_yscale('log')
         axij.set_title("Skew. " + ("%.2g" % test_values[selection[i,j],0]) + 
-                       "\nKurt. " + ("%.2g" % test_values[selection[i,j],1]),
-                       pad=-20,fontsize=8)
+                       ",Kurt. " + ("%.2g" % test_values[selection[i,j],1]),
+                       x=0.5,y=0.8,fontsize=6)
         if cumulative:
             ax[i,j].plot(xvals,
                 0.5 + 0.5*scipy.special.erf((xvals - xbar)/(np.sqrt(2)*sigma)),
@@ -1934,7 +1944,7 @@ theta_ranges=[[0.1,0.5],[0,1.0],[-np.inf,np.inf],[0,2],
                                    [-np.inf,0],[0,np.inf],[-1,1]]
 theta_ranges_epsilon = [[0.9,1.10],[0,1.0],[-np.inf,np.inf],[0,2],
                                    [-np.inf,0],[0,np.inf],[-1,1]]
-redo_chain = False
+redo_chain = True
 continue_chain = True
 backup_start = True
 import emcee
@@ -1965,9 +1975,28 @@ n_batches = 100
 autocorr = np.zeros((3,n_batches*batch_size))
 old_tau = np.inf
 #data_filter = np.where(np.sqrt(np.sum(scoords**2,1)) < 1.5)[0]
+data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
+         (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
 
+# Tabulated inverse:
+ntab = 100
+svals = np.linspace(0,3,ntab)
+rperp_vals = np.linspace(0,3,ntab)
+ntab_f = 100
+f_vals = np.linspace(0,1,ntab_f)
+rvals = np.zeros((ntab,ntab,ntab_f))
+for i in tools.progressbar(range(0,ntab)):
+    for j in range(0,ntab):
+        for k in range(0,ntab_f):
+            F = (lambda r: r - r*(f_vals[k]/3)*\
+                Delta_func(np.sqrt(r**2 + rperp_vals[i]**2)) \
+                - svals[j])
+            rvals[i,j,k] = scipy.optimize.fsolve(F,svals[j])
 
-
+F_inv = lambda x, y, z: scipy.interpolate.interpn((rperp_vals,svals,f_vals),
+                                               rvals,
+                                               np.vstack((x,y,z)).T,
+                                               method='cubic')
 
 if parallel:
     with Pool() as pool:
@@ -1985,11 +2014,13 @@ else:
     #cholesky_cov_filtered = scipy.linalg.cholesky(reg_cov_filtered,lower=True)
     sampler = emcee.EnsembleSampler(
             nwalkers, ndims, log_probability_aptest, 
-            args=(data_field,scoords,
-                  inv_cov,z,Delta_func,delta_func,rho_real),
-            kwargs={'Om_fid':Om_fid,'cholesky':False,'tabulate_inverse':True,
+            args=(data_field[data_filter],scoords[data_filter,:],
+                  cholesky_cov[data_filter,:][:,data_filter],z,Delta_func,
+                  delta_func,rho_real),
+            kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
                     'sample_epsilon':True,'theta_ranges':theta_ranges_epsilon,
-                    'singular':True,'Umap':Umap,'good_eig':good_eig},
+                    'singular':False,'Umap':Umap,'good_eig':good_eig,
+                    'F_inv':F_inv},
                     backend=backend)
     if redo_chain:
         sampler.run_mcmc(initial,n_mcmc , progress=True)
@@ -2005,6 +2036,7 @@ else:
                 break
             old_tau = tau
 
+
 # Filter the MCMC samples to account for correlation:
 tau = sampler.get_autocorr_time(tol=0)
 tau_max = np.max(tau)
@@ -2018,6 +2050,51 @@ fig = corner.corner(flat_samples, labels=["$\\Omega_{m}$","$f$","A"])
 fig.suptitle("$\\Lambda$-CDM Inference from Void Catalogue")
 plt.savefig(figuresFolder + "corner_plot_cosmo_inference.pdf")
 plt.show()
+
+
+# Tests of the inverse function:
+#X = scoords[:,0].reshape((20,20))
+#Y = scoords[:,1].reshape((20,20))
+X = np.hstack([np.array([x for k in range(0,100)]) 
+    for x in np.linspace(0,2,100)])
+Y = np.hstack([np.linspace(0,2,100) for k in range(0,100)])
+
+inv_field = F_inv(X,Y,
+                  0.25*np.ones(len(X))).reshape((100,100))
+
+
+s_par_range = np.linspace(0,2,40)
+s_perp_range = np.linspace(0,2,40)
+f_range = np.linspace(0,1,40)
+X, Y, Z = [x.flatten() for x in 
+    np.meshgrid(s_par_range,s_perp_range,f_range)]
+
+inv_field_3d = F_inv(X,Y,Z).reshape((40,40,40))
+
+plt.clf()
+im = plt.imshow(inv_field,cmap='Blues',vmin=0,vmax=2,extent=(0,2,0,2))
+plt.xlabel('$s_{\\perp}/R_{\\mathrm{eff}}$')
+plt.ylabel('$s_{\\parallel}/R_{\\mathrm{eff}}$')
+plt.colorbar()
+plt.savefig(figuresFolder + "inverse_field.pdf")
+plt.show()
+
+plt.clf()
+fig, ax = plt.subplots(1,3)
+slices = [inv_field_3d[:,10,20],inv_field_3d[27,:,13],inv_field_3d[20,39,:]]
+ranges = [s_par_range,s_perp_range,f_range]
+xnames = ['$s_{\\parallel}/R_{\\mathrm{eff}}$',
+          '$s_{\\perp}/R_{\\mathrm{eff}}$','$f$']
+data_points = []
+for axi, y, xvals, name in zip(ax, slices,ranges,xnames):
+    axi.plot(xvals,y)
+    axi.set_xlabel('$s_{\\parallel}/R_{\\mathrm{eff}}$')
+    axi.set_ylabel('$F^{-1}$')
+
+plt.tight_layout()
+plt.savefig(figuresFolder + "inverse_field_slice.pdf")
+plt.show()
+
 
 # Optimal A:
 args2 = (data_field,scoords,np.identity(1600),z,Delta_func,delta_func,rho_real)
