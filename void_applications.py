@@ -1944,7 +1944,7 @@ theta_ranges=[[0.1,0.5],[0,1.0],[-np.inf,np.inf],[0,2],
                                    [-np.inf,0],[0,np.inf],[-1,1]]
 theta_ranges_epsilon = [[0.9,1.10],[0,1.0],[-np.inf,np.inf],[0,2],
                                    [-np.inf,0],[0,np.inf],[-1,1]]
-redo_chain = True
+redo_chain = False
 continue_chain = True
 backup_start = True
 import emcee
