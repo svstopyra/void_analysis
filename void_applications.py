@@ -2264,7 +2264,8 @@ for i in range(0,len(bins_z_reff)-1):
         profile_2d[i,j] = z_space_profile(spar,sperp,
                                           lambda r: rho_real(r,A,r0,c1,f1,B),
                                           z,Om,Delta_func,delta_func,
-                                          epsilon=1,f=f_fid,apply_geometry=True)
+                                          epsilon=flat_mean[0],
+                                          f=flat_mean[1],apply_geometry=True)
 
 plot_los_void_stack(\
         profile_2d,bin_d_centres,bin_z_centres,
@@ -2408,6 +2409,22 @@ tau2 = sampler2.get_autocorr_time()
 
 flat_samples2 = sampler2.get_chain(discard=int(3*np.max(tau2)), 
                                  thin=int(np.max(tau2)), flat=True)
+
+
+# Test effect on the inference:
+
+nll_cosmo1 = lambda *theta: -log_likelihood_aptest(
+    np.hstack([*theta,np.mean(flat_samples1,0)]),*args,**kwargs)
+nll_cosmo2 = lambda *theta: -log_likelihood_aptest(
+    np.hstack([*theta,np.mean(flat_samples2,0)]),*args,**kwargs)
+#nll = lambda *theta: -log_likelihood_aptest(np.hstack([*theta,A_opt]),
+#                                            *args,**kwargs)
+soln_cosmo1 = scipy.optimize.minimize(nll_cosmo1, 
+    np.array([1.0,f_lcdm(z,Om_fid)]),bounds = [(0.9,1.1),(0,1.0)])
+soln_cosmo2 = scipy.optimize.minimize(nll_cosmo2, 
+    np.array([1.0,f_lcdm(z,Om_fid)]),bounds = [(0.9,1.1),(0,1.0)])
+soln_mle2 = scipy.optimize.minimize(nll, 
+    np.array([1.0,f_lcdm(z,Om_fid)]),bounds = [(0.9,1.1),(0,1.0)])
 
 
 # Corner plot:
