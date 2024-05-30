@@ -1940,24 +1940,27 @@ sol2 = scipy.optimize.minimize(nll1, initial,
 A,r0,c1,f1,B = sol2.x
 
 # Run the inference:
-theta_ranges=[[0.1,0.5],[0,1.0],[-np.inf,np.inf],[0,2],
-                                   [-np.inf,0],[0,np.inf],[-1,1]]
-theta_ranges_epsilon = [[0.9,1.10],[0,1.0],[-np.inf,np.inf],[0,2],
-                                   [-np.inf,0],[0,np.inf],[-1,1]]
+profile_param_ranges = [[-np.inf,np.inf],[0,2],[-np.inf,0],[0,np.inf],[-1,1]]
+om_ranges = [[0.1,0.5]]
+eps_ranges = [[0.9,1.1]]
+f_ranges = [[0,1]]
+
+theta_ranges=om_ranges + f_ranges + profile_param_ranges
+theta_ranges_epsilon = eps_ranges + f_ranges + profile_param_ranges
 redo_chain = False
 continue_chain = True
 backup_start = True
 import emcee
 import h5py
 nwalkers = 64
-ndims = 7
+ndims = 2
 n_mcmc = 10000
 disp = 1e-4
 Om_fid = 0.3111
 max_n = 1000000
 z = 0.0225
-eps_initial_guess = np.array([1.0,f_lcdm(z,Om_fid),A,r0,c1,f1,B])
-theta_initial_guess = np.array([0.3,f_lcdm(z,0.3),A,r0,c1,f1,B])
+eps_initial_guess = np.array([1.0,f_lcdm(z,Om_fid)])
+theta_initial_guess = np.array([0.3,f_lcdm(z,0.3)])
 initial = eps_initial_guess + disp*np.random.randn(nwalkers,ndims)
 filename = data_folder + "inference_weighted.h5"
 filename_initial = data_folder + "inference_old_state.h5"
@@ -1998,6 +2001,11 @@ F_inv = lambda x, y, z: scipy.interpolate.interpn((rperp_vals,svals,f_vals),
                                                np.vstack((x,y,z)).T,
                                                method='cubic')
 
+# Wrapper allowing us to pass arbitrary arguments that won't be sampled over:
+def posterior_wrapper(theta,additional_args,*args,**kwargs):
+    theta_comb = np.hstack([theta,additional_args])
+    return log_probability_aptest(theta_comb,*args,**kwargs)
+
 if parallel:
     with Pool() as pool:
         sampler = emcee.EnsembleSampler(
@@ -2013,8 +2021,9 @@ else:
     #reg_cov_filtered = reg_cov[data_filter,:][:,data_filter]
     #cholesky_cov_filtered = scipy.linalg.cholesky(reg_cov_filtered,lower=True)
     sampler = emcee.EnsembleSampler(
-            nwalkers, ndims, log_probability_aptest, 
-            args=(data_field[data_filter],scoords[data_filter,:],
+            nwalkers, ndims, 
+            posterior_wrapper, 
+            args=(sol2.x,data_field[data_filter],scoords[data_filter,:],
                   cholesky_cov[data_filter,:][:,data_filter],z,Delta_func,
                   delta_func,rho_real),
             kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
@@ -2023,18 +2032,23 @@ else:
                     'F_inv':F_inv},
                     backend=backend)
     if redo_chain:
-        sampler.run_mcmc(initial,n_mcmc , progress=True)
+        autocorr = np.zeros((ndims,0))
     else:
-        for k in range(0,n_batches):
+        autocorr = np.load(data_folder + "autocorr_.npy")
+    for k in range(0,n_batches):
+        if (k == 0 and redo_chain):
+            sampler.run_mcmc(initial,batch_size , progress=True)
+        else:
             sampler.run_mcmc(None,batch_size,progress=True)
-            tau = sampler.get_autocorr_time(tol=0)
-            autocorr[:,k] = tau
-            # Check convergence
-            converged = np.all(tau * 100 < sampler.iteration)
-            converged &= np.all(np.abs(old_tau - tau) / tau < 0.01)
-            if converged:
-                break
-            old_tau = tau
+        tau = sampler.get_autocorr_time(tol=0)
+        autocorr = np.hstack([autocorr,tau.reshape((ndims,1))])
+        np.save(data_folder + "autocorr_.npy",autocorr)
+        # Check convergence
+        converged = np.all(tau * 100 < sampler.iteration)
+        converged &= np.all(np.abs(old_tau - tau) / tau < 0.01)
+        if converged:
+            break
+        old_tau = tau
 
 
 # Filter the MCMC samples to account for correlation:
@@ -2043,17 +2057,19 @@ tau_max = np.max(tau)
 flat_samples = sampler.get_chain(discard=int(3*tau_max), 
                                  thin=int(tau_max/2), flat=True)
 
-
+flat_mean = np.mean(flat_samples,0)
+flat_range = np.percentile(flat_samples,[16,84],axis=0)
 
 
 import corner
 
 plt.clf()
 #fig = corner.corner(flat_samples, labels=["$\\Omega_{m}$","$f$","A"])
-fig = corner.corner(flat_samples, labels=["$\\epsilon$","$f$","$A$","$r_0$",
-    "$c_1$","$f_1$","$B$"])
+#fig = corner.corner(flat_samples, labels=["$\\epsilon$","$f$","$A$","$r_0$",
+#    "$c_1$","$f_1$","$B$"])
+fig = corner.corner(flat_samples,labels=["$\\epsilon$","$f$"])
 fig.suptitle("$\\Lambda$-CDM Inference from Void Catalogue")
-plt.savefig(figuresFolder + "corner_plot_cosmo_inference.pdf")
+plt.savefig(figuresFolder + "corner_plot_cosmo_inference_cosmo_only.pdf")
 plt.show()
 
 
@@ -2115,19 +2131,26 @@ data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
         (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
 reg_cov_filtered = reg_cov[data_filter,:][:,data_filter]
 cholesky_cov_filtered = scipy.linalg.cholesky(reg_cov_filtered,lower=True)
-args = (data_field[data_filter],scoords[data_filter,:],cholesky_cov_filtered,
-        z,Delta_func,delta_func,rho_real)
+args=(data_field[data_filter],scoords[data_filter,:],
+                  cholesky_cov[data_filter,:][:,data_filter],z,Delta_func,
+                  delta_func,rho_real)
+kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
+        'sample_epsilon':True,'theta_ranges':theta_ranges_epsilon,
+        'singular':False,'Umap':Umap,'good_eig':good_eig,
+        'F_inv':F_inv}
 #data_filter = np.where(np.sqrt(np.sum(scoords**2,1)) < 2.0)[0]
 #kwargs={'Om_fid':0.3111,'data_filter':data_filter}
-Om_fid = 0.3111
-kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
-    'sample_epsilon':True}
-eps_initial_guess = [1.0,f_lcdm(z,Om_fid),0.01]
-nll = lambda *theta: -log_likelihood_aptest(*theta,*args,**kwargs)
+#Om_fid = 0.3111
+#kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
+#    'sample_epsilon':True}
+eps_initial_guess = np.hstack([np.array([1.0,f_lcdm(z,Om_fid)]),sol2.x])
+nll = lambda *theta: -log_likelihood_aptest(np.hstack([*theta,sol2.x]),*args,
+                                            **kwargs)
 #nll = lambda *theta: -log_likelihood_aptest(np.hstack([*theta,A_opt]),
 #                                            *args,**kwargs)
-soln = scipy.optimize.minimize(nll, eps_initial_guess,
-    bounds=[(0.98,1.02),(0,1.0),(None,None)])
+soln = scipy.optimize.minimize(nll, np.array([1.0,f_lcdm(z,Om_fid)]),
+    bounds = [(0.9,1.1),(0,1.0)])
+    #bounds=[(0.9,1.1),(0,1.0),(None,None),(0,2),(None,0),(0,None),(-1,1)])
 #soln = scipy.optimize.minimize(nll, theta_initial_guess,
 #    bounds=[(0.1,0.5),(0,1.0),(None,None)])
 theta_initial_guess2 = np.array([Om_fid,f_lcdm(z,Om_fid)])
@@ -2144,14 +2167,15 @@ Om_range_centres = plot.binCentres(Om_range)
 eps_range = np.linspace(0.9,1.1,41)
 
 log_like_ap = np.zeros((40,40))
-A = soln.x[2]
+A,r0,c1,f1,B = sol2.x
 #A = A_opt
 for i in tools.progressbar(range(0,len(Om_range_centres))):
     for j in range(0,len(f_range_centres)):
         if kwargs['sample_epsilon']:
-            theta = np.array([eps_range[i],f_range_centres[j],A])
+            theta = np.array([eps_range[i],f_range_centres[j],A,r0,c1,f1,B])
         else:
-            theta = np.array([Om_range_centres[i],f_range_centres[j],A])
+            theta = np.array([Om_range_centres[i],f_range_centres[j],
+                              A,r0,c1,f1,B])
         log_like_ap[i,j] = log_likelihood_aptest(theta,*args,**kwargs)
 
 
@@ -2159,7 +2183,7 @@ if kwargs['sample_epsilon']:
     plt.clf()
     plt.imshow(-log_like_ap.T,
                extent=(eps_range[0],eps_range[-1],f_range[0],f_range[-1]),
-               norm=colors.LogNorm(vmin=1e20,vmax=5e20),cmap='Blues',
+               norm=colors.LogNorm(vmin=2e9,vmax=1e8),cmap='Blues',
                aspect='auto',origin='lower')
     plt.xlabel('$\\epsilon$')
     plt.ylabel('$f$')
@@ -2227,16 +2251,20 @@ plt.show()
 
 
 Om = soln.x[0]
+eps = soln.x[0]
 f = soln.x[1]
 A = soln.x[2]
+
+f_fid = f_lcdm(0.0225,0.3111)
 
 for i in range(0,len(bins_z_reff)-1):
     for j in range(0,len(bins_d_reff)-1):
         spar = bin_z_centres[i]
         sperp = bin_d_centres[j]
-        profile_2d[i,j] = z_space_profile(spar,sperp,lambda r: rho_real(r,A),
+        profile_2d[i,j] = z_space_profile(spar,sperp,
+                                          lambda r: rho_real(r,A,r0,c1,f1,B),
                                           z,Om,Delta_func,delta_func,
-                                          Om_fid=0.3111,f=f)
+                                          epsilon=1,f=f_fid,apply_geometry=True)
 
 plot_los_void_stack(\
         profile_2d,bin_d_centres,bin_z_centres,
@@ -2249,15 +2277,25 @@ plot_los_void_stack(\
         colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})$")
 
 plot_los_void_stack(\
-        profile_2d/field_borg,bin_d_centres,bin_z_centres,
+        field_borg,bin_d_centres,bin_z_centres,
+        cmap='Blues',vmin=0,vmax=0.06,fontsize=10,
+        xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$ (Perpendicular distance)',
+        ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$ (LOS distance)',
+        density_unit='probability',
+        savename=figuresFolder + "profile_2d_field_borg.pdf",
+        title=None,colorbar=True,shrink=0.9,
+        colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})$")
+
+plot_los_void_stack(\
+        (profile_2d - field_borg)/field_borg,bin_d_centres,bin_z_centres,
         cmap='PuOr_r',
-        vmin=0,vmax=200,fontsize=10,norm=colors.LogNorm(vmin=1e-2,vmax=1e2),
+        vmin=0,vmax=200,fontsize=10,norm=colors.Normalize(vmin=-1,vmax=1),
         xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$ (Perpendicular distance)',
         ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$ (LOS distance)',
         density_unit='probability',
         savename=figuresFolder + "profile_2d_test_diff.pdf",
         title=None,colorbar=True,shrink=0.9,
-        colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})" + \
+        colorbar_title="$\\Delta\\rho(s_{\\parallel},s_{\\perp})" + \
         "/\\tilde{\\rho}(s_{\\parallel},s_{\\perp})$")
 
 
@@ -2276,7 +2314,7 @@ plot_los_void_stack(\
 
 
 plot_los_void_stack(\
-        profile_2d,bin_d_centres,bin_z_centres,
+        field_lcdm,bin_d_centres,bin_z_centres,
         cmap='Blues',
         vmin=0,vmax=0.06,fontsize=10,
         xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$ (Perpendicular distance)',
@@ -2345,19 +2383,19 @@ import emcee
 pos = sol1.x + 1e-4*np.random.randn(32,5)
 nwalkers, ndim = pos.shape
 
-sampler = emcee.EnsembleSampler(
+sampler1 = emcee.EnsembleSampler(
     nwalkers, ndim, log_probability, args=(r_bin_centres, np.log(rho_r_mean),
     0.5*np.log((rho_r_mean + rho_r_std)/\
     (rho_r_mean - rho_r_std)))
 )
-sampler.run_mcmc(pos, 10000, progress=True)
+sampler1.run_mcmc(pos, 10000, progress=True)
 
-tau = sampler.get_autocorr_time()
+tau1 = sampler1.get_autocorr_time()
 
-flat_samples = sampler.get_chain(discard=int(3*np.max(tau)), 
+flat_samples1 = sampler1.get_chain(discard=int(3*np.max(tau)), 
                                  thin=int(np.max(tau)), flat=True)
 
-A1, r01, c11,f11,B1 = np.mean(flat_samples,0)
+A1, r01, c11,f11,B1 = np.mean(flat_samples1,0)
 
 
 sampler2 = emcee.EnsembleSampler(
@@ -2376,7 +2414,7 @@ flat_samples2 = sampler2.get_chain(discard=int(3*np.max(tau2)),
 import corner
 
 plt.clf()
-fig = corner.corner(flat_samples, labels=["$A$","$r_0$","$c_1$","$f_1$","$B$"])
+fig = corner.corner(flat_samples1, labels=["$A$","$r_0$","$c_1$","$f_1$","$B$"])
 fig.suptitle("$\\Lambda$-CDM Simulations Contour Ellipticity")
 plt.savefig(figuresFolder + "corner_plot_profile_fit.pdf")
 plt.show()
@@ -2391,7 +2429,7 @@ plt.show()
 
 rho_r_fit_samples = np.vstack([
     profile_broken_power(r_bin_centres,A,r0,c1,f1,B) 
-    for A,r0,c1,f1,B in flat_samples])
+    for A,r0,c1,f1,B in flat_samples1])
 
 rho_r_fit_samples_mean = np.mean(rho_r_fit_samples,0)
 rho_r_fit_samples_std = np.std(rho_r_fit_samples,0)
@@ -2403,10 +2441,17 @@ rho_r_borg_fit_samples = np.vstack([
 rho_r_borg_fit_samples_mean = np.mean(rho_r_borg_fit_samples,0)
 rho_r_borg_fit_samples_std = np.std(rho_r_borg_fit_samples,0)
 
+field_borg_fit_samples = rho_r_borg_fit_samples = np.vstack([
+    profile_broken_power(r_bin_centres,A,r0,c1,f1,B) 
+    for A,r0,c1,f1,B in flat_samples[:,2:]])
+field_borg_fit_mean = np.mean(field_borg_fit_samples,0)
+field_borg_fit_std = np.std(field_borg_fit_samples,0)
 
 #rho_r_fit_vals = profile_broken_power(r_bin_centres,A1,r01,c11,f11,B1)
 rho_r_fit_vals = profile_broken_power(r_bin_centres,A1,r01,c11,f11,B1)
 rho_r_fit_vals_borg = profile_broken_power(r_bin_centres,A2,r02,c12,f12,B2)
+
+
 plt.clf()
 fig, ax = plt.subplots(figsize=(textwidth,0.45*textwidth))
 plt.errorbar(r_bin_centres,rho_r_mean,yerr=rho_r_std,linestyle='-',
@@ -2426,17 +2471,24 @@ plt.fill_between(r_bin_centres,
 #         linestyle=':',color=seabornColormap[0])
 #plt.plot(r_bin_centres,rho_r_fit_vals_borg,
 #         linestyle=':',color=seabornColormap[1])
-#plt.plot(bin_d_centres,field_borg[0],linestyle='-',color='k',
-#    label="$\\rho_{\\mathrm{BORG}}(s_{\\perp},0)$")
+plt.plot(bin_d_centres,field_borg[0],linestyle='-',color='k',
+    label="$\\rho_{\\mathrm{BORG}}(s_{\\perp},0)$")
+plt.fill_between(r_bin_centres,
+                 field_borg_fit_mean - field_borg_fit_std,
+                 field_borg_fit_mean + field_borg_fit_std,
+                 alpha=0.5,color='k',
+                 label="Fitting-formula, $\\rho(s_{\\parallel},s_{\\perp})$ " + 
+                 " fit")
 #plt.plot(bin_d_centres,field_lcdm[0],linestyle='--',color='k',
 #    label="$\\rho_{\\Lambda\\mathrm{CDM}}(s_{\\perp},0)$")
+
 plt.xlabel('$r/r_{\\mathrm{eff}}$')
 plt.ylabel('$\\rho(r)$')
 #plt.yscale('log')
 #plt.xscale('log')
 plt.legend(frameon=False,loc="upper right")
 plt.tight_layout()
-plt.savefig(figuresFolder + "profile_fit_test.pdf")
+plt.savefig(figuresFolder + "profile_fit_test2.pdf")
 plt.show()
 
 
