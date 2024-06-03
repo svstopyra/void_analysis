@@ -793,11 +793,36 @@ zcentres = tools.loadOrRecompute(data_folder + "zspace_centres.p",
                                  snapListRev,hrlist=None,_recomputeData=False)
 
 filter_list_borg = [halo_indices[ns] >= 0 for ns in range(0,len(snapList))]
+
+
+# BORG particles, void only, z-space:
 los_list_void_only_borg_zspace = get_los_positions_for_all_catalogues(snapList,
     snapListRev,zcentres,cat300.getAllProperties("radii",void_filter=True).T,
     all_particles=False,void_indices = halo_indices,
     filter_list=filter_list_borg,dist_max=60,rmin=10,rmax=20,recompute=False,
     zspace=True,recompute_zspace=False,suffix=".lospos_void_only_zspace2.p")
+
+# BORG particles, all, z-space:
+los_list_all_borg_zspace = get_los_positions_for_all_catalogues(snapList,
+    snapListRev,zcentres,cat300.getAllProperties("radii",void_filter=True).T,
+    all_particles=True,void_indices = halo_indices,
+    filter_list=filter_list_borg,dist_max=60,rmin=10,rmax=20,recompute=False,
+    zspace=True,recompute_zspace=False,suffix=".lospos_all_zspace2.p")
+
+# BORG particles, Real space positions (void only):
+los_list_void_only_borg = get_los_positions_for_all_catalogues(snapList,
+    snapListRev,
+    cat300.getAllCentres(void_filter=True),
+    cat300.getAllProperties("radii",void_filter=True).T,all_particles=False,
+    void_indices = halo_indices,filter_list=filter_list_borg,
+    dist_max=60,rmin=10,rmax=20,recompute=False,suffix=".lospos_void_only2.p")
+# BORG particles, Real space positions (all):
+los_list_all_borg = get_los_positions_for_all_catalogues(snapList,
+    snapListRev,
+    cat300.getAllCentres(void_filter=True),
+    cat300.getAllProperties("radii",void_filter=True).T,all_particles=True,
+    void_indices = halo_indices,filter_list=filter_list_borg,
+    dist_max=60,rmin=10,rmax=20,recompute=False,suffix=".lospos_all.p")
 
 # LCDM examples for comparison:
 distances_from_centre_lcdm = [
@@ -806,11 +831,19 @@ distances_from_centre_lcdm = [
 filter_list_lcdm = [(dist < 135) & (radii > 10) & (radii <= 20) 
     for dist, radii in zip(distances_from_centre_lcdm,antihaloRadiiUn)]
 
-los_list_void_only_lcdm_zspace = get_los_positions_for_all_catalogues(
-    snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
-    all_particles=False,filter_list=filter_list_lcdm,dist_max=60,rmin=10,
-    rmax=20,recompute=False,zspace=True,recompute_zspace=False,
-    suffix=".lospos_void_only_zspace.p")
+# LCDM particles (centres), void only, z-space:
+#los_list_void_only_lcdm_zspace = get_los_positions_for_all_catalogues(
+#    snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
+#    all_particles=False,filter_list=filter_list_lcdm,dist_max=60,rmin=10,
+#    rmax=20,recompute=False,zspace=True,recompute_zspace=False,
+#    suffix=".lospos_void_only_zspace.p")
+
+# LCDM particles (centres), all, z-space:
+#los_list_all_lcdm_zspace = get_los_positions_for_all_catalogues(
+#    snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
+#    all_particles=True,filter_list=filter_list_lcdm,dist_max=60,rmin=10,
+#    rmax=20,recompute=False,zspace=True,recompute_zspace=False,
+#    suffix=".lospos_all_zspace.p")
 
 # Get LOS list for selection-effect-processed regions:
 [randCentres,randOverDen] = tools.loadPickle(data_folder2 + \
@@ -855,10 +888,31 @@ filter_list_lcdm_selected = [np.any(np.array([
     for all_dists, radii in 
     zip(distances_from_centre_lcdm_selected,antihaloRadiiUn)]
 
+# LCDM particles, density selected, void only, real space:
 los_list_void_only_selected_lcdm = get_los_positions_for_all_catalogues(
     snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
     all_particles=False,filter_list=filter_list_lcdm_by_region,dist_max=60,
     rmin=10,rmax=20,recompute=False,suffix=".lospos_void_only_selected.p")
+
+# LCDM particles, density selected, all, real space:
+los_list_all_selected_lcdm = get_los_positions_for_all_catalogues(
+    snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
+    all_particles=True,filter_list=filter_list_lcdm_by_region,dist_max=60,
+    rmin=10,rmax=20,recompute=False,suffix=".lospos_all_selected.p")
+
+# LCDM particles, density selected, void only, z-space:
+los_list_void_only_lcdm_zspace_selected = get_los_positions_for_all_catalogues(
+    snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
+    all_particles=False,filter_list=filter_list_lcdm_by_region,dist_max=60,
+    rmin=10,rmax=20,recompute=False,zspace=True,recompute_zspace=False,
+    suffix=".lospos_void_only_zspace_selected.p")
+
+# LCDM particles, density selected, all, z-space:
+los_list_void_only_lcdm_zspace_selected = get_los_positions_for_all_catalogues(
+    snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
+    all_particles=True,filter_list=filter_list_lcdm_by_region,dist_max=60,
+    rmin=10,rmax=20,recompute=False,zspace=True,recompute_zspace=False,
+    suffix=".lospos_all_zspace_selected.p")
 
 los_list_void_only_selected_lcdm_flat = [x 
     for y in los_list_void_only_selected_lcdm for x in y]
@@ -886,28 +940,16 @@ def combine_los_lists(los_lists):
 los_list_void_only_combined_lcdm = [combine_los_lists(los_list) 
     for los_list in los_list_void_only_selected_lcdm]
 
-los_list_void_only_lcdm_zspace_selected = get_los_positions_for_all_catalogues(
-    snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
-    all_particles=False,filter_list=filter_list_lcdm_by_region,dist_max=60,
-    rmin=10,rmax=20,recompute=False,zspace=True,recompute_zspace=False,
-    suffix=".lospos_void_only_zspace_selected.p")
-
 los_list_void_only_combined_lcdm_zspace = [combine_los_lists(los_list) 
     for los_list in los_list_void_only_lcdm_zspace_selected]
 
-# Real space positions:
-los_list_void_only_borg = get_los_positions_for_all_catalogues(snapList,
-    snapListRev,
-    cat300.getAllCentres(void_filter=True),
-    cat300.getAllProperties("radii",void_filter=True).T,all_particles=False,
-    void_indices = halo_indices,filter_list=filter_list_borg,
-    dist_max=60,rmin=10,rmax=20,recompute=False,suffix=".lospos_void_only2.p")
 
 
-los_list_void_only_lcdm = get_los_positions_for_all_catalogues(snapListUn,
-    snapListRevUn,antihaloCentresUn,antihaloRadiiUn,all_particles=False,
-    filter_list=filter_list_lcdm,dist_max=60,rmin=10,rmax=20,recompute=False,
-    suffix=".lospos_void_only.p")
+
+#los_list_void_only_lcdm = get_los_positions_for_all_catalogues(snapListUn,
+#    snapListRevUn,antihaloCentresUn,antihaloRadiiUn,all_particles=False,
+#    filter_list=filter_list_lcdm,dist_max=60,rmin=10,rmax=20,recompute=False,
+#    suffix=".lospos_void_only.p")
 
 # 2D void stacks:
 def get_2d_void_stack_from_los_pos(los_pos,z_bins,d_bins,radii,stacked=True):
@@ -930,8 +972,10 @@ def get_2d_void_stack_from_los_pos(los_pos,z_bins,d_bins,radii,stacked=True):
         return los_list_reff
 
 
-los_lcdm = los_list_void_only_combined_lcdm
-los_borg = los_list_void_only_borg
+los_lcdm_real = los_list_void_only_combined_lcdm
+los_lcdm_zspace = los_list_void_only_combined_lcdm_zspace
+los_borg_real = los_list_void_only_borg
+los_borg_zspace = los_list_void_only_borg_zspace
 
 # Bins:
 upper_dist_reff = 2
@@ -942,12 +986,12 @@ bin_d_centres = plot.binCentres(bins_d_reff)
 
 # Stacked void particles in 2d (in redshift space):
 stacked_particles_reff_lcdm_abs = get_2d_void_stack_from_los_pos(
-    los_list_void_only_combined_lcdm_zspace,bins_z_reff,bins_d_reff,
+    los_lcdm_zspace,bins_z_reff,bins_d_reff,
     antihaloRadiiUn)
 void_radii_borg = cat300.getMeanProperty("radii",void_filter=True)[0]
 void_individual_radii_borg = cat300.getAllProperties("radii",void_filter=True)
 stacked_particles_reff_borg_abs = get_2d_void_stack_from_los_pos(
-    los_list_void_only_borg_zspace,bins_z_reff,bins_d_reff,
+    los_borg_zspace,bins_z_reff,bins_d_reff,
     [void_radii_borg for rad in antihaloRadii])
 
 # Stacked void_particles in 1d:
@@ -963,10 +1007,10 @@ stacked_particles_reff_lcdm_real_all = [get_2d_void_stack_from_los_pos(
 #    los_list_void_only_borg,bins_z_reff,bins_d_reff,
 #    [void_radii_borg for rad in antihaloRadii])
 stacked_particles_reff_borg_real = get_2d_void_stack_from_los_pos(
-    los_list_void_only_borg,bins_z_reff,bins_d_reff,
+    los_borg_real,bins_z_reff,bins_d_reff,
     [void_individual_radii_borg[:,k] for k in range(0,20)])
 stacked_particles_reff_borg_real_all = [get_2d_void_stack_from_los_pos(
-    [los_list_void_only_borg[k]],bins_z_reff,bins_d_reff,
+    [los_borg_real[k]],bins_z_reff,bins_d_reff,
     [void_individual_radii_borg[:,k]]) for k in range(0,len(snapList))]
 stacked_1d_real_lcdm = np.sqrt(np.sum(stacked_particles_reff_lcdm_real**2,1))
 stacked_1d_real_borg = np.sqrt(np.sum(stacked_particles_reff_borg_real**2,1))
@@ -1011,12 +1055,12 @@ def get_weights_for_stack(los_pos,void_radii,additional_weights = None,
 
 # Weights for each void in the stack:
 voids_used_lcdm = [np.array([len(x) for x in los]) > 0 
-    for los in los_list_void_only_combined_lcdm_zspace]
+    for los in los_lcdm_zspace]
 voids_used_lcdm_all = [np.array([len(x) for x in los]) > 0 
     for los in los_list_void_only_selected_lcdm_flat]
 voids_used_lcdm_ind = [np.where(x)[0] for x in voids_used_lcdm]
 voids_used_borg = [np.array([len(x) for x in los]) > 0 
-    for los in los_list_void_only_borg_zspace]
+    for los in los_borg_zspace]
 void_radii_lcdm = [rad[filt] 
     for rad, filt in zip(antihaloRadiiUn,voids_used_lcdm)]
 void_radii_lcdm_all = [rad[filt] 
@@ -1024,11 +1068,11 @@ void_radii_lcdm_all = [rad[filt]
 
 
 los_pos_lcdm = [ [los[x] for x in np.where(ind)[0]] 
-    for los, ind in zip(los_list_void_only_combined_lcdm_zspace,voids_used_lcdm) ]
+    for los, ind in zip(los_lcdm_zspace,voids_used_lcdm) ]
 los_pos_borg = [ [los[x] for x in np.where(ind)[0]] 
-    for los, ind in zip(los_list_void_only_borg_zspace,voids_used_borg) ]
+    for los, ind in zip(los_borg_zspace,voids_used_borg) ]
 los_pos_borg_real = [ [los[x] for x in np.where(ind)[0]] 
-    for los, ind in zip(los_list_void_only_borg,voids_used_borg) ]
+    for los, ind in zip(los_borg_real,voids_used_borg) ]
 los_pos_lcdm_all = [ [los[x] for x in np.where(ind)[0]] 
     for los, ind in 
     zip(los_list_void_only_selected_lcdm_flat,voids_used_lcdm_all) ]
@@ -1242,6 +1286,7 @@ Om = 0.3111
 f = f_lcdm(z,Om)
 A = 0.013
 
+# Density profile fits:
 
 def profile_broken_power_log(r,A,r0,c1,f1,B):
     return np.log(np.abs(A + B*(r/r0)**2 + (r/r0)**4)) + \
@@ -1249,6 +1294,11 @@ def profile_broken_power_log(r,A,r0,c1,f1,B):
 
 def profile_broken_power(r,A,r0,c1,f1,B):
     return np.exp(profile_broken_power_log(r,A,r0,c1,f1,B))
+
+# Modified Hamaus profile:
+def profile_modified_hamaus(r,alpha,beta,rs,rv,delta_c,delta_large = 0.0):
+    return (delta_c - delta_large)*(1.0 - (r/rs)**alpha)/(1 + (r/rv)**beta) \
+        + 1.0 + delta_large
 
 
 def rho_real(r,A,r0,c1,f1,B):
@@ -1336,7 +1386,7 @@ plt.show()
 # Estimate BORG data covariance:
 
 los_list_reff_borg = get_2d_void_stack_from_los_pos(
-    los_list_void_only_borg_zspace,bins_z_reff,bins_d_reff,
+    los_borg_zspace,bins_z_reff,bins_d_reff,
     [void_radii_borg for rad in antihaloRadii],stacked=False)
 
 
@@ -1700,7 +1750,7 @@ for k in tools.progressbar(range(0,len(data_filter))):
     sigma = np.std(data)
     residuals = (data - xbar)/sigma
     product = np.outer(residuals,residuals)
-    A = np.mean(residuals**3)
+    A = np.sqrt(n/6)*np.mean(residuals**3)
     B = np.sqrt(n/(24))*(np.sum(residuals**4)/n - 3)
     dof = 1
     test_values[k,0] = A
@@ -1708,7 +1758,7 @@ for k in tools.progressbar(range(0,len(data_filter))):
 
 plt.clf()
 fig, ax = plt.subplots(1,2)
-xvals0 = np.linspace(-1,1,1001)
+xvals0 = np.linspace(-6,6,1001)
 xvals1 = np.linspace(-6,6,1001)
 seaborn.kdeplot(test_values[:,0],color=seabornColormap[0],ax=ax[0],
                 alpha=0.5,fill=True,cut=0)
@@ -1716,8 +1766,8 @@ seaborn.kdeplot(test_values[:,1],color=seabornColormap[0],ax=ax[1],
                 alpha=0.5,fill=True,cut=0)
 ax[0].plot(xvals0,scipy.stats.norm.pdf(xvals0,0,1),linestyle='--',color='k')
 ax[1].plot(xvals1,scipy.stats.norm.pdf(xvals1,0,1),linestyle='--',color='k')
-ax[0].set_xlabel('Skewness $\\times \\sqrt{n/24}$')
-ax[1].set_xlabel('Kurtosis $\\times \\sqrt{n/6}$')
+ax[0].set_xlabel('$\\tilde{A}$ (Skewness $\\times \\sqrt{n/6}$)')
+ax[1].set_xlabel('$\\tilde{B}$ (Kurtosis $\\times \\sqrt{n/24}$)')
 #ax[0].set_yscale('log')
 #ax[0].set_xscale('log')
 plt.savefig(figuresFolder + "AB_distribution.pdf")
@@ -1781,8 +1831,8 @@ for i in range(0,nrows):
         xbar = np.mean(selected_samples[i,j,:])
         sigma = np.std(selected_samples[i,j,:])
         axij.set_xlim([xmin,xmax])
-        axij.set_ylim([0,ymax])
-        #axij.set_yscale('log')
+        axij.set_ylim([1e-4,10*ymax])
+        axij.set_yscale('log')
         axij.set_title("Skew. " + ("%.2g" % test_values[selection[i,j],0]) + 
                        ",Kurt. " + ("%.2g" % test_values[selection[i,j],1]),
                        x=0.5,y=0.8,fontsize=6)
@@ -1803,7 +1853,7 @@ for i in range(0,nrows):
             axij.xaxis.set_major_formatter(NullFormatter())
             axij.xaxis.set_minor_formatter(NullFormatter())
 
-fig.supxlabel('$\\rho(s_{\\perp},s_{\\parallel})$')
+fig.supxlabel('$(\\hat{\\rho}^s - \\bar{\\hat{\\rho}^s})/\\sigma_{\\hat{\\rho}^s}$')
 #fig.supylabel('Probability Density')
 plt.subplots_adjust(wspace=0.0,hspace=0.0,left=0.15,bottom=0.15,
                     top=0.95,right=0.95)
@@ -2067,7 +2117,10 @@ plt.clf()
 #fig = corner.corner(flat_samples, labels=["$\\Omega_{m}$","$f$","A"])
 #fig = corner.corner(flat_samples, labels=["$\\epsilon$","$f$","$A$","$r_0$",
 #    "$c_1$","$f_1$","$B$"])
-fig = corner.corner(flat_samples,labels=["$\\epsilon$","$f$"])
+#param_ranges = [[0.9,1.1],[0,1.0]]
+param_ranges = None
+fig = corner.corner(flat_samples,labels=["$\\epsilon$","$f$"],
+                    range=param_ranges)
 fig.suptitle("$\\Lambda$-CDM Inference from Void Catalogue")
 plt.savefig(figuresFolder + "corner_plot_cosmo_inference_cosmo_only.pdf")
 plt.show()
@@ -2211,16 +2264,29 @@ plt.savefig(figuresFolder + "nll_plot_f.pdf")
 plt.show()
 
 
+#likelihood at mean value:
+log_like_mean = np.zeros(eps_range[0:-1].shape)
+for i in tools.progressbar(range(0,len(Om_range_centres))):
+    if kwargs['sample_epsilon']:
+            theta = np.array([eps_range[i],flat_mean[1],A,r0,c1,f1,B])
+    else:
+        theta = np.array([Om_range_centres[i],flat_mean[1],
+                          A,r0,c1,f1,B])
+    log_like_mean[i] = log_likelihood_aptest(theta,*args,**kwargs)
+
 plt.clf()
-plt.plot(eps_range[0:-1],log_like_ap[:,20])
-plt.axvline(ap_parameter(z,0.0,Om_fid),linestyle=':',color='k',
-    label='$\\Omega_m=0$')
-plt.axvline(ap_parameter(z,1.0,Om_fid),linestyle='--',color='k',
-    label='$\\Omega_m=1.0$')
+plt.plot(eps_range[0:-1],log_like_mean)
+#plt.axvline(ap_parameter(z,0.0,Om_fid),linestyle=':',color='k',
+#    label='$\\Omega_m=0$')
+#plt.axvline(ap_parameter(z,1.0,Om_fid),linestyle='--',color='k',
+#    label='$\\Omega_m=1.0$')
+plt.axvspan(ap_parameter(z,0.0,Om_fid),ap_parameter(z,1.0,Om_fid),alpha=0.5,
+            color='k',label='$0 < \\Omega_m(\\epsilon) < 1$',ec=None)
 plt.xlabel('$\\epsilon$')
 plt.ylabel('Log Likelihood')
-plt.title("Likelihood at $f = " + ("%.2g" % f_range_centres[20]) + "$")
+plt.title("Likelihood at $f = " + ("%.3g" % flat_mean[1]) + "$")
 plt.legend(frameon=False)
+plt.tight_layout()
 plt.savefig(figuresFolder + "nll_plot_eps.pdf")
 plt.show()
 
