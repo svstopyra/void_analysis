@@ -668,16 +668,20 @@ def get_los_pos_with_filter(centres,filt,hr_list,void_indices,positions,
     los_pos_all = []
     for k in tools.progressbar(range(0,len(centres))):
         if filt[k]:
+            if np.isscalar(dist_max):
+                max_distance = dist_max
+            else:
+                max_distance = dist_max[k]
             if not all_particles:
                 indices = hr_list[void_indices[k]+1]['iord']
                 halo_pos = snapedit.unwrap(positions[sorted_indices[indices],:],
                     boxsize)
                 distances = np.sqrt(
                     np.sum(snapedit.unwrap(halo_pos - centres[k],boxsize)**2,1))
-                halo_pos = halo_pos[distances < dist_max,:]
+                halo_pos = halo_pos[distances < max_distance,:]
             else:
                 indices = tree.query_ball_point(
-                    snapedit.wrap(centres[k],boxsize),dist_max,workers=-1)
+                    snapedit.wrap(centres[k],boxsize),max_distance,workers=-1)
                 halo_pos = snapedit.unwrap(positions[indices,:],boxsize)
             los_pos = get_los_pos(halo_pos,centres[k],boxsize)
             los_pos_all.append(los_pos)
@@ -687,10 +691,10 @@ def get_los_pos_with_filter(centres,filt,hr_list,void_indices,positions,
 
 # Get the line of sight (los) co-ordinates of selected particles in a snapshot:
 def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres,radii,
-        dist_max=20,rmin=10,rmax=20,all_particles=True,filter_list=None,
+        dist_max=3,rmin=10,rmax=20,all_particles=True,filter_list=None,
         void_indices=None,sorted_indices=None,reverse_indices=None,
         positions = None,hr_list=None,tree=None,zspace=False,
-        recompute_zspace=False):
+        recompute_zspace=False,dist_cut_method="relative"):
     snap = tools.getPynbodySnap(snapname_forward)
     snap_reverse = tools.getPynbodySnap(snapname_reverse)
     if hr_list is None:
@@ -734,19 +738,25 @@ def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres,radii,
             for filt in filter_list]
     else:
         rad_filter = filter_list & (radii > rmin) & (radii <= rmax)
+    if dist_cut_method == "relative":
+        max_distance = dist_max*radii
+    else:
+        max_distance = dist_max
     if type(rad_filter) is list:
         los_pos_all = []
         for filt in rad_filter:
             lost_pos_list = get_los_pos_with_filter(centres,filt,hr_list,
                                               void_indices,positions,
-                                              sorted_indices,boxsize,dist_max,
-                                              tree,all_particles=all_particles)
+                                              sorted_indices,boxsize,
+                                              max_distance,tree,
+                                              all_particles=all_particles)
             los_pos_all.append(lost_pos_list)
     else:
         los_pos_all = get_los_pos_with_filter(centres,rad_filter,hr_list,
                                               void_indices,positions,
-                                              sorted_indices,boxsize,dist_max,
-                                              tree,all_particles=all_particles)
+                                              sorted_indices,boxsize,
+                                              max_distance,tree,
+                                              all_particles=all_particles)
     return los_pos_all
 
 # The the los positions for selected particles in the group of snapshots

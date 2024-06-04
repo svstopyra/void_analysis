@@ -603,7 +603,7 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
                           cholesky=False,normalised=False,tabulate_inverse=True,
                           ntab = 10,sample_epsilon=False,Om_fid=None,
                           singular=False,Umap=None,good_eig=None,
-                          F_inv=None,**kwargs):
+                          F_inv=None,log_density=False,**kwargs):
     s_par = scoords[:,0]
     s_perp = scoords[:,1]
     if sample_epsilon:
@@ -651,6 +651,10 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
                                          z,Om,Delta,delta,f=f,
                                          F_inv=lambda x, y, z: F_inv(x,y,z),
                                          **kwargs)
+        if log_density:
+            # Examine the log density. Assumes that the user has already 
+            # provided log-data and a relevant estimated covariance matrix
+            theory_val = np.log(theory_val)
         if normalised:
             delta_rho = 1.0 - theory_val/data_val
         else:
@@ -799,14 +803,14 @@ filter_list_borg = [halo_indices[ns] >= 0 for ns in range(0,len(snapList))]
 los_list_void_only_borg_zspace = get_los_positions_for_all_catalogues(snapList,
     snapListRev,zcentres,cat300.getAllProperties("radii",void_filter=True).T,
     all_particles=False,void_indices = halo_indices,
-    filter_list=filter_list_borg,dist_max=60,rmin=10,rmax=20,recompute=False,
+    filter_list=filter_list_borg,dist_max=3,rmin=10,rmax=20,recompute=False,
     zspace=True,recompute_zspace=False,suffix=".lospos_void_only_zspace2.p")
 
 # BORG particles, all, z-space:
 los_list_all_borg_zspace = get_los_positions_for_all_catalogues(snapList,
     snapListRev,zcentres,cat300.getAllProperties("radii",void_filter=True).T,
     all_particles=True,void_indices = halo_indices,
-    filter_list=filter_list_borg,dist_max=60,rmin=10,rmax=20,recompute=False,
+    filter_list=filter_list_borg,dist_max=3,rmin=10,rmax=20,recompute=False,
     zspace=True,recompute_zspace=False,suffix=".lospos_all_zspace2.p")
 
 # BORG particles, Real space positions (void only):
@@ -815,14 +819,14 @@ los_list_void_only_borg = get_los_positions_for_all_catalogues(snapList,
     cat300.getAllCentres(void_filter=True),
     cat300.getAllProperties("radii",void_filter=True).T,all_particles=False,
     void_indices = halo_indices,filter_list=filter_list_borg,
-    dist_max=60,rmin=10,rmax=20,recompute=False,suffix=".lospos_void_only2.p")
+    dist_max=3,rmin=10,rmax=20,recompute=False,suffix=".lospos_void_only2.p")
 # BORG particles, Real space positions (all):
 los_list_all_borg = get_los_positions_for_all_catalogues(snapList,
     snapListRev,
     cat300.getAllCentres(void_filter=True),
     cat300.getAllProperties("radii",void_filter=True).T,all_particles=True,
     void_indices = halo_indices,filter_list=filter_list_borg,
-    dist_max=60,rmin=10,rmax=20,recompute=False,suffix=".lospos_all.p")
+    dist_max=3,rmin=10,rmax=20,recompute=False,suffix=".lospos_all.p")
 
 # LCDM examples for comparison:
 distances_from_centre_lcdm = [
@@ -891,26 +895,26 @@ filter_list_lcdm_selected = [np.any(np.array([
 # LCDM particles, density selected, void only, real space:
 los_list_void_only_selected_lcdm = get_los_positions_for_all_catalogues(
     snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
-    all_particles=False,filter_list=filter_list_lcdm_by_region,dist_max=60,
+    all_particles=False,filter_list=filter_list_lcdm_by_region,dist_max=3,
     rmin=10,rmax=20,recompute=False,suffix=".lospos_void_only_selected.p")
 
 # LCDM particles, density selected, all, real space:
 los_list_all_selected_lcdm = get_los_positions_for_all_catalogues(
     snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
-    all_particles=True,filter_list=filter_list_lcdm_by_region,dist_max=60,
+    all_particles=True,filter_list=filter_list_lcdm_by_region,dist_max=3,
     rmin=10,rmax=20,recompute=False,suffix=".lospos_all_selected.p")
 
 # LCDM particles, density selected, void only, z-space:
 los_list_void_only_lcdm_zspace_selected = get_los_positions_for_all_catalogues(
     snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
-    all_particles=False,filter_list=filter_list_lcdm_by_region,dist_max=60,
+    all_particles=False,filter_list=filter_list_lcdm_by_region,dist_max=3,
     rmin=10,rmax=20,recompute=False,zspace=True,recompute_zspace=False,
     suffix=".lospos_void_only_zspace_selected.p")
 
 # LCDM particles, density selected, all, z-space:
-los_list_void_only_lcdm_zspace_selected = get_los_positions_for_all_catalogues(
+los_list_all_lcdm_zspace_selected = get_los_positions_for_all_catalogues(
     snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
-    all_particles=True,filter_list=filter_list_lcdm_by_region,dist_max=60,
+    all_particles=True,filter_list=filter_list_lcdm_by_region,dist_max=3,
     rmin=10,rmax=20,recompute=False,zspace=True,recompute_zspace=False,
     suffix=".lospos_all_zspace_selected.p")
 
@@ -943,8 +947,16 @@ los_list_void_only_combined_lcdm = [combine_los_lists(los_list)
 los_list_void_only_combined_lcdm_zspace = [combine_los_lists(los_list) 
     for los_list in los_list_void_only_lcdm_zspace_selected]
 
+los_list_all_combined_lcdm = [combine_los_lists(los_list) 
+    for los_list in los_list_all_selected_lcdm]
 
+los_list_all_combined_lcdm_zspace = [combine_los_lists(los_list) 
+    for los_list in los_list_all_lcdm_zspace_selected]
 
+dist_all_combined_lcdm_zspace = [[np.sqrt(np.sum(los**2,1))/rad 
+    for los, rad in zip(all_los,all_rad)] 
+    for all_los, all_rad in 
+    zip(los_list_all_combined_lcdm_zspace,antihaloRadiiUn)]
 
 #los_list_void_only_lcdm = get_los_positions_for_all_catalogues(snapListUn,
 #    snapListRevUn,antihaloCentresUn,antihaloRadiiUn,all_particles=False,
@@ -972,10 +984,10 @@ def get_2d_void_stack_from_los_pos(los_pos,z_bins,d_bins,radii,stacked=True):
         return los_list_reff
 
 
-los_lcdm_real = los_list_void_only_combined_lcdm
-los_lcdm_zspace = los_list_void_only_combined_lcdm_zspace
-los_borg_real = los_list_void_only_borg
-los_borg_zspace = los_list_void_only_borg_zspace
+los_lcdm_real = los_list_all_combined_lcdm
+los_lcdm_zspace = los_list_all_combined_lcdm_zspace
+los_borg_real = los_list_all_borg
+los_borg_zspace = los_list_all_borg_zspace
 
 # Bins:
 upper_dist_reff = 2
@@ -1296,8 +1308,8 @@ def profile_broken_power(r,A,r0,c1,f1,B):
     return np.exp(profile_broken_power_log(r,A,r0,c1,f1,B))
 
 # Modified Hamaus profile:
-def profile_modified_hamaus(r,alpha,beta,rs,rv,delta_c,delta_large = 0.0):
-    return (delta_c - delta_large)*(1.0 - (r/rs)**alpha)/(1 + (r/rv)**beta) \
+def profile_modified_hamaus(r,alpha,beta,rs,delta_c,delta_large = 0.0):
+    return (delta_c - delta_large)*(1.0 - (r/rs)**alpha)/(1 + (r)**beta) \
         + 1.0 + delta_large
 
 
@@ -1989,47 +2001,71 @@ sol2 = scipy.optimize.minimize(nll1, initial,
 
 A,r0,c1,f1,B = sol2.x
 
-# Run the inference:
-profile_param_ranges = [[-np.inf,np.inf],[0,2],[-np.inf,0],[0,np.inf],[-1,1]]
-om_ranges = [[0.1,0.5]]
-eps_ranges = [[0.9,1.1]]
-f_ranges = [[0,1]]
 
-theta_ranges=om_ranges + f_ranges + profile_param_ranges
-theta_ranges_epsilon = eps_ranges + f_ranges + profile_param_ranges
-redo_chain = False
-continue_chain = True
-backup_start = True
-import emcee
-import h5py
-nwalkers = 64
-ndims = 2
-n_mcmc = 10000
-disp = 1e-4
-Om_fid = 0.3111
-max_n = 1000000
-z = 0.0225
-eps_initial_guess = np.array([1.0,f_lcdm(z,Om_fid)])
-theta_initial_guess = np.array([0.3,f_lcdm(z,0.3)])
-initial = eps_initial_guess + disp*np.random.randn(nwalkers,ndims)
-filename = data_folder + "inference_weighted.h5"
-filename_initial = data_folder + "inference_old_state.h5"
-if backup_start:
-    os.system("cp " + filename + " " + filename_initial)
 
-backend = emcee.backends.HDFBackend(filename)
-if redo_chain:
-    backend.reset(nwalkers, ndims)
 
-parallel = False
+# Inference run:
+def run_inference(data_field,theta_ranges,theta_initial,filename,
+                  log_probability,*args,
+                  redo_chain=False,
+                  backup_start=True,nwalkers=64,sample="all",n_mcmc=10000,
+                  disp=1e-4,Om_fid=0.3111,max_n=1000000,z=0.0225,
+                  parallel=False,batch_size=100,n_batches=100,
+                  data_filter=None,F_inv=None,autocorr_file=None,**kwargs):
+    if sample == "all":
+        sample = np.array([True for theta in theta_ranges])
+    ndims = np.sum(sample)
+    ndata = len(data_field)
+    if data_filter is None:
+        data_filter = np.arange(0,ndata)
+    # Setup run:
+    initial = theta_initial + disp*np.random.randn(nwalkers,ndims)
+    filename_initial = filename + ".old"
+    if backup_start:
+        os.system("cp " + filename + " " + filename_initial)
+    backend = emcee.backends.HDFBackend(filename)
+    if redo_chain:
+        backend.reset(nwalkers, ndims)
+    # Inference run:
+    if parallel:
+        with Pool() as pool:
+            sampler = emcee.EnsembleSampler(
+                nwalkers, ndims, log_probability_aptest_parallel, 
+                args=(z,),
+                kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
+                        'sample_epsilon':True},
+                backend=backend,pool=pool)
+            sampler.run_mcmc(initial,n_mcmc , progress=True)
+    else:
+        #data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
+        #    (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
+        #reg_cov_filtered = reg_cov[data_filter,:][:,data_filter]
+        #cholesky_cov_filtered = scipy.linalg.cholesky(reg_cov_filtered,lower=True)
+        sampler = emcee.EnsembleSampler(nwalkers, ndims, log_probability,
+                                        args=args,kwargs=kwargs,backend=backend)
+        if redo_chain or (autocorr_file is None):
+            autocorr = np.zeros((ndims,0))
+        else:
+            autocorr = np.load(autocorr_file)
+        old_tau = np.inf
+        for k in range(0,n_batches):
+            if (k == 0 and redo_chain):
+                sampler.run_mcmc(initial,batch_size , progress=True)
+            else:
+                sampler.run_mcmc(None,batch_size,progress=True)
+            tau = sampler.get_autocorr_time(tol=0)
+            autocorr = np.hstack([autocorr,tau.reshape((ndims,1))])
+            if autocorr_file is not None:
+                np.save(autocorr_file,autocorr)
+            # Check convergence
+            converged = np.all(tau * 100 < sampler.iteration)
+            converged &= np.all(np.abs(old_tau - tau) / tau < 0.01)
+            if converged:
+                break
+            old_tau = tau
+    return tau, sampler
 
-batch_size = 100
-n_batches = 100
-autocorr = np.zeros((ndims,n_batches*batch_size))
-old_tau = np.inf
-#data_filter = np.where(np.sqrt(np.sum(scoords**2,1)) < 1.5)[0]
-data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
-         (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
+
 
 # Tabulated inverse:
 ntab = 100
@@ -2051,54 +2087,67 @@ F_inv = lambda x, y, z: scipy.interpolate.interpn((rperp_vals,svals,f_vals),
                                                np.vstack((x,y,z)).T,
                                                method='cubic')
 
+
+
+# Run the inference:
+profile_param_ranges = [[-np.inf,np.inf],[0,2],[-np.inf,0],[0,np.inf],[-1,1]]
+om_ranges = [[0.1,0.5]]
+eps_ranges = [[0.9,1.1]]
+f_ranges = [[0,1]]
+z = 0.0225
+Om_fid = 0.3111
+eps_initial_guess = np.array([1.0,f_lcdm(z,Om_fid)])
+theta_initial_guess = np.array([0.3,f_lcdm(z,0.3)])
+
+theta_ranges=om_ranges + f_ranges + profile_param_ranges
+theta_ranges_epsilon = eps_ranges + f_ranges + profile_param_ranges
+
+args = (sol2.x,data_field[data_filter],scoords[data_filter,:],
+        cholesky_cov[data_filter,:][:,data_filter],z,Delta_func,
+        delta_func,rho_real)
+kwargs = {'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
+          'sample_epsilon':True,'theta_ranges':theta_ranges_epsilon,
+          'singular':False,'Umap':Umap,'good_eig':good_eig,
+          'F_inv':F_inv}
+
 # Wrapper allowing us to pass arbitrary arguments that won't be sampled over:
 def posterior_wrapper(theta,additional_args,*args,**kwargs):
     theta_comb = np.hstack([theta,additional_args])
     return log_probability_aptest(theta_comb,*args,**kwargs)
 
-if parallel:
-    with Pool() as pool:
-        sampler = emcee.EnsembleSampler(
-            nwalkers, ndims, log_probability_aptest_parallel, 
-            args=(z,),
-            kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
-                    'sample_epsilon':True},
-            backend=backend,pool=pool)
-        sampler.run_mcmc(initial,n_mcmc , progress=True)
-else:
-    #data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
-    #    (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
-    #reg_cov_filtered = reg_cov[data_filter,:][:,data_filter]
-    #cholesky_cov_filtered = scipy.linalg.cholesky(reg_cov_filtered,lower=True)
-    sampler = emcee.EnsembleSampler(
-            nwalkers, ndims, 
-            posterior_wrapper, 
-            args=(sol2.x,data_field[data_filter],scoords[data_filter,:],
-                  cholesky_cov[data_filter,:][:,data_filter],z,Delta_func,
-                  delta_func,rho_real),
-            kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
-                    'sample_epsilon':True,'theta_ranges':theta_ranges_epsilon,
-                    'singular':False,'Umap':Umap,'good_eig':good_eig,
-                    'F_inv':F_inv},
-                    backend=backend)
-    if redo_chain:
-        autocorr = np.zeros((ndims,0))
-    else:
-        autocorr = np.load(data_folder + "autocorr_.npy")
-    for k in range(0,n_batches):
-        if (k == 0 and redo_chain):
-            sampler.run_mcmc(initial,batch_size , progress=True)
-        else:
-            sampler.run_mcmc(None,batch_size,progress=True)
-        tau = sampler.get_autocorr_time(tol=0)
-        autocorr = np.hstack([autocorr,tau.reshape((ndims,1))])
-        np.save(data_folder + "autocorr_.npy",autocorr)
-        # Check convergence
-        converged = np.all(tau * 100 < sampler.iteration)
-        converged &= np.all(np.abs(old_tau - tau) / tau < 0.01)
-        if converged:
-            break
-        old_tau = tau
+
+
+tau, sampler = run_inference(data_field,theta_ranges_epsilon,eps_initial_guess,
+                             data_folder + "inference_weighted.h5",
+                             posterior_wrapper,*args,redo_chain=False,
+                             backup_start=True,nwalkers=64,sample="all",
+                             n_mcmc=10000,disp=1e-4,Om_fid=0.3111,
+                             max_n=1000000,z=0.0225,parallel=False,
+                             batch_size=100,n_batches=100,data_filter=None,
+                             F_inv=F_inv,
+                             autocorr_file = data_folder + "autocorr.npy",
+                             **kwargs)
+
+
+
+redo_chain = False
+continue_chain = True
+backup_start = True
+import emcee
+import h5py
+nwalkers = 64
+ndims = 2
+n_mcmc = 10000
+disp = 1e-4
+max_n = 1000000
+
+
+batch_size = 100
+
+#data_filter = np.where(np.sqrt(np.sum(scoords**2,1)) < 1.5)[0]
+
+data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
+         (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
 
 
 # Filter the MCMC samples to account for correlation:
@@ -2407,10 +2456,11 @@ def log_profile_fit(r,rho0,p,C,rb):
 
 # MLE of the profile fit:
 
-def log_likelihood(theta, x, y, yerr):
+def log_likelihood(theta, x, y, yerr,profile_model):
     #rho0,p,C,rb = theta
-    A,r0,c1,f1,B = theta
-    model = profile_broken_power_log(x, A,r0,c1,f1,B)
+    #A,r0,c1,f1,B = theta
+    #model = profile_broken_power_log(x, A,r0,c1,f1,B)
+    model = profile_model(x,*theta)
     sigma2 = yerr**2
     return -0.5 * np.sum( (y - model)**2/sigma2 + np.log(sigma2) )
 
@@ -2423,28 +2473,49 @@ def log_prior(theta):
     else:
         return -np.inf
 
-def log_probability(theta,x,y,yerr):
+def log_probability(theta,x,y,yerr,*args,**kwargs):
     lp = log_prior(theta)
     if not np.isfinite(lp):
         return -np.inf
-    return lp + log_likelihood(theta, x, y, yerr)
+    return lp + log_likelihood(theta, x, y, yerr,*args,**kwargs)
 
 nll1 = lambda *theta: -log_likelihood(*theta)
 initial = np.array([0.1,0.9,-9.5,3.5,0.01])
 sol1 = scipy.optimize.minimize(nll1, initial, 
     bounds = [(0,None),(0,2),(None,0),(0,None),(-1,1)],
     args=(r_bin_centres, np.log(rho_r_mean),
-    0.5*np.log((rho_r_mean + rho_r_std)/(rho_r_mean - rho_r_std))) )
+    0.5*np.log((rho_r_mean + rho_r_std)/(rho_r_mean - rho_r_std)),
+    profile_broken_power_log) )
 
 sol2 = scipy.optimize.minimize(nll1, initial, 
     bounds = [(0,None),(0,2),(None,0),(0,None),(-1,1)],
     args=(r_bin_centres, np.log(rho_r_borg_mean),
     0.5*np.log((rho_r_borg_mean + rho_r_borg_std)/\
-    (rho_r_borg_mean - rho_r_borg_std))) )
+    (rho_r_borg_mean - rho_r_borg_std)),
+    profile_broken_power_log) )
 
-A1,r01,c11,f11,B1 = sol1.x
-A2,r02,c12,f12,B2 = sol2.x
+#A1,r01,c11,f11,B1 = sol1.x
+#A2,r02,c12,f12,B2 = sol2.x
 
+initial = np.array([1.0,1.0,1.0,-0.2,0.0])
+bounds = [(0,None),(0,None),(0,None),(-1,0),(-1,1)]
+
+
+
+sol1 = scipy.optimize.minimize(nll1, initial, 
+    bounds = [(0,None),(0,2),(None,0),(0,None),(-1,1)],
+    args=(r_bin_centres, np.log(rho_r_mean),
+    0.5*np.log((rho_r_mean + rho_r_std)/(rho_r_mean - rho_r_std)),
+    profile_modified_hamaus) )
+
+sol2 = scipy.optimize.minimize(nll1, initial, 
+    bounds = [(0,None),(0,2),(None,0),(0,None),(-1,1)],
+    args=(r_bin_centres, np.log(rho_r_borg_mean),
+    0.5*np.log((rho_r_borg_mean + rho_r_borg_std)/\
+    (rho_r_borg_mean - rho_r_borg_std)),
+    profile_modified_hamaus) )
+
+alpha,beta,rs,delta_c,delta_large = sol1.x
 
 import emcee
 pos = sol1.x + 1e-4*np.random.randn(32,5)
@@ -2462,7 +2533,7 @@ tau1 = sampler1.get_autocorr_time()
 flat_samples1 = sampler1.get_chain(discard=int(3*np.max(tau)), 
                                  thin=int(np.max(tau)), flat=True)
 
-A1, r01, c11,f11,B1 = np.mean(flat_samples1,0)
+#A1, r01, c11,f11,B1 = np.mean(flat_samples1,0)
 
 
 sampler2 = emcee.EnsembleSampler(
