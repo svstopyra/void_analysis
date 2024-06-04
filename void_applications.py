@@ -810,7 +810,7 @@ los_list_void_only_borg_zspace = get_los_positions_for_all_catalogues(snapList,
 los_list_all_borg_zspace = get_los_positions_for_all_catalogues(snapList,
     snapListRev,zcentres,cat300.getAllProperties("radii",void_filter=True).T,
     all_particles=True,void_indices = halo_indices,
-    filter_list=filter_list_borg,dist_max=3,rmin=10,rmax=20,recompute=True,
+    filter_list=filter_list_borg,dist_max=3,rmin=10,rmax=20,recompute=False,
     zspace=True,recompute_zspace=False,suffix=".lospos_all_zspace2.p")
 
 # BORG particles, Real space positions (void only):
@@ -826,7 +826,7 @@ los_list_all_borg = get_los_positions_for_all_catalogues(snapList,
     cat300.getAllCentres(void_filter=True),
     cat300.getAllProperties("radii",void_filter=True).T,all_particles=True,
     void_indices = halo_indices,filter_list=filter_list_borg,
-    dist_max=3,rmin=10,rmax=20,recompute=True,suffix=".lospos_all.p")
+    dist_max=3,rmin=10,rmax=20,recompute=False,suffix=".lospos_all.p")
 
 # LCDM examples for comparison:
 distances_from_centre_lcdm = [
@@ -902,7 +902,7 @@ los_list_void_only_selected_lcdm = get_los_positions_for_all_catalogues(
 los_list_all_selected_lcdm = get_los_positions_for_all_catalogues(
     snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
     all_particles=True,filter_list=filter_list_lcdm_by_region,dist_max=3,
-    rmin=10,rmax=20,recompute=True,suffix=".lospos_all_selected.p")
+    rmin=10,rmax=20,recompute=False,suffix=".lospos_all_selected.p")
 
 # LCDM particles, density selected, void only, z-space:
 los_list_void_only_lcdm_zspace_selected = get_los_positions_for_all_catalogues(
@@ -915,7 +915,7 @@ los_list_void_only_lcdm_zspace_selected = get_los_positions_for_all_catalogues(
 los_list_all_lcdm_zspace_selected = get_los_positions_for_all_catalogues(
     snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
     all_particles=True,filter_list=filter_list_lcdm_by_region,dist_max=3,
-    rmin=10,rmax=20,recompute=True,zspace=True,recompute_zspace=False,
+    rmin=10,rmax=20,recompute=False,zspace=True,recompute_zspace=False,
     suffix=".lospos_all_zspace_selected.p")
 
 los_list_void_only_selected_lcdm_flat = [x 
@@ -953,10 +953,10 @@ los_list_all_combined_lcdm = [combine_los_lists(los_list)
 los_list_all_combined_lcdm_zspace = [combine_los_lists(los_list) 
     for los_list in los_list_all_lcdm_zspace_selected]
 
-dist_all_combined_lcdm_zspace = [[np.sqrt(np.sum(los**2,1))/rad 
-    for los, rad in zip(all_los,all_rad)] 
-    for all_los, all_rad in 
-    zip(los_list_all_combined_lcdm_zspace,antihaloRadiiUn)]
+#dist_all_combined_lcdm_zspace = [[np.sqrt(np.sum(los**2,1))/rad 
+#    for los, rad in zip(all_los,all_rad)] 
+#    for all_los, all_rad in 
+#    zip(los_list_all_combined_lcdm_zspace,antihaloRadiiUn)]
 
 #los_list_void_only_lcdm = get_los_positions_for_all_catalogues(snapListUn,
 #    snapListRevUn,antihaloCentresUn,antihaloRadiiUn,all_particles=False,
@@ -1009,7 +1009,7 @@ stacked_particles_reff_borg_abs = get_2d_void_stack_from_los_pos(
 # Stacked void_particles in 1d:
 # We can use the real space profile for this:
 stacked_particles_reff_lcdm_real = get_2d_void_stack_from_los_pos(
-    los_lcdm,bins_z_reff,bins_d_reff,antihaloRadiiUn)
+    los_lcdm_real,bins_z_reff,bins_d_reff,antihaloRadiiUn)
 radlist = [antihaloRadiiUn[k] 
     for k in range(0,20) for x in filter_list_lcdm_by_region[k]]
 stacked_particles_reff_lcdm_real_all = [get_2d_void_stack_from_los_pos(
@@ -1122,18 +1122,25 @@ weighted_counts_lcdm = np.array([
     np.histogram(dist,bins=bins_d_reff,weights=weights)[0]
     for dist, weights in zip(stacked_1d_real_lcdm_all,v_weight_lcdm_all)])
 
-def get_field_from_los_data(los_data,z_bins,d_bins,v_weight,void_count):
+def get_field_from_los_data(los_data,z_bins,d_bins,v_weight,void_count,
+                            nbar=None):
     cell_volumes_reff = np.outer(np.diff(z_bins),np.diff(d_bins))
     hist = np.histogramdd(los_data,bins=[z_bins,d_bins],density=False,
                           weights = v_weight/(2*np.pi*los_data[:,1]))
-    return hist[0]/(2*void_count*cell_volumes_reff)
+    if nbar is not None:
+        return hist[0]/(2*void_count*cell_volumes_reff*nbar)
+    else:
+        return hist[0]/(2*void_count*cell_volumes_reff)
+
+
 
 # Fields:
+nbar = len(referenceSnap)/boxsize**3
 num_voids_lcdm = np.sum([np.sum(x) for x in voids_used_lcdm]) 
 cell_volumes_reff = np.outer(np.diff(bins_z_reff),np.diff(bins_d_reff))
 field_lcdm = get_field_from_los_data(stacked_particles_reff_lcdm_abs,
                                      bins_z_reff,bins_d_reff,v_weight_lcdm,
-                                     num_voids_lcdm)
+                                     num_voids_lcdm,nbar=nbar)
 
 num_voids_sample_borg = np.array([np.sum(x) for x in voids_used_borg])
 num_voids_borg = np.sum(num_voids_sample_borg) # Not the actual number
@@ -1142,12 +1149,13 @@ num_voids_borg = np.sum(num_voids_sample_borg) # Not the actual number
 nmean = len(snapList[0])/(boxsize**3)
 
 field_borg = get_field_from_los_data(stacked_particles_reff_borg_abs,
-                                     bins_z_reff,bins_d_reff,v_weight_borg,1)
+                                     bins_z_reff,bins_d_reff,v_weight_borg,1,
+                                     nbar=nbar)
 
 
 field_borg_unweighted = get_field_from_los_data(
     stacked_particles_reff_borg_abs,bins_z_reff,bins_d_reff,
-    v_weight_borg_unweighted,num_voids_borg)
+    v_weight_borg_unweighted,num_voids_borg,nbar=nbar)
 
 
 
@@ -1194,7 +1202,7 @@ rho_r_error = np.sqrt(noInBins_lcdm)/(np.sum(noInBins_lcdm)*\
 #    for n in noInBins_lcdm_all])
 
 rho_r_all = weighted_counts_lcdm/\
-    (4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
+    (4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)*nbar/3)
 
 rho_r_std = np.std(rho_r_all,0)
 rho_r_mean = np.mean(rho_r_all,0)
@@ -1211,7 +1219,7 @@ rho_borg_r_error = np.sqrt(noInBins_borg)/(np.sum(noInBins_borg)*\
 #    4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
 #    for n in noInBins_borg_all])
 rho_r_borg_all =  weighted_counts_borg/\
-    (4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
+    (4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)*nbar/3)
 rho_r_borg_std = np.std(rho_r_borg_all,0)
 rho_r_borg_mean = np.mean(rho_r_borg_all,0)
 rho_r_borg_range_1sigma = np.percentile(rho_r_borg_all,[16,84],axis=0)
@@ -1331,8 +1339,8 @@ plot_los_void_stack(\
 
 plot_los_void_stack(\
         field_borg,bin_d_centres,bin_z_centres,
-        cmap='Blues',
-        vmin=0,vmax=0.1,fontsize=10,
+        cmap='PuOr_r',
+        vmin=0,vmax=2,fontsize=10,
         xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$ (Perpendicular distance)',
         ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$ (LOS distance)',
         fontfamily='serif',
@@ -1345,8 +1353,8 @@ plt.clf()
 fig, ax = plt.subplots(1,2,figsize=(textwidth,0.45*textwidth))
 plot_los_void_stack(\
         field_borg_unweighted,bin_d_centres,bin_z_centres,
-        cmap='Blues',ax= ax[0],
-        vmin=0,vmax=0.1,fontsize=10,
+        cmap='PuOr_r',ax= ax[0],
+        vmin=0,vmax=2,fontsize=10,
         xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$',
         ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$ (LOS distance)',
         fontfamily='serif',
@@ -1356,8 +1364,8 @@ plot_los_void_stack(\
         colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})$")
 im = plot_los_void_stack(\
         field_borg,bin_d_centres,bin_z_centres,
-        cmap='Blues',ax= ax[1],
-        vmin=0,vmax=0.1,fontsize=10,
+        cmap='PuOr_r',ax= ax[1],
+        vmin=0,vmax=2,fontsize=10,
         xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$',
         ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$ (LOS distance)',
         fontfamily='serif',
@@ -1982,24 +1990,28 @@ if test:
 
 
 # Start with a MLE guess of the 1d profile parameters:
-def log_likelihood(theta, x, y, yerr):
+
+def log_likelihood(theta, x, y, yerr,profile_model):
     #rho0,p,C,rb = theta
-    A,r0,c1,f1,B = theta
-    model = profile_broken_power_log(x, A,r0,c1,f1,B)
+    #A,r0,c1,f1,B = theta
+    #model = profile_broken_power_log(x, A,r0,c1,f1,B)
+    model = profile_model(x,*theta)
     sigma2 = yerr**2
     return -0.5 * np.sum( (y - model)**2/sigma2 + np.log(sigma2) )
 
 
 nll1 = lambda *theta: -log_likelihood(*theta)
-initial = np.array([0.1,0.9,-9.5,3.5,0.01])
+#initial = np.array([0.1,0.9,-9.5,3.5,0.01])
+initial = np.array([1.0,1.0,1.0,-0.2,0.0])
+bounds = [(0,None),(0,None),(0,None),(-1,0),(-1,1)]
 
 sol2 = scipy.optimize.minimize(nll1, initial, 
-    bounds = [(0,None),(0,2),(None,0),(0,None),(-1,1)],
-    args=(r_bin_centres, np.log(rho_r_borg_mean),
-    0.5*np.log((rho_r_borg_mean + rho_r_borg_std)/\
-    (rho_r_borg_mean - rho_r_borg_std))) )
+    bounds = bounds,
+    args=(r_bin_centres, rho_r_borg_mean, rho_r_borg_std,
+          profile_modified_hamaus))
 
-A,r0,c1,f1,B = sol2.x
+#A,r0,c1,f1,B = sol2.x
+alpha,beta,rs,delta_c,delta_large = sol2.x
 
 
 
@@ -2466,10 +2478,12 @@ def log_likelihood(theta, x, y, yerr,profile_model):
 
 # Priors:
 def log_prior(theta):
-    A,r0,c1,f1,B = theta
-    if (0 <= r0 < 2.0) and (c1 < 0) and (f1 > 0):
+    #A,r0,c1,f1,B = theta
+    alpha,beta,rs,delta_c,delta_large = theta
+    if (0 <= alpha < np.inf) and (0 <= beta < np.inf) and (0 <= rs < np.inf) \
+        and (-1 < delta_c <= 0) and (-1 <= delta_large <= 1):
         # Jeffries priors:
-        return -np.log(A)
+        return 0
     else:
         return -np.inf
 
@@ -2503,17 +2517,14 @@ bounds = [(0,None),(0,None),(0,None),(-1,0),(-1,1)]
 
 
 sol1 = scipy.optimize.minimize(nll1, initial, 
-    bounds = [(0,None),(0,2),(None,0),(0,None),(-1,1)],
-    args=(r_bin_centres, np.log(rho_r_mean),
-    0.5*np.log((rho_r_mean + rho_r_std)/(rho_r_mean - rho_r_std)),
+    bounds = bounds,
+    args=(r_bin_centres, rho_r_mean, rho_r_std,
     profile_modified_hamaus) )
 
 sol2 = scipy.optimize.minimize(nll1, initial, 
-    bounds = [(0,None),(0,2),(None,0),(0,None),(-1,1)],
-    args=(r_bin_centres, np.log(rho_r_borg_mean),
-    0.5*np.log((rho_r_borg_mean + rho_r_borg_std)/\
-    (rho_r_borg_mean - rho_r_borg_std)),
-    profile_modified_hamaus) )
+    bounds = bounds,
+    args=(r_bin_centres, rho_r_borg_mean, rho_r_borg_std,
+          profile_modified_hamaus) )
 
 alpha,beta,rs,delta_c,delta_large = sol1.x
 
@@ -2522,27 +2533,25 @@ pos = sol1.x + 1e-4*np.random.randn(32,5)
 nwalkers, ndim = pos.shape
 
 sampler1 = emcee.EnsembleSampler(
-    nwalkers, ndim, log_probability, args=(r_bin_centres, np.log(rho_r_mean),
-    0.5*np.log((rho_r_mean + rho_r_std)/\
-    (rho_r_mean - rho_r_std)))
+    nwalkers, ndim, log_probability, args=(r_bin_centres, rho_r_mean, rho_r_std,
+    profile_modified_hamaus)
 )
-sampler1.run_mcmc(pos, 10000, progress=True)
+sampler1.run_mcmc(pos, 100000, progress=True)
 
-tau1 = sampler1.get_autocorr_time()
+tau1 = sampler1.get_autocorr_time(tol=0)
 
-flat_samples1 = sampler1.get_chain(discard=int(3*np.max(tau)), 
-                                 thin=int(np.max(tau)), flat=True)
+flat_samples1 = sampler1.get_chain(discard=int(3*np.max(tau1)), 
+                                 thin=int(np.max(tau1)), flat=True)
 
 #A1, r01, c11,f11,B1 = np.mean(flat_samples1,0)
 
 
 sampler2 = emcee.EnsembleSampler(
-    nwalkers, ndim, log_probability, args=(r_bin_centres, np.log(rho_r_borg_mean),
-    0.5*np.log((rho_r_borg_mean + rho_r_borg_std)/\
-    (rho_r_borg_mean - rho_r_borg_std)))
+    nwalkers, ndim, log_probability, args=(r_bin_centres, rho_r_borg_mean, 
+    rho_r_borg_std, profile_modified_hamaus)
 )
 sampler2.run_mcmc(pos, 10000, progress=True)
-tau2 = sampler2.get_autocorr_time()
+tau2 = sampler2.get_autocorr_time(tol=0)
 
 flat_samples2 = sampler2.get_chain(discard=int(3*np.max(tau2)), 
                                  thin=int(np.max(tau2)), flat=True)
@@ -2581,23 +2590,33 @@ plt.show()
 #r0 = 0.9
 #r1 = 1
 
+#rho_r_fit_samples = np.vstack([
+#    profile_broken_power(r_bin_centres,A,r0,c1,f1,B) 
+#    for A,r0,c1,f1,B in flat_samples1])
+
 rho_r_fit_samples = np.vstack([
-    profile_broken_power(r_bin_centres,A,r0,c1,f1,B) 
-    for A,r0,c1,f1,B in flat_samples1])
+    profile_modified_hamaus(r_bin_centres,*theta) 
+    for theta in flat_samples1])
 
 rho_r_fit_samples_mean = np.mean(rho_r_fit_samples,0)
 rho_r_fit_samples_std = np.std(rho_r_fit_samples,0)
 
+
 rho_r_borg_fit_samples = np.vstack([
-    profile_broken_power(r_bin_centres,A,r0,c1,f1,B) 
-    for A,r0,c1,f1,B in flat_samples2])
+    profile_modified_hamaus(r_bin_centres,*theta)
+    for theta in flat_samples2])
 
 rho_r_borg_fit_samples_mean = np.mean(rho_r_borg_fit_samples,0)
 rho_r_borg_fit_samples_std = np.std(rho_r_borg_fit_samples,0)
 
+#field_borg_fit_samples = rho_r_borg_fit_samples = np.vstack([
+#    profile_broken_power(r_bin_centres,A,r0,c1,f1,B) 
+#    for A,r0,c1,f1,B in flat_samples[:,2:]])
+
 field_borg_fit_samples = rho_r_borg_fit_samples = np.vstack([
-    profile_broken_power(r_bin_centres,A,r0,c1,f1,B) 
-    for A,r0,c1,f1,B in flat_samples[:,2:]])
+    profile_modified_hamaus(r_bin_centres,theta) 
+    for theta in flat_samples[:,2:]])
+
 field_borg_fit_mean = np.mean(field_borg_fit_samples,0)
 field_borg_fit_std = np.std(field_borg_fit_samples,0)
 
@@ -2625,14 +2644,14 @@ plt.fill_between(r_bin_centres,
 #         linestyle=':',color=seabornColormap[0])
 #plt.plot(r_bin_centres,rho_r_fit_vals_borg,
 #         linestyle=':',color=seabornColormap[1])
-plt.plot(bin_d_centres,field_borg[0],linestyle='-',color='k',
-    label="$\\rho_{\\mathrm{BORG}}(s_{\\perp},0)$")
-plt.fill_between(r_bin_centres,
-                 field_borg_fit_mean - field_borg_fit_std,
-                 field_borg_fit_mean + field_borg_fit_std,
-                 alpha=0.5,color='k',
-                 label="Fitting-formula, $\\rho(s_{\\parallel},s_{\\perp})$ " + 
-                 " fit")
+#plt.plot(bin_d_centres,field_borg[0],linestyle='-',color='k',
+#    label="$\\rho_{\\mathrm{BORG}}(s_{\\perp},0)$")
+#plt.fill_between(r_bin_centres,
+#                 field_borg_fit_mean - field_borg_fit_std,
+#                 field_borg_fit_mean + field_borg_fit_std,
+#                 alpha=0.5,color='k',
+#                 label="Fitting-formula, $\\rho(s_{\\parallel},s_{\\perp})$ " + 
+#                 " fit")
 #plt.plot(bin_d_centres,field_lcdm[0],linestyle='--',color='k',
 #    label="$\\rho_{\\Lambda\\mathrm{CDM}}(s_{\\perp},0)$")
 
