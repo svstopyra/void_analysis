@@ -810,7 +810,7 @@ los_list_void_only_borg_zspace = get_los_positions_for_all_catalogues(snapList,
 los_list_all_borg_zspace = get_los_positions_for_all_catalogues(snapList,
     snapListRev,zcentres,cat300.getAllProperties("radii",void_filter=True).T,
     all_particles=True,void_indices = halo_indices,
-    filter_list=filter_list_borg,dist_max=3,rmin=10,rmax=20,recompute=False,
+    filter_list=filter_list_borg,dist_max=3,rmin=10,rmax=20,recompute=True,
     zspace=True,recompute_zspace=False,suffix=".lospos_all_zspace2.p")
 
 # BORG particles, Real space positions (void only):
@@ -826,7 +826,7 @@ los_list_all_borg = get_los_positions_for_all_catalogues(snapList,
     cat300.getAllCentres(void_filter=True),
     cat300.getAllProperties("radii",void_filter=True).T,all_particles=True,
     void_indices = halo_indices,filter_list=filter_list_borg,
-    dist_max=3,rmin=10,rmax=20,recompute=False,suffix=".lospos_all.p")
+    dist_max=3,rmin=10,rmax=20,recompute=True,suffix=".lospos_all.p")
 
 # LCDM examples for comparison:
 distances_from_centre_lcdm = [
@@ -902,7 +902,7 @@ los_list_void_only_selected_lcdm = get_los_positions_for_all_catalogues(
 los_list_all_selected_lcdm = get_los_positions_for_all_catalogues(
     snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
     all_particles=True,filter_list=filter_list_lcdm_by_region,dist_max=3,
-    rmin=10,rmax=20,recompute=False,suffix=".lospos_all_selected.p")
+    rmin=10,rmax=20,recompute=True,suffix=".lospos_all_selected.p")
 
 # LCDM particles, density selected, void only, z-space:
 los_list_void_only_lcdm_zspace_selected = get_los_positions_for_all_catalogues(
@@ -915,7 +915,7 @@ los_list_void_only_lcdm_zspace_selected = get_los_positions_for_all_catalogues(
 los_list_all_lcdm_zspace_selected = get_los_positions_for_all_catalogues(
     snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
     all_particles=True,filter_list=filter_list_lcdm_by_region,dist_max=3,
-    rmin=10,rmax=20,recompute=False,zspace=True,recompute_zspace=False,
+    rmin=10,rmax=20,recompute=True,zspace=True,recompute_zspace=False,
     suffix=".lospos_all_zspace_selected.p")
 
 los_list_void_only_selected_lcdm_flat = [x 
