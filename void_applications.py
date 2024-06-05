@@ -607,13 +607,13 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
     s_par = scoords[:,0]
     s_perp = scoords[:,1]
     if sample_epsilon:
-        epsilon, f, A, r0, c1,f1, B = theta
+        epsilon, f, *profile_args = theta
         if Om_fid is not None:
             Om = Om_fid
         else:
             Om = 0.3
     else:
-        Om, f , A, r0, c1,f1, B = theta
+        Om, f , *profile_args = theta
         if Om_fid is not None:
             epsilon = ap_parameter(z,Om,Om_fid,**kwargs)
         else:
@@ -642,12 +642,12 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
                                                            np.vstack((x,y)).T,
                                                            method='cubic')
             theory_val = z_space_profile(s_par_new,s_perp_new,
-                                         lambda r: rho_real(r,A,r0,c1,f1,B),
+                                         lambda r: rho_real(r,*profile_args),
                                          z,Om,Delta,delta,f=f,F_inv=F_inv,
                                          **kwargs)
         else:
             theory_val = z_space_profile(s_par_new,s_perp_new,
-                                         lambda r: rho_real(r,A,r0,c1,f1,B),
+                                         lambda r: rho_real(r,*profile_args),
                                          z,Om,Delta,delta,f=f,
                                          F_inv=lambda x, y, z: F_inv(x,y,z),
                                          **kwargs)
@@ -702,14 +702,14 @@ def log_likelihood_aptest_parallel(theta,z,**kwargs):
 # Un-normalised log prior:
 
 def log_flat_prior_single(theta,theta_range):
-    in_range = (theta_range[0] <= theta < theta_range[1])
+    in_range = (theta_range[0] <= theta <= theta_range[1])
     if in_range:
         return 0.0
     else:
         return -np.inf
 
 def log_flat_prior(theta,theta_ranges):
-    bool_array = np.aray([bounds[0] <= param < bounds[1] 
+    bool_array = np.aray([bounds[0] <= param <= bounds[1] 
         for bounds, param in zip(theta_ranges,theta)],dtype=bool)
     if np.all(bool_array):
         return 0.0
@@ -722,13 +722,13 @@ def log_prior_aptest(theta,
                                    [-np.inf,0],[0,np.inf],[-1,1]],
                     **kwargs):
     log_prior_array = np.zeros(theta.shape)
-    flat_priors = [0,1,3,4,5,6]
+    flat_priors = [0,1,2,3,4,5,6]
     theta_flat = [theta[k] for k in flat_priors]
     theta_ranges_flat = [theta_ranges[k] for k in flat_priors]
     for k in flat_priors:
         log_prior_array[k] = log_flat_prior_single(theta[k],theta_ranges[k])
     # Amplitude prior (Jeffries):
-    log_prior_array[2] = -np.log(theta[2])
+    #log_prior_array[2] = -np.log(theta[2])
     return np.sum(log_prior_array)
 
 # Posterior (unnormalised):
@@ -921,6 +921,9 @@ los_list_all_lcdm_zspace_selected = get_los_positions_for_all_catalogues(
 los_list_void_only_selected_lcdm_flat = [x 
     for y in los_list_void_only_selected_lcdm for x in y]
 
+los_list_all_selected_lcdm_flat = [x 
+    for y in los_list_all_selected_lcdm for x in y]
+
 # Function to combine lists of void los-coords in the same simulation into 
 # a single list.
 def combine_los_lists(los_lists):
@@ -1014,7 +1017,7 @@ radlist = [antihaloRadiiUn[k]
     for k in range(0,20) for x in filter_list_lcdm_by_region[k]]
 stacked_particles_reff_lcdm_real_all = [get_2d_void_stack_from_los_pos(
     [los],bins_z_reff,bins_d_reff,[rad])
-    for los, rad in zip(los_list_void_only_selected_lcdm_flat,radlist)]
+    for los, rad in zip(los_list_all_selected_lcdm_flat,radlist)]
 #stacked_particles_reff_borg_real = get_2d_void_stack_from_los_pos(
 #    los_list_void_only_borg,bins_z_reff,bins_d_reff,
 #    [void_radii_borg for rad in antihaloRadii])
@@ -1069,7 +1072,7 @@ def get_weights_for_stack(los_pos,void_radii,additional_weights = None,
 voids_used_lcdm = [np.array([len(x) for x in los]) > 0 
     for los in los_lcdm_zspace]
 voids_used_lcdm_all = [np.array([len(x) for x in los]) > 0 
-    for los in los_list_void_only_selected_lcdm_flat]
+    for los in los_list_all_selected_lcdm_flat]
 voids_used_lcdm_ind = [np.where(x)[0] for x in voids_used_lcdm]
 voids_used_borg = [np.array([len(x) for x in los]) > 0 
     for los in los_borg_zspace]
@@ -1087,7 +1090,7 @@ los_pos_borg_real = [ [los[x] for x in np.where(ind)[0]]
     for los, ind in zip(los_borg_real,voids_used_borg) ]
 los_pos_lcdm_all = [ [los[x] for x in np.where(ind)[0]] 
     for los, ind in 
-    zip(los_list_void_only_selected_lcdm_flat,voids_used_lcdm_all) ]
+    zip(los_list_all_selected_lcdm_flat,voids_used_lcdm_all) ]
 
 rep_scores = void_cat_frac = cat300.property_with_filter(
     cat300.finalCatFrac,void_filter=True)
@@ -1185,7 +1188,8 @@ Delta_lcdm_all = np.array([(np.sum(np.cumsum(all_pairs[k],1),0)+1)/\
             for k in range(0,len(all_volumes))])
 delta_lcdm = np.mean(delta_lcdm_all,0)/nbar
 Delta_lcdm = np.mean(Delta_lcdm_all,0)/nbar
-
+sigma_delta_lcdm = np.std(delta_lcdm_all,0)/nbar
+sigma_Delta_lcdm = np.std(Delta_lcdm_all,0)/nbar
 
 # Profile function (should we use the inferred profile, or the 
 # lcdm mock profiles?):
@@ -1316,13 +1320,14 @@ def profile_broken_power(r,A,r0,c1,f1,B):
     return np.exp(profile_broken_power_log(r,A,r0,c1,f1,B))
 
 # Modified Hamaus profile:
-def profile_modified_hamaus(r,alpha,beta,rs,delta_c,delta_large = 0.0):
-    return (delta_c - delta_large)*(1.0 - (r/rs)**alpha)/(1 + (r)**beta) \
+def profile_modified_hamaus(r,alpha,beta,rs,delta_c,delta_large = 0.0,rv=1.0):
+    return (delta_c - delta_large)*(1.0 - (r/rs)**alpha)/(1 + (r/rv)**beta) \
         + 1.0 + delta_large
 
 
-def rho_real(r,A,r0,c1,f1,B):
-    return profile_broken_power(r,A,r0,c1,f1,B)
+def rho_real(r,*profile_args):
+    #return profile_broken_power(r,A,r0,c1,f1,B)
+    return profile_modified_hamaus(r,*profile_args)
 
 # Test plot:
 plot_los_void_stack(\
@@ -1521,7 +1526,7 @@ jackknife_cov = np.cov(bootstrap_stacks)
 jackknife_mean = np.mean(bootstrap_stacks,1)
 norm_cov = jackknife_cov/np.outer(jackknife_mean,jackknife_mean)
 reg_norm_cov = regularise_covariance(norm_cov,lambda_reg= 1e-10)
-reg_cov = regularise_covariance(jackknife_cov,lambda_reg= 1e-27)
+reg_cov = regularise_covariance(jackknife_cov,lambda_reg= 1e-15)
 cholesky_cov = scipy.linalg.cholesky(reg_cov,lower=True)
 
 inv_cov = get_inverse_covariance(reg_cov,lambda_reg = 1e-23)
@@ -1537,7 +1542,7 @@ logrho_cov = np.cov(log_samples[:,finite_samples])
 #    logrho_mean = np.array(np.ma.mean(np.ma.masked_invalid(log_samples,1)))
 #    logrho_cov = np.array(np.ma.cov(np.ma.masked_invalid(log_samples)))
 
-logrho_reg_cov = regularise_covariance(logrho_cov,lambda_reg= 1e-27)
+logrho_reg_cov = regularise_covariance(logrho_cov,lambda_reg= 1e-7)
 
 #logrho_mean = np.mean(log_samples,1)
 #logrho_cov = np.cov(log_samples)
@@ -1570,7 +1575,7 @@ eig, U = scipy.linalg.eigh(reg_cov)
 eigen = np.real(np.linalg.eig(jackknife_cov)[0])
 
 plt.clf()
-bins = np.logspace(-30,-9,21)
+bins = np.logspace(-16,-7,21)
 plt.hist(eig,bins=bins,alpha=0.5,color=seabornColormap[1],cumulative=True,
          label="Cumulative eigenvalues")
 plt.hist(eig,bins=bins,alpha=0.5,color=seabornColormap[0],
@@ -1579,7 +1584,8 @@ plt.xlabel('Eigenvalue, $\\lambda$')
 plt.ylabel('Number of eigenvectors')
 plt.xscale('log')
 plt.yscale('log')
-plt.axhline(1600 - 1529,linestyle=':',color='k',label='Possibly singular d.o.f')
+#plt.axhline(1600 - 1529,linestyle=':',color='k',
+#            label='Possibly singular d.o.f')
 plt.legend(frameon=False)
 plt.savefig(figuresFolder + "eigenvalue_distribution.pdf")
 plt.show()
@@ -1731,11 +1737,11 @@ data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
 
 
 solved_residuals = get_solved_residuals(
-    bootstrap_stacks[data_filter,:],jackknife_cov[data_filter,:][:,data_filter],
+    bootstrap_stacks[data_filter,:],reg_cov[data_filter,:][:,data_filter],
     jackknife_mean[data_filter],singular=True)
 [A_test,B_test] = compute_normality_test_statistics(
     bootstrap_stacks[data_filter,:],
-    covariance=jackknife_cov[data_filter,:][:,data_filter],
+    covariance=reg_cov[data_filter,:][:,data_filter],
     xbar=jackknife_mean[data_filter],singular=True,
     solved_residuals=solved_residuals)
 
@@ -2002,16 +2008,26 @@ def log_likelihood(theta, x, y, yerr,profile_model):
 
 nll1 = lambda *theta: -log_likelihood(*theta)
 #initial = np.array([0.1,0.9,-9.5,3.5,0.01])
-initial = np.array([1.0,1.0,1.0,-0.2,0.0])
-bounds = [(0,None),(0,None),(0,None),(-1,0),(-1,1)]
+initial = np.array([1.0,1.0,1.0,-0.2,0.0,1.0])
+bounds = [(0,None),(0,None),(0,None),(-1,0),(-1,1),(0,2)]
 
-sol2 = scipy.optimize.minimize(nll1, initial, 
+sol2_old = scipy.optimize.minimize(nll1, initial, 
     bounds = bounds,
     args=(r_bin_centres, rho_r_borg_mean, rho_r_borg_std,
           profile_modified_hamaus))
 
+sol2 = scipy.optimize.minimize(nll1, initial, 
+    bounds = bounds,
+    args=(rBinStackCentres, delta_borg, sigma_delta_borg,
+          profile_modified_hamaus))
+
+sol2_lcdm = scipy.optimize.minimize(nll1, initial, 
+    bounds = bounds,
+    args=(rBinStackCentres, delta_lcdm, sigma_delta_lcdm,
+          profile_modified_hamaus))
+
 #A,r0,c1,f1,B = sol2.x
-alpha,beta,rs,delta_c,delta_large = sol2.x
+alpha,beta,rs,delta_c,delta_large, rv = sol2.x
 
 
 
@@ -2085,17 +2101,17 @@ svals = np.linspace(0,3,ntab)
 rperp_vals = np.linspace(0,3,ntab)
 ntab_f = 100
 f_vals = np.linspace(0,1,ntab_f)
-rvals = np.zeros((ntab,ntab,ntab_f))
+F_inv_vals = np.zeros((ntab,ntab,ntab_f))
 for i in tools.progressbar(range(0,ntab)):
     for j in range(0,ntab):
         for k in range(0,ntab_f):
             F = (lambda r: r - r*(f_vals[k]/3)*\
                 Delta_func(np.sqrt(r**2 + rperp_vals[i]**2)) \
                 - svals[j])
-            rvals[i,j,k] = scipy.optimize.fsolve(F,svals[j])
+            F_inv_vals[i,j,k] = scipy.optimize.fsolve(F,svals[j])
 
 F_inv = lambda x, y, z: scipy.interpolate.interpn((rperp_vals,svals,f_vals),
-                                               rvals,
+                                               F_inv_vals,
                                                np.vstack((x,y,z)).T,
                                                method='cubic')
 
@@ -2241,15 +2257,22 @@ sol_A = scipy.optimize.minimize_scalar(
 A_opt = sol_A.x
 
 # Fix the amplitude, and plot the likelihood:
+Om_fid = 0.3111
 data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
         (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
 reg_cov_filtered = reg_cov[data_filter,:][:,data_filter]
 cholesky_cov_filtered = scipy.linalg.cholesky(reg_cov_filtered,lower=True)
+
+profile_param_ranges_hamaus = [(0,np.inf),(0,np.inf),(0,np.inf),(-1,0),
+                               (-1,1),(0,2)]
+
+theta_ranges_hamaus = eps_ranges + f_ranges + profile_param_ranges_hamaus
+
 args=(data_field[data_filter],scoords[data_filter,:],
                   cholesky_cov[data_filter,:][:,data_filter],z,Delta_func,
                   delta_func,rho_real)
 kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
-        'sample_epsilon':True,'theta_ranges':theta_ranges_epsilon,
+        'sample_epsilon':True,'theta_ranges':theta_ranges_hamaus,
         'singular':False,'Umap':Umap,'good_eig':good_eig,
         'F_inv':F_inv}
 #data_filter = np.where(np.sqrt(np.sum(scoords**2,1)) < 2.0)[0]
@@ -2257,12 +2280,17 @@ kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
 #Om_fid = 0.3111
 #kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
 #    'sample_epsilon':True}
-eps_initial_guess = np.hstack([np.array([1.0,f_lcdm(z,Om_fid)]),sol2.x])
-nll = lambda *theta: -log_likelihood_aptest(np.hstack([*theta,sol2.x]),*args,
+params = combine_parameters(np.mean(flat_samples1,0),fixed)
+eps_initial_guess = np.hstack([np.array([1.0,f_lcdm(z,Om_fid)]),params])
+nll = lambda *theta: -log_likelihood_aptest(np.hstack([*theta,params]),*args,
                                             **kwargs)
+nlp = lambda *theta: -log_probability_aptest(np.hstack([*theta,params]),
+                                                 *args,**kwargs)
 #nll = lambda *theta: -log_likelihood_aptest(np.hstack([*theta,A_opt]),
 #                                            *args,**kwargs)
 soln = scipy.optimize.minimize(nll, np.array([1.0,f_lcdm(z,Om_fid)]),
+    bounds = [(0.9,1.1),(0,1.0)])
+solnp = scipy.optimize.minimize(nlp, np.array([1.0,f_lcdm(z,Om_fid)]),
     bounds = [(0.9,1.1),(0,1.0)])
     #bounds=[(0.9,1.1),(0,1.0),(None,None),(0,2),(None,0),(0,None),(-1,1)])
 #soln = scipy.optimize.minimize(nll, theta_initial_guess,
@@ -2279,29 +2307,40 @@ f_range = np.linspace(0,1,41)
 f_range_centres = plot.binCentres(f_range)
 Om_range_centres = plot.binCentres(Om_range)
 eps_range = np.linspace(0.9,1.1,41)
+eps_centres = plot.binCentres(eps_range)
 
 log_like_ap = np.zeros((40,40))
-A,r0,c1,f1,B = sol2.x
+#A,r0,c1,f1,B = sol2.x
+alpha,beta,rs,delta_c,delta_large, rv = sol2.x
+params = combine_parameters(np.mean(flat_samples1,0),fixed)
 #A = A_opt
 for i in tools.progressbar(range(0,len(Om_range_centres))):
     for j in range(0,len(f_range_centres)):
         if kwargs['sample_epsilon']:
-            theta = np.array([eps_range[i],f_range_centres[j],A,r0,c1,f1,B])
+            theta = np.array([eps_range[i],f_range_centres[j],*params])
         else:
-            theta = np.array([Om_range_centres[i],f_range_centres[j],
-                              A,r0,c1,f1,B])
-        log_like_ap[i,j] = log_likelihood_aptest(theta,*args,**kwargs)
+            theta = np.array([Om_range_centres[i],f_range_centres[j],*params])
+        #log_like_ap[i,j] = log_likelihood_aptest(theta,*args,**kwargs)
+        log_like_ap[i,j] = log_probability_aptest(theta,*args,**kwargs)
 
 
 if kwargs['sample_epsilon']:
     plt.clf()
-    plt.imshow(-log_like_ap.T,
+    im = plt.imshow(-log_like_ap.T,
                extent=(eps_range[0],eps_range[-1],f_range[0],f_range[-1]),
-               norm=colors.LogNorm(vmin=2e9,vmax=1e8),cmap='Blues',
+               norm=colors.LogNorm(vmin=1e9,vmax=1e10),cmap='Blues',
                aspect='auto',origin='lower')
+    X, Y = np.meshgrid(eps_centres,f_range_centres)
+    CS = plt.contour(X,Y,-log_like_ap.T,levels = 10)
+    plt.clabel(CS, inline=True, fontsize=10)
+    plt.axvline(1.0,linestyle=':',color='k',label='Fiducial $\\Lambda$CDM')
+    plt.axhline(f_lcdm(z,Om_fid),linestyle=':',color='k')
+    plt.scatter(*soln.x,marker='x',color='k',label='MLE')
     plt.xlabel('$\\epsilon$')
     plt.ylabel('$f$')
-    plt.colorbar(label='Negative Log Likelihood')
+    #plt.colorbar(im,label='Negative Log Likelihood')
+    plt.colorbar(im,label='Negative Log Posterior')
+    plt.legend(frameon=False,loc="upper left")
     plt.savefig(figuresFolder + "likelihood_test_plot_eps.pdf")
     plt.show()
 else:
@@ -2389,10 +2428,10 @@ for i in range(0,len(bins_z_reff)-1):
         spar = bin_z_centres[i]
         sperp = bin_d_centres[j]
         profile_2d[i,j] = z_space_profile(spar,sperp,
-                                          lambda r: rho_real(r,A,r0,c1,f1,B),
+                                          lambda r: rho_real(r,*sol2.x),
                                           z,Om,Delta_func,delta_func,
-                                          epsilon=flat_mean[0],
-                                          f=flat_mean[1],apply_geometry=True)
+                                          epsilon=1.0,
+                                          f=f_fid,apply_geometry=True)
 
 plot_los_void_stack(\
         profile_2d,bin_d_centres,bin_z_centres,
@@ -2466,22 +2505,35 @@ def profile_fit(r,rho0,p,C,rb):
 def log_profile_fit(r,rho0,p,C,rb):
     return np.log(rho0) + (p*C/2)*rb*r - C*r**p
 
-# MLE of the profile fit:
+def combine_parameters(theta,fixed):
+    free_params = np.isnan(fixed)
+    fixed_params = np.logical_not(free_params)
+    if np.sum(free_params) != len(theta):
+        raise Exception("Parameter count not consistent with free parameters.")
+    else:
+        theta_new = np.zeros(len(fixed))
+        theta_new[free_params] = theta
+        theta_new[fixed_params] = fixed[fixed_params]
+        return theta_new
 
-def log_likelihood(theta, x, y, yerr,profile_model):
+# MLE of the profile fit:
+def log_likelihood(theta, x, y, yerr,profile_model,fixed=None):
     #rho0,p,C,rb = theta
     #A,r0,c1,f1,B = theta
     #model = profile_broken_power_log(x, A,r0,c1,f1,B)
-    model = profile_model(x,*theta)
+    if fixed is None:
+        fixed = np.array([np.nan for x in theta])
+    model = profile_model(x,*combine_parameters(theta,fixed))
     sigma2 = yerr**2
     return -0.5 * np.sum( (y - model)**2/sigma2 + np.log(sigma2) )
 
 # Priors:
 def log_prior(theta):
     #A,r0,c1,f1,B = theta
-    alpha,beta,rs,delta_c,delta_large = theta
-    if (0 <= alpha < np.inf) and (0 <= beta < np.inf) and (0 <= rs < np.inf) \
-        and (-1 < delta_c <= 0) and (-1 <= delta_large <= 1):
+    #alpha,beta,rs,delta_c,delta_large, rv = theta
+    beta,delta_c,delta_large, rv = theta
+    if (0 <= beta < np.inf) \
+        and (-1 < delta_c <= 0) and (-1 <= delta_large <= 1) and (0 <= rv <= 2):
         # Jeffries priors:
         return 0
     else:
@@ -2511,32 +2563,39 @@ sol2 = scipy.optimize.minimize(nll1, initial,
 #A1,r01,c11,f11,B1 = sol1.x
 #A2,r02,c12,f12,B2 = sol2.x
 
-initial = np.array([1.0,1.0,1.0,-0.2,0.0])
-bounds = [(0,None),(0,None),(0,None),(-1,0),(-1,1)]
+#initial = np.array([1.0,1.0,1.0,-0.2,0.0,1.0])
+#bounds = [(0,None),(0,None),(0,None),(-1,0),(-1,1),(0,2)]
 
+initial_free = np.array([1.0,-0.85,0.0,1.0])
+bounds_free =  [(0,None),(-1,0),(-1,1),(0,2)]
+fixed = np.array([np.nan for x in range(0,6)])
+fixed[0] = 1
+fixed[2] = np.inf
 
+sol1 = scipy.optimize.minimize(nll1, initial_free, 
+    bounds = bounds_free,
+    args=(rBinStackCentres, delta_lcdm, sigma_delta_lcdm,
+    profile_modified_hamaus,fixed) )
 
-sol1 = scipy.optimize.minimize(nll1, initial, 
-    bounds = bounds,
-    args=(r_bin_centres, rho_r_mean, rho_r_std,
-    profile_modified_hamaus) )
+sol2 = scipy.optimize.minimize(nll1, initial_free, 
+    bounds = bounds_free,
+    args=(rBinStackCentres, delta_borg, sigma_delta_borg,
+          profile_modified_hamaus,fixed) )
 
-sol2 = scipy.optimize.minimize(nll1, initial, 
-    bounds = bounds,
-    args=(r_bin_centres, rho_r_borg_mean, rho_r_borg_std,
-          profile_modified_hamaus) )
+beta,delta_c,delta_large,rv = sol1.x
 
-alpha,beta,rs,delta_c,delta_large = sol1.x
+alpha=1
+rs = np.inf
 
 import emcee
-pos = sol1.x + 1e-4*np.random.randn(32,5)
+pos = sol1.x + 1e-4*np.random.randn(32,4)
 nwalkers, ndim = pos.shape
 
 sampler1 = emcee.EnsembleSampler(
-    nwalkers, ndim, log_probability, args=(r_bin_centres, rho_r_mean, rho_r_std,
-    profile_modified_hamaus)
+    nwalkers, ndim, log_probability, args=(rBinStackCentres, delta_lcdm, 
+    sigma_delta_lcdm, profile_modified_hamaus,fixed)
 )
-sampler1.run_mcmc(pos, 100000, progress=True)
+sampler1.run_mcmc(pos, 10000, progress=True)
 
 tau1 = sampler1.get_autocorr_time(tol=0)
 
@@ -2544,11 +2603,11 @@ flat_samples1 = sampler1.get_chain(discard=int(3*np.max(tau1)),
                                  thin=int(np.max(tau1)), flat=True)
 
 #A1, r01, c11,f11,B1 = np.mean(flat_samples1,0)
-
+params = combine_parameters(np.mean(flat_samples1,0),fixed)
 
 sampler2 = emcee.EnsembleSampler(
-    nwalkers, ndim, log_probability, args=(r_bin_centres, rho_r_borg_mean, 
-    rho_r_borg_std, profile_modified_hamaus)
+    nwalkers, ndim, log_probability, args=(rBinStackCentres, delta_borg, 
+    sigma_delta_borg, profile_modified_hamaus,fixed)
 )
 sampler2.run_mcmc(pos, 10000, progress=True)
 tau2 = sampler2.get_autocorr_time(tol=0)
@@ -2577,7 +2636,9 @@ soln_mle2 = scipy.optimize.minimize(nll,
 import corner
 
 plt.clf()
-fig = corner.corner(flat_samples1, labels=["$A$","$r_0$","$c_1$","$f_1$","$B$"])
+#fig = corner.corner(flat_samples1,labels=["$A$","$r_0$","$c_1$","$f_1$","$B$"])
+fig = corner.corner(flat_samples1, labels=["$\\alpha$","$\\beta$","$r_s$",
+    "$\\delta_c$","$\\delta_{LS}$","$r_v$"])
 fig.suptitle("$\\Lambda$-CDM Simulations Contour Ellipticity")
 plt.savefig(figuresFolder + "corner_plot_profile_fit.pdf")
 plt.show()
@@ -2594,8 +2655,11 @@ plt.show()
 #    profile_broken_power(r_bin_centres,A,r0,c1,f1,B) 
 #    for A,r0,c1,f1,B in flat_samples1])
 
+#r_values = r_bin_centres
+r_values = rBinStackCentres
+
 rho_r_fit_samples = np.vstack([
-    profile_modified_hamaus(r_bin_centres,*theta) 
+    profile_modified_hamaus(r_values,*combine_parameters(theta,fixed)) 
     for theta in flat_samples1])
 
 rho_r_fit_samples_mean = np.mean(rho_r_fit_samples,0)
@@ -2603,39 +2667,39 @@ rho_r_fit_samples_std = np.std(rho_r_fit_samples,0)
 
 
 rho_r_borg_fit_samples = np.vstack([
-    profile_modified_hamaus(r_bin_centres,*theta)
+    profile_modified_hamaus(r_values,*combine_parameters(theta,fixed))
     for theta in flat_samples2])
 
 rho_r_borg_fit_samples_mean = np.mean(rho_r_borg_fit_samples,0)
 rho_r_borg_fit_samples_std = np.std(rho_r_borg_fit_samples,0)
 
 #field_borg_fit_samples = rho_r_borg_fit_samples = np.vstack([
-#    profile_broken_power(r_bin_centres,A,r0,c1,f1,B) 
+#    profile_broken_power(r_values,A,r0,c1,f1,B) 
 #    for A,r0,c1,f1,B in flat_samples[:,2:]])
 
 field_borg_fit_samples = rho_r_borg_fit_samples = np.vstack([
-    profile_modified_hamaus(r_bin_centres,theta) 
+    profile_modified_hamaus(r_values,combine_parameters(theta,fixed)) 
     for theta in flat_samples[:,2:]])
 
 field_borg_fit_mean = np.mean(field_borg_fit_samples,0)
 field_borg_fit_std = np.std(field_borg_fit_samples,0)
 
-#rho_r_fit_vals = profile_broken_power(r_bin_centres,A1,r01,c11,f11,B1)
-rho_r_fit_vals = profile_broken_power(r_bin_centres,A1,r01,c11,f11,B1)
-rho_r_fit_vals_borg = profile_broken_power(r_bin_centres,A2,r02,c12,f12,B2)
+#rho_r_fit_vals = profile_broken_power(r_values,A1,r01,c11,f11,B1)
+rho_r_fit_vals = profile_broken_power(r_values,A1,r01,c11,f11,B1)
+rho_r_fit_vals_borg = profile_broken_power(r_values,A2,r02,c12,f12,B2)
 
 
 plt.clf()
 fig, ax = plt.subplots(figsize=(textwidth,0.45*textwidth))
-plt.errorbar(r_bin_centres,rho_r_mean,yerr=rho_r_std,linestyle='-',
+plt.errorbar(rBinStackCentres,delta_lcdm,yerr=sigma_delta_lcdm,linestyle='-',
              color=seabornColormap[0],label="$\\Lambda$-CDM profile")
-plt.fill_between(r_bin_centres,rho_r_fit_samples_mean-rho_r_fit_samples_std,
+plt.fill_between(r_values,rho_r_fit_samples_mean-rho_r_fit_samples_std,
                  rho_r_fit_samples_mean + rho_r_fit_samples_std,alpha=0.5,
                  color=seabornColormap[0],
                  label="Fitting-formula, $\\Lambda$CDM-profile fit")
-plt.errorbar(r_bin_centres,rho_r_borg_mean,yerr=rho_r_borg_std,linestyle='-',
+plt.errorbar(rBinStackCentres,delta_borg,yerr=sigma_delta_borg,linestyle='-',
              color=seabornColormap[1],label="BORG profile")
-plt.fill_between(r_bin_centres,
+plt.fill_between(r_values,
                  rho_r_borg_fit_samples_mean-rho_r_borg_fit_samples_std,
                  rho_r_borg_fit_samples_mean + rho_r_borg_fit_samples_std,
                  alpha=0.5,color=seabornColormap[1],
@@ -2657,9 +2721,11 @@ plt.fill_between(r_bin_centres,
 
 plt.xlabel('$r/r_{\\mathrm{eff}}$')
 plt.ylabel('$\\rho(r)$')
+plt.xlim([0,10])
+plt.ylim([0,1.1])
 #plt.yscale('log')
 #plt.xscale('log')
-plt.legend(frameon=False,loc="upper right")
+plt.legend(frameon=False,loc="lower right")
 plt.tight_layout()
 plt.savefig(figuresFolder + "profile_fit_test2.pdf")
 plt.show()
@@ -2667,15 +2733,20 @@ plt.show()
 
 plt.clf()
 fig, ax = plt.subplots(figsize=(textwidth,0.45*textwidth))
-plt.errorbar(r_bin_centres,(rho_r_mean - rho_r_fit_vals)/rho_r_fit_vals,
-             yerr=rho_r_std/rho_r_fit_vals,linestyle='-',color=seabornColormap[0],
+plt.errorbar(r_values,(delta_lcdm - rho_r_fit_samples_mean)/\
+             rho_r_fit_samples_mean,
+             yerr=sigma_delta_lcdm/rho_r_fit_samples_mean,linestyle='-',
+             color=seabornColormap[0],
              label="$\\Lambda$-CDM profile")
-plt.errorbar(r_bin_centres,
-             (rho_r_borg_mean - rho_r_fit_vals_borg)/rho_r_fit_vals_borg,
-             yerr=rho_r_borg_std/rho_r_fit_vals_borg,linestyle='-',
+plt.errorbar(r_values,
+             (delta_borg - rho_r_borg_fit_samples_mean)/\
+             rho_r_borg_fit_samples_mean,
+             yerr=sigma_delta_borg/rho_r_borg_fit_samples_mean,linestyle='-',
              color=seabornColormap[1],label="BORG profile")
 plt.xlabel('$r/r_{\\mathrm{eff}}$')
 plt.ylabel('$\\Delta\\rho(r)/\\rho(r)$')
+plt.axhline(0.0,linestyle=':',color='k')
+plt.axhspan(-0.01,0.01,color='grey',alpha=0.5,label='1% error')
 #plt.yscale('log')
 #plt.xscale('log')
 plt.ylim([-0.1,0.1])
