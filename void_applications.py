@@ -392,6 +392,11 @@ from void_analysis.plot import draw_ellipse, plot_los_void_stack
 #-------------------------------------------------------------------------------
 # COSMOLOGY CONNECTION
 
+
+
+#-------------------------------------------------------------------------------
+# FUNCTIONS LIBRARY
+
 # E(z)^2 function:
 def Ez2(z,Om,Or=0,Ok=0,Ol=None,**kwargs):
     if Ol is None:
@@ -744,20 +749,6 @@ def log_probability_aptest_parallel(theta,*args,**kwargs):
         return -np.inf
     return lp + log_likelihood_aptest_parallel(theta,*args,**kwargs)
 
-
-
-#los_list_lcdm = get_los_positions_for_all_catalogues(snapListUn,snapListRevUn,
-#    antihaloCentresUn,antihaloRadiiUn,filter_list=filter_list_lcdm,
-#    dist_max=60,rmin=10,rmax=20,zspace=True,recompute=False,
-#    suffix=".lospos_zspace")
-final_cat = cat300.get_final_catalogue(void_filter=True)
-halo_indices = [-np.ones(len(final_cat),dtype=int) 
-    for ns in range(0,len(snapList))]
-for ns in range(0,len(snapList)):
-    have_void = final_cat[:,ns] >= 0
-    halo_indices[ns][have_void] = \
-        cat300.indexListShort[ns][final_cat[have_void,ns]-1]
-
 from void_analysis import context
 #hrList = [snap.halos() for snap in snapListRev]
 def get_zspace_centres(halo_indices,snap_list,snap_list_rev,hrlist=None,
@@ -790,6 +781,217 @@ def get_zspace_centres(halo_indices,snap_list,snap_list_rev,hrlist=None,
                     positions[sorted_indices[indices],:],periodicity=boxsize),
                     boxsize,swapXZ  = False,reverse = True)
     return centres
+
+# Function to combine lists of void los-coords in the same simulation into 
+# a single list.
+def combine_los_lists(los_lists):
+    lengths = np.array([len(x) for x in los_lists],dtype=int)
+    if not np.all(lengths == lengths[0]):
+        raise Exception("Cannot combine los lists with different lengths.")
+    new_list = []
+    num_parts = np.vstack([np.array([len(x) for x in los_list],dtype=int) 
+        for los_list in los_lists]).T
+    to_use = -np.ones(lengths[0],dtype=int)
+    num_lists = len(los_lists)
+    for k in range(0,num_lists):
+        to_use[num_parts[:,k] > 0] = k
+    for k in range(0,lengths[0]):
+        if to_use[k] >= 0:
+            new_list.append(los_lists[to_use[k]][k])
+        else:
+            new_list.append(np.zeros((0,2)))
+    return new_list
+
+# 2D void stacks:
+def get_2d_void_stack_from_los_pos(los_pos,z_bins,d_bins,radii,stacked=True):
+    voids_used = [np.array([len(x) for x in los]) > 0 for los in los_pos]
+    # Filter out any unused voids as they just cause problems:
+    los_pos_filtered = [ [x for x in los if len(x) > 0] for los in los_pos]
+    # Cell volumes and void radii:
+    cell_volumes_reff = np.outer(np.diff(z_bins),np.diff(d_bins))
+    void_radii = [rad[filt] for rad, filt in zip(radii,voids_used)]
+    # LOS positions in units of Reff:
+    los_list_reff = [
+        [np.abs(los/rad) for los, rad in zip(all_los,all_radii)] 
+        for all_los, all_radii in zip(los_pos_filtered,void_radii)]
+    # Stacked particles:
+    if stacked:
+        stacked_particles_reff = np.vstack([np.vstack(los_list) 
+            for los_list in los_list_reff ])
+        return stacked_particles_reff
+    else:
+        return los_list_reff
+
+
+# Compute_volume weights:
+def get_weights_for_stack(los_pos,void_radii,additional_weights = None,
+                          stacked = True):
+    if additional_weights is None:
+        v_weight = [[(1.0/rad)**3*np.ones(len(los)) 
+                    for los, rad in zip(all_los,all_radii)] 
+                    for all_los, all_radii in zip(los_pos,void_radii)]
+    else:
+        if type(additional_weights) == list:
+            v_weight = [[(1.0/rad)**3*np.ones(len(los))*weight 
+                    for los, rad, weight in zip(all_los,all_radii,all_weights)] 
+                    for all_los, all_radii, all_weights,
+                    in zip(los_pos,void_radii,additional_weights)]
+        else:
+            v_weight = [[(1.0/rad)**3*np.ones(len(los))*weight 
+                    for los, rad, weight 
+                    in zip(all_los,all_radii,additional_weights)]
+                    for all_los, all_radii
+                    in zip(los_pos,void_radii)]
+    if stacked:
+        return np.hstack([np.hstack(rad) for rad in v_weight])
+    else:
+        return v_weight
+
+
+def get_field_from_los_data(los_data,z_bins,d_bins,v_weight,void_count,
+                            nbar=None):
+    cell_volumes_reff = np.outer(np.diff(z_bins),np.diff(d_bins))
+    hist = np.histogramdd(los_data,bins=[z_bins,d_bins],density=False,
+                          weights = v_weight/(2*np.pi*los_data[:,1]))
+    if nbar is not None:
+        return hist[0]/(2*void_count*cell_volumes_reff*nbar)
+    else:
+        return hist[0]/(2*void_count*cell_volumes_reff)
+
+
+def profile_broken_power_log(r,A,r0,c1,f1,B):
+    return np.log(np.abs(A + B*(r/r0)**2 + (r/r0)**4)) + \
+        ((c1 - 4)/f1)*np.log(1 + (r/r0)**f1)
+
+def profile_broken_power(r,A,r0,c1,f1,B):
+    return np.exp(profile_broken_power_log(r,A,r0,c1,f1,B))
+
+# Modified Hamaus profile:
+def profile_modified_hamaus(r,alpha,beta,rs,delta_c,delta_large = 0.0,rv=1.0):
+    return (delta_c - delta_large)*(1.0 - (r/rs)**alpha)/(1 + (r/rv)**beta) \
+        + 1.0 + delta_large
+
+
+def rho_real(r,*profile_args):
+    #return profile_broken_power(r,A,r0,c1,f1,B)
+    return profile_modified_hamaus(r,*profile_args)
+
+
+def tikhonov_regularisation(mat,lambda_reg=1e-10):
+    return mat + lambda_reg*np.identity(mat.shape[0])
+
+def regularise_covariance(cov,lambda_reg=1e-10):
+    symmetric_cov = (cov + cov.T)/2
+    regularised_cov = tikhonov_regularisation(symmetric_cov,
+                                              lambda_reg=lambda_reg)
+    return regularised_cov
+
+def get_inverse_covariance(cov,lambda_reg=1e-10):
+    regularised_cov = regularise_covariance(cov,lambda_reg=lambda_reg)
+    L = np.linalg.cholesky(regularised_cov)
+    P = np.linalg.inv(L)
+    inv_cov = np.matmul(P,P.T)
+    return inv_cov
+
+
+def range_excluding(kmin,kmax,exclude):
+    return np.setdiff1d(range(kmin,kmax),exclude)
+
+
+def get_nonsingular_subspace(C,lambda_reg,lambda_cut = None,
+                             normalised_cov=False,mu=None):
+    reg_cov = regularise_covariance(C,lambda_reg= lambda_reg)
+    if normalised_cov:
+        if mu is None:
+            raise Exception("Mean not provided.")
+        else:
+            norm_cov = C/np.outer(mu,mu)
+            norm_reg_cov = regularise_covariance(norm_cov,
+                                                 lambda_reg= lambda_reg)
+            eig, U = scipy.linalg.eigh(norm_reg_cov)
+    else:
+        eig, U = scipy.linalg.eigh(reg_cov)
+    if lambda_cut is None:
+        lambda_cut = 10*lambda_reg
+    bad_eig = np.where(eig < lambda_cut)[0]
+    good_eig = np.where(eig >= lambda_cut)[0]
+    #D = np.diag(eig[good_eig])
+    Umap = (U.T)[good_eig,:]
+    #Ctilde = np.matmul(Umap.T,np.matmul(D,Umap))
+    #Ctilde = (Ctilde.T + Ctilde)/2
+    return Umap, eig[good_eig]
+
+
+def get_solved_residuals(samples,covariance,xbar,singular=False,
+                         normalised_cov=False,L=None,lambda_cut=1e-23,
+                         lambda_reg=1e-27,Umap=None,good_eig=None):
+    if not singular:
+        if normalised_cov:
+                residual = samples/xbar[:,None] - 1.0
+        else:
+            residual = samples - xbar[:,None]
+        if L is None:
+            reg_cov = regularise_covariance(covariance,lambda_reg= lambda_reg)
+            L = scipy.linalg.cholesky(reg_cov,lower=True)
+        solved_residuals = np.array(
+            [scipy.linalg.solve_triangular(L,residual[:,i],lower=True) 
+            for i in tools.progressbar(range(0,n))]).T
+    else:
+        if (Umap is None) or (good_eig is None):
+            Umap, good_eig = get_nonsingular_subspace(covariance,lambda_reg,
+                                                      lambda_cut=lambda_cut,
+                                                      normalised_cov = False,
+                                                      mu=xbar)
+        if normalised_cov:
+            residual = np.matmul(Umap,samples/xbar[:,None] - 1.0)
+        else:
+            residual = np.matmul(Umap,samples - xbar[:,None])
+        solved_residuals = residual/np.sqrt(good_eig[:,None])
+    return solved_residuals
+
+def compute_normality_test_statistics(samples,covariance=None,xbar=None,
+                                      solved_residuals=None,
+                                      low_memory_sum = False,**kwargs):
+    n = samples.shape[1]
+    k = samples.shape[0]
+    if covariance is None:
+        covariance = np.cov(samples)
+    if xbar is None:
+        xbar = np.mean(samples,1)
+    if solved_residuals is None:
+        solved_residuals = get_solved_residuals(samples, covariance,xbar,
+                                                **kwargs)
+    # Compute Skewness:
+    if low_memory_sum:
+        Ai = np.array(
+            [np.sum(
+            np.sum((solved_residuals[:,i][:,None]*solved_residuals),0)**3)
+            for i in tools.progressbar(range(0,n))])
+        A = np.sum(Ai)/(6*n)
+    else:
+        product = np.matmul(solved_residuals.T,solved_residuals)
+        A = np.sum(product**3)/(6*n)
+    B = np.sqrt(n/(8*k*(k+2)))*(np.sum(np.sum(solved_residuals**2,0)**2)/n \
+                            - k*(k+2))
+    return [A,B]
+
+
+
+
+#-------------------------------------------------------------------------------
+# LOS LISTS
+
+#los_list_lcdm = get_los_positions_for_all_catalogues(snapListUn,snapListRevUn,
+#    antihaloCentresUn,antihaloRadiiUn,filter_list=filter_list_lcdm,
+#    dist_max=60,rmin=10,rmax=20,zspace=True,recompute=False,
+#    suffix=".lospos_zspace")
+final_cat = cat300.get_final_catalogue(void_filter=True)
+halo_indices = [-np.ones(len(final_cat),dtype=int) 
+    for ns in range(0,len(snapList))]
+for ns in range(0,len(snapList)):
+    have_void = final_cat[:,ns] >= 0
+    halo_indices[ns][have_void] = \
+        cat300.indexListShort[ns][final_cat[have_void,ns]-1]
 
 # Convert void centres to redshift space:
 zcentres = tools.loadOrRecompute(data_folder + "zspace_centres.p",
@@ -828,6 +1030,13 @@ los_list_all_borg = get_los_positions_for_all_catalogues(snapList,
     void_indices = halo_indices,filter_list=filter_list_borg,
     dist_max=3,rmin=10,rmax=20,recompute=False,suffix=".lospos_all.p")
 
+
+#-------------------------------------------------------------------------------
+# FILTER LOS LISTS
+
+# Filter the voids in unconstrained simulations to match those used in the 
+# BORG catalogue.
+
 # LCDM examples for comparison:
 distances_from_centre_lcdm = [
     np.sqrt(np.sum(snapedit.unwrap(centres - np.array([boxsize/2]*3),
@@ -850,20 +1059,29 @@ filter_list_lcdm = [(dist < 135) & (radii > 10) & (radii <= 20)
 #    suffix=".lospos_all_zspace.p")
 
 # Get LOS list for selection-effect-processed regions:
+
+# Randomly selected regions (pre-selected) in unconstrained simulations:
 [randCentres,randOverDen] = tools.loadPickle(data_folder2 + \
     "random_centres_and_densities.p")
+# Density contrasts of these regions (precomputed):
 deltaMCMCList = tools.loadPickle(data_folder2 + "delta_list.p")
 from void_analysis.simulation_tools import get_map_from_sample
+
+# MAP estimate of the density from these samples, using bootstrap:
 deltaMAPBootstrap = scipy.stats.bootstrap(
     (deltaMCMCList,),get_map_from_sample,confidence_level = 0.68,
     vectorized=False,random_state=1000)
 deltaMAPInterval = deltaMAPBootstrap.confidence_interval
+
+# Select regions with similar density contrast the local supervolume:
 comparableDensityMAP = [(delta <= deltaMAPInterval[1]) & \
     (delta > deltaMAPInterval[0]) for delta in randOverDen]
 centresToUse = [randCentres[comp] for comp in comparableDensityMAP]
 deltaToUse = [randOverDen[ns][comp] \
     for ns, comp in zip(range(0,len(snapList)),comparableDensityMAP)]
 rSep = 2*135
+# Filter out spheres which overlap with already selected spheres, to ensure
+# independence:
 indicesUnderdenseNonOverlapping = simulation_tools.getNonOverlappingCentres(
     centresToUse,rSep,boxsize,returnIndices=True)
 centresUnderdenseNonOverlapping = [centres[ind] \
@@ -874,12 +1092,15 @@ densityListUnderdenseNonOverlapping = [density[ind] \
 densityUnderdenseNonOverlapping = np.hstack(
     densityListUnderdenseNonOverlapping)
 
+# Get distances from the centre of each region for each of the voids in that
+# region:
 distances_from_centre_lcdm_selected = [[
     np.sqrt(np.sum(snapedit.unwrap(centres - sphere_centre,boxsize)**2,1))
     for sphere_centre in selected_regions]
     for centres, selected_regions in zip(antihaloCentresUn,
     centresUnderdenseNonOverlapping)]
 
+# Filter voids to the radius range used in the catalogue:
 filter_list_lcdm_by_region = [[
     (dist < 135) & (radii > 10) & (radii <= 20) 
     for dist in all_dists]
@@ -891,6 +1112,12 @@ filter_list_lcdm_selected = [np.any(np.array([
     for dist in all_dists]),0)
     for all_dists, radii in 
     zip(distances_from_centre_lcdm_selected,antihaloRadiiUn)]
+
+
+
+#-------------------------------------------------------------------------------
+# LOS LISTS FOR FILTERED VOIDS
+
 
 # LCDM particles, density selected, void only, real space:
 los_list_void_only_selected_lcdm = get_los_positions_for_all_catalogues(
@@ -924,26 +1151,10 @@ los_list_void_only_selected_lcdm_flat = [x
 los_list_all_selected_lcdm_flat = [x 
     for y in los_list_all_selected_lcdm for x in y]
 
-# Function to combine lists of void los-coords in the same simulation into 
-# a single list.
-def combine_los_lists(los_lists):
-    lengths = np.array([len(x) for x in los_lists],dtype=int)
-    if not np.all(lengths == lengths[0]):
-        raise Exception("Cannot combine los lists with different lengths.")
-    new_list = []
-    num_parts = np.vstack([np.array([len(x) for x in los_list],dtype=int) 
-        for los_list in los_lists]).T
-    to_use = -np.ones(lengths[0],dtype=int)
-    num_lists = len(los_lists)
-    for k in range(0,num_lists):
-        to_use[num_parts[:,k] > 0] = k
-    for k in range(0,lengths[0]):
-        if to_use[k] >= 0:
-            new_list.append(los_lists[to_use[k]][k])
-        else:
-            new_list.append(np.zeros((0,2)))
-    return new_list
 
+# Combined Lists
+# Combine the voids from different regions of the same simulation
+# so that we can use them in the same way as the BORG samples:
 los_list_void_only_combined_lcdm = [combine_los_lists(los_list) 
     for los_list in los_list_void_only_selected_lcdm]
 
@@ -966,33 +1177,16 @@ los_list_all_combined_lcdm_zspace = [combine_los_lists(los_list)
 #    filter_list=filter_list_lcdm,dist_max=60,rmin=10,rmax=20,recompute=False,
 #    suffix=".lospos_void_only.p")
 
-# 2D void stacks:
-def get_2d_void_stack_from_los_pos(los_pos,z_bins,d_bins,radii,stacked=True):
-    voids_used = [np.array([len(x) for x in los]) > 0 for los in los_pos]
-    # Filter out any unused voids as they just cause problems:
-    los_pos_filtered = [ [x for x in los if len(x) > 0] for los in los_pos]
-    # Cell volumes and void radii:
-    cell_volumes_reff = np.outer(np.diff(z_bins),np.diff(d_bins))
-    void_radii = [rad[filt] for rad, filt in zip(radii,voids_used)]
-    # LOS positions in units of Reff:
-    los_list_reff = [
-        [np.abs(los/rad) for los, rad in zip(all_los,all_radii)] 
-        for all_los, all_radii in zip(los_pos_filtered,void_radii)]
-    # Stacked particles:
-    if stacked:
-        stacked_particles_reff = np.vstack([np.vstack(los_list) 
-            for los_list in los_list_reff ])
-        return stacked_particles_reff
-    else:
-        return los_list_reff
+#-------------------------------------------------------------------------------
+# CONSTRUCT FIELD USED FOR INFERENCE
 
-
+# Get relevant LOS lists:
 los_lcdm_real = los_list_all_combined_lcdm
 los_lcdm_zspace = los_list_all_combined_lcdm_zspace
 los_borg_real = los_list_all_borg
 los_borg_zspace = los_list_all_borg_zspace
 
-# Bins:
+# Bins in LOS co-ords:
 upper_dist_reff = 2
 bins_z_reff = np.linspace(0,upper_dist_reff,21)
 bins_d_reff = np.linspace(0,upper_dist_reff,21)
@@ -1044,29 +1238,8 @@ noInBins_borg_all = [plot_utilities.binValues(stacked_dist,bins_d_reff)[1]
     for stacked_dist in stacked_1d_real_borg_all]
 
 
-# Compute_volume weights:
-def get_weights_for_stack(los_pos,void_radii,additional_weights = None,
-                          stacked = True):
-    if additional_weights is None:
-        v_weight = [[(1.0/rad)**3*np.ones(len(los)) 
-                    for los, rad in zip(all_los,all_radii)] 
-                    for all_los, all_radii in zip(los_pos,void_radii)]
-    else:
-        if type(additional_weights) == list:
-            v_weight = [[(1.0/rad)**3*np.ones(len(los))*weight 
-                    for los, rad, weight in zip(all_los,all_radii,all_weights)] 
-                    for all_los, all_radii, all_weights,
-                    in zip(los_pos,void_radii,additional_weights)]
-        else:
-            v_weight = [[(1.0/rad)**3*np.ones(len(los))*weight 
-                    for los, rad, weight 
-                    in zip(all_los,all_radii,additional_weights)]
-                    for all_los, all_radii
-                    in zip(los_pos,void_radii)]
-    if stacked:
-        return np.hstack([np.hstack(rad) for rad in v_weight])
-    else:
-        return v_weight
+#-------------------------------------------------------------------------------
+# COMPUTE WEIGHTS FOR DATA FIELD
 
 # Weights for each void in the stack:
 voids_used_lcdm = [np.array([len(x) for x in los]) > 0 
@@ -1125,17 +1298,6 @@ weighted_counts_lcdm = np.array([
     np.histogram(dist,bins=bins_d_reff,weights=weights)[0]
     for dist, weights in zip(stacked_1d_real_lcdm_all,v_weight_lcdm_all)])
 
-def get_field_from_los_data(los_data,z_bins,d_bins,v_weight,void_count,
-                            nbar=None):
-    cell_volumes_reff = np.outer(np.diff(z_bins),np.diff(d_bins))
-    hist = np.histogramdd(los_data,bins=[z_bins,d_bins],density=False,
-                          weights = v_weight/(2*np.pi*los_data[:,1]))
-    if nbar is not None:
-        return hist[0]/(2*void_count*cell_volumes_reff*nbar)
-    else:
-        return hist[0]/(2*void_count*cell_volumes_reff)
-
-
 
 # Fields:
 nbar = len(referenceSnap)/boxsize**3
@@ -1151,16 +1313,19 @@ num_voids_borg = np.sum(num_voids_sample_borg) # Not the actual number
     # by the number of samples.
 nmean = len(snapList[0])/(boxsize**3)
 
+# Field with the reproducibility score weighting applied:
 field_borg = get_field_from_los_data(stacked_particles_reff_borg_abs,
                                      bins_z_reff,bins_d_reff,v_weight_borg,1,
                                      nbar=nbar)
 
-
+# Field without reproducibility score weighting
 field_borg_unweighted = get_field_from_los_data(
     stacked_particles_reff_borg_abs,bins_z_reff,bins_d_reff,
     v_weight_borg_unweighted,num_voids_borg,nbar=nbar)
 
 
+#-------------------------------------------------------------------------------
+# REAL SPACE DENSITY FIELD
 
 # Get the matter density fields:
 # Better, just load them directly from the pre-computed profiles:
@@ -1253,6 +1418,9 @@ rho_func_borg_z0 = scipy.interpolate.interp1d(
     fill_value=(field_borg[0][0],field_borg[0][-1]),
     bounds_error=False)
 
+#-------------------------------------------------------------------------------
+# TEST PLOTS FOR REAL SPACE FIELD
+
 # Test Plot:
 fig, ax = plt.subplots()
 ax.plot(rvals,delta_func(rvals),label='$\\delta(r)$')
@@ -1310,24 +1478,8 @@ Om = 0.3111
 f = f_lcdm(z,Om)
 A = 0.013
 
-# Density profile fits:
-
-def profile_broken_power_log(r,A,r0,c1,f1,B):
-    return np.log(np.abs(A + B*(r/r0)**2 + (r/r0)**4)) + \
-        ((c1 - 4)/f1)*np.log(1 + (r/r0)**f1)
-
-def profile_broken_power(r,A,r0,c1,f1,B):
-    return np.exp(profile_broken_power_log(r,A,r0,c1,f1,B))
-
-# Modified Hamaus profile:
-def profile_modified_hamaus(r,alpha,beta,rs,delta_c,delta_large = 0.0,rv=1.0):
-    return (delta_c - delta_large)*(1.0 - (r/rs)**alpha)/(1 + (r/rv)**beta) \
-        + 1.0 + delta_large
-
-
-def rho_real(r,*profile_args):
-    #return profile_broken_power(r,A,r0,c1,f1,B)
-    return profile_modified_hamaus(r,*profile_args)
+#-------------------------------------------------------------------------------
+# DENSITY PROFILE FITS PLOTS
 
 # Test plot:
 plot_los_void_stack(\
@@ -1406,10 +1558,11 @@ plot_los_void_stack(\
         "\\rho(s_{\\parallel},s_{\\perp})$")
 plt.show()
 
-# Inference:
+#-------------------------------------------------------------------------------
+# COSMIOLOGICAL INFERENCE:
 
-# Estimate BORG data covariance:
-
+#-------------------------------------------------------------------------------
+# COVARIANCE MATRIX ESTIMATION:
 los_list_reff_borg = get_2d_void_stack_from_los_pos(
     los_borg_zspace,bins_z_reff,bins_d_reff,
     [void_radii_borg for rad in antihaloRadii],stacked=False)
@@ -1459,22 +1612,6 @@ L = np.linalg.cholesky(regularised_cov)
 P = np.linalg.inv(L)
 inv_cov = np.matmul(P,P.T)
 
-def tikhonov_regularisation(mat,lambda_reg=1e-10):
-    return mat + lambda_reg*np.identity(mat.shape[0])
-
-def regularise_covariance(cov,lambda_reg=1e-10):
-    symmetric_cov = (cov + cov.T)/2
-    regularised_cov = tikhonov_regularisation(symmetric_cov,
-                                              lambda_reg=lambda_reg)
-    return regularised_cov
-
-def get_inverse_covariance(cov,lambda_reg=1e-10):
-    regularised_cov = regularise_covariance(cov,lambda_reg=lambda_reg)
-    L = np.linalg.cholesky(regularised_cov)
-    P = np.linalg.inv(L)
-    inv_cov = np.matmul(P,P.T)
-    return inv_cov
-
 # Covariance over all posterior samples:
 los_list_sample_borg = [np.vstack(los) for los in los_list_reff_borg]
 v_weights_sample_borg = [np.hstack(weights) for weights in v_weights_all_borg]
@@ -1498,10 +1635,6 @@ inv_cov = get_inverse_covariance(norm_cov,lambda_reg = 1e-10)
 #eigen = np.real(np.linalg.eig(norm_cov)[0])
 
 # Jackknife over all voids:
-
-def range_excluding(kmin,kmax,exclude):
-    return np.setdiff1d(range(kmin,kmax),exclude)
-
 num_voids = stacked_fields.shape[1]
 
 jackknife_samples_all = np.array([np.average(
@@ -1548,6 +1681,8 @@ logrho_reg_cov = regularise_covariance(logrho_cov,lambda_reg= 1e-7)
 #logrho_cov = np.cov(log_samples)
 #logrho_reg_cov = regularise_covariance(logrho_cov,lambda_reg= 1e-27)
 
+#-------------------------------------------------------------------------------
+# TESTING EIGENVALUE DISTRIBUTION
 
 # Eigenalue distribution:
 eig, U = scipy.linalg.eigh(logrho_reg_cov)
@@ -1609,7 +1744,8 @@ plt.savefig(figuresFolder + "eigenvalue_distribution_normalised.pdf")
 plt.show()
 
 
-
+#-------------------------------------------------------------------------------
+# GAUSSIANITY TESTING
 
 # Normality test:
 import seaborn
@@ -1636,30 +1772,6 @@ plt.show()
 
 # Singular Gaussian likelihood:
 
-def get_nonsingular_subspace(C,lambda_reg,lambda_cut = None,
-                             normalised_cov=False,mu=None):
-    reg_cov = regularise_covariance(C,lambda_reg= lambda_reg)
-    if normalised_cov:
-        if mu is None:
-            raise Exception("Mean not provided.")
-        else:
-            norm_cov = C/np.outer(mu,mu)
-            norm_reg_cov = regularise_covariance(norm_cov,
-                                                 lambda_reg= lambda_reg)
-            eig, U = scipy.linalg.eigh(norm_reg_cov)
-    else:
-        eig, U = scipy.linalg.eigh(reg_cov)
-    if lambda_cut is None:
-        lambda_cut = 10*lambda_reg
-    bad_eig = np.where(eig < lambda_cut)[0]
-    good_eig = np.where(eig >= lambda_cut)[0]
-    #D = np.diag(eig[good_eig])
-    Umap = (U.T)[good_eig,:]
-    #Ctilde = np.matmul(Umap.T,np.matmul(D,Umap))
-    #Ctilde = (Ctilde.T + Ctilde)/2
-    return Umap, eig[good_eig]
-
-
 Umap, good_eig = get_nonsingular_subspace(jackknife_cov,1e-27,lambda_cut=1e-23,
                                           normalised_cov = False,
                                           mu=jackknife_mean)
@@ -1668,60 +1780,6 @@ Umap, good_eig = get_nonsingular_subspace(jackknife_cov,1e-27,lambda_cut=1e-23,
 #Umap, good_eig = get_nonsingular_subspace(logrho_cov,1e-27,lambda_cut=1e-23,
 #                                          normalised_cov = False,
 #                                          mu=logrho_mean)
-
-def get_solved_residuals(samples,covariance,xbar,singular=False,
-                         normalised_cov=False,L=None,lambda_cut=1e-23,
-                         lambda_reg=1e-27,Umap=None,good_eig=None):
-    if not singular:
-        if normalised_cov:
-                residual = samples/xbar[:,None] - 1.0
-        else:
-            residual = samples - xbar[:,None]
-        if L is None:
-            reg_cov = regularise_covariance(covariance,lambda_reg= lambda_reg)
-            L = scipy.linalg.cholesky(reg_cov,lower=True)
-        solved_residuals = np.array(
-            [scipy.linalg.solve_triangular(L,residual[:,i],lower=True) 
-            for i in tools.progressbar(range(0,n))]).T
-    else:
-        if (Umap is None) or (good_eig is None):
-            Umap, good_eig = get_nonsingular_subspace(covariance,lambda_reg,
-                                                      lambda_cut=lambda_cut,
-                                                      normalised_cov = False,
-                                                      mu=xbar)
-        if normalised_cov:
-            residual = np.matmul(Umap,samples/xbar[:,None] - 1.0)
-        else:
-            residual = np.matmul(Umap,samples - xbar[:,None])
-        solved_residuals = residual/np.sqrt(good_eig[:,None])
-    return solved_residuals
-
-def compute_normality_test_statistics(samples,covariance=None,xbar=None,
-                                      solved_residuals=None,
-                                      low_memory_sum = False,**kwargs):
-    n = samples.shape[1]
-    k = samples.shape[0]
-    if covariance is None:
-        covariance = np.cov(samples)
-    if xbar is None:
-        xbar = np.mean(samples,1)
-    if solved_residuals is None:
-        solved_residuals = get_solved_residuals(samples, covariance,xbar,
-                                                **kwargs)
-    # Compute Skewness:
-    if low_memory_sum:
-        Ai = np.array(
-            [np.sum(
-            np.sum((solved_residuals[:,i][:,None]*solved_residuals),0)**3)
-            for i in tools.progressbar(range(0,n))])
-        A = np.sum(Ai)/(6*n)
-    else:
-        product = np.matmul(solved_residuals.T,solved_residuals)
-        A = np.sum(product**3)/(6*n)
-    B = np.sqrt(n/(8*k*(k+2)))*(np.sum(np.sum(solved_residuals**2,0)**2)/n \
-                            - k*(k+2))
-    return [A,B]
-
 singular = True
 
 
@@ -1962,6 +2020,9 @@ plt.title("Estimated covariance of $\\rho(s_{\\mathrm{\\perp}}," +
     "s_{\\mathrm{\\parallel}}$)")
 plt.savefig(figuresFolder + "covariance_distribution.pdf")
 plt.show()
+
+#-------------------------------------------------------------------------------
+# COSMOLOGICAL INFERENCE
 
 # Data to compare to:
 data_field = field_borg.flatten()
