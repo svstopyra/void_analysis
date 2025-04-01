@@ -975,6 +975,66 @@ def compute_normality_test_statistics(samples,covariance=None,xbar=None,
                             - k*(k+2))
     return [A,B]
 
+def run_inference(data_field,theta_ranges,theta_initial,filename,
+                  log_probability,*args,
+                  redo_chain=False,
+                  backup_start=True,nwalkers=64,sample="all",n_mcmc=10000,
+                  disp=1e-4,Om_fid=0.3111,max_n=1000000,z=0.0225,
+                  parallel=False,batch_size=100,n_batches=100,
+                  data_filter=None,F_inv=None,autocorr_file=None,**kwargs):
+    if sample == "all":
+        sample = np.array([True for theta in theta_ranges])
+    ndims = np.sum(sample)
+    ndata = len(data_field)
+    if data_filter is None:
+        data_filter = np.arange(0,ndata)
+    # Setup run:
+    initial = theta_initial + disp*np.random.randn(nwalkers,ndims)
+    filename_initial = filename + ".old"
+    if backup_start:
+        os.system("cp " + filename + " " + filename_initial)
+    backend = emcee.backends.HDFBackend(filename)
+    if redo_chain:
+        backend.reset(nwalkers, ndims)
+    # Inference run:
+    if parallel:
+        with Pool() as pool:
+            sampler = emcee.EnsembleSampler(
+                nwalkers, ndims, log_probability_aptest_parallel, 
+                args=(z,),
+                kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
+                        'sample_epsilon':True},
+                backend=backend,pool=pool)
+            sampler.run_mcmc(initial,n_mcmc , progress=True)
+    else:
+        #data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
+        #    (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
+        #reg_cov_filtered = reg_cov[data_filter,:][:,data_filter]
+        #cholesky_cov_filtered = scipy.linalg.cholesky(reg_cov_filtered,lower=True)
+        sampler = emcee.EnsembleSampler(nwalkers, ndims, log_probability,
+                                        args=args,kwargs=kwargs,backend=backend)
+        if redo_chain or (autocorr_file is None):
+            autocorr = np.zeros((ndims,0))
+        else:
+            autocorr = np.load(autocorr_file)
+        old_tau = np.inf
+        for k in range(0,n_batches):
+            if (k == 0 and redo_chain):
+                sampler.run_mcmc(initial,batch_size , progress=True)
+            else:
+                sampler.run_mcmc(None,batch_size,progress=True)
+            tau = sampler.get_autocorr_time(tol=0)
+            autocorr = np.hstack([autocorr,tau.reshape((ndims,1))])
+            if autocorr_file is not None:
+                np.save(autocorr_file,autocorr)
+            # Check convergence
+            converged = np.all(tau * 100 < sampler.iteration)
+            converged &= np.all(np.abs(old_tau - tau) / tau < 0.01)
+            if converged:
+                break
+            old_tau = tau
+    return tau, sampler
+
 
 
 
@@ -2024,6 +2084,29 @@ plt.show()
 #-------------------------------------------------------------------------------
 # COSMOLOGICAL INFERENCE
 
+# Eigenvalue quality filter:
+
+Umap, good_eig = get_nonsingular_subspace(jackknife_cov,1e-27,lambda_cut=1e-23,
+                                          normalised_cov = False,
+                                          mu=jackknife_mean)
+
+
+#Umap, good_eig = get_nonsingular_subspace(logrho_cov,1e-27,lambda_cut=1e-23,
+#                                          normalised_cov = False,
+#                                          mu=logrho_mean)
+singular = True
+
+
+spar = np.hstack([s*np.ones(field_borg.shape[1]) 
+    for s in plot.binCentres(bins_z_reff)])
+sperp = np.hstack([plot.binCentres(bins_d_reff) 
+    for s in plot.binCentres(bins_z_reff)])
+scoords = np.vstack([spar,sperp]).T
+
+data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
+        (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
+
+
 # Data to compare to:
 data_field = field_borg.flatten()
 spar = np.hstack([s*np.ones(field_borg.shape[1]) 
@@ -2094,66 +2177,6 @@ alpha,beta,rs,delta_c,delta_large, rv = sol2.x
 
 
 # Inference run:
-def run_inference(data_field,theta_ranges,theta_initial,filename,
-                  log_probability,*args,
-                  redo_chain=False,
-                  backup_start=True,nwalkers=64,sample="all",n_mcmc=10000,
-                  disp=1e-4,Om_fid=0.3111,max_n=1000000,z=0.0225,
-                  parallel=False,batch_size=100,n_batches=100,
-                  data_filter=None,F_inv=None,autocorr_file=None,**kwargs):
-    if sample == "all":
-        sample = np.array([True for theta in theta_ranges])
-    ndims = np.sum(sample)
-    ndata = len(data_field)
-    if data_filter is None:
-        data_filter = np.arange(0,ndata)
-    # Setup run:
-    initial = theta_initial + disp*np.random.randn(nwalkers,ndims)
-    filename_initial = filename + ".old"
-    if backup_start:
-        os.system("cp " + filename + " " + filename_initial)
-    backend = emcee.backends.HDFBackend(filename)
-    if redo_chain:
-        backend.reset(nwalkers, ndims)
-    # Inference run:
-    if parallel:
-        with Pool() as pool:
-            sampler = emcee.EnsembleSampler(
-                nwalkers, ndims, log_probability_aptest_parallel, 
-                args=(z,),
-                kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
-                        'sample_epsilon':True},
-                backend=backend,pool=pool)
-            sampler.run_mcmc(initial,n_mcmc , progress=True)
-    else:
-        #data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
-        #    (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
-        #reg_cov_filtered = reg_cov[data_filter,:][:,data_filter]
-        #cholesky_cov_filtered = scipy.linalg.cholesky(reg_cov_filtered,lower=True)
-        sampler = emcee.EnsembleSampler(nwalkers, ndims, log_probability,
-                                        args=args,kwargs=kwargs,backend=backend)
-        if redo_chain or (autocorr_file is None):
-            autocorr = np.zeros((ndims,0))
-        else:
-            autocorr = np.load(autocorr_file)
-        old_tau = np.inf
-        for k in range(0,n_batches):
-            if (k == 0 and redo_chain):
-                sampler.run_mcmc(initial,batch_size , progress=True)
-            else:
-                sampler.run_mcmc(None,batch_size,progress=True)
-            tau = sampler.get_autocorr_time(tol=0)
-            autocorr = np.hstack([autocorr,tau.reshape((ndims,1))])
-            if autocorr_file is not None:
-                np.save(autocorr_file,autocorr)
-            # Check convergence
-            converged = np.all(tau * 100 < sampler.iteration)
-            converged &= np.all(np.abs(old_tau - tau) / tau < 0.01)
-            if converged:
-                break
-            old_tau = tau
-    return tau, sampler
-
 
 
 # Tabulated inverse:
@@ -2179,7 +2202,8 @@ F_inv = lambda x, y, z: scipy.interpolate.interpn((rperp_vals,svals,f_vals),
 
 
 # Run the inference:
-profile_param_ranges = [[-np.inf,np.inf],[0,2],[-np.inf,0],[0,np.inf],[-1,1]]
+#profile_param_ranges = [[-np.inf,np.inf],[0,2],[-np.inf,0],[0,np.inf],[-1,1]]
+profile_param_ranges = [[0,np.inf],[0,np.inf],[0,np.inf],[-1,0],[-1,1],[0,2]]
 om_ranges = [[0.1,0.5]]
 eps_ranges = [[0.9,1.1]]
 f_ranges = [[0,1]]
@@ -2188,10 +2212,13 @@ Om_fid = 0.3111
 eps_initial_guess = np.array([1.0,f_lcdm(z,Om_fid)])
 theta_initial_guess = np.array([0.3,f_lcdm(z,0.3)])
 
+initial_guess_eps = np.hstack([eps_initial_guess,sol2.x])
+initial_guess_theta = np.hstack([theta_initial_guess,sol2.x])
+
 theta_ranges=om_ranges + f_ranges + profile_param_ranges
 theta_ranges_epsilon = eps_ranges + f_ranges + profile_param_ranges
 
-args = (sol2.x,data_field[data_filter],scoords[data_filter,:],
+args = (data_field[data_filter],scoords[data_filter,:],
         cholesky_cov[data_filter,:][:,data_filter],z,Delta_func,
         delta_func,rho_real)
 kwargs = {'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
@@ -2204,18 +2231,17 @@ def posterior_wrapper(theta,additional_args,*args,**kwargs):
     theta_comb = np.hstack([theta,additional_args])
     return log_probability_aptest(theta_comb,*args,**kwargs)
 
+import emcee
 
-
-tau, sampler = run_inference(data_field,theta_ranges_epsilon,eps_initial_guess,
+tau, sampler = run_inference(data_field,theta_ranges_epsilon,initial_guess_eps,
                              data_folder + "inference_weighted.h5",
-                             posterior_wrapper,*args,redo_chain=False,
+                             posterior_wrapper,*args,redo_chain=True,
                              backup_start=True,nwalkers=64,sample="all",
                              n_mcmc=10000,disp=1e-4,Om_fid=0.3111,
                              max_n=1000000,z=0.0225,parallel=False,
                              batch_size=100,n_batches=100,data_filter=None,
                              F_inv=F_inv,
-                             autocorr_file = data_folder + "autocorr.npy",
-                             **kwargs)
+                             autocorr_file = data_folder + "autocorr.npy")
 
 
 
