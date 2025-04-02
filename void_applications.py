@@ -975,15 +975,15 @@ def compute_normality_test_statistics(samples,covariance=None,xbar=None,
                             - k*(k+2))
     return [A,B]
 
-def run_inference(data_field,theta_ranges,theta_initial,filename,
+def run_inference(data_field,theta_ranges_list,theta_initial,filename,
                   log_probability,*args,
                   redo_chain=False,
                   backup_start=True,nwalkers=64,sample="all",n_mcmc=10000,
                   disp=1e-4,Om_fid=0.3111,max_n=1000000,z=0.0225,
                   parallel=False,batch_size=100,n_batches=100,
-                  data_filter=None,F_inv=None,autocorr_file=None,**kwargs):
+                  data_filter=None,autocorr_file=None,**kwargs):
     if sample == "all":
-        sample = np.array([True for theta in theta_ranges])
+        sample = np.array([True for theta in theta_ranges_list])
     ndims = np.sum(sample)
     ndata = len(data_field)
     if data_filter is None:
@@ -2221,29 +2221,63 @@ theta_ranges_epsilon = eps_ranges + f_ranges + profile_param_ranges
 args = (data_field[data_filter],scoords[data_filter,:],
         cholesky_cov[data_filter,:][:,data_filter],z,Delta_func,
         delta_func,rho_real)
-kwargs = {'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
+kwargs = {'cholesky':True,'tabulate_inverse':True,
           'sample_epsilon':True,'theta_ranges':theta_ranges_epsilon,
-          'singular':False,'Umap':Umap,'good_eig':good_eig,
-          'F_inv':F_inv}
+          'singular':False,'Umap':Umap,'good_eig':good_eig,'F_inv':F_inv}
 
 # Wrapper allowing us to pass arbitrary arguments that won't be sampled over:
 def posterior_wrapper(theta,additional_args,*args,**kwargs):
     theta_comb = np.hstack([theta,additional_args])
     return log_probability_aptest(theta_comb,*args,**kwargs)
 
+nll = lambda theta: -log_likelihood_aptest(theta,*args,**kwargs)
+mle_estimate = scipy.optimize.minimize(nll,initial_guess_eps,bounds=theta_ranges_epsilon)
+
+
+plt.clf()
+fig, ax = plt.subplots(figsize=(textwidth,0.45*textwidth))
+plt.errorbar(rBinStackCentres,delta_borg,yerr=sigma_delta_borg,linestyle='-',
+             color=seabornColormap[1],label="BORG profile")
+plt.plot(rBinStackCentres,
+         profile_modified_hamaus(rBinStackCentres,*mle_estimate.x[2:]),
+         label="MLE Profile (joint inference)")
+plt.plot(rBinStackCentres,
+         profile_modified_hamaus(rBinStackCentres,*sol2.x),
+         label="MLE Profile (Separate inference)")
+
+plt.xlabel('$r/r_{\\mathrm{eff}}$')
+plt.ylabel('$\\rho(r)$')
+plt.xlim([0,10])
+plt.ylim([0,1.1])
+#plt.yscale('log')
+#plt.xscale('log')
+plt.legend(frameon=False,loc="lower right")
+plt.tight_layout()
+plt.savefig(figuresFolder + "profile_fit_test3.pdf")
+plt.show()
+
+
+
+
+
+
+
 import emcee
 
-tau, sampler = run_inference(data_field,theta_ranges_epsilon,initial_guess_eps,
+tau, sampler = run_inference(data_field,theta_ranges_epsilon,mle_estimate.x,
                              data_folder + "inference_weighted.h5",
-                             posterior_wrapper,*args,redo_chain=True,
+                             log_probability_aptest,*args,redo_chain=True,
                              backup_start=True,nwalkers=64,sample="all",
-                             n_mcmc=10000,disp=1e-4,Om_fid=0.3111,
-                             max_n=1000000,z=0.0225,parallel=False,
-                             batch_size=100,n_batches=100,data_filter=None,
-                             F_inv=F_inv,
-                             autocorr_file = data_folder + "autocorr.npy")
+                             n_mcmc=10000,disp=1e-1,
+                             max_n=1000000,z=0.0225,parallel=False,Om_fid=0.3111,
+                             batch_size=100,n_batches=10,data_filter=None,
+                             autocorr_file = data_folder + "autocorr.npy",**kwargs)
 
-
+sampler = emcee.backends.HDFBackend(data_folder + "inference_weighted.h5")
+tau = sampler.get_autocorr_time(tol=0)
+chain = samples.get_chain()
+all_samples = chain.reshape(chain.shape[0]*chain.shape[1],chain.shape[2])
+flat_samples = sampler.get_chain(discard = 300,thin=50,flat=True)
 
 redo_chain = False
 continue_chain = True
@@ -2367,7 +2401,8 @@ kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
 #Om_fid = 0.3111
 #kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
 #    'sample_epsilon':True}
-params = combine_parameters(np.mean(flat_samples1,0),fixed)
+#params = combine_parameters(np.mean(flat_samples,0),fixed)
+params = np.mean(flat_samples[:,2:],0)
 eps_initial_guess = np.hstack([np.array([1.0,f_lcdm(z,Om_fid)]),params])
 nll = lambda *theta: -log_likelihood_aptest(np.hstack([*theta,params]),*args,
                                             **kwargs)
@@ -2399,7 +2434,7 @@ eps_centres = plot.binCentres(eps_range)
 log_like_ap = np.zeros((40,40))
 #A,r0,c1,f1,B = sol2.x
 alpha,beta,rs,delta_c,delta_large, rv = sol2.x
-params = combine_parameters(np.mean(flat_samples1,0),fixed)
+#params = combine_parameters(np.mean(flat_samples1,0),fixed)
 #A = A_opt
 for i in tools.progressbar(range(0,len(Om_range_centres))):
     for j in range(0,len(f_range_centres)):
