@@ -2266,16 +2266,16 @@ import emcee
 
 tau, sampler = run_inference(data_field,theta_ranges_epsilon,mle_estimate.x,
                              data_folder + "inference_weighted.h5",
-                             log_probability_aptest,*args,redo_chain=True,
+                             log_probability_aptest,*args,redo_chain=False,
                              backup_start=True,nwalkers=64,sample="all",
                              n_mcmc=10000,disp=1e-1,
                              max_n=1000000,z=0.0225,parallel=False,Om_fid=0.3111,
-                             batch_size=100,n_batches=10,data_filter=None,
+                             batch_size=100,n_batches=100,data_filter=None,
                              autocorr_file = data_folder + "autocorr.npy",**kwargs)
 
 sampler = emcee.backends.HDFBackend(data_folder + "inference_weighted.h5")
 tau = sampler.get_autocorr_time(tol=0)
-chain = samples.get_chain()
+chain = sampler.get_chain()
 all_samples = chain.reshape(chain.shape[0]*chain.shape[1],chain.shape[2])
 flat_samples = sampler.get_chain(discard = 300,thin=50,flat=True)
 
