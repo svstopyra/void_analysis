@@ -183,9 +183,180 @@ else:
                                                  reverse = True)
                        for centres in extract_antihalo_property(snapList,5)]
     antihaloRadiiUn = extract_antihalo_property(snapListUn,7)
-    antihaloCentres = extract_antihalo_property(snapList,5)
     antihaloMasses = extract_antihalo_property(snapList,3)
     antihaloRadii = extract_antihalo_property(snapList,7)
+
+
+
+#-------------------------------------------------------------------------------
+# SNAPSHOT GROUP CLASS
+
+# Load properties file for a given snapshot. Allow for backwards compatibility
+# with older pickle version of the file:
+def get_antihalo_properties(snap,file_suffix = "AHproperties",
+                            default=".h5",low_memory_mode=True):
+    filename = snap.filename + "." + file_suffix + default
+    # For backwards compatibility:
+    filename_old = snap.filename + "." + file_suffix + ".p"
+    if os.path.isfile(filename):
+        return h5py.File(filename, "r")
+    elif os.path.isfile(filename_old):
+        if low_memory_mode:
+            return filename_old
+        else:
+            return tools.loadPickle(filename_old)
+    else:
+        raise Exception("Anti-halo properties file not found.")
+
+
+# Class to organise anti-halo properties into a more convenient format
+class SnapshotGroup:
+    def __init__(self,snap_list,snap_list_reverse,low_memory_mode=True,
+                 swapXZ = False,reverse = False,remap_centres=False):
+        self.snaps = [tools.getPynbodySnap(snap) for snap in snap_list]
+        self.snaps_reverse = [tools.getPynbodySnap(snap) 
+                              for snap in snap_list_reverse]
+        self.N = len(self.snaps)
+        self.low_memory_mode = low_memory_mode
+        if low_memory_mode:
+            self.all_property_lists = [None for snap in snap_list]
+        else:
+            self.all_property_lists = [get_antihalo_properties(snap) 
+                                   for snap in snap_list]
+        self.property_list = ["halo_centres","halo_masses",
+                             "antihalo_centres","antihalo_masses",
+                             "cell_volumes","void_centres",
+                             "void_volumes","void_radii",
+                             "radius_bins","pair_counts",
+                             "bin_volumes","delta_central",
+                             "delta_average"]
+        self.additional_properties = {"halos":None,"antihalos":None,
+                                      "snaps":self.snaps,
+                                      "snaps_reverse":self.snaps_reverse}
+        self.property_map = {name:ind for name, ind in 
+            zip(self.property_list,range(0,len(self.property_list)))}
+        self.reverse = reverse
+        self.swapXZ = swapXZ
+        self.remap_centres = True
+        self.boxsize = self.snaps[0].properties['boxsize'].ratio("Mpc a h**-1")
+        self.all_properties = [None for prop in self.property_list]
+        self.snap_filenames = [snap.filename for snap in self.snaps]
+        self.snap_reverse_filenames = [snap.filename 
+                                       for snap in self.snaps_reverse]
+    def is_valid_property(self,prop):
+        if type(prop) is int:
+            return prop in range(0,len(self.property_list))
+        elif type(prop) is str:
+            return prop in self.property_list
+        else:
+            return False
+    # Map named property to a property index, and check it is valid:
+    def get_property_index(self,prop):
+        if type(prop) is int:
+            if prop in range(0,len(self.property_list)):
+                return prop
+            else:
+                raise Exception("Property index is out of range.")
+        elif type(prop) is str:
+            if prop in self.property_list:
+                return self.property_map[prop]
+            else:
+                raise Exception("Requested property does not exist.")
+        else:
+            raise Exception("Invalid property type")
+    # Map property index to a named property and check it is valid:
+    def get_property_name(self,prop):
+        if type(prop) is int:
+            if prop in range(0,len(self.property_list)):
+                return self.property_list[prop]
+            else:
+                raise Exception("Property index is out of range.")
+        elif type(prop) is str:
+            if prop in self.property_list:
+                return prop
+            else:
+                raise Exception("Requested property does not exist.")
+        else:
+            raise Exception("Invalid property type")
+    # Get the selected property:
+    def get_property(self,snap_index,property_name,recompute=False):
+        prop_index = self.get_property_index(property_name)
+        if (self.all_properties[prop_index] is not None) and (not recompute):
+            # Load the cachec properties if they exist:
+            return self.all_properties[prop_index][snap_index]
+        else:
+            # Otherwise, recompute them:
+            property_list = self.all_property_lists[snap_index]
+            if property_list is None:
+                property_list = get_antihalo_properties(
+                                    self.snaps[snap_index])
+            # Load from hdf5 file:
+            if type(property_list) is h5py._hl.files.File:
+                return property_list[self.get_property_name(property_name)]
+            # Load from pickled list:
+            elif type(property_list) is list:
+                return property_list[self.get_property_index(property_name)]
+            # Load pickle, get property, then dispose of pickle to avoid
+            # keeping it in memory (used for low_memory_mode):
+            elif type(property_list) is str:
+                # Only load the file for as long as necessary:
+                props_list = tools.loadPickle(property_list)
+                return props_list[self.get_property_index(property_name)]
+            else:
+                raise Exception("Invalid Property Type")
+    # check if a property is something that should be remapped to the correct
+    # co-ordinates
+    def check_remappable(self,property_name):
+        index = self.get_property_index(property_name)
+        return (index == 0) or (index == 5)
+    # Remap the centres to the correct co-ordiantes:
+    # Get a list of all properties:
+    def get_all_properties(self,property_name,cache = True,recompute=False):
+        prop_index = self.get_property_index(property_name)
+        if self.all_properties[prop_index] is None:
+            if self.check_remappable(property_name):
+                properties = [tools.remapAntiHaloCentre(self.get_property(
+                              ind,property_name,recompute=recompute),
+                              boxsize,swapXZ  = self.swapXZ,
+                              reverse = self.reverse)
+                              for ind in range(0,self.N)]
+            else:
+                properties = [self.get_property(ind,property_name,
+                              recompute=recompute) 
+                              for ind in range(0,self.N)]
+            if cache:
+                self.all_properties[prop_index] = properties
+            return properties
+        else:
+            return self.all_properties[prop_index]
+    def __getitem__(self,property_name):
+        if self.is_valid_property(property_name):
+            return self.get_all_properties(property_name)
+        else:
+            if type(property_name) is str:
+                if property_name in self.additional_properties:
+                    if self.additional_properties[property_name] is not None:
+                        return self.additional_properties[property_name]
+                    else:
+                        # Generate the property:
+                        if property_name == "halos":
+                            prop = self.additional_properties["halos"] = \
+                                [snap.halos() for snap in self.snaps]
+                        elif property_name == "antihalos":
+                            prop = self.additional_properties["antihalos"] = \
+                                [snap.halos() for snap in self.snaps_reverse]
+                        else:
+                            raise Exception("Invalid property_name")
+                        return prop
+            else:
+                raise Exception("Invalid property_name")
+
+borg_snaps = SnapshotGroup(snapList,snapListRev,low_memory_mode=True,
+                           swapXZ  = False,reverse = True,remap_centres=True)
+
+lcdm_snaps = SnapshotGroup(snapListUn,snapListRevUn,
+                                    low_memory_mode=True,swapXZ  = False,
+                                    reverse = True,remap_centres=True)
 
 #-------------------------------------------------------------------------------
 # BUILDING VOID CATALOGUES FROM SCRATCH
@@ -206,7 +377,7 @@ mMax = 1e16 # Maximum mass halos to include (Note, this is effectively
     # over-ridden by the maximum radius threshold)
 rMin = 5 # Minimum radius voids to use
 rMax = 30 # Maximum radius voids to use
-m_unit = snapList[0]['mass'][0]*1e10
+m_unit = borg_snaps.snaps[0]['mass'][0]*1e10
 
 # Signal to noise information:
 snrThresh=10
@@ -217,9 +388,10 @@ if not low_memory_mode:
 
 if recomputeCatalogues or (not os.path.isfile(data_folder2 + "cat300.p")):
     cat300 = catalogue.combinedCatalogue(
-        snapNameList,snapNameListRev,\
+        borg_snaps.snap_filenames,borg_snaps.snap_reverse_filenames,\
         muOpt,rSearchOpt,rSphere,\
-        ahProps=ahProps,hrList=hrList,max_index=None,\
+        ahProps=borg_snaps.all_property_lists,hrList=borg_snaps["antihalos"],\
+        max_index=None,\
         twoWayOnly=True,blockDuplicates=True,\
         massRange = [mMin,mMax],\
         NWayMatch = NWayMatch,r_min=rMin,r_max=rMax,\
@@ -227,9 +399,10 @@ if recomputeCatalogues or (not os.path.isfile(data_folder2 + "cat300.p")):
         refineCentres=refineCentres,sortBy=sortBy,\
         enforceExclusive=enforceExclusive)
     cat300test = catalogue.combinedCatalogue(
-        snapNameList,snapNameListRev,\
+        borg_snaps.snap_filenames,borg_snaps.snap_reverse_filenames,\
         muOpt,rSearchOpt,rSphere,\
-        ahProps=ahProps,hrList=hrList,max_index=None,\
+        ahProps=borg_snaps.all_property_lists,hrList=borg_snaps["antihalos"],\
+        max_index=None,\
         twoWayOnly=True,blockDuplicates=True,\
         massRange = [m_unit*800,mMax],\
         NWayMatch = NWayMatch,r_min=10,r_max=30,\
@@ -243,14 +416,12 @@ else:
     cat300 = tools.loadPickle(data_folder2 + "cat300.p")
 
 # Random catalogues:
-snapNameListRand = [snap.filename for snap in snapListUn]
-snapNameListRandRev = [snap.filename for snap in snapListRevUn]
-
 if recomputeCatalogues or (not os.path.isfile(data_folder2 + "cat300Rand.p")):
     cat300Rand = catalogue.combinedCatalogue(
-        snapNameListRand,snapNameListRandRev,\
+        lcdm_snaps.snap_filenames,lcdm_snaps.snap_reverse_filenames,\
         muOpt,rSearchOpt,rSphere,\
-        ahProps=ahPropsUn,hrList=hrListUn,max_index=None,\
+        ahProps=lcdm_snaps.all_property_lists,hrList=lcdm_snaps["antihalos"],\
+        max_index=None,\
         twoWayOnly=True,blockDuplicates=True,\
         massRange = [mMin,mMax],\
         NWayMatch = NWayMatch,r_min=rMin,r_max=rMax,\
@@ -258,9 +429,10 @@ if recomputeCatalogues or (not os.path.isfile(data_folder2 + "cat300Rand.p")):
         refineCentres=refineCentres,sortBy=sortBy,\
         enforceExclusive=enforceExclusive)
     cat300RandTest = catalogue.combinedCatalogue(
-        snapNameListRand,snapNameListRandRev,\
+        lcdm_snaps.snap_filenames,lcdm_snaps.snap_reverse_filenames,\
         muOpt,rSearchOpt,rSphere,\
-        ahProps=ahPropsUn,hrList=hrListUn,max_index=None,\
+        ahProps=lcdm_snaps.all_property_lists,hrList=lcdm_snaps["antihalos"],\
+        max_index=None,\
         twoWayOnly=True,blockDuplicates=True,\
         massRange = [m_unit*800,mMax],\
         NWayMatch = NWayMatch,r_min=10,r_max=30,\
@@ -387,6 +559,11 @@ from void_analysis.simulation_tools import redshift_space_positions
 from void_analysis.simulation_tools import get_los_pos_for_snapshot
 from void_analysis.simulation_tools import get_los_positions_for_all_catalogues
 from void_analysis.plot import draw_ellipse, plot_los_void_stack
+
+
+
+#-------------------------------------------------------------------------------
+
 
 
 #-------------------------------------------------------------------------------
@@ -751,7 +928,6 @@ def log_probability_aptest_parallel(theta,*args,**kwargs):
     return lp + log_likelihood_aptest_parallel(theta,*args,**kwargs)
 
 from void_analysis import context
-#hrList = [snap.halos() for snap in snapListRev]
 def get_zspace_centres(halo_indices,snap_list,snap_list_rev,hrlist=None,
                        recompute_zspace=False):
     if len(halo_indices) != len(snap_list):
@@ -1042,50 +1218,53 @@ def run_inference(data_field,theta_ranges_list,theta_initial,filename,
 #-------------------------------------------------------------------------------
 # LOS LISTS
 
-#los_list_lcdm = get_los_positions_for_all_catalogues(snapListUn,snapListRevUn,
-#    antihaloCentresUn,antihaloRadiiUn,filter_list=filter_list_lcdm,
+#los_list_lcdm = get_los_positions_for_all_catalogues(lcdm_snaps["snaps"],
+#    lcdm_snaps["snaps_reverse"],
+#    lcdm_snaps["void_centres"],lcdm_snaps["void_radii"],filter_list=filter_list_lcdm,
 #    dist_max=60,rmin=10,rmax=20,zspace=True,recompute=False,
 #    suffix=".lospos_zspace")
 final_cat = cat300.get_final_catalogue(void_filter=True)
 halo_indices = [-np.ones(len(final_cat),dtype=int) 
-    for ns in range(0,len(snapList))]
-for ns in range(0,len(snapList)):
+    for ns in range(0,borg_snaps.N)]
+for ns in range(0,borg_snaps.N):
     have_void = final_cat[:,ns] >= 0
     halo_indices[ns][have_void] = \
         cat300.indexListShort[ns][final_cat[have_void,ns]-1]
 
 # Convert void centres to redshift space:
 zcentres = tools.loadOrRecompute(data_folder + "zspace_centres.p",
-                                 get_zspace_centres,halo_indices,snapList,
-                                 snapListRev,hrlist=None,_recomputeData=False)
+                                 get_zspace_centres,halo_indices,borg_snaps["snaps"],
+                                 borg_snaps["snaps_reverse"],hrlist=None,_recomputeData=False)
 
-filter_list_borg = [halo_indices[ns] >= 0 for ns in range(0,len(snapList))]
+filter_list_borg = [halo_indices[ns] >= 0 for ns in range(0,borg_snaps.N)]
 
 
 # BORG particles, void only, z-space:
-los_list_void_only_borg_zspace = get_los_positions_for_all_catalogues(snapList,
-    snapListRev,zcentres,cat300.getAllProperties("radii",void_filter=True).T,
-    all_particles=False,void_indices = halo_indices,
-    filter_list=filter_list_borg,dist_max=3,rmin=10,rmax=20,recompute=False,
-    zspace=True,recompute_zspace=False,suffix=".lospos_void_only_zspace2.p")
+#los_list_void_only_borg_zspace = get_los_positions_for_all_catalogues(
+#    borg_snaps["snaps"],borg_snaps["snaps_reverse"],zcentres,
+#    cat300.getAllProperties("radii",void_filter=True).T,
+#    all_particles=False,void_indices = halo_indices,
+#    filter_list=filter_list_borg,dist_max=3,rmin=10,rmax=20,recompute=False,
+#    zspace=True,recompute_zspace=False,suffix=".lospos_void_only_zspace2.p")
 
 # BORG particles, all, z-space:
-los_list_all_borg_zspace = get_los_positions_for_all_catalogues(snapList,
-    snapListRev,zcentres,cat300.getAllProperties("radii",void_filter=True).T,
+los_list_all_borg_zspace = get_los_positions_for_all_catalogues(
+    borg_snaps["snaps"],borg_snaps["snaps_reverse"],zcentres,
+    cat300.getAllProperties("radii",void_filter=True).T,
     all_particles=True,void_indices = halo_indices,
     filter_list=filter_list_borg,dist_max=3,rmin=10,rmax=20,recompute=False,
     zspace=True,recompute_zspace=False,suffix=".lospos_all_zspace2.p")
 
 # BORG particles, Real space positions (void only):
-los_list_void_only_borg = get_los_positions_for_all_catalogues(snapList,
-    snapListRev,
-    cat300.getAllCentres(void_filter=True),
-    cat300.getAllProperties("radii",void_filter=True).T,all_particles=False,
-    void_indices = halo_indices,filter_list=filter_list_borg,
-    dist_max=3,rmin=10,rmax=20,recompute=False,suffix=".lospos_void_only2.p")
+#los_list_void_only_borg = get_los_positions_for_all_catalogues(
+#    borg_snaps["snaps"],borg_snaps["snaps_reverse"],
+#    cat300.getAllCentres(void_filter=True),
+#    cat300.getAllProperties("radii",void_filter=True).T,all_particles=False,
+#    void_indices = halo_indices,filter_list=filter_list_borg,
+#    dist_max=3,rmin=10,rmax=20,recompute=False,suffix=".lospos_void_only2.p")
 # BORG particles, Real space positions (all):
-los_list_all_borg = get_los_positions_for_all_catalogues(snapList,
-    snapListRev,
+los_list_all_borg = get_los_positions_for_all_catalogues(borg_snaps["snaps"],
+    borg_snaps["snaps_reverse"],
     cat300.getAllCentres(void_filter=True),
     cat300.getAllProperties("radii",void_filter=True).T,all_particles=True,
     void_indices = halo_indices,filter_list=filter_list_borg,
@@ -1101,20 +1280,22 @@ los_list_all_borg = get_los_positions_for_all_catalogues(snapList,
 # LCDM examples for comparison:
 distances_from_centre_lcdm = [
     np.sqrt(np.sum(snapedit.unwrap(centres - np.array([boxsize/2]*3),
-    boxsize)**2,1)) for centres in antihaloCentresUn]
+    boxsize)**2,1)) for centres in lcdm_snaps["void_centres"]]
 filter_list_lcdm = [(dist < 135) & (radii > 10) & (radii <= 20) 
-    for dist, radii in zip(distances_from_centre_lcdm,antihaloRadiiUn)]
+    for dist, radii in zip(distances_from_centre_lcdm,lcdm_snaps["void_radii"])]
 
 # LCDM particles (centres), void only, z-space:
 #los_list_void_only_lcdm_zspace = get_los_positions_for_all_catalogues(
-#    snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
+#    lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],lcdm_snaps["void_centres"],
+#    lcdm_snaps["void_radii"],
 #    all_particles=False,filter_list=filter_list_lcdm,dist_max=60,rmin=10,
 #    rmax=20,recompute=False,zspace=True,recompute_zspace=False,
 #    suffix=".lospos_void_only_zspace.p")
 
 # LCDM particles (centres), all, z-space:
 #los_list_all_lcdm_zspace = get_los_positions_for_all_catalogues(
-#    snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
+#    lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],lcdm_snaps["void_centres"],
+#    lcdm_snaps["void_radii"],
 #    all_particles=True,filter_list=filter_list_lcdm,dist_max=60,rmin=10,
 #    rmax=20,recompute=False,zspace=True,recompute_zspace=False,
 #    suffix=".lospos_all_zspace.p")
@@ -1139,7 +1320,7 @@ comparableDensityMAP = [(delta <= deltaMAPInterval[1]) & \
     (delta > deltaMAPInterval[0]) for delta in randOverDen]
 centresToUse = [randCentres[comp] for comp in comparableDensityMAP]
 deltaToUse = [randOverDen[ns][comp] \
-    for ns, comp in zip(range(0,len(snapList)),comparableDensityMAP)]
+    for ns, comp in zip(range(0,borg_snaps.N),comparableDensityMAP)]
 rSep = 2*135
 # Filter out spheres which overlap with already selected spheres, to ensure
 # independence:
@@ -1158,7 +1339,7 @@ densityUnderdenseNonOverlapping = np.hstack(
 distances_from_centre_lcdm_selected = [[
     np.sqrt(np.sum(snapedit.unwrap(centres - sphere_centre,boxsize)**2,1))
     for sphere_centre in selected_regions]
-    for centres, selected_regions in zip(antihaloCentresUn,
+    for centres, selected_regions in zip(lcdm_snaps["void_centres"],
     centresUnderdenseNonOverlapping)]
 
 # Filter voids to the radius range used in the catalogue:
@@ -1166,13 +1347,13 @@ filter_list_lcdm_by_region = [[
     (dist < 135) & (radii > 10) & (radii <= 20) 
     for dist in all_dists]
     for all_dists, radii in 
-    zip(distances_from_centre_lcdm_selected,antihaloRadiiUn)]
+    zip(distances_from_centre_lcdm_selected,lcdm_snaps["void_radii"])]
 
 filter_list_lcdm_selected = [np.any(np.array([
     (dist < 135) & (radii > 10) & (radii <= 20) 
     for dist in all_dists]),0)
     for all_dists, radii in 
-    zip(distances_from_centre_lcdm_selected,antihaloRadiiUn)]
+    zip(distances_from_centre_lcdm_selected,lcdm_snaps["void_radii"])]
 
 
 
@@ -1181,33 +1362,38 @@ filter_list_lcdm_selected = [np.any(np.array([
 
 
 # LCDM particles, density selected, void only, real space:
-los_list_void_only_selected_lcdm = get_los_positions_for_all_catalogues(
-    snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
-    all_particles=False,filter_list=filter_list_lcdm_by_region,dist_max=3,
-    rmin=10,rmax=20,recompute=False,suffix=".lospos_void_only_selected.p")
+#los_list_void_only_selected_lcdm = get_los_positions_for_all_catalogues(
+#    lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],lcdm_snaps["void_centres"],
+#    lcdm_snaps["void_radii"],all_particles=False,
+#    filter_list=filter_list_lcdm_by_region,dist_max=3,
+#    rmin=10,rmax=20,recompute=False,suffix=".lospos_void_only_selected.p")
 
 # LCDM particles, density selected, all, real space:
-los_list_all_selected_lcdm = get_los_positions_for_all_catalogues(
-    snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
-    all_particles=True,filter_list=filter_list_lcdm_by_region,dist_max=3,
-    rmin=10,rmax=20,recompute=False,suffix=".lospos_all_selected.p")
+los_list_all_combined_lcdm = get_los_positions_for_all_catalogues(
+    lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],lcdm_snaps["void_centres"],
+    lcdm_snaps["void_radii"],all_particles=True,
+    filter_list=filter_list_lcdm_by_region,dist_max=3,
+    rmin=10,rmax=20,recompute=False,suffix=".lospos_all_selected.p",
+    flatten_filters=True)
 
 # LCDM particles, density selected, void only, z-space:
-los_list_void_only_lcdm_zspace_selected = get_los_positions_for_all_catalogues(
-    snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
-    all_particles=False,filter_list=filter_list_lcdm_by_region,dist_max=3,
-    rmin=10,rmax=20,recompute=False,zspace=True,recompute_zspace=False,
-    suffix=".lospos_void_only_zspace_selected.p")
+#los_list_void_only_lcdm_zspace_selected = get_los_positions_for_all_catalogues(
+#    lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],lcdm_snaps["void_centres"],
+#    lcdm_snaps["void_radii"],all_particles=False,
+#    filter_list=filter_list_lcdm_by_region,dist_max=3,
+#    rmin=10,rmax=20,recompute=False,zspace=True,recompute_zspace=False,
+#    suffix=".lospos_void_only_zspace_selected.p")
 
 # LCDM particles, density selected, all, z-space:
-los_list_all_lcdm_zspace_selected = get_los_positions_for_all_catalogues(
-    snapListUn,snapListRevUn,antihaloCentresUn,antihaloRadiiUn,
-    all_particles=True,filter_list=filter_list_lcdm_by_region,dist_max=3,
+los_list_all_combined_lcdm_zspace = get_los_positions_for_all_catalogues(
+    lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],lcdm_snaps["void_centres"],
+    lcdm_snaps["void_radii"],all_particles=True,
+    filter_list=filter_list_lcdm_by_region,dist_max=3,
     rmin=10,rmax=20,recompute=False,zspace=True,recompute_zspace=False,
-    suffix=".lospos_all_zspace_selected.p")
+    suffix=".lospos_all_zspace_selected.p",flatten_filters=True)
 
-los_list_void_only_selected_lcdm_flat = [x 
-    for y in los_list_void_only_selected_lcdm for x in y]
+#los_list_void_only_selected_lcdm_flat = [x 
+#    for y in los_list_void_only_selected_lcdm for x in y]
 
 los_list_all_selected_lcdm_flat = [x 
     for y in los_list_all_selected_lcdm for x in y]
@@ -1216,25 +1402,26 @@ los_list_all_selected_lcdm_flat = [x
 # Combined Lists
 # Combine the voids from different regions of the same simulation
 # so that we can use them in the same way as the BORG samples:
-los_list_void_only_combined_lcdm = [combine_los_lists(los_list) 
-    for los_list in los_list_void_only_selected_lcdm]
+#los_list_void_only_combined_lcdm = [combine_los_lists(los_list) 
+#    for los_list in los_list_void_only_selected_lcdm]
 
-los_list_void_only_combined_lcdm_zspace = [combine_los_lists(los_list) 
-    for los_list in los_list_void_only_lcdm_zspace_selected]
+#los_list_void_only_combined_lcdm_zspace = [combine_los_lists(los_list) 
+#    for los_list in los_list_void_only_lcdm_zspace_selected]
 
-los_list_all_combined_lcdm = [combine_los_lists(los_list) 
-    for los_list in los_list_all_selected_lcdm]
+#los_list_all_combined_lcdm = [combine_los_lists(los_list) 
+#    for los_list in los_list_all_selected_lcdm]
 
-los_list_all_combined_lcdm_zspace = [combine_los_lists(los_list) 
-    for los_list in los_list_all_lcdm_zspace_selected]
+#los_list_all_combined_lcdm_zspace = [combine_los_lists(los_list) 
+#    for los_list in los_list_all_lcdm_zspace_selected]
 
 #dist_all_combined_lcdm_zspace = [[np.sqrt(np.sum(los**2,1))/rad 
 #    for los, rad in zip(all_los,all_rad)] 
 #    for all_los, all_rad in 
-#    zip(los_list_all_combined_lcdm_zspace,antihaloRadiiUn)]
+#    zip(los_list_all_combined_lcdm_zspace,lcdm_snaps["void_radii"])]
 
-#los_list_void_only_lcdm = get_los_positions_for_all_catalogues(snapListUn,
-#    snapListRevUn,antihaloCentresUn,antihaloRadiiUn,all_particles=False,
+#los_list_void_only_lcdm = get_los_positions_for_all_catalogues(lcdm_snaps["snaps"],
+#    lcdm_snaps["snaps_reverse"],lcdm_snaps["void_centres"],
+#    lcdm_snaps["void_radii"],all_particles=False,
 #    filter_list=filter_list_lcdm,dist_max=60,rmin=10,rmax=20,recompute=False,
 #    suffix=".lospos_void_only.p")
 
@@ -1257,31 +1444,31 @@ bin_d_centres = plot.binCentres(bins_d_reff)
 # Stacked void particles in 2d (in redshift space):
 stacked_particles_reff_lcdm_abs = get_2d_void_stack_from_los_pos(
     los_lcdm_zspace,bins_z_reff,bins_d_reff,
-    antihaloRadiiUn)
+    lcdm_snaps["void_radii"])
 void_radii_borg = cat300.getMeanProperty("radii",void_filter=True)[0]
 void_individual_radii_borg = cat300.getAllProperties("radii",void_filter=True)
 stacked_particles_reff_borg_abs = get_2d_void_stack_from_los_pos(
     los_borg_zspace,bins_z_reff,bins_d_reff,
-    [void_radii_borg for rad in antihaloRadii])
+    [void_radii_borg for rad in borg_snaps["void_radii"]])
 
 # Stacked void_particles in 1d:
 # We can use the real space profile for this:
 stacked_particles_reff_lcdm_real = get_2d_void_stack_from_los_pos(
-    los_lcdm_real,bins_z_reff,bins_d_reff,antihaloRadiiUn)
-radlist = [antihaloRadiiUn[k] 
+    los_lcdm_real,bins_z_reff,bins_d_reff,lcdm_snaps["void_radii"])
+radlist = [lcdm_snaps["void_radii"][k] 
     for k in range(0,20) for x in filter_list_lcdm_by_region[k]]
 stacked_particles_reff_lcdm_real_all = [get_2d_void_stack_from_los_pos(
     [los],bins_z_reff,bins_d_reff,[rad])
     for los, rad in zip(los_list_all_selected_lcdm_flat,radlist)]
 #stacked_particles_reff_borg_real = get_2d_void_stack_from_los_pos(
 #    los_list_void_only_borg,bins_z_reff,bins_d_reff,
-#    [void_radii_borg for rad in antihaloRadii])
+#    [void_radii_borg for rad in borg_snaps["void_radii"]])
 stacked_particles_reff_borg_real = get_2d_void_stack_from_los_pos(
     los_borg_real,bins_z_reff,bins_d_reff,
     [void_individual_radii_borg[:,k] for k in range(0,20)])
 stacked_particles_reff_borg_real_all = [get_2d_void_stack_from_los_pos(
     [los_borg_real[k]],bins_z_reff,bins_d_reff,
-    [void_individual_radii_borg[:,k]]) for k in range(0,len(snapList))]
+    [void_individual_radii_borg[:,k]]) for k in range(0,borg_snaps.N)]
 stacked_1d_real_lcdm = np.sqrt(np.sum(stacked_particles_reff_lcdm_real**2,1))
 stacked_1d_real_borg = np.sqrt(np.sum(stacked_particles_reff_borg_real**2,1))
 stacked_1d_real_lcdm_all = [np.sqrt(np.sum(stacked_los**2,1)) 
@@ -1311,7 +1498,7 @@ voids_used_lcdm_ind = [np.where(x)[0] for x in voids_used_lcdm]
 voids_used_borg = [np.array([len(x) for x in los]) > 0 
     for los in los_borg_zspace]
 void_radii_lcdm = [rad[filt] 
-    for rad, filt in zip(antihaloRadiiUn,voids_used_lcdm)]
+    for rad, filt in zip(lcdm_snaps["void_radii"],voids_used_lcdm)]
 void_radii_lcdm_all = [rad[filt] 
     for rad, filt in zip(radlist,voids_used_lcdm_all)]
 
@@ -1344,7 +1531,7 @@ v_weight_lcdm = get_weights_for_stack(los_pos_lcdm,void_radii_lcdm)
 v_weight_borg_all = [get_weights_for_stack(
     [los_pos_borg_real[k]],[void_individual_radii_borg[voids_used_borg[k],k]],
     additional_weights = [rep_scores[voids_used_borg[k]]/\
-    np.sum(rep_scores[voids_used_borg[k]])]) for k in range(0,len(snapList))]
+    np.sum(rep_scores[voids_used_borg[k]])]) for k in range(0,borg_snaps.N)]
 v_weight_lcdm_all = [get_weights_for_stack(
     [los_pos_lcdm_all[k]],[void_radii_lcdm_all[k]],
     additional_weights = \
@@ -1362,7 +1549,7 @@ weighted_counts_lcdm = np.array([
 
 # Fields:
 nbar = len(referenceSnap)/boxsize**3
-num_voids_lcdm = np.sum([np.sum(x) for x in voids_used_lcdm]) 
+num_voids_lcdm = np.sum([np.sum(x) for x in voids_used_lcdm])
 cell_volumes_reff = np.outer(np.diff(bins_z_reff),np.diff(bins_d_reff))
 field_lcdm = get_field_from_los_data(stacked_particles_reff_lcdm_abs,
                                      bins_z_reff,bins_d_reff,v_weight_lcdm,
@@ -1372,7 +1559,7 @@ num_voids_sample_borg = np.array([np.sum(x) for x in voids_used_borg])
 num_voids_borg = np.sum(num_voids_sample_borg) # Not the actual number
     # but the effective number being stacked, so the number of voids multiplied
     # by the number of samples.
-nmean = len(snapList[0])/(boxsize**3)
+nmean = len(borg_snaps["snaps"][0])/(boxsize**3)
 
 # Field with the reproducibility score weighting applied:
 field_borg = get_field_from_los_data(stacked_particles_reff_borg_abs,
@@ -1383,6 +1570,103 @@ field_borg = get_field_from_los_data(stacked_particles_reff_borg_abs,
 field_borg_unweighted = get_field_from_los_data(
     stacked_particles_reff_borg_abs,bins_z_reff,bins_d_reff,
     v_weight_borg_unweighted,num_voids_borg,nbar=nbar)
+
+#-------------------------------------------------------------------------------
+# END TO END FUNCTION
+
+# Compute weights for each void contributing to the stack:
+def get_weights(los_zspace,void_radii,additional_weights = None):
+    voids_used = [np.array([len(x) for x in los]) > 0 
+        for los in los_zspace]
+    los_pos = [ [los[x] for x in np.where(ind)[0]] 
+        for los, ind in zip(los_zspace,voids_used) ]
+    if additional_weights is None:
+        weights_list = None
+    else:
+        all_additional_weights = np.hstack([weights[used] 
+                                       for weights, used in 
+                                       zip(additional_weights,voids_used)])
+        weights_list = [weights[used]/np.sum(all_additional_weights) 
+            for weights, used in zip(additional_weights,voids_used)]
+    v_weight = get_weights_for_stack(
+        los_pos,[radii[used] for radii, used in zip(void_radii,voids_used)],
+        additional_weights = weights_list)
+    return v_weight
+
+
+# This is actually not needed, because we can already do this in the 
+# catalogue class!
+def get_halo_indices(catalogue):
+    final_cat = catalogue.get_final_catalogue(void_filter=True)
+    halo_indices = [-np.ones(len(final_cat),dtype=int) 
+                    for ns in range(0,snaps.N)]
+    for ns in range(0,borg_snaps.N):
+        have_void = final_cat[:,ns] >= 0
+        halo_indices[ns][have_void] = \
+            catalogue.indexListShort[ns][final_cat[have_void,ns]-1]
+    return halo_indices
+
+
+#void_radii = catalogue.getMeanProperty("radii",void_filter=True)[0]
+#rep_scores = catalogue.property_with_filter(
+#    catalogue.finalCatFrac,void_filter=True)
+
+
+
+
+def get_stacked_void_density_field(snaps,void_radii_lists,void_centre_lists,
+                                   bins_spar,bins_sperp,halo_indices=None,
+                                   filter_list=None,additional_weights=None,
+                                   **kwargs):
+    boxsize = snaps.boxsize
+    nbar = len(snaps["snaps"][0])/boxsize**3
+    # Filter out any invalid halo indices (usually only occurs for
+    # BORG catalogues, where anti-halos are missing in some samples):
+    if halo_indices is not None:
+        if filter_list is None:
+            filter_list = [halo_indices[ns] >= 0 for ns in range(0,snaps.N)]
+    # Get LOS positions:
+    los_zspace = get_los_positions_for_all_catalogues(
+        snaps["snaps"],snaps["snaps_reverse"],void_centre_lists,
+        void_radii_lists,all_particles=True,void_indices = halo_indices,
+        filter_list=filter_list,dist_max=3,rmin=10,rmax=20,recompute=False,
+        zspace=True,recompute_zspace=False,suffix=".lospos_all_zspace2.p")
+    # Number of voids:
+    voids_used = [np.array([len(x) for x in los]) > 0 
+        for los in los_zspace]
+    num_voids = np.sum([np.sum(x) for x in voids_used])
+    # Weights for each void:
+    v_weight = get_weights(los_zspace,void_radii_lists,
+                           additional_weights=additional_weights)
+    # Stack all particles from all voids, in units of Reff:
+    stacked_particles_reff_abs = get_2d_void_stack_from_los_pos(
+        los_zspace,bins_spar,bins_sperp,void_radii_lists)
+    # Compute the density in each cell:
+    if additional_weights is None:
+        # Scaled by the number of voids:
+        scale_factor = num_voids
+    else:
+        # Scaling is handled by the weights:
+        scale_factor = 1
+    return get_field_from_los_data(stacked_particles_reff_abs,bins_spar,
+                                   bins_sperp,v_weight,scale_factor,nbar=nbar)
+
+
+# BORG density field:
+halo_indices = cat300.get_final_catalogue(void_filter=True,short_list=False)
+zcentres = tools.loadOrRecompute(data_folder + "zspace_centres.p",
+                                 get_zspace_centres,halo_indices,
+                                 borg_snaps["snaps"],borg_snaps["snaps_reverse"],
+                                 hrlist=None,_recomputeData=False)
+
+field_borg_test = get_stacked_void_density_field(
+    borg_snaps,cat300.getAllProperties("radii",void_filter=True),zcentres,
+    bins_z_reff,bins_d_reff)
+
+
+field_lcdm_test = get_stacked_void_density_field(
+    lcdm_snaps,lcdm_snaps["void_radii"],lcdm_snaps["void_centres"],
+    bins_z_reff,bins_d_reff)
 
 
 #-------------------------------------------------------------------------------
@@ -1623,7 +1907,7 @@ plt.show()
 # COVARIANCE MATRIX ESTIMATION:
 los_list_reff_borg = get_2d_void_stack_from_los_pos(
     los_borg_zspace,bins_z_reff,bins_d_reff,
-    [void_radii_borg for rad in antihaloRadii],stacked=False)
+    [void_radii_borg for rad in borg_snaps["borg_radii"]],stacked=False)
 
 
 

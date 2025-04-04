@@ -689,12 +689,19 @@ def get_los_pos_with_filter(centres,filt,hr_list,void_indices,positions,
             los_pos_all.append(np.zeros((0,2)))
     return los_pos_all
 
+def flatten_filter_list(filter_list):
+    filt_combined = np.zeros(filter_list[0],dtype=bool)
+    for filt in filter_list:
+        filt_combined = np.logical_or(filt_combined,filt)
+    return filt_combined
+
 # Get the line of sight (los) co-ordinates of selected particles in a snapshot:
 def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres,radii,
         dist_max=3,rmin=10,rmax=20,all_particles=True,filter_list=None,
         void_indices=None,sorted_indices=None,reverse_indices=None,
         positions = None,hr_list=None,tree=None,zspace=False,
-        recompute_zspace=False,dist_cut_method="relative"):
+        recompute_zspace=False,dist_cut_method="relative",
+        flatten_filters=False):
     snap = tools.getPynbodySnap(snapname_forward)
     snap_reverse = tools.getPynbodySnap(snapname_reverse)
     if hr_list is None:
@@ -742,7 +749,7 @@ def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres,radii,
         max_distance = dist_max*radii
     else:
         max_distance = dist_max
-    if type(rad_filter) is list:
+    if type(rad_filter) is list and (not flatten_filters):
         los_pos_all = []
         for filt in rad_filter:
             lost_pos_list = get_los_pos_with_filter(centres,filt,hr_list,
@@ -752,7 +759,11 @@ def get_los_pos_for_snapshot(snapname_forward,snapname_reverse,centres,radii,
                                               all_particles=all_particles)
             los_pos_all.append(lost_pos_list)
     else:
-        los_pos_all = get_los_pos_with_filter(centres,rad_filter,hr_list,
+        if flatten_filters and type(rad_filter) is list:
+            combined_filter = flatten_filter_list(rad_filter)
+        else:
+            combined_filter = rad_filter
+        los_pos_all = get_los_pos_with_filter(centres,combined_filter,hr_list,
                                               void_indices,positions,
                                               sorted_indices,boxsize,
                                               max_distance,tree,
