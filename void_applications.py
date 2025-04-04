@@ -679,8 +679,9 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
         # rather than an explicit covariance. We then solve this rather than
         # actually computing 
         x = scipy.linalg.solve_triangular(inv_cov,delta_rho,lower=True)
-        return -0.5*np.sum(x**2)  - (M/2)*np.log(2*np.pi) - \
-             np.sum(np.log(np.diag(inv_cov)))
+        #return -0.5*np.sum(x**2)  - (M/2)*np.log(2*np.pi) - \
+        #     np.sum(np.log(np.diag(inv_cov)))
+        return -0.5*np.sum(x**2)
     elif singular:
         if (Umap is None) or (good_eig is None):
             raise Exception("Must provide Umap and good_eigenvalues for " + 
@@ -1619,9 +1620,6 @@ plot_los_void_stack(\
 plt.show()
 
 #-------------------------------------------------------------------------------
-# COSMIOLOGICAL INFERENCE:
-
-#-------------------------------------------------------------------------------
 # COVARIANCE MATRIX ESTIMATION:
 los_list_reff_borg = get_2d_void_stack_from_los_pos(
     los_borg_zspace,bins_z_reff,bins_d_reff,
@@ -1731,15 +1729,30 @@ finite_samples = np.where(np.all(np.isfinite(log_samples),0))[0]
 #if np.min(bootstrap_stacks) > 0:
 logrho_mean = np.mean(log_samples[:,finite_samples],1)
 logrho_cov = np.cov(log_samples[:,finite_samples])
+norm_logcov = logrho_cov/np.outer(logrho_mean,logrho_mean)
+reg_norm_logcov = regularise_covariance(norm_logcov,lambda_reg= 1e-10)
 #else:
 #    logrho_mean = np.array(np.ma.mean(np.ma.masked_invalid(log_samples,1)))
 #    logrho_cov = np.array(np.ma.cov(np.ma.masked_invalid(log_samples)))
 
 logrho_reg_cov = regularise_covariance(logrho_cov,lambda_reg= 1e-7)
+log_cholesky_cov = scipy.linalg.cholesky(logrho_reg_cov,lower=True)
 
 #logrho_mean = np.mean(log_samples,1)
 #logrho_cov = np.cov(log_samples)
 #logrho_reg_cov = regularise_covariance(logrho_cov,lambda_reg= 1e-27)
+
+# Test of whether the covariance is remotely sensible:
+plt.clf()
+plt.hist(stacked_fields[0],bins = np.logspace(-9,-3,41),alpha=0.5,
+         color=seabornColormap[0])
+plt.xscale('log')
+plt.yscale('log')
+plt.axvline(np.mean(stacked_fields[0]))
+plt.xlabel('Field values')
+plt.ylabel('Number of Voids')
+plt.savefig(figuresFolder + "field_val_dist.pdf")
+plt.show()
 
 #-------------------------------------------------------------------------------
 # TESTING EIGENVALUE DISTRIBUTION
@@ -2086,14 +2099,24 @@ plt.show()
 
 # Eigenvalue quality filter:
 
-Umap, good_eig = get_nonsingular_subspace(jackknife_cov,1e-27,lambda_cut=1e-23,
-                                          normalised_cov = False,
-                                          mu=jackknife_mean)
-
-
-#Umap, good_eig = get_nonsingular_subspace(logrho_cov,1e-27,lambda_cut=1e-23,
+#Umap, good_eig = get_nonsingular_subspace(jackknife_cov,1e-27,lambda_cut=1e-23,
 #                                          normalised_cov = False,
-#                                          mu=logrho_mean)
+#                                          mu=jackknife_mean)
+
+
+#covariance = jackknife_cov
+#mean = jackknife_mean
+#norm_cov = reg_norm_cov
+#cholesky = cholesky_cov
+
+covariance = logrho_cov
+mean = logrho_mean
+norm_cov = reg_norm_logcov
+cholesky_matrix = log_cholesky_cov
+
+Umap, good_eig = get_nonsingular_subspace(covariance,1e-27,lambda_cut=1e-23,
+                                          normalised_cov = False,
+                                          mu=mean)
 singular = True
 
 
@@ -2103,12 +2126,13 @@ sperp = np.hstack([plot.binCentres(bins_d_reff)
     for s in plot.binCentres(bins_z_reff)])
 scoords = np.vstack([spar,sperp]).T
 
-data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
+data_filter = np.where((1.0/np.sqrt(np.diag(norm_cov)) > 5) & \
         (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
 
 
 # Data to compare to:
-data_field = field_borg.flatten()
+#data_field = field_borg.flatten()
+data_field = np.log(field_borg.flatten())
 spar = np.hstack([s*np.ones(field_borg.shape[1]) 
     for s in plot.binCentres(bins_z_reff)])
 sperp = np.hstack([plot.binCentres(bins_d_reff) 
@@ -2118,7 +2142,7 @@ z = 0.0225
 
 # Covariances plot:
 plt.clf()
-plt.imshow(reg_norm_cov,vmin=-1e-3,vmax=1e-3,cmap='PuOr_r')
+plt.imshow(norm_cov,vmin=-1e-3,vmax=1e-3,cmap='PuOr_r')
 plt.savefig(figuresFolder + "covariance_plot.pdf")
 plt.show()
 
@@ -2132,12 +2156,19 @@ if test:
     t0 = time.time()
     for k in tools.progressbar(range(0,100)):
         logp = log_probability_aptest(theta_initial_guess,data_field,scoords,
-                                      cholesky_cov,z,Delta_func,delta_func,
+                                      cholesky_matrix,z,Delta_func,delta_func,
                                       rho_real,Om_fid = 0.3111,cholesky=True,
                                       tabulate_inverse=True)
     t1 = time.time()
     average_time = (t1 - t0)/100
 
+
+#log_likelihood_aptest(theta,data_field,scoords,inv_cov,
+#                          z,Delta,delta,rho_real,data_filter=None,
+#                          cholesky=False,normalised=False,tabulate_inverse=True,
+#                          ntab = 10,sample_epsilon=False,Om_fid=None,
+#                          singular=False,Umap=None,good_eig=None,
+#                          F_inv=None,log_density=False,**kwargs)
 
 # Start with a MLE guess of the 1d profile parameters:
 
@@ -2219,11 +2250,11 @@ theta_ranges=om_ranges + f_ranges + profile_param_ranges
 theta_ranges_epsilon = eps_ranges + f_ranges + profile_param_ranges
 
 args = (data_field[data_filter],scoords[data_filter,:],
-        cholesky_cov[data_filter,:][:,data_filter],z,Delta_func,
+        cholesky_matrix[data_filter,:][:,data_filter],z,Delta_func,
         delta_func,rho_real)
 kwargs = {'cholesky':True,'tabulate_inverse':True,
           'sample_epsilon':True,'theta_ranges':theta_ranges_epsilon,
-          'singular':False,'Umap':Umap,'good_eig':good_eig,'F_inv':F_inv}
+          'singular':False,'Umap':Umap,'good_eig':good_eig,'F_inv':F_inv,'log_density':True}
 
 # Wrapper allowing us to pass arbitrary arguments that won't be sampled over:
 def posterior_wrapper(theta,additional_args,*args,**kwargs):
@@ -2273,11 +2304,42 @@ tau, sampler = run_inference(data_field,theta_ranges_epsilon,mle_estimate.x,
                              batch_size=100,n_batches=100,data_filter=None,
                              autocorr_file = data_folder + "autocorr.npy",**kwargs)
 
-sampler = emcee.backends.HDFBackend(data_folder + "inference_weighted.h5")
+sampler = emcee.backends.HDFBackend(data_folder + "inference_weighted_2025_04_03.h5")
 tau = sampler.get_autocorr_time(tol=0)
-chain = sampler.get_chain()
+chain = sampler.get_chain(discard=2000)
+
+jump = 100
+intervals = np.arange(0,chain.shape[0],jump)
+taus = np.zeros((len(intervals)-1,chain.shape[1],chain.shape[2]))
+for k in tools.progressbar(range(0,chain.shape[1])):
+    for l in range(0,len(intervals)-1):
+        taus[l,k,:] = emcee.autocorr.integrated_time(chain[0:intervals[l+1],[k],:],
+                                                     tol=0)
+
+# Taus plot:
+plt.clf()
+plt.plot(intervals[1:],taus[:,5,:])
+plt.savefig(figuresFolder + "taus.pdf")
+plt.show()
+
+std_chain = np.std(chain,0)
+
+mean_chain = np.mean(chain,1)
+tau_mean = emcee.autocorr.integrated_time(
+    mean_chain.reshape(chain.shape[0],1,chain.shape[2]),tol=0)
+
+# Chains plot:
+plt.clf()
+#plt.plot(np.sign(mean_chain)*np.log10(1 + np.abs(mean_chain)))
+plt.plot(chain[:,5,:])
+plt.ylim([-5,5])
+plt.savefig(figuresFolder + "all_chains.pdf")
+plt.show()
+
+
+
 all_samples = chain.reshape(chain.shape[0]*chain.shape[1],chain.shape[2])
-flat_samples = sampler.get_chain(discard = 300,thin=50,flat=True)
+#flat_samples = sampler.get_chain(discard = 300,thin=50,flat=True)
 
 redo_chain = False
 continue_chain = True
@@ -2295,7 +2357,7 @@ batch_size = 100
 
 #data_filter = np.where(np.sqrt(np.sum(scoords**2,1)) < 1.5)[0]
 
-data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
+data_filter = np.where((1.0/np.sqrt(np.diag(norm_cov)) > 5) & \
          (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
 
 
@@ -2379,7 +2441,7 @@ A_opt = sol_A.x
 
 # Fix the amplitude, and plot the likelihood:
 Om_fid = 0.3111
-data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
+data_filter = np.where((1.0/np.sqrt(np.diag(norm_cov)) > 5) & \
         (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
 reg_cov_filtered = reg_cov[data_filter,:][:,data_filter]
 cholesky_cov_filtered = scipy.linalg.cholesky(reg_cov_filtered,lower=True)
@@ -2390,19 +2452,20 @@ profile_param_ranges_hamaus = [(0,np.inf),(0,np.inf),(0,np.inf),(-1,0),
 theta_ranges_hamaus = eps_ranges + f_ranges + profile_param_ranges_hamaus
 
 args=(data_field[data_filter],scoords[data_filter,:],
-                  cholesky_cov[data_filter,:][:,data_filter],z,Delta_func,
+                  cholesky_matrix[data_filter,:][:,data_filter],z,Delta_func,
                   delta_func,rho_real)
 kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
         'sample_epsilon':True,'theta_ranges':theta_ranges_hamaus,
         'singular':False,'Umap':Umap,'good_eig':good_eig,
-        'F_inv':F_inv}
+        'F_inv':F_inv,'log_density':True}
 #data_filter = np.where(np.sqrt(np.sum(scoords**2,1)) < 2.0)[0]
 #kwargs={'Om_fid':0.3111,'data_filter':data_filter}
 #Om_fid = 0.3111
 #kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
 #    'sample_epsilon':True}
 #params = combine_parameters(np.mean(flat_samples,0),fixed)
-params = np.mean(flat_samples[:,2:],0)
+#params = np.mean(flat_samples[:,2:],0)
+params = mle_estimate.x[2:]
 eps_initial_guess = np.hstack([np.array([1.0,f_lcdm(z,Om_fid)]),params])
 nll = lambda *theta: -log_likelihood_aptest(np.hstack([*theta,params]),*args,
                                             **kwargs)
@@ -2436,6 +2499,8 @@ log_like_ap = np.zeros((40,40))
 alpha,beta,rs,delta_c,delta_large, rv = sol2.x
 #params = combine_parameters(np.mean(flat_samples1,0),fixed)
 #A = A_opt
+params = mle_estimate.x[2:]
+#params = sol2.x
 for i in tools.progressbar(range(0,len(Om_range_centres))):
     for j in range(0,len(f_range_centres)):
         if kwargs['sample_epsilon']:
@@ -2448,9 +2513,13 @@ for i in tools.progressbar(range(0,len(Om_range_centres))):
 
 if kwargs['sample_epsilon']:
     plt.clf()
+    #im = plt.imshow(-log_like_ap.T,
+    #           extent=(eps_range[0],eps_range[-1],f_range[0],f_range[-1]),
+    #           norm=colors.LogNorm(vmin=1e9,vmax=1e10),cmap='Blues',
+    #           aspect='auto',origin='lower')
     im = plt.imshow(-log_like_ap.T,
                extent=(eps_range[0],eps_range[-1],f_range[0],f_range[-1]),
-               norm=colors.LogNorm(vmin=1e9,vmax=1e10),cmap='Blues',
+               norm=colors.LogNorm(vmin=100,vmax=2e3),cmap='Blues',
                aspect='auto',origin='lower')
     X, Y = np.meshgrid(eps_centres,f_range_centres)
     CS = plt.contour(X,Y,-log_like_ap.T,levels = 10)
