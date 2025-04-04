@@ -1660,7 +1660,7 @@ zcentres = tools.loadOrRecompute(data_folder + "zspace_centres.p",
                                  hrlist=None,_recomputeData=False)
 
 field_borg_test = get_stacked_void_density_field(
-    borg_snaps,cat300.getAllProperties("radii",void_filter=True),zcentres,
+    borg_snaps,cat300.getAllProperties("radii",void_filter=True).T,zcentres,
     bins_z_reff,bins_d_reff)
 
 
