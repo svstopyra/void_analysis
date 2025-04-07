@@ -1373,7 +1373,7 @@ los_list_all_combined_lcdm = get_los_positions_for_all_catalogues(
     lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],lcdm_snaps["void_centres"],
     lcdm_snaps["void_radii"],all_particles=True,
     filter_list=filter_list_lcdm_by_region,dist_max=3,
-    rmin=10,rmax=20,recompute=False,suffix=".lospos_all_selected.p",
+    rmin=10,rmax=20,recompute=True,suffix=".lospos_all_selected.p",
     flatten_filters=True)
 
 # LCDM particles, density selected, void only, z-space:
@@ -1389,7 +1389,7 @@ los_list_all_combined_lcdm_zspace = get_los_positions_for_all_catalogues(
     lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],lcdm_snaps["void_centres"],
     lcdm_snaps["void_radii"],all_particles=True,
     filter_list=filter_list_lcdm_by_region,dist_max=3,
-    rmin=10,rmax=20,recompute=False,zspace=True,recompute_zspace=False,
+    rmin=10,rmax=20,recompute=True,zspace=True,recompute_zspace=False,
     suffix=".lospos_all_zspace_selected.p",flatten_filters=True)
 
 #los_list_void_only_selected_lcdm_flat = [x 
@@ -1431,6 +1431,7 @@ los_list_all_selected_lcdm_flat = [x
 # Get relevant LOS lists:
 los_lcdm_real = los_list_all_combined_lcdm
 los_lcdm_zspace = los_list_all_combined_lcdm_zspace
+#los_lcdm_zspace = los_list_all_selected_lcdm_flat
 los_borg_real = los_list_all_borg
 los_borg_zspace = los_list_all_borg_zspace
 
