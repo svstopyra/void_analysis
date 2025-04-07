@@ -1373,7 +1373,7 @@ los_list_all_combined_lcdm = get_los_positions_for_all_catalogues(
     lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],lcdm_snaps["void_centres"],
     lcdm_snaps["void_radii"],all_particles=True,
     filter_list=filter_list_lcdm_by_region,dist_max=3,
-    rmin=10,rmax=20,recompute=True,suffix=".lospos_all_selected.p",
+    rmin=10,rmax=20,recompute=False,suffix=".lospos_all_selected.p",
     flatten_filters=True)
 
 # LCDM particles, density selected, void only, z-space:
@@ -1389,7 +1389,7 @@ los_list_all_combined_lcdm_zspace = get_los_positions_for_all_catalogues(
     lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],lcdm_snaps["void_centres"],
     lcdm_snaps["void_radii"],all_particles=True,
     filter_list=filter_list_lcdm_by_region,dist_max=3,
-    rmin=10,rmax=20,recompute=True,zspace=True,recompute_zspace=False,
+    rmin=10,rmax=20,recompute=False,zspace=True,recompute_zspace=False,
     suffix=".lospos_all_zspace_selected.p",flatten_filters=True)
 
 #los_list_void_only_selected_lcdm_flat = [x 
@@ -1456,11 +1456,12 @@ stacked_particles_reff_borg_abs = get_2d_void_stack_from_los_pos(
 # We can use the real space profile for this:
 stacked_particles_reff_lcdm_real = get_2d_void_stack_from_los_pos(
     los_lcdm_real,bins_z_reff,bins_d_reff,lcdm_snaps["void_radii"])
-radlist = [lcdm_snaps["void_radii"][k] 
-    for k in range(0,20) for x in filter_list_lcdm_by_region[k]]
+#radlist = [lcdm_snaps["void_radii"][k] 
+#    for k in range(0,20) for x in filter_list_lcdm_by_region[k]]
+radlist = [lcdm_snaps["void_radii"][k] for k in range(0,lcdm_snaps.N)]
 stacked_particles_reff_lcdm_real_all = [get_2d_void_stack_from_los_pos(
     [los],bins_z_reff,bins_d_reff,[rad])
-    for los, rad in zip(los_list_all_selected_lcdm_flat,radlist)]
+    for los, rad in zip(los_list_all_combined_lcdm_zspace,radlist)]
 #stacked_particles_reff_borg_real = get_2d_void_stack_from_los_pos(
 #    los_list_void_only_borg,bins_z_reff,bins_d_reff,
 #    [void_radii_borg for rad in borg_snaps["void_radii"]])
@@ -1494,7 +1495,7 @@ noInBins_borg_all = [plot_utilities.binValues(stacked_dist,bins_d_reff)[1]
 voids_used_lcdm = [np.array([len(x) for x in los]) > 0 
     for los in los_lcdm_zspace]
 voids_used_lcdm_all = [np.array([len(x) for x in los]) > 0 
-    for los in los_list_all_selected_lcdm_flat]
+    for los in los_list_all_combined_lcdm_zspace]
 voids_used_lcdm_ind = [np.where(x)[0] for x in voids_used_lcdm]
 voids_used_borg = [np.array([len(x) for x in los]) > 0 
     for los in los_borg_zspace]
@@ -1512,7 +1513,7 @@ los_pos_borg_real = [ [los[x] for x in np.where(ind)[0]]
     for los, ind in zip(los_borg_real,voids_used_borg) ]
 los_pos_lcdm_all = [ [los[x] for x in np.where(ind)[0]] 
     for los, ind in 
-    zip(los_list_all_selected_lcdm_flat,voids_used_lcdm_all) ]
+    zip(los_list_all_combined_lcdm_zspace,voids_used_lcdm_all) ]
 
 rep_scores = void_cat_frac = cat300.property_with_filter(
     cat300.finalCatFrac,void_filter=True)
@@ -2006,6 +2007,58 @@ reg_cov = regularise_covariance(jackknife_cov,lambda_reg= 1e-15)
 cholesky_cov = scipy.linalg.cholesky(reg_cov,lower=True)
 
 inv_cov = get_inverse_covariance(reg_cov,lambda_reg = 1e-23)
+
+# Covariance function:
+def get_covariance_matrix(los_list_all,v_weights_all,bins_spar,bins_sperp,
+                          n_boot=10000,seed=42,lambda_reg = 1e-15,
+                          cholesky=True,regularise=True,log_field=False):
+    # Get 2D stacked fields for each sample:
+    all_fields = [[
+        get_field_from_los_data(los,bins_spar,bins_sperp,v_weight,1) 
+        for los, v_weight in zip(los_vals,v_weights)] 
+        for los_vals, v_weights in zip(los_list_all,v_weights_all)]
+    stacked_fields = np.vstack([np.vstack([x.flatten() for x in fields]) 
+        for fields in all_fields]).T
+    # Weights, accounting for differing lengths of the void catalogues
+    # in each sample:
+    v_weights_all_scalar = np.hstack([np.array([x[0] for x in y]) 
+        for y in v_weights_all])
+    f_lengths = [np.array([len(los) for los in all_los])
+        for all_los in los_list_all]
+    f_totals = np.array([np.sum(x) for x in f_lengths])
+    f_weights = [length/total for length, total in zip(f_lengths,f_totals)]
+    stacked_weights = (np.hstack(f_lengths)/np.sum(f_totals))*\
+        v_weights_all_scalar
+    # Bootstrap samples of the voids:
+    np.random.seed(42)
+    num_voids = stacked_fields.shape[1]
+    bootstrap_samples = np.random.choice(num_voids,size=(num_voids,n_boot))
+    bootstrap_stacks = np.array([np.average(
+        stacked_fields[:,bootstrap_samples[:,k]],
+        axis=1,weights=stacked_weights[bootstrap_samples[:,k]]) 
+        for k in tools.progressbar(range(0,n_boot))]).T
+    # Compute covariance of the bootstrap samples:
+    if log_field:
+        # Covariance of the log-field
+        log_samples = np.log(bootstrap_stacks)
+        finite_samples = np.where(np.all(np.isfinite(log_samples),0))[0]
+        cov = np.cov(log_samples[:,finite_samples])
+        mean =  np.mean(log_samples[:,finite_samples],1)
+    else:
+        cov = np.cov(bootstrap_stacks)
+        mean = np.mean(bootstrap_stacks,1)
+    if regularise:
+        cov = regularise_covariance(cov,lambda_reg= lambda_reg)
+    if cholesky:
+        # If we want to use the Cholesky decomposition, instead of the
+        # covariance directly.
+        return scipy.linalg.cholesky(cov,lower=True)
+    else:
+        return cov
+
+
+
+
 
 #logrho_mean = np.mean(np.log(bootstrap_stacks),1)
 
