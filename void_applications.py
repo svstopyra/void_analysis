@@ -1619,6 +1619,9 @@ def get_halo_indices(catalogue):
 def get_stacked_void_density_field(snaps,void_radii_lists,void_centre_lists,
                                    bins_spar,bins_sperp,halo_indices=None,
                                    filter_list=None,additional_weights=None,
+                                   dist_max=3,rmin=10,rmax=20,recompute=False,
+                                   zspace=True,recompute_zspace=False,
+                                   suffix=".lospos_all_zspace2.p",
                                    **kwargs):
     boxsize = snaps.boxsize
     nbar = len(snaps["snaps"][0])/boxsize**3
@@ -1631,8 +1634,9 @@ def get_stacked_void_density_field(snaps,void_radii_lists,void_centre_lists,
     los_zspace = get_los_positions_for_all_catalogues(
         snaps["snaps"],snaps["snaps_reverse"],void_centre_lists,
         void_radii_lists,all_particles=True,void_indices = halo_indices,
-        filter_list=filter_list,dist_max=3,rmin=10,rmax=20,recompute=False,
-        zspace=True,recompute_zspace=False,suffix=".lospos_all_zspace2.p")
+        filter_list=filter_list,dist_max=dist_max,rmin=rmin,rmax=rmax,
+        recompute=recompute,zspace=zspace,recompute_zspace=recompute_zspace,
+        suffix=suffix)
     # Number of voids:
     voids_used = [np.array([len(x) for x in los]) > 0 
         for los in los_zspace]
@@ -1668,7 +1672,7 @@ field_borg_test = get_stacked_void_density_field(
 
 field_lcdm_test = get_stacked_void_density_field(
     lcdm_snaps,lcdm_snaps["void_radii"],lcdm_snaps["void_centres"],
-    bins_z_reff,bins_d_reff)
+    bins_z_reff,bins_d_reff,filter_list=voids_used_lcdm,recompute=False)
 
 
 #-------------------------------------------------------------------------------
