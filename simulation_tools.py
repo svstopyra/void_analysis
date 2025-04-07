@@ -690,7 +690,7 @@ def get_los_pos_with_filter(centres,filt,hr_list,void_indices,positions,
     return los_pos_all
 
 def flatten_filter_list(filter_list):
-    filt_combined = np.zeros(filter_list[0],dtype=bool)
+    filt_combined = np.zeros(len(filter_list[0]),dtype=bool)
     for filt in filter_list:
         filt_combined = np.logical_or(filt_combined,filt)
     return filt_combined
