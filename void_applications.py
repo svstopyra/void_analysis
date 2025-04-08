@@ -152,39 +152,39 @@ def extract_antihalo_property(snap_list,prop):
 
 
 
-if not low_memory_mode:
-    # Properties of anti-halos:
-    ahProps = [pickle.load(open(snap.filename + ".AHproperties.p","rb")) 
-               for snap in snapList]
-    ahPropsUn = [pickle.load(open(snap.filename + ".AHproperties.p","rb")) 
-                 for snap in snapListUn]
-    # Anti-halo catalogues:
-    hrList = [snap.halos() for snap in snapListRev]
-    hrListUn = [snap.halos() for snap in snapListRevUn]
-    # Centres, radii, and masses:
-    antihaloCentresUn = [tools.remapAntiHaloCentre(props[5],boxsize) \
-                for props in ahPropsUn]
-    antihaloMassesUn = [props[3] for props in ahPropsUn]
-    antihaloRadiiUn = [props[7] for props in ahPropsUn]
-    antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize,
-                                                 swapXZ  = False,
-                                                 reverse = True)
-                       for props in ahProps]
-    antihaloMasses = [props[3] for props in ahProps]
-    antihaloRadii = [props[7] for props in ahProps]
-else:
-    antihaloCentresUn = [tools.remapAntiHaloCentre(centres,boxsize,
-                                                 swapXZ  = False,
-                                                 reverse = True)
-                       for centres in extract_antihalo_property(snapListUn,5)]
-    antihaloMassesUn = extract_antihalo_property(snapListUn,3)
-    antihaloCentres = [tools.remapAntiHaloCentre(centres,boxsize,
-                                                 swapXZ  = False,
-                                                 reverse = True)
-                       for centres in extract_antihalo_property(snapList,5)]
-    antihaloRadiiUn = extract_antihalo_property(snapListUn,7)
-    antihaloMasses = extract_antihalo_property(snapList,3)
-    antihaloRadii = extract_antihalo_property(snapList,7)
+#if not low_memory_mode:
+#    # Properties of anti-halos:
+#    ahProps = [pickle.load(open(snap.filename + ".AHproperties.p","rb")) 
+#               for snap in snapList]
+#    ahPropsUn = [pickle.load(open(snap.filename + ".AHproperties.p","rb")) 
+#                 for snap in snapListUn]
+#    # Anti-halo catalogues:
+#    hrList = [snap.halos() for snap in snapListRev]
+#    hrListUn = [snap.halos() for snap in snapListRevUn]
+#    # Centres, radii, and masses:
+#    antihaloCentresUn = [tools.remapAntiHaloCentre(props[5],boxsize) \
+#                for props in ahPropsUn]
+#    antihaloMassesUn = [props[3] for props in ahPropsUn]
+#    antihaloRadiiUn = [props[7] for props in ahPropsUn]
+#    antihaloCentres = [tools.remapAntiHaloCentre(props[5],boxsize,
+#                                                 swapXZ  = False,
+#                                                 reverse = True)
+#                       for props in ahProps]
+#    antihaloMasses = [props[3] for props in ahProps]
+#    antihaloRadii = [props[7] for props in ahProps]
+#else:
+#    antihaloCentresUn = [tools.remapAntiHaloCentre(centres,boxsize,
+#                                                 swapXZ  = False,
+#                                                 reverse = True)
+#                       for centres in extract_antihalo_property(snapListUn,5)]
+#    antihaloMassesUn = extract_antihalo_property(snapListUn,3)
+#    antihaloCentres = [tools.remapAntiHaloCentre(centres,boxsize,
+#                                                 swapXZ  = False,
+#                                                 reverse = True)
+#                       for centres in extract_antihalo_property(snapList,5)]
+#    antihaloRadiiUn = extract_antihalo_property(snapListUn,7)
+#    antihaloMasses = extract_antihalo_property(snapList,3)
+#    antihaloRadii = extract_antihalo_property(snapList,7)
 
 
 
@@ -785,7 +785,8 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
                           cholesky=False,normalised=False,tabulate_inverse=True,
                           ntab = 10,sample_epsilon=False,Om_fid=None,
                           singular=False,Umap=None,good_eig=None,
-                          F_inv=None,log_density=False,**kwargs):
+                          F_inv=None,log_density=False,infer_profile_args=False,
+                          **kwargs):
     s_par = scoords[:,0]
     s_perp = scoords[:,1]
     if sample_epsilon:
@@ -804,6 +805,14 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
     delta_rho = np.zeros(s_par.shape)
     # Apply geometric correction to account for miss-specified cosmology:
     s_par_new, s_perp_new = geometry_correction(s_par,s_perp,epsilon)
+    # Wrappers if we are inferring profile arguments:
+    if infer_profile_args:
+        Delta_func = lambda r: Delta(r,*profile_args)
+        delta_func = lambda r: delta(r,*profile_args)
+    else:
+        # Fixed profile:
+        Delta_func = Delta
+        delta_func = delta
     # Evaluate the profile for the supplied value of the parameters:
     if tabulate_inverse:
         # Tabulate an inverse function and then evaluate an interpolated
@@ -816,7 +825,7 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
             for i in range(0,ntab):
                 for j in range(0,ntab):
                     F = (lambda r: r - r*(f/3)*\
-                        Delta(np.sqrt(r**2 + rperp_vals[i]**2)) \
+                        Delta_func(np.sqrt(r**2 + rperp_vals[i]**2)) \
                         - svals[j])
                     rvals[i,j] = scipy.optimize.fsolve(F,svals[j])
             F_inv = lambda x, y: scipy.interpolate.interpn((rperp_vals,svals),
@@ -825,12 +834,12 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
                                                            method='cubic')
             theory_val = z_space_profile(s_par_new,s_perp_new,
                                          lambda r: rho_real(r,*profile_args),
-                                         z,Om,Delta,delta,f=f,F_inv=F_inv,
-                                         **kwargs)
+                                         z,Om,Delta_func,delta_func,f=f,
+                                         F_inv=F_inv,**kwargs)
         else:
             theory_val = z_space_profile(s_par_new,s_perp_new,
                                          lambda r: rho_real(r,*profile_args),
-                                         z,Om,Delta,delta,f=f,
+                                         z,Om,Delta_func,delta_func,f=f,
                                          F_inv=lambda x, y, z: F_inv(x,y,z),
                                          **kwargs)
         if log_density:
@@ -846,7 +855,8 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
             data_val = data_field[k]
             theory_val = z_space_profile(s_par_new[k],s_perp_new[k],
                                          lambda r: rho_real(r,A,r0,c1,f1,B),
-                                         z,Om,Delta,delta,f=f,**kwargs)
+                                         z,Om,Delta_func,delta_func,f=f,
+                                         **kwargs)
             if normalised:
                 delta_rho[k] = 1.0 - theory_val/data_val
             else:
@@ -1046,7 +1056,18 @@ def profile_broken_power(r,A,r0,c1,f1,B):
 # Modified Hamaus profile:
 def profile_modified_hamaus(r,alpha,beta,rs,delta_c,delta_large = 0.0,rv=1.0):
     return (delta_c - delta_large)*(1.0 - (r/rs)**alpha)/(1 + (r/rv)**beta) \
-        + 1.0 + delta_large
+        + delta_large
+
+def integrated_profile_modified_hamaus(r,alpha,beta,rs,delta_c,
+                                       delta_large = 0.0,rv=1.0):
+    arg = ((r/rv)**beta)/(1 + (r/rv)**beta)
+    hyp_1 = scipy.special.hyp2f1(3/beta,3/beta,1 + 3/beta,arg)
+    hyp_2 = scipy.special.hyp2f1((alpha+3)/beta,
+                                 (alpha+3)/beta,1 + (alpha+3)/beta,arg)
+    return (delta_c - delta_large)*(
+         ((1.0 + (r/rv)**beta)**(-3/beta))*hyp_1 - 
+         (3/(alpha+3))*((r/rs)**alpha)*
+         ((1 + (r/rv)**beta)**(-(alpha+3)/beta))*hyp_2) + delta_large
 
 
 def rho_real(r,*profile_args):
@@ -1395,8 +1416,8 @@ los_list_all_combined_lcdm_zspace = get_los_positions_for_all_catalogues(
 #los_list_void_only_selected_lcdm_flat = [x 
 #    for y in los_list_void_only_selected_lcdm for x in y]
 
-los_list_all_selected_lcdm_flat = [x 
-    for y in los_list_all_selected_lcdm for x in y]
+#los_list_all_selected_lcdm_flat = [x 
+#    for y in los_list_all_selected_lcdm for x in y]
 
 
 # Combined Lists
@@ -1437,39 +1458,39 @@ los_borg_zspace = los_list_all_borg_zspace
 
 # Bins in LOS co-ords:
 upper_dist_reff = 2
-bins_z_reff = np.linspace(0,upper_dist_reff,21)
-bins_d_reff = np.linspace(0,upper_dist_reff,21)
-bin_z_centres = plot.binCentres(bins_z_reff)
-bin_d_centres = plot.binCentres(bins_d_reff)
+spar_bins = np.linspace(0,upper_dist_reff,21)
+sperp_bins = np.linspace(0,upper_dist_reff,21)
+bin_z_centres = plot.binCentres(spar_bins)
+bin_d_centres = plot.binCentres(sperp_bins)
 
 # Stacked void particles in 2d (in redshift space):
 stacked_particles_reff_lcdm_abs = get_2d_void_stack_from_los_pos(
-    los_lcdm_zspace,bins_z_reff,bins_d_reff,
+    los_lcdm_zspace,spar_bins,sperp_bins,
     lcdm_snaps["void_radii"])
 void_radii_borg = cat300.getMeanProperty("radii",void_filter=True)[0]
 void_individual_radii_borg = cat300.getAllProperties("radii",void_filter=True)
 stacked_particles_reff_borg_abs = get_2d_void_stack_from_los_pos(
-    los_borg_zspace,bins_z_reff,bins_d_reff,
+    los_borg_zspace,spar_bins,sperp_bins,
     [void_radii_borg for rad in borg_snaps["void_radii"]])
 
 # Stacked void_particles in 1d:
 # We can use the real space profile for this:
 stacked_particles_reff_lcdm_real = get_2d_void_stack_from_los_pos(
-    los_lcdm_real,bins_z_reff,bins_d_reff,lcdm_snaps["void_radii"])
+    los_lcdm_real,spar_bins,sperp_bins,lcdm_snaps["void_radii"])
 #radlist = [lcdm_snaps["void_radii"][k] 
 #    for k in range(0,20) for x in filter_list_lcdm_by_region[k]]
 radlist = [lcdm_snaps["void_radii"][k] for k in range(0,lcdm_snaps.N)]
 stacked_particles_reff_lcdm_real_all = [get_2d_void_stack_from_los_pos(
-    [los],bins_z_reff,bins_d_reff,[rad])
+    [los],spar_bins,sperp_bins,[rad])
     for los, rad in zip(los_list_all_combined_lcdm_zspace,radlist)]
 #stacked_particles_reff_borg_real = get_2d_void_stack_from_los_pos(
-#    los_list_void_only_borg,bins_z_reff,bins_d_reff,
+#    los_list_void_only_borg,spar_bins,sperp_bins,
 #    [void_radii_borg for rad in borg_snaps["void_radii"]])
 stacked_particles_reff_borg_real = get_2d_void_stack_from_los_pos(
-    los_borg_real,bins_z_reff,bins_d_reff,
+    los_borg_real,spar_bins,sperp_bins,
     [void_individual_radii_borg[:,k] for k in range(0,20)])
 stacked_particles_reff_borg_real_all = [get_2d_void_stack_from_los_pos(
-    [los_borg_real[k]],bins_z_reff,bins_d_reff,
+    [los_borg_real[k]],spar_bins,sperp_bins,
     [void_individual_radii_borg[:,k]]) for k in range(0,borg_snaps.N)]
 stacked_1d_real_lcdm = np.sqrt(np.sum(stacked_particles_reff_lcdm_real**2,1))
 stacked_1d_real_borg = np.sqrt(np.sum(stacked_particles_reff_borg_real**2,1))
@@ -1479,12 +1500,12 @@ stacked_1d_real_borg_all = [np.sqrt(np.sum(stacked_los**2,1))
     for stacked_los in stacked_particles_reff_borg_real_all]
 
 # Unweighted bin counts:
-[_,noInBins_lcdm] = plot_utilities.binValues(stacked_1d_real_lcdm,bins_d_reff)
-[_,noInBins_borg] = plot_utilities.binValues(stacked_1d_real_borg,bins_d_reff)
+[_,noInBins_lcdm] = plot_utilities.binValues(stacked_1d_real_lcdm,sperp_bins)
+[_,noInBins_borg] = plot_utilities.binValues(stacked_1d_real_borg,sperp_bins)
 
-noInBins_lcdm_all = [plot_utilities.binValues(stacked_dist,bins_d_reff)[1]
+noInBins_lcdm_all = [plot_utilities.binValues(stacked_dist,sperp_bins)[1]
     for stacked_dist in stacked_1d_real_lcdm_all]
-noInBins_borg_all = [plot_utilities.binValues(stacked_dist,bins_d_reff)[1]
+noInBins_borg_all = [plot_utilities.binValues(stacked_dist,sperp_bins)[1]
     for stacked_dist in stacked_1d_real_borg_all]
 
 
@@ -1542,19 +1563,19 @@ v_weight_lcdm_all = [get_weights_for_stack(
 
 
 weighted_counts_borg = np.array([
-    np.histogram(dist,bins=bins_d_reff,weights=weights)[0]
+    np.histogram(dist,bins=sperp_bins,weights=weights)[0]
     for dist, weights in zip(stacked_1d_real_borg_all,v_weight_borg_all)])
 weighted_counts_lcdm = np.array([
-    np.histogram(dist,bins=bins_d_reff,weights=weights)[0]
+    np.histogram(dist,bins=sperp_bins,weights=weights)[0]
     for dist, weights in zip(stacked_1d_real_lcdm_all,v_weight_lcdm_all)])
 
 
 # Fields:
 nbar = len(referenceSnap)/boxsize**3
 num_voids_lcdm = np.sum([np.sum(x) for x in voids_used_lcdm])
-cell_volumes_reff = np.outer(np.diff(bins_z_reff),np.diff(bins_d_reff))
+cell_volumes_reff = np.outer(np.diff(spar_bins),np.diff(sperp_bins))
 field_lcdm = get_field_from_los_data(stacked_particles_reff_lcdm_abs,
-                                     bins_z_reff,bins_d_reff,v_weight_lcdm,
+                                     spar_bins,sperp_bins,v_weight_lcdm,
                                      num_voids_lcdm,nbar=nbar)
 
 num_voids_sample_borg = np.array([np.sum(x) for x in voids_used_borg])
@@ -1565,12 +1586,12 @@ nmean = len(borg_snaps["snaps"][0])/(boxsize**3)
 
 # Field with the reproducibility score weighting applied:
 field_borg = get_field_from_los_data(stacked_particles_reff_borg_abs,
-                                     bins_z_reff,bins_d_reff,v_weight_borg,1,
+                                     spar_bins,sperp_bins,v_weight_borg,1,
                                      nbar=nbar)
 
 # Field without reproducibility score weighting
 field_borg_unweighted = get_field_from_los_data(
-    stacked_particles_reff_borg_abs,bins_z_reff,bins_d_reff,
+    stacked_particles_reff_borg_abs,spar_bins,sperp_bins,
     v_weight_borg_unweighted,num_voids_borg,nbar=nbar)
 
 #-------------------------------------------------------------------------------
@@ -1667,12 +1688,12 @@ zcentres = tools.loadOrRecompute(data_folder + "zspace_centres.p",
 
 field_borg_test = get_stacked_void_density_field(
     borg_snaps,cat300.getAllProperties("radii",void_filter=True).T,zcentres,
-    bins_z_reff,bins_d_reff)
+    spar_bins,sperp_bins)
 
 
 field_lcdm_test = get_stacked_void_density_field(
     lcdm_snaps,lcdm_snaps["void_radii"],lcdm_snaps["void_centres"],
-    bins_z_reff,bins_d_reff,filter_list=voids_used_lcdm,recompute=False)
+    spar_bins,sperp_bins,filter_list=voids_used_lcdm,recompute=False)
 
 
 #-------------------------------------------------------------------------------
@@ -1687,42 +1708,42 @@ field_lcdm_test = get_stacked_void_density_field(
 # Posterior profiles:
 [allPairsSample,allVolumesSample] = tools.loadPickle(
     data_folder2 + "pair_counts_mcmc_cut_samples.p")
-[delta_borg, sigma_delta_borg] = [x/nbar 
+[delta_borg, sigma_delta_borg] = [x/nbar - 1.0
     for x in stacking.get_mean_mcmc_profile(
     allPairsSample,allVolumesSample,cumulative = False)]
-[Delta_borg, sigma_Delta_borg] = [x/nbar 
+[Delta_borg, sigma_Delta_borg] = [x/nbar - 1.0 
     for x in stacking.get_mean_mcmc_profile(allPairsSample,allVolumesSample,
     cumulative = True)]
 
 # LCDM profiles:
 all_pairs = regionAndVoidDensityConditionDict['pairs']
 all_volumes = regionAndVoidDensityConditionDict['volumes']
-delta_lcdm_all = stacking.get_profiles_in_regions(all_pairs,all_volumes,
+rho_lcdm_all = stacking.get_profiles_in_regions(all_pairs,all_volumes,
                                               cumulative=False)
-Delta_lcdm_all = np.array([(np.sum(np.cumsum(all_pairs[k],1),0)+1)/\
+rhoCum_lcdm_all = np.array([(np.sum(np.cumsum(all_pairs[k],1),0)+1)/\
             np.sum(np.cumsum(all_volumes[k],1),0) \
             for k in range(0,len(all_volumes))])
-delta_lcdm = np.mean(delta_lcdm_all,0)/nbar
-Delta_lcdm = np.mean(Delta_lcdm_all,0)/nbar
-sigma_delta_lcdm = np.std(delta_lcdm_all,0)/nbar
-sigma_Delta_lcdm = np.std(Delta_lcdm_all,0)/nbar
+delta_lcdm = np.mean(rho_lcdm_all,0)/nbar - 1.0
+Delta_lcdm = np.mean(rhoCum_lcdm_all,0)/nbar - 1.0
+sigma_delta_lcdm = np.std(rho_lcdm_all,0)/nbar
+sigma_Delta_lcdm = np.std(rhoCum_lcdm_all,0)/nbar
 
 # Profile function (should we use the inferred profile, or the 
 # lcdm mock profiles?):
-r_bin_centres = plot_utilities.binCentres(bins_d_reff)
+r_bin_centres = plot_utilities.binCentres(sperp_bins)
 #rho_r = noInBins_borg/np.sum(noInBins_borg)
 rho_r = noInBins_lcdm/(np.sum(noInBins_lcdm)*\
-    4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
+    4*np.pi*(sperp_bins[1:]**3 - sperp_bins[0:-1]**3)/3)
 rho_r_error = np.sqrt(noInBins_lcdm)/(np.sum(noInBins_lcdm)*\
-    4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
+    4*np.pi*(sperp_bins[1:]**3 - sperp_bins[0:-1]**3)/3)
 
 
 #rho_r_all = np.array([n/(np.sum(n)*\
-#    4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
+#    4*np.pi*(sperp_bins[1:]**3 - sperp_bins[0:-1]**3)/3)
 #    for n in noInBins_lcdm_all])
 
 rho_r_all = weighted_counts_lcdm/\
-    (4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)*nbar/3)
+    (4*np.pi*(sperp_bins[1:]**3 - sperp_bins[0:-1]**3)*nbar/3)
 
 rho_r_std = np.std(rho_r_all,0)
 rho_r_mean = np.mean(rho_r_all,0)
@@ -1731,15 +1752,15 @@ rho_r_range_2sigma = np.percentile(rho_r_all,[2.5,97.5],axis=0)
 
 
 rho_borg_r = noInBins_borg/(np.sum(noInBins_borg)*\
-    4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
+    4*np.pi*(sperp_bins[1:]**3 - sperp_bins[0:-1]**3)/3)
 rho_borg_r_error = np.sqrt(noInBins_borg)/(np.sum(noInBins_borg)*\
-    4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
+    4*np.pi*(sperp_bins[1:]**3 - sperp_bins[0:-1]**3)/3)
 
 #rho_r_borg_all = np.array([n/(np.sum(n)*\
-#    4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)/3)
+#    4*np.pi*(sperp_bins[1:]**3 - sperp_bins[0:-1]**3)/3)
 #    for n in noInBins_borg_all])
 rho_r_borg_all =  weighted_counts_borg/\
-    (4*np.pi*(bins_d_reff[1:]**3 - bins_d_reff[0:-1]**3)*nbar/3)
+    (4*np.pi*(sperp_bins[1:]**3 - sperp_bins[0:-1]**3)*nbar/3)
 rho_r_borg_std = np.std(rho_r_borg_all,0)
 rho_r_borg_mean = np.mean(rho_r_borg_all,0)
 rho_r_borg_range_1sigma = np.percentile(rho_r_borg_all,[16,84],axis=0)
@@ -1747,10 +1768,10 @@ rho_r_borg_range_2sigma = np.percentile(rho_r_borg_all,[2.5,97.5],axis=0)
 
 Delta_r = np.cumsum(noInBins_borg)/np.sum(noInBins_borg)
 delta_func = scipy.interpolate.interp1d(
-    rBinStackCentres,delta_borg - 1.0,kind='cubic',
+    rBinStackCentres,delta_borg,kind='cubic',
     fill_value=(delta_borg[0],delta_borg[-1]),bounds_error=False)
 Delta_func = scipy.interpolate.interp1d(
-    rBinStackCentres,Delta_borg - 1.0,kind='cubic',
+    rBinStackCentres,Delta_borg,kind='cubic',
     fill_value=(Delta_borg[0],Delta_borg[-1]),bounds_error=False)
 rho_func = scipy.interpolate.interp1d(
     r_bin_centres,rho_r,kind='cubic',
@@ -1823,7 +1844,7 @@ plt.show()
 
 # 2D profile function test (zspace):
 z = 0.0225
-profile_2d = np.zeros((len(bins_z_reff)-1,len(bins_d_reff)-1))
+profile_2d = np.zeros((len(spar_bins)-1,len(sperp_bins)-1))
 
 Om = 0.3111
 f = f_lcdm(z,Om)
@@ -1912,8 +1933,8 @@ plt.show()
 #-------------------------------------------------------------------------------
 # COVARIANCE MATRIX ESTIMATION:
 los_list_reff_borg = get_2d_void_stack_from_los_pos(
-    los_borg_zspace,bins_z_reff,bins_d_reff,
-    [void_radii_borg for rad in borg_snaps["borg_radii"]],stacked=False)
+    los_borg_zspace,spar_bins,sperp_bins,
+    [void_radii_borg for rad in borg_snaps["void_radii"]],stacked=False)
 
 
 
@@ -1926,7 +1947,7 @@ v_weights_all_borg_scalar = np.hstack([np.array([x[0] for x in y])
     for y in v_weights_all_borg])
 
 all_fields_borg = [[
-    get_field_from_los_data(los,bins_z_reff,bins_d_reff,v_weight,1) 
+    get_field_from_los_data(los,spar_bins,sperp_bins,v_weight,1) 
     for los, v_weight in zip(los_vals,v_weights)] 
     for los_vals, v_weights in zip(los_list_reff_borg,v_weights_all_borg)]
 
@@ -1964,7 +1985,7 @@ inv_cov = np.matmul(P,P.T)
 los_list_sample_borg = [np.vstack(los) for los in los_list_reff_borg]
 v_weights_sample_borg = [np.hstack(weights) for weights in v_weights_all_borg]
 sample_fields_borg = np.array([
-    get_field_from_los_data(los,bins_z_reff,bins_d_reff,v_weight,1) 
+    get_field_from_los_data(los,spar_bins,sperp_bins,v_weight,1) 
     for los, v_weight, count in zip(los_list_sample_borg,v_weights_sample_borg,
     num_voids_sample_borg)])
 
@@ -2008,14 +2029,15 @@ jackknife_mean = np.mean(bootstrap_stacks,1)
 norm_cov = jackknife_cov/np.outer(jackknife_mean,jackknife_mean)
 reg_norm_cov = regularise_covariance(norm_cov,lambda_reg= 1e-10)
 reg_cov = regularise_covariance(jackknife_cov,lambda_reg= 1e-15)
-cholesky_cov = scipy.linalg.cholesky(reg_cov,lower=True)
+cholesky_cov2 = scipy.linalg.cholesky(reg_cov,lower=True)
 
 inv_cov = get_inverse_covariance(reg_cov,lambda_reg = 1e-23)
 
 # Covariance function:
 def get_covariance_matrix(los_list_all,v_weights_all,bins_spar,bins_sperp,
                           n_boot=10000,seed=42,lambda_reg = 1e-15,
-                          cholesky=True,regularise=True,log_field=False):
+                          cholesky=True,regularise=True,log_field=False,
+                          return_mean=False):
     # Get 2D stacked fields for each sample:
     all_fields = [[
         get_field_from_los_data(los,bins_spar,bins_sperp,v_weight,1) 
@@ -2056,13 +2078,23 @@ def get_covariance_matrix(los_list_all,v_weights_all,bins_spar,bins_sperp,
     if cholesky:
         # If we want to use the Cholesky decomposition, instead of the
         # covariance directly.
-        return scipy.linalg.cholesky(cov,lower=True)
+        cov = scipy.linalg.cholesky(cov,lower=True)
+    if return_mean:
+        return cov, mean
     else:
         return cov
 
 
 
+rho_cov, rhomean = get_covariance_matrix(
+    los_list_reff_borg,v_weights_all_borg,spar_bins,sperp_bins,
+    return_mean=True,cholesky=False)
+cholesky_cov = scipy.linalg.cholesky(rho_cov,lower=True)
 
+logrho_cov, logrho_mean = get_covariance_matrix(
+    los_list_reff_borg,v_weights_all_borg,spar_bins,sperp_bins,
+    log_field=True,cholesky=False,return_mean=True)
+log_cholesky_cov = scipy.linalg.cholesky(logrho_cov,lower=True)
 
 #logrho_mean = np.mean(np.log(bootstrap_stacks),1)
 
@@ -2199,9 +2231,9 @@ singular = True
 
 
 spar = np.hstack([s*np.ones(field_borg.shape[1]) 
-    for s in plot.binCentres(bins_z_reff)])
-sperp = np.hstack([plot.binCentres(bins_d_reff) 
-    for s in plot.binCentres(bins_z_reff)])
+    for s in plot.binCentres(spar_bins)])
+sperp = np.hstack([plot.binCentres(sperp_bins) 
+    for s in plot.binCentres(spar_bins)])
 scoords = np.vstack([spar,sperp]).T
 
 data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
@@ -2439,6 +2471,190 @@ plt.show()
 #-------------------------------------------------------------------------------
 # COSMOLOGICAL INFERENCE
 
+# Get a maximum-likelihood estimate for the initial parameters to use for
+# inference:
+def get_mle_estimate(initial_guess_eps,theta_ranges_epsilon,*args,**kwargs):
+    nll = lambda theta: -log_likelihood_aptest(theta,*args,**kwargs)
+    mle_estimate = scipy.optimize.minimize(nll,initial_guess_eps,
+                                           bounds=theta_ranges_epsilon)
+    return mle_estimate
+
+# Tabulate the inverse function used for moving to redshift-space, to speed
+# up the inference. Only useful if the inverse is not a function of the 
+# parameters being inferred.
+def get_fixed_inverse(Delta_func,ntab=100,ntaf_f=100,sval_range = [0,3],
+                      rperp_range=[0,3],f_val_range = [0,1],):
+    # Tabulated inverse:
+    svals = np.linspace(sval_range[0],sval_range[1],ntab)
+    rperp_vals = np.linspace(rperp_range[0],rperp_range[1],ntab)
+    f_vals = np.linspace(f_val_range[0],f_val_range[1],ntab_f)
+    F_inv_vals = np.zeros((ntab,ntab,ntab_f))
+    for i in tools.progressbar(range(0,ntab)):
+        for j in range(0,ntab):
+            for k in range(0,ntab_f):
+                F = (lambda r: r - r*(f_vals[k]/3)*\
+                    Delta_func(np.sqrt(r**2 + rperp_vals[i]**2)) \
+                    - svals[j])
+                F_inv_vals[i,j,k] = scipy.optimize.fsolve(F,svals[j])
+
+    F_inv = lambda x, y, z: scipy.interpolate.interpn((rperp_vals,svals,f_vals),
+                                                   F_inv_vals,
+                                                   np.vstack((x,y,z)).T,
+                                                   method='cubic')
+    return F_inv
+
+def generate_scoord_grid(sperp_bins,spar_bins):
+    spar = np.hstack([s*np.ones(len(sperp_bins)-1) 
+        for s in plot.binCentres(spar_bins)])
+    sperp = np.hstack([plot.binCentres(sperp_bins) 
+        for s in plot.binCentres(spar_bins)])
+    return scoords = np.vstack([spar,sperp]).T
+
+# Data filter, that attempts to restrict to a region with high S/N:
+def generate_data_filter(cov,mean,scoords,cov_thresh=5,
+                         srad_thresh = 1.5):
+    # Apply filter on the normalised covariance matrix:
+    norm_cov = cov/np.outer(mean,mean)
+    data_filter = np.where((1.0/np.sqrt(np.diag(norm_cov)) > cov_thresh) & \
+        (np.sqrt(np.sum(scoords**2,1)) < srad_thresh) )[0]
+    return data_filter
+
+# Likelihood for the real-space profile (fixed):
+def log_likelihood_profile(theta, x, y, yerr,profile_model):
+    #rho0,p,C,rb = theta
+    #A,r0,c1,f1,B = theta
+    #model = profile_broken_power_log(x, A,r0,c1,f1,B)
+    model = profile_model(x,*theta)
+    sigma2 = yerr**2
+    return -0.5 * np.sum( (y - model)**2/sigma2 + np.log(sigma2) )
+
+# Get parameters for the fixed profile:
+def get_profile_parameters_fixed(ri,rhoi,sigma_rhoi,
+                                 model=profile_modified_hamaus,
+                                 initial = np.array([1.0,1.0,1.0,-0.2,0.0,1.0]),
+                                 bounds = [(0,None),(0,None),(0,None),(-1,0),
+                                           (-1,1),(0,2)]):
+    nll = lambda *theta: -log_likelihood_profile(*theta)
+    sol = scipy.optimize.minimize(nll, initial, bounds = bounds,
+                                  args=(ri, rhoi, sigma_rhoi,
+                                        profile_modified_hamaus))
+    return sol.x
+
+
+
+#A,r0,c1,f1,B = sol2.x
+
+
+# Inference for LCDM mock (end-to-end test):
+
+
+
+
+
+# Inference for Borg catalogue:
+
+
+def run_inference_pipeline(field,cov,sperp_bins,spar_bins,ri,delta_i,
+                           sigma_delta_i,log_field=False,
+                           infer_profile_args=True,tabulate_inverse=True,
+                           cholesky=True,sample_epsilon=True,filter_data=False,
+                           z = 0.0225,lambda_cut=1e-23,lambda_ref=1e-27,
+                           profile_param_ranges = [[0,np.inf],[0,np.inf],
+                                                   [0,np.inf],[-1,0],[-1,1],
+                                                   [0,2]],
+                           om_ranges = [[0.1,0.5]],eps_ranges = [[0.9,1.1]],
+                           f_ranges = [[0,1]],Om_fid = 0.3111,
+                           filename = "inference_weighted.h5",
+                           autocorr_filename = "autocorr.npy",disp=1e-2,
+                           nwalkers=64,n_mcmc=10000,max_n=1000000,
+                           batch_size=100,nbatch=100,redo_chain=False,
+                           backup_start=True):
+    # Compute inverse covariance, or cholesky decomposition:
+    if cholesky:
+        # Instead of computing the inverse matrix, use cholesky decomposition
+        # to evaluate the likelihood. Likelihood will interpret the 
+        # 'inverse_matrix' argument as the cholesky decomposition, instead of
+        # an inverse
+        inverse_matrix = scipy.linalg.cholesky(cov,lower=True)
+    else:
+        inverse_matrix = get_inverse_covariance(cov,lambda_reg = 1e-23)
+    # Generate a data filter:
+    scoords = generate_scoord_grid(sperp_bins,spar_bins)
+    if filter_data:
+        data_filter = generate_data_filter(cov,mean,scoords)
+    else:
+        data_filter = np.ones(field.flatten().shape,dtype=bool)
+    # Field to use for inference:
+    data_field = field.flatten()[data_filter]
+    # Profile functions:
+    if infer_profile_args:
+        delta_func = profile_modified_hamaus
+        Delta_func = integrated_profile_modified_hamaus
+        rho_real = lambda *args: profile_modified_hamaus(*args) + 1.0
+    else:
+        alpha,beta,rs,delta_c,delta_large, rv = get_profile_parameters_fixed(
+            ri,delta_i,sigma_delta_i)
+        delta_func = lambda r: profile_modified_hamaus(r,alpha,beta,rs,delta_c,
+                                                       delta_large = delta_large,
+                                                       rv=rv)
+        Delta_func = lambda r: integrated_profile_modified_hamaus(
+                                   r,alpha,beta,rs,delta_c,
+                                   delta_large = delta_large,rv=rv)
+        rho_real = lambda r: delta_func(r) + 1.0
+    # Precompute inverse function. Only useful if profile parameters are fixed:
+    if infer_profile_args or (not tabulate_inverse):
+        F_inv = None
+    else:
+        # Tabulate the inverse:
+        F_inv = get_fixed_inverse(Delta_func)
+    # Setup parameter initial guesses:
+    if sample_epsilon:
+        initial_guess_MG = np.array([1.0,f_lcdm(z,Om_fid)])
+    else:
+        initial_guess_MG = np.array([Om_fid,f_lcdm(z,Om_fid)])
+    if infer_profile_args:
+        profile_params = get_profile_parameters_fixed(ri,delta_i,sigma_delta_i)
+        initial_guess = np.hstack([initial_guess_MG,profile_params])
+    else:
+        initial_guess = initial_guess_MG
+    # Parameter bounds:
+    if sample_epsilon:
+        theta_ranges = eps_ranges + f_ranges + profile_param_ranges
+    else:
+        theta_ranges = om_ranges + f_ranges + profile_param_ranges
+    # Setup Umap to fitler out bad eigenvalue of the covariance matrix:
+    Umap, good_eig = get_nonsingular_subspace(cov,lambda_ref,
+                                              lambda_cut=lambda_cut,
+                                              normalised_cov = False,mu=mean)
+    # Arguments to supply to the MCMC run:
+    args = (data_field,scoords[data_filter,:],
+            inverse_matrix[data_filter,:][:,data_filter],z,Delta_func,
+            delta_func,rho_real)
+    kwargs = {'cholesky':cholesky,'tabulate_inverse':tabulate_inverse,
+              'sample_epsilon':sample_epsilon,'theta_ranges':theta_ranges,
+              'singular':False,'Umap':Umap,'good_eig':good_eig,'F_inv':F_inv,
+              'log_density':True}
+    # Run MCMC:
+    tau, sampler = run_inference(data_field,theta_ranges,initial_guess,
+                                 filename,log_probability_aptest,*args,
+                                 redo_chain=redo_chain,
+                                 backup_start=backup_start,nwalkers=nwalkers,
+                                 sample="all",n_mcmc=n_mcmc,disp=disp,
+                                 max_n=max_n,z=z,parallel=False,
+                                 Om_fid=Om_fid,batch_size=batch_size,
+                                 n_batches=n_batches,
+                                 autocorr_file = autocorr_filename,**kwargs)
+    return tau, sampler
+
+
+
+
+
+
+
+
+
+
 # Eigenvalue quality filter:
 
 #Umap, good_eig = get_nonsingular_subspace(jackknife_cov,1e-27,lambda_cut=1e-23,
@@ -2453,7 +2669,7 @@ plt.show()
 
 covariance = logrho_cov
 mean = logrho_mean
-norm_cov = reg_norm_logcov
+#norm_cov = reg_norm_logcov
 cholesky_matrix = log_cholesky_cov
 
 Umap, good_eig = get_nonsingular_subspace(covariance,1e-27,lambda_cut=1e-23,
@@ -2463,9 +2679,9 @@ singular = True
 
 
 spar = np.hstack([s*np.ones(field_borg.shape[1]) 
-    for s in plot.binCentres(bins_z_reff)])
-sperp = np.hstack([plot.binCentres(bins_d_reff) 
-    for s in plot.binCentres(bins_z_reff)])
+    for s in plot.binCentres(spar_bins)])
+sperp = np.hstack([plot.binCentres(sperp_bins) 
+    for s in plot.binCentres(spar_bins)])
 scoords = np.vstack([spar,sperp]).T
 
 data_filter = np.where((1.0/np.sqrt(np.diag(norm_cov)) > 5) & \
@@ -2476,9 +2692,9 @@ data_filter = np.where((1.0/np.sqrt(np.diag(norm_cov)) > 5) & \
 #data_field = field_borg.flatten()
 data_field = np.log(field_borg.flatten())
 spar = np.hstack([s*np.ones(field_borg.shape[1]) 
-    for s in plot.binCentres(bins_z_reff)])
-sperp = np.hstack([plot.binCentres(bins_d_reff) 
-    for s in plot.binCentres(bins_z_reff)])
+    for s in plot.binCentres(spar_bins)])
+sperp = np.hstack([plot.binCentres(sperp_bins) 
+    for s in plot.binCentres(spar_bins)])
 scoords = np.vstack([spar,sperp]).T
 z = 0.0225
 
@@ -2514,37 +2730,7 @@ if test:
 
 # Start with a MLE guess of the 1d profile parameters:
 
-def log_likelihood(theta, x, y, yerr,profile_model):
-    #rho0,p,C,rb = theta
-    #A,r0,c1,f1,B = theta
-    #model = profile_broken_power_log(x, A,r0,c1,f1,B)
-    model = profile_model(x,*theta)
-    sigma2 = yerr**2
-    return -0.5 * np.sum( (y - model)**2/sigma2 + np.log(sigma2) )
 
-
-nll1 = lambda *theta: -log_likelihood(*theta)
-#initial = np.array([0.1,0.9,-9.5,3.5,0.01])
-initial = np.array([1.0,1.0,1.0,-0.2,0.0,1.0])
-bounds = [(0,None),(0,None),(0,None),(-1,0),(-1,1),(0,2)]
-
-sol2_old = scipy.optimize.minimize(nll1, initial, 
-    bounds = bounds,
-    args=(r_bin_centres, rho_r_borg_mean, rho_r_borg_std,
-          profile_modified_hamaus))
-
-sol2 = scipy.optimize.minimize(nll1, initial, 
-    bounds = bounds,
-    args=(rBinStackCentres, delta_borg, sigma_delta_borg,
-          profile_modified_hamaus))
-
-sol2_lcdm = scipy.optimize.minimize(nll1, initial, 
-    bounds = bounds,
-    args=(rBinStackCentres, delta_lcdm, sigma_delta_lcdm,
-          profile_modified_hamaus))
-
-#A,r0,c1,f1,B = sol2.x
-alpha,beta,rs,delta_c,delta_large, rv = sol2.x
 
 
 
@@ -2956,8 +3142,8 @@ A = soln.x[2]
 
 f_fid = f_lcdm(0.0225,0.3111)
 
-for i in range(0,len(bins_z_reff)-1):
-    for j in range(0,len(bins_d_reff)-1):
+for i in range(0,len(spar_bins)-1):
+    for j in range(0,len(sperp_bins)-1):
         spar = bin_z_centres[i]
         sperp = bin_d_centres[j]
         profile_2d[i,j] = z_space_profile(spar,sperp,
