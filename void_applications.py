@@ -517,7 +517,7 @@ H0 = referenceSnap.properties['h']*100
 h = referenceSnap.properties['h']
 boxsize = referenceSnap.properties['boxsize'].ratio("Mpc a h**-1")
 cosmo = astropy.cosmology.LambdaCDM(H0,Om0,Ode0)
-
+nbar = len(referenceSnap)/boxsize**3
 
 # 2M++ Data:
 catFile = "./2mpp_data/2m++.txt"
@@ -1244,18 +1244,14 @@ def run_inference(data_field,theta_ranges_list,theta_initial,filename,
 #    lcdm_snaps["void_centres"],lcdm_snaps["void_radii"],filter_list=filter_list_lcdm,
 #    dist_max=60,rmin=10,rmax=20,zspace=True,recompute=False,
 #    suffix=".lospos_zspace")
-final_cat = cat300.get_final_catalogue(void_filter=True)
-halo_indices = [-np.ones(len(final_cat),dtype=int) 
-    for ns in range(0,borg_snaps.N)]
-for ns in range(0,borg_snaps.N):
-    have_void = final_cat[:,ns] >= 0
-    halo_indices[ns][have_void] = \
-        cat300.indexListShort[ns][final_cat[have_void,ns]-1]
+halo_indices = cat300.get_final_catalogue(void_filter=True,short_list=False).T
 
 # Convert void centres to redshift space:
 zcentres = tools.loadOrRecompute(data_folder + "zspace_centres.p",
-                                 get_zspace_centres,halo_indices,borg_snaps["snaps"],
-                                 borg_snaps["snaps_reverse"],hrlist=None,_recomputeData=False)
+                                 get_zspace_centres,halo_indices,
+                                 borg_snaps["snaps"],
+                                 borg_snaps["snaps_reverse"],hrlist=None,
+                                 _recomputeData=False)
 
 filter_list_borg = [halo_indices[ns] >= 0 for ns in range(0,borg_snaps.N)]
 
@@ -1343,6 +1339,7 @@ centresToUse = [randCentres[comp] for comp in comparableDensityMAP]
 deltaToUse = [randOverDen[ns][comp] \
     for ns, comp in zip(range(0,borg_snaps.N),comparableDensityMAP)]
 rSep = 2*135
+boxsize = borg_snaps.boxsize
 # Filter out spheres which overlap with already selected spheres, to ensure
 # independence:
 indicesUnderdenseNonOverlapping = simulation_tools.getNonOverlappingCentres(
@@ -1440,8 +1437,8 @@ los_list_all_combined_lcdm_zspace = get_los_positions_for_all_catalogues(
 #    for all_los, all_rad in 
 #    zip(los_list_all_combined_lcdm_zspace,lcdm_snaps["void_radii"])]
 
-#los_list_void_only_lcdm = get_los_positions_for_all_catalogues(lcdm_snaps["snaps"],
-#    lcdm_snaps["snaps_reverse"],lcdm_snaps["void_centres"],
+#los_list_void_only_lcdm = get_los_positions_for_all_catalogues(
+#    lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],lcdm_snaps["void_centres"],
 #    lcdm_snaps["void_radii"],all_particles=False,
 #    filter_list=filter_list_lcdm,dist_max=60,rmin=10,rmax=20,recompute=False,
 #    suffix=".lospos_void_only.p")
@@ -1507,6 +1504,9 @@ noInBins_lcdm_all = [plot_utilities.binValues(stacked_dist,sperp_bins)[1]
     for stacked_dist in stacked_1d_real_lcdm_all]
 noInBins_borg_all = [plot_utilities.binValues(stacked_dist,sperp_bins)[1]
     for stacked_dist in stacked_1d_real_borg_all]
+
+
+
 
 
 #-------------------------------------------------------------------------------
@@ -1678,18 +1678,102 @@ def get_stacked_void_density_field(snaps,void_radii_lists,void_centre_lists,
     return get_field_from_los_data(stacked_particles_reff_abs,bins_spar,
                                    bins_sperp,v_weight,scale_factor,nbar=nbar)
 
+# Bins in LOS co-ords:
+upper_dist_reff = 2
+spar_bins = np.linspace(0,upper_dist_reff,21)
+sperp_bins = np.linspace(0,upper_dist_reff,21)
+bin_z_centres = plot.binCentres(spar_bins)
+bin_d_centres = plot.binCentres(sperp_bins)
+
 
 # BORG density field:
 halo_indices = cat300.get_final_catalogue(void_filter=True,short_list=False)
 zcentres = tools.loadOrRecompute(data_folder + "zspace_centres.p",
                                  get_zspace_centres,halo_indices,
-                                 borg_snaps["snaps"],borg_snaps["snaps_reverse"],
-                                 hrlist=None,_recomputeData=False)
+                                 borg_snaps["snaps"],
+                                 borg_snaps["snaps_reverse"],hrlist=None,
+                                 _recomputeData=False)
 
 field_borg_test = get_stacked_void_density_field(
     borg_snaps,cat300.getAllProperties("radii",void_filter=True).T,zcentres,
     spar_bins,sperp_bins)
 
+
+
+
+def get_borg_density_estimate(snaps,densities_file = None,dist_max=135,
+                              seed = 1000,interval=0.68):
+    boxsize = snaps.boxsize
+    if np.min(snaps["snaps"][0]["pos"]) < 0:
+        centre = np.array([0,0,0])
+    else:
+        centre = np.array([boxsize/2]*3)
+    if densities_file is not None:
+        deltaMCMCList = tools.loadPickle(densities_file)
+    else:
+        deltaMCMCList = np.array([simulation_tools.density_from_snapshot(
+                                     snap,centre,dist_max)
+                                  for snap in snaps["snaps"]])
+    deltaMAPBootstrap = scipy.stats.bootstrap(
+        (deltaMCMCList,),simulation_tools.get_map_from_sample,
+        confidence_level = interval,vectorized=False,random_state=seed)
+    deltaMAPInterval = deltaMAPBootstrap.confidence_interval
+    return deltaMAPBootstrap, deltaMAPInterval
+
+# LCDM test
+densities_file = data_folder2 + "delta_list.p"
+deltaMAPBootstrap, deltaMAPInterval = get_borg_density_estimate(
+    borg_snap,densities_file = densities_file)
+
+# Create the list of voids to use:
+centres_file = data_folder2 + "random_centres_and_densities.p"
+
+def get_lcdm_void_catalogue(snaps,delta_interval,dist_max=135,
+                            radii_range=[10,20],centres_file = None,
+                            nRandCentres = 10000,seed=1000):
+    boxsize = snaps.boxsize
+    # Get random centres (usually pre-computed, but we can create them
+    # from scratch if necessary):
+    if centres_file is not None:
+        [randCentres,randOverDen] = tools.loadPickle(centres_file)
+    else:
+        [randCentres,randOverDen] = \
+            simulation_tools.get_random_centres_and_densities(
+                dist_max,snaps["snaps"],seed=seed,nRandCentres = nRandCentres)
+    # Select regions with similar density contrast the local supervolume:
+    comparableDensityMAP = [(delta <= deltaMAPInterval[1]) & \
+        (delta > deltaMAPInterval[0]) for delta in randOverDen]
+    centresToUse = [randCentres[comp] for comp in comparableDensityMAP]
+    # Get non-overlapping sphere:
+    rSep = 2*dist_max
+    indicesUnderdenseNonOverlapping = simulation_tools.getNonOverlappingCentres(
+        centresToUse,rSep,boxsize,returnIndices=True)
+    centresUnderdenseNonOverlapping = [centres[ind] \
+        for centres,ind in zip(centresToUse,indicesUnderdenseNonOverlapping)]
+    densityListUnderdenseNonOverlapping = [density[ind] \
+        for density, ind in zip(comparableDensityMAP,\
+        indicesUnderdenseNonOverlapping)]
+    densityUnderdenseNonOverlapping = np.hstack(
+        densityListUnderdenseNonOverlapping)
+    # Get the centres of the voids from their respective regions:
+    distances_from_centre_lcdm_selected = [[
+        np.sqrt(np.sum(snapedit.unwrap(centres - sphere_centre,boxsize)**2,1))
+        for sphere_centre in selected_regions]
+        for centres, selected_regions in zip(snaps["void_centres"],
+        centresUnderdenseNonOverlapping)]
+    # Filter voids to the radius range used in the catalogue:
+    filter_list_lcdm_by_region = [[
+        (dist < dist_max) & (radii > radii_range[0]) & (radii <= radii_range[1]) 
+        for dist in all_dists]
+        for all_dists, radii in 
+        zip(distances_from_centre_lcdm_selected,snaps["void_radii"])]
+    voids_used_lcdm = [simulation_tools.flatten_filter_list(filt_list) 
+                          for filt_list in filter_list_lcdm_by_region]
+    return voids_used_lcdm
+
+
+voids_used_lcdm = get_lcdm_void_catalogue(lcdm_snaps,deltaMAPBootstrap,
+                                          centres_file = centres_file)
 
 field_lcdm_test = get_stacked_void_density_field(
     lcdm_snaps,lcdm_snaps["void_radii"],lcdm_snaps["void_centres"],
@@ -1931,17 +2015,304 @@ plot_los_void_stack(\
 plt.show()
 
 #-------------------------------------------------------------------------------
-# COVARIANCE MATRIX ESTIMATION:
-los_list_reff_borg = get_2d_void_stack_from_los_pos(
-    los_borg_zspace,spar_bins,sperp_bins,
-    [void_radii_borg for rad in borg_snaps["void_radii"]],stacked=False)
+# REAL SPACE DENSTIY PROFILE, 1D
+
+def get_1d_density(void_radii,los_pos,spar_bins,sperp_bins):
+    stacked_particles_reff_real = get_2d_void_stack_from_los_pos(
+        los_pos,spar_bins,sperp_bins,void_radii)
+    stacked_1d_real = np.sqrt(np.sum(stacked_particles_reff_real**2,1))
+    [_,noInBins] = plot_utilities.binValues(stacked_1d_real,sperp_bins)
+    return noInBins
+
+los_list_all_borg = get_los_positions_for_all_catalogues(borg_snaps["snaps"],
+    borg_snaps["snaps_reverse"],
+    cat300.getAllCentres(void_filter=True),
+    cat300.getAllProperties("radii",void_filter=True).T,all_particles=True,
+    void_indices = halo_indices,filter_list=filter_list_borg,
+    dist_max=3,rmin=10,rmax=20,recompute=False,suffix=".lospos_all.p")
+
+los_list_all_lcdm = get_los_positions_for_all_catalogues(
+    lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],lcdm_snaps["void_centres"],
+    lcdm_snaps["void_radii"],all_particles=True,
+    filter_list=filter_list_lcdm_by_region,dist_max=3,
+    rmin=10,rmax=20,recompute=False,suffix=".lospos_all_selected.p",
+    flatten_filters=True)
+
+noInBins_lcdm = get_1d_density(lcdm_snaps["void_radii"],los_list_all_lcdm,spar_bins,
+                               sperp_bins)
+
+noInBins_borg = get_1d_density(
+    cat300.getAllProperties("radii",void_filter=True).T,los_list_all_borg,
+    spar_bins,sperp_bins)
+
+def get_delta_points(rad_bins,bin_counts):
+    ri = plot_utilities.binCentres(rad_bins)
+    delta_i = bin_counts/(np.sum(bin_counts)*\
+        4*np.pi*(rad_bins[1:]**3 - rad_bins[0:-1]**3)/3) - 1.0
+    sigma_delta_i = np.sqrt(bin_counts)/(np.sum(bin_counts)*\
+        4*np.pi*(rad_bins[1:]**3 - rad_bins[0:-1]**3)/3)
+
+def get_weighted_1d_density(void_radii,los_pos,spar_bins,sperp_bins):
+    stacked_particles_real_all = [get_2d_void_stack_from_los_pos(
+        [los],spar_bins,sperp_bins,[rad])
+        for los, rad in zip(los_pos,void_radii)]
+    stacked_1d_real_all = [np.sqrt(np.sum(stacked_los**2,1)) 
+        for stacked_los in stacked_particles_real_all]
+    los_pos_lcdm_all = [ [los[x] for x in np.where(ind)[0]] 
+        for los, ind in 
+        zip(los_list_all_combined_lcdm_zspace,voids_used_lcdm_all) ]
+    v_weight_lcdm_all = [get_weights_for_stack(
+        [los_pos_lcdm_all[k]],[void_radii_lcdm_all[k]],
+        additional_weights = \
+        [np.ones(len(void_radii_lcdm_all[k]))/len(void_radii_lcdm_all[k])])
+        for k in range(0,len(void_radii_lcdm_all))]
+
+
+# Stacked void_particles in 1d:
+# We can use the real space profile for this:
+stacked_particles_reff_lcdm_real = get_2d_void_stack_from_los_pos(
+    los_lcdm_real,spar_bins,sperp_bins,lcdm_snaps["void_radii"])
+#radlist = [lcdm_snaps["void_radii"][k] 
+#    for k in range(0,20) for x in filter_list_lcdm_by_region[k]]
+radlist = [lcdm_snaps["void_radii"][k] for k in range(0,lcdm_snaps.N)]
+stacked_particles_reff_lcdm_real_all = [get_2d_void_stack_from_los_pos(
+    [los],spar_bins,sperp_bins,[rad])
+    for los, rad in zip(los_list_all_combined_lcdm_zspace,radlist)]
+#stacked_particles_reff_borg_real = get_2d_void_stack_from_los_pos(
+#    los_list_void_only_borg,spar_bins,sperp_bins,
+#    [void_radii_borg for rad in borg_snaps["void_radii"]])
+stacked_particles_reff_borg_real = get_2d_void_stack_from_los_pos(
+    los_borg_real,spar_bins,sperp_bins,
+    [void_individual_radii_borg[:,k] for k in range(0,20)])
+stacked_particles_reff_borg_real_all = [get_2d_void_stack_from_los_pos(
+    [los_borg_real[k]],spar_bins,sperp_bins,
+    [void_individual_radii_borg[:,k]]) for k in range(0,borg_snaps.N)]
+stacked_1d_real_lcdm = np.sqrt(np.sum(stacked_particles_reff_lcdm_real**2,1))
+stacked_1d_real_borg = np.sqrt(np.sum(stacked_particles_reff_borg_real**2,1))
+stacked_1d_real_lcdm_all = [np.sqrt(np.sum(stacked_los**2,1)) 
+    for stacked_los in stacked_particles_reff_lcdm_real_all]
+stacked_1d_real_borg_all = [np.sqrt(np.sum(stacked_los**2,1)) 
+    for stacked_los in stacked_particles_reff_borg_real_all]
 
 
 
-v_weights_all_borg = get_weights_for_stack(
+
+
+
+
+# Weights for each void in the stack:
+voids_used_lcdm = [np.array([len(x) for x in los]) > 0 
+    for los in los_lcdm_zspace]
+voids_used_lcdm_all = [np.array([len(x) for x in los]) > 0 
+    for los in los_list_all_combined_lcdm_zspace]
+voids_used_lcdm_ind = [np.where(x)[0] for x in voids_used_lcdm]
+voids_used_borg = [np.array([len(x) for x in los]) > 0 
+    for los in los_borg_zspace]
+void_radii_lcdm = [rad[filt] 
+    for rad, filt in zip(lcdm_snaps["void_radii"],voids_used_lcdm)]
+void_radii_lcdm_all = [rad[filt] 
+    for rad, filt in zip(radlist,voids_used_lcdm_all)]
+
+
+los_pos_lcdm = [ [los[x] for x in np.where(ind)[0]] 
+    for los, ind in zip(los_lcdm_zspace,voids_used_lcdm) ]
+los_pos_borg = [ [los[x] for x in np.where(ind)[0]] 
+    for los, ind in zip(los_borg_zspace,voids_used_borg) ]
+los_pos_borg_real = [ [los[x] for x in np.where(ind)[0]] 
+    for los, ind in zip(los_borg_real,voids_used_borg) ]
+los_pos_lcdm_all = [ [los[x] for x in np.where(ind)[0]] 
+    for los, ind in 
+    zip(los_list_all_combined_lcdm_zspace,voids_used_lcdm_all) ]
+
+rep_scores = void_cat_frac = cat300.property_with_filter(
+    cat300.finalCatFrac,void_filter=True)
+
+all_rep_scores = np.hstack([rep_scores[used] for used in voids_used_borg])
+v_weight_borg = get_weights_for_stack(
     los_pos_borg,[void_radii_borg[used] for used in voids_used_borg],
     additional_weights = [rep_scores[used]/np.sum(all_rep_scores) 
-    for used in voids_used_borg],stacked=False)
+    for used in voids_used_borg])
+v_weight_borg_unweighted = get_weights_for_stack(
+    los_pos_borg,[void_radii_borg[used] for used in voids_used_borg],
+    additional_weights = None)
+v_weight_lcdm = get_weights_for_stack(los_pos_lcdm,void_radii_lcdm)
+
+
+# Weighted bin counts:
+v_weight_borg_all = [get_weights_for_stack(
+    [los_pos_borg_real[k]],[void_individual_radii_borg[voids_used_borg[k],k]],
+    additional_weights = [rep_scores[voids_used_borg[k]]/\
+    np.sum(rep_scores[voids_used_borg[k]])]) for k in range(0,borg_snaps.N)]
+v_weight_lcdm_all = [get_weights_for_stack(
+    [los_pos_lcdm_all[k]],[void_radii_lcdm_all[k]],
+    additional_weights = \
+    [np.ones(len(void_radii_lcdm_all[k]))/len(void_radii_lcdm_all[k])])
+    for k in range(0,len(void_radii_lcdm_all))]
+
+
+weighted_counts_borg = np.array([
+    np.histogram(dist,bins=sperp_bins,weights=weights)[0]
+    for dist, weights in zip(stacked_1d_real_borg_all,v_weight_borg_all)])
+weighted_counts_lcdm = np.array([
+    np.histogram(dist,bins=sperp_bins,weights=weights)[0]
+    for dist, weights in zip(stacked_1d_real_lcdm_all,v_weight_lcdm_all)])
+
+
+#-------------------------------------------------------------------------------
+# COVARIANCE MATRIX ESTIMATION:
+
+
+
+los_lcdm_zspace = get_los_positions_for_all_catalogues(
+    lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],lcdm_snaps["void_centres"],
+    lcdm_snaps["void_radii"],all_particles=True,
+    filter_list=filter_list_lcdm_by_region,dist_max=3,
+    rmin=10,rmax=20,recompute=False,zspace=True,recompute_zspace=False,
+    suffix=".lospos_all_zspace_selected.p",flatten_filters=True)
+
+los_borg_zspace = get_los_positions_for_all_catalogues(
+    borg_snaps["snaps"],borg_snaps["snaps_reverse"],zcentres,
+    cat300.getAllProperties("radii",void_filter=True).T,
+    all_particles=True,void_indices = halo_indices,
+    filter_list=filter_list_borg,dist_max=3,rmin=10,rmax=20,recompute=False,
+    zspace=True,recompute_zspace=False,suffix=".lospos_all_zspace2.p")
+
+
+# Remove voids that don't contribute to the stacked field in any way, returning
+# a list of LOS positions, and boolean arrays flagging which voids were kept:
+def trim_los_list(los_list,spar_bins,sperp_bins,all_radii):
+    los_list_trimmed = get_2d_void_stack_from_los_pos(
+        los_list,spar_bins,sperp_bins,
+        [all_radii[ns] for ns in range(0,len(los_list))],stacked=False)
+    voids_used = [np.array([len(x) for x in los]) > 0 
+        for los in los_list]
+    return los_list_trimmed, voids_used
+
+
+
+void_radii_borg = cat300.getMeanProperty("radii",void_filter=True)[0]
+void_individual_radii_borg = cat300.getAllProperties("radii",void_filter=True).T
+
+los_list_trimmed_borg, voids_used_borg = trim_los_list(
+    los_borg_zspace,spar_bins,sperp_bins,void_individual_radii_borg)
+
+los_list_trimmed_lcdm, voids_used_lcdm = trim_los_list(
+    los_lcdm_zspace,spar_bins,sperp_bins,lcdm_snaps["void_radii"])
+
+
+# Get additional weighting factor for BORG voids based on their
+# reproducibility score:
+def get_additional_weights_borg(cat,los_list_trimmed,voids_used_borg):
+    rep_scores = cat.property_with_filter(cat.finalCatFrac,void_filter=True)
+    all_rep_scores = np.hstack([rep_scores[used] for used in voids_used_borg])
+    all_void_radii_borg = cat.getAllProperties("radii",void_filter=True).T
+    num_voids = np.sum([np.sum(x) for x in voids_used_borg])
+    return [rep_scores[used]*num_voids/np.sum(all_rep_scores) 
+            for used in voids_used_borg]
+
+
+additional_weights_borg = get_additional_weights_borg(
+    cat300,los_list_trimmed_borg,voids_used_borg)
+
+# Compute final weighting for each void:
+def get_void_weights(los_list_trimmed,voids_used,all_radii,
+                     additional_weights=None):
+    return get_weights_for_stack(los_list_trimmed,
+        [rad[used] for used, rad in zip(voids_used,all_radii)],
+        additional_weights = additional_weights,stacked=False)
+
+v_weights_all_borg = get_void_weights(
+    los_list_trimmed_borg,voids_used_borg,void_individual_radii_borg,
+    additional_weights = additional_weights_borg)
+
+v_weights_all_lcdm = get_void_weights(los_list_trimmed_lcdm,voids_used_lcdm,
+                                       lcdm_snaps["void_radii"])
+
+# Covariance function:
+def get_covariance_matrix(los_list_all,v_weights_all,bins_spar,bins_sperp,nbar,
+                          n_boot=10000,seed=42,lambda_reg = 1e-15,
+                          cholesky=True,regularise=True,log_field=False,
+                          return_mean=False):
+    # Get 2D stacked fields for each sample:
+    all_fields = [[
+        get_field_from_los_data(los,bins_spar,bins_sperp,v_weight,1,nbar=nbar) 
+        for los, v_weight in zip(los_vals,v_weights)] 
+        for los_vals, v_weights in zip(los_list_all,v_weights_all)]
+    stacked_fields = np.vstack([np.vstack([x.flatten() for x in fields]) 
+        for fields in all_fields]).T
+    # Weights, accounting for differing lengths of the void catalogues
+    # in each sample:
+    v_weights_all_scalar = np.hstack([np.array([x[0] for x in y]) 
+        for y in v_weights_all])
+    f_lengths = np.array([len(los) for los in los_list_all])
+    f_total = np.sum(f_lengths)
+    f_weights = f_lengths/f_total
+    f_weight_array = np.hstack([w*np.ones(l) 
+                                for w, l in zip(f_weights,f_lengths)])
+    stacked_weights = f_weight_array*v_weights_all_scalar
+    # Bootstrap samples of the voids:
+    np.random.seed(42)
+    num_voids = stacked_fields.shape[1]
+    bootstrap_samples = np.random.choice(num_voids,size=(num_voids,n_boot))
+    bootstrap_stacks = np.array([np.average(
+        stacked_fields[:,bootstrap_samples[:,k]],
+        axis=1,weights=stacked_weights[bootstrap_samples[:,k]]) 
+        for k in tools.progressbar(range(0,n_boot))]).T
+    # Compute covariance of the bootstrap samples:
+    if log_field:
+        # Covariance of the log-field
+        log_samples = np.log(bootstrap_stacks)
+        finite_samples = np.where(np.all(np.isfinite(log_samples),0))[0]
+        cov = np.cov(log_samples[:,finite_samples])
+        mean =  np.mean(log_samples[:,finite_samples],1)
+    else:
+        cov = np.cov(bootstrap_stacks)
+        mean = np.mean(bootstrap_stacks,1)
+    if regularise:
+        cov = regularise_covariance(cov,lambda_reg= lambda_reg)
+    if cholesky:
+        # If we want to use the Cholesky decomposition, instead of the
+        # covariance directly.
+        cov = scipy.linalg.cholesky(cov,lower=True)
+    if return_mean:
+        return cov, mean
+    else:
+        return cov
+
+
+
+rho_cov_borg, rhomean_borg = get_covariance_matrix(
+    los_list_trimmed_borg,v_weights_all_borg,spar_bins,sperp_bins,nbar,
+    return_mean=True,cholesky=False)
+cholesky_cov_borg = scipy.linalg.cholesky(rho_cov_borg,lower=True)
+
+logrho_cov_borg, logrho_mean_borg = get_covariance_matrix(
+    los_list_trimmed_borg,v_weights_all_borg,spar_bins,sperp_bins,nbar,
+    log_field=True,cholesky=False,return_mean=True)
+log_cholesky_cov_borg = scipy.linalg.cholesky(logrho_cov_borg,lower=True)
+
+
+rho_cov_lcdm, rhomean_lcdm = get_covariance_matrix(
+    los_list_trimmed_lcdm,v_weights_all_lcdm,spar_bins,sperp_bins,nbar,
+    return_mean=True,cholesky=False)
+cholesky_cov_lcdm = scipy.linalg.cholesky(rho_cov_lcdm,lower=True)
+
+logrho_cov_lcdm, logrho_mean_lcdm = get_covariance_matrix(
+    los_list_trimmed_lcdm,v_weights_all_lcdm,spar_bins,sperp_bins,nbar,
+    log_field=True,cholesky=False,return_mean=True)
+log_cholesky_cov_lcdm = scipy.linalg.cholesky(logrho_cov_lcdm,lower=True)
+
+
+
+
+
+
+#-------------------------------------------------------------------------------
+# OLD COVARIANCE MATRIX TESTS
+
+
+
+
 
 v_weights_all_borg_scalar = np.hstack([np.array([x[0] for x in y]) 
     for y in v_weights_all_borg])
@@ -1949,11 +2320,11 @@ v_weights_all_borg_scalar = np.hstack([np.array([x[0] for x in y])
 all_fields_borg = [[
     get_field_from_los_data(los,spar_bins,sperp_bins,v_weight,1) 
     for los, v_weight in zip(los_vals,v_weights)] 
-    for los_vals, v_weights in zip(los_list_reff_borg,v_weights_all_borg)]
+    for los_vals, v_weights in zip(los_list_trimmed_borg,v_weights_all_borg)]
 
 
 f_lengths = [np.array([len(los) for los in all_los])
-    for all_los in los_list_reff_borg]
+    for all_los in los_list_trimmed_borg]
 f_totals = np.array([np.sum(x) for x in f_lengths])
 
 f_weights = [length/total for length, total in zip(f_lengths,f_totals)]
@@ -1982,7 +2353,7 @@ P = np.linalg.inv(L)
 inv_cov = np.matmul(P,P.T)
 
 # Covariance over all posterior samples:
-los_list_sample_borg = [np.vstack(los) for los in los_list_reff_borg]
+los_list_sample_borg = [np.vstack(los) for los in los_list_trimmed_borg]
 v_weights_sample_borg = [np.hstack(weights) for weights in v_weights_all_borg]
 sample_fields_borg = np.array([
     get_field_from_los_data(los,spar_bins,sperp_bins,v_weight,1) 
@@ -2032,70 +2403,6 @@ reg_cov = regularise_covariance(jackknife_cov,lambda_reg= 1e-15)
 cholesky_cov2 = scipy.linalg.cholesky(reg_cov,lower=True)
 
 inv_cov = get_inverse_covariance(reg_cov,lambda_reg = 1e-23)
-
-# Covariance function:
-def get_covariance_matrix(los_list_all,v_weights_all,bins_spar,bins_sperp,
-                          n_boot=10000,seed=42,lambda_reg = 1e-15,
-                          cholesky=True,regularise=True,log_field=False,
-                          return_mean=False):
-    # Get 2D stacked fields for each sample:
-    all_fields = [[
-        get_field_from_los_data(los,bins_spar,bins_sperp,v_weight,1) 
-        for los, v_weight in zip(los_vals,v_weights)] 
-        for los_vals, v_weights in zip(los_list_all,v_weights_all)]
-    stacked_fields = np.vstack([np.vstack([x.flatten() for x in fields]) 
-        for fields in all_fields]).T
-    # Weights, accounting for differing lengths of the void catalogues
-    # in each sample:
-    v_weights_all_scalar = np.hstack([np.array([x[0] for x in y]) 
-        for y in v_weights_all])
-    f_lengths = [np.array([len(los) for los in all_los])
-        for all_los in los_list_all]
-    f_totals = np.array([np.sum(x) for x in f_lengths])
-    f_weights = [length/total for length, total in zip(f_lengths,f_totals)]
-    stacked_weights = (np.hstack(f_lengths)/np.sum(f_totals))*\
-        v_weights_all_scalar
-    # Bootstrap samples of the voids:
-    np.random.seed(42)
-    num_voids = stacked_fields.shape[1]
-    bootstrap_samples = np.random.choice(num_voids,size=(num_voids,n_boot))
-    bootstrap_stacks = np.array([np.average(
-        stacked_fields[:,bootstrap_samples[:,k]],
-        axis=1,weights=stacked_weights[bootstrap_samples[:,k]]) 
-        for k in tools.progressbar(range(0,n_boot))]).T
-    # Compute covariance of the bootstrap samples:
-    if log_field:
-        # Covariance of the log-field
-        log_samples = np.log(bootstrap_stacks)
-        finite_samples = np.where(np.all(np.isfinite(log_samples),0))[0]
-        cov = np.cov(log_samples[:,finite_samples])
-        mean =  np.mean(log_samples[:,finite_samples],1)
-    else:
-        cov = np.cov(bootstrap_stacks)
-        mean = np.mean(bootstrap_stacks,1)
-    if regularise:
-        cov = regularise_covariance(cov,lambda_reg= lambda_reg)
-    if cholesky:
-        # If we want to use the Cholesky decomposition, instead of the
-        # covariance directly.
-        cov = scipy.linalg.cholesky(cov,lower=True)
-    if return_mean:
-        return cov, mean
-    else:
-        return cov
-
-
-
-rho_cov, rhomean = get_covariance_matrix(
-    los_list_reff_borg,v_weights_all_borg,spar_bins,sperp_bins,
-    return_mean=True,cholesky=False)
-cholesky_cov = scipy.linalg.cholesky(rho_cov,lower=True)
-
-logrho_cov, logrho_mean = get_covariance_matrix(
-    los_list_reff_borg,v_weights_all_borg,spar_bins,sperp_bins,
-    log_field=True,cholesky=False,return_mean=True)
-log_cholesky_cov = scipy.linalg.cholesky(logrho_cov,lower=True)
-
 #logrho_mean = np.mean(np.log(bootstrap_stacks),1)
 
 log_samples = np.log(bootstrap_stacks)
@@ -2496,7 +2803,6 @@ def get_fixed_inverse(Delta_func,ntab=100,ntaf_f=100,sval_range = [0,3],
                     Delta_func(np.sqrt(r**2 + rperp_vals[i]**2)) \
                     - svals[j])
                 F_inv_vals[i,j,k] = scipy.optimize.fsolve(F,svals[j])
-
     F_inv = lambda x, y, z: scipy.interpolate.interpn((rperp_vals,svals,f_vals),
                                                    F_inv_vals,
                                                    np.vstack((x,y,z)).T,
@@ -2508,7 +2814,7 @@ def generate_scoord_grid(sperp_bins,spar_bins):
         for s in plot.binCentres(spar_bins)])
     sperp = np.hstack([plot.binCentres(sperp_bins) 
         for s in plot.binCentres(spar_bins)])
-    return scoords = np.vstack([spar,sperp]).T
+    return np.vstack([spar,sperp]).T
 
 # Data filter, that attempts to restrict to a region with high S/N:
 def generate_data_filter(cov,mean,scoords,cov_thresh=5,
@@ -2647,7 +2953,22 @@ def run_inference_pipeline(field,cov,sperp_bins,spar_bins,ri,delta_i,
     return tau, sampler
 
 
-
+tau, sampler = run_inference_pipeline(field_lcdm_test,logrho_cov_lcdm,
+                                      sperp_bins,spar_bins,ri,delta_i,
+                           sigma_delta_i,log_field=False,
+                           infer_profile_args=True,tabulate_inverse=True,
+                           cholesky=True,sample_epsilon=True,filter_data=False,
+                           z = 0.0225,lambda_cut=1e-23,lambda_ref=1e-27,
+                           profile_param_ranges = [[0,np.inf],[0,np.inf],
+                                                   [0,np.inf],[-1,0],[-1,1],
+                                                   [0,2]],
+                           om_ranges = [[0.1,0.5]],eps_ranges = [[0.9,1.1]],
+                           f_ranges = [[0,1]],Om_fid = 0.3111,
+                           filename = "inference_weighted.h5",
+                           autocorr_filename = "autocorr.npy",disp=1e-2,
+                           nwalkers=64,n_mcmc=10000,max_n=1000000,
+                           batch_size=100,nbatch=100,redo_chain=False,
+                           backup_start=True)
 
 
 
