@@ -1157,8 +1157,8 @@ def get_lcdm_void_catalogue(snaps,delta_interval,dist_max=135,
             simulation_tools.get_random_centres_and_densities(
                 dist_max,snaps["snaps"],seed=seed,nRandCentres = nRandCentres)
     # Select regions with similar density contrast the local supervolume:
-    comparableDensityMAP = [(delta <= deltaMAPInterval[1]) & \
-        (delta > deltaMAPInterval[0]) for delta in randOverDen]
+    comparableDensityMAP = [(delta <= delta_interval[1]) & \
+        (delta > delta_interval[0]) for delta in randOverDen]
     centresToUse = [randCentres[comp] for comp in comparableDensityMAP]
     # Get non-overlapping sphere:
     rSep = 2*dist_max

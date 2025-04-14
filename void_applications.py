@@ -119,7 +119,7 @@ def extract_antihalo_property(snap_list,prop):
 #-------------------------------------------------------------------------------
 # SNAPSHOT GROUP CLASS
 
-from cosmology_inference import SnapshotGroup
+from void_analysis.cosmology_inference import SnapshotGroup
 
 borg_snaps = SnapshotGroup(snapList,snapListRev,low_memory_mode=True,
                            swapXZ  = False,reverse = True,remap_centres=True)
