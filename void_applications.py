@@ -361,11 +361,12 @@ deltaMAPBootstrap, deltaMAPInterval = get_borg_density_estimate(
     borg_snaps,densities_file = densities_file)
 # Creat voids list for lcdm:
 centres_file = data_folder2 + "random_centres_and_densities.p"
-voids_used_lcdm = get_lcdm_void_catalogue(lcdm_snaps,deltaMAPBootstrap,
-                                          centres_file = centres_file)
-voids_used_lcdm_all = get_lcdm_void_catalogue(lcdm_snaps,deltaMAPBootstrap,
-                                              centres_file = centres_file,
-                                              flattened=False)
+voids_used_lcdm = get_lcdm_void_catalogue(
+    lcdm_snaps,deltaMAPBootstrap.confidence_interval,
+    centres_file = centres_file)
+voids_used_lcdm_all = get_lcdm_void_catalogue(
+    lcdm_snaps,deltaMAPBootstrap.confidence_interval,
+    centres_file = centres_file,flattened=False)
 
 los_lcdm_zspace = get_los_positions_for_all_catalogues(
     lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],lcdm_snaps["void_centres"],

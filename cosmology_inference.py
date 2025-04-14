@@ -743,6 +743,112 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
     else:
         return -0.5*np.matmul(np.matmul(delta_rho,inv_cov),delta_rho.T)
 
+def log_likelihood_aptest_revised(theta, data_field, scoords, inv_cov, z,
+                                   Delta, delta, rho_real,
+                                   data_filter=None,
+                                   cholesky=False,
+                                   normalised=False,
+                                   tabulate_inverse=False,
+                                   ntab=10,
+                                   sample_epsilon=False,
+                                   Om_fid=0.3,
+                                   singular=False,
+                                   Umap=None,
+                                   good_eig=None,
+                                   F_inv=None,
+                                   log_density=False,
+                                   infer_profile_args=False,
+                                   **kwargs):
+    """
+    Compute the log-likelihood for a cosmological + void profile model 
+    using redshift-space distortion data and the Alcock-Paczynski test.
+
+    Supports both:
+    - Fixed profile functions (Δ(r), δ(r), ρ(r)), or
+    - Parameterised profiles where shape parameters are inferred from data
+
+    Parameters:
+        theta (array): Model parameters:
+            - [Om, f, ...] if sampling cosmology and profile
+            - [epsilon, f, ...] if sample_epsilon=True
+        data_field (array): Observed or simulated redshift-space density field
+        scoords (array): (s_par, s_perp) coordinates
+        inv_cov (array or Cholesky factor): Covariance inverse or lower triangle
+        z (float): Redshift
+        Delta, delta, rho_real (functions or constructors):
+            - If infer_profile_args=True, must accept (*params)
+            - Else, must be callables of r only
+        data_filter (array or None): Optional data mask/filter
+        cholesky (bool): If True, use Cholesky decomposition of covariance
+        normalised (bool): Indicates whether to normalise the model
+        tabulate_inverse (bool): If True, generate tabulated inverse map
+        ntab (int): Number of samples for inverse interpolation
+        sample_epsilon (bool): If True, sample ε instead of Om
+        Om_fid (float): Fiducial Om used to compute ε
+        singular (bool): Use projected likelihood in reduced eigenspace
+        Umap (matrix): Projection matrix (for singular=True)
+        good_eig (array): Eigenvalues for singular projection
+        F_inv (callable or None): Precomputed inverse mapping
+        log_density (bool): If True, use log(ρ) in likelihood
+        infer_profile_args (bool): If True, extract profile params from θ
+
+    Returns:
+        float: Log-likelihood value
+    """
+    # Apply optional data filtering
+    if data_filter is not None:
+        data_field = data_field[data_filter]
+        scoords = scoords[data_filter, :]
+        if cholesky or not singular:
+            inv_cov = inv_cov[data_filter, :][:, data_filter]
+
+    s_par, s_perp = scoords[:, 0], scoords[:, 1]
+    # Unpack parameter vector
+    if sample_epsilon:
+        epsilon, f = theta[0], theta[1]
+        profile_params = theta[2:]
+        Om = Om_fid
+    else:
+        Om, f = theta[0], theta[1]
+        profile_params = theta[2:]
+        epsilon = ap_parameter(z, Om, Om_fid, **kwargs)
+    # Construct profile functions
+    if infer_profile_args:
+        Delta_func = lambda r: Delta(r, *profile_params)
+        delta_func = lambda r: delta(r, *profile_params)
+        rho_func = lambda r: rho_real(r, *profile_params)
+    else:
+        Delta_func = Delta
+        delta_func = delta
+        rho_func = rho_real
+    # Generate a tabulated inverse mapping if needed
+    if F_inv is None and tabulate_inverse:
+        F_inv = tools.inverse_los_map(z, Om, Delta_func, f, ntab=ntab, **kwargs)
+    # Evaluate the model at each (s_par, s_perp) coordinate
+    model_field = np.array([
+        z_space_profile(sp, st, rho_func, z, Om, Delta_func, delta_func,
+                        Om_fid=Om_fid, epsilon=epsilon,
+                        apply_geometry=sample_epsilon,
+                        F_inv=F_inv, f=f,
+                        **kwargs)
+        for sp, st in zip(s_par, s_perp)
+    ])
+    if log_density:
+        model_field = np.log(model_field)
+    # Project into reduced space if using singular-mode filtering
+    if singular:
+        data_field = Umap @ data_field
+        model_field = Umap @ model_field
+        inv_cov = np.diag(1.0 / good_eig)
+    # Compute residual
+    delta_vec = data_field - model_field
+    if cholesky:
+        alpha = scipy.linalg.solve_triangular(inv_cov, delta_vec, lower=True)
+        return -0.5 * np.dot(alpha, alpha)
+    else:
+        return -0.5 * np.dot(delta_vec, inv_cov @ delta_vec)
+
+
 # Likelihood function, parallelised. Requires global variables!:
 # UNUSED
 def log_likelihood_aptest_parallel(theta,z,**kwargs):
@@ -761,23 +867,37 @@ def log_likelihood_aptest_parallel(theta,z,**kwargs):
 
 # Un-normalised log prior:
 
-def log_flat_prior_single(theta,theta_range):
-    in_range = (theta_range[0] <= theta <= theta_range[1])
-    if in_range:
-        return 0.0
-    else:
-        return -np.inf
+def log_flat_prior_single(x, bounds):
+    """
+    Compute the log of a flat prior over a bounded interval.
 
-def log_flat_prior(theta,theta_ranges):
-    bool_array = np.aray([bounds[0] <= param <= bounds[1] 
-        for bounds, param in zip(theta_ranges,theta)],dtype=bool)
-    if np.all(bool_array):
-        return 0.0
-    else:
-        return -np.inf
+    Parameters:
+        x (float): Parameter value
+        bounds (tuple): (min, max) bounds of the flat prior
 
-# Prior (assuming flat prior for now):
-def log_prior_aptest(theta,
+    Returns:
+        float: 0 if within bounds, -inf if out of bounds
+    """
+    xmin, xmax = bounds
+    return 0.0 if xmin <= x <= xmax else -np.inf
+
+def log_flat_prior(theta, bounds):
+    """
+    Compute the joint log of a flat prior over a hyperrectangle.
+
+    Parameters:
+        theta (array-like): List of parameter values
+        bounds (list of tuples): List of (min, max) bounds for each parameter
+
+    Returns:
+        float: 0 if all parameters are within bounds, -inf otherwise
+    """
+    if any(t < b[0] or t > b[1] for t, b in zip(theta, bounds)):
+        return -np.inf
+    return 0.0
+
+# DEPRECATED Prior (assuming flat prior for now):
+def log_prior_aptest_old(theta,
                      theta_ranges=[[0.1,0.5],[0,1.0],[-np.inf,np.inf],[0,2],
                                    [-np.inf,0],[0,np.inf],[-1,1]],
                     **kwargs):
@@ -791,12 +911,41 @@ def log_prior_aptest(theta,
     #log_prior_array[2] = -np.log(theta[2])
     return np.sum(log_prior_array)
 
-# Posterior (unnormalised):
-def log_probability_aptest(theta,*args,**kwargs):
+# DEPRECATED Posterior (unnormalised):
+def log_probability_aptest_old(theta,*args,**kwargs):
     lp = log_prior_aptest(theta,**kwargs)
     if not np.isfinite(lp):
         return -np.inf
     return lp + log_likelihood_aptest(theta,*args,**kwargs)
+
+def log_probability_aptest(theta, *args, **kwargs):
+    """
+    Compute the log posterior for the AP test likelihood.
+
+    Posterior is defined as:
+        log_posterior = log_prior + log_likelihood
+
+    Assumes a flat prior with hard bounds defined by 'theta_ranges' in kwargs.
+
+    Parameters:
+        theta (array): Parameter vector
+        *args: Passed to log_likelihood_aptest_revised
+        **kwargs:
+            - theta_ranges (list of tuples): Prior bounds for each parameter
+            - All other kwargs passed to log_likelihood_aptest
+
+    Returns:
+        float: Log posterior
+    """
+    theta_ranges = kwargs.pop("theta_ranges", None)
+    if theta_ranges is None:
+        raise ValueError("Missing 'theta_ranges' in kwargs for prior evaluation.")
+
+    lp = log_flat_prior(theta, theta_ranges)
+    if not np.isfinite(lp):
+        return -np.inf
+
+    return lp + log_likelihood_aptest(theta, *args, **kwargs)
 
 # UNUSED
 def log_probability_aptest_parallel(theta,*args,**kwargs):
@@ -810,177 +959,374 @@ def log_probability_aptest_parallel(theta,*args,**kwargs):
 #-------------------------------------------------------------------------------
 # GAUSSIANITY TESTING
 
-def tikhonov_regularisation(mat,lambda_reg=1e-10):
-    return mat + lambda_reg*np.identity(mat.shape[0])
+def tikhonov_regularisation(cov_matrix, alpha=1e-10):
+    """
+    Apply Tikhonov regularisation to a covariance matrix.
 
-def regularise_covariance(cov,lambda_reg=1e-10):
-    symmetric_cov = (cov + cov.T)/2
-    regularised_cov = tikhonov_regularisation(symmetric_cov,
-                                              lambda_reg=lambda_reg)
+    This adds a scaled identity matrix to the covariance, stabilising the inverse:
+        cov_reg = cov + alpha * I
+
+    Parameters:
+        cov_matrix (ndarray): Original covariance matrix (NxN)
+        alpha (float): Regularisation strength (default: 1e-3)
+
+    Returns:
+        ndarray: Regularised covariance matrix
+    """
+    return cov_matrix + alpha * np.eye(cov_matrix.shape[0])
+
+def regularise_covariance(cov, lambda_reg=1e-10):
+    """
+    Symmetrise and regularise a covariance matrix using Tikhonov regularisation.
+
+    Ensures the matrix is symmetric and numerically stable for inversion.
+
+    Parameters:
+        cov (ndarray): Input covariance matrix
+        lambda_reg (float): Tikhonov regularisation strength (default: 1e-10)
+
+    Returns:
+        ndarray: Symmetrised and regularised covariance matrix
+    """
+    symmetric_cov = 0.5 * (cov + cov.T)
+    regularised_cov = tikhonov_regularisation(symmetric_cov, lambda_reg=lambda_reg)
     return regularised_cov
 
-def get_inverse_covariance(cov,lambda_reg=1e-10):
-    regularised_cov = regularise_covariance(cov,lambda_reg=lambda_reg)
-    L = np.linalg.cholesky(regularised_cov)
-    P = np.linalg.inv(L)
-    inv_cov = np.matmul(P,P.T)
+
+def get_inverse_covariance(cov, lambda_reg=1e-10):
+    """
+    Compute the inverse of a (regularised) covariance matrix using Cholesky decomposition.
+
+    This involves:
+    - Symmetrising the input
+    - Applying Tikhonov regularisation for numerical stability
+    - Computing the inverse via Cholesky factorisation:
+        C^(-1) = (L^(-1))^T @ L^(-1)
+
+    Parameters:
+        cov (ndarray): Covariance matrix (NxN)
+        lambda_reg (float): Regularisation strength (default: 1e-10)
+
+    Returns:
+        ndarray: Inverse of the regularised covariance matrix
+    """
+    regularised_cov = regularise_covariance(cov, lambda_reg=lambda_reg)
+    L = np.linalg.cholesky(regularised_cov)      # Lower triangular matrix
+    P = np.linalg.inv(L)                         # Inverse of L
+    inv_cov = np.matmul(P, P.T)                  # Reconstruct full inverse
     return inv_cov
 
 
-def range_excluding(kmin,kmax,exclude):
-    return np.setdiff1d(range(kmin,kmax),exclude)
+def range_excluding(kmin, kmax, exclude):
+    """
+    Generate a list of integers in [kmin, kmax), excluding values in 'exclude'.
 
+    Parameters:
+        kmin (int): Start of range (inclusive)
+        kmax (int): End of range (exclusive)
+        exclude (list or array): Values to remove from the range
 
-def get_nonsingular_subspace(C,lambda_reg,lambda_cut = None,
-                             normalised_cov=False,mu=None):
-    reg_cov = regularise_covariance(C,lambda_reg= lambda_reg)
+    Returns:
+        ndarray: Array of integers not in 'exclude'
+    """
+    return np.setdiff1d(range(kmin, kmax), exclude)
+
+def get_nonsingular_subspace(C, lambda_reg,
+                             lambda_cut=None,
+                             normalised_cov=False,
+                             mu=None):
+    """
+    Compute a projection onto the non-singular subspace of a covariance matrix.
+
+    The covariance is regularised and optionally normalised before eigenvalue decomposition.
+    Only eigenvectors with eigenvalues above a cutoff are retained.
+
+    Parameters:
+        C (ndarray): Covariance matrix (k x k)
+        lambda_reg (float): Tikhonov regularisation parameter
+        lambda_cut (float or None): Minimum eigenvalue to keep (default: 10 * lambda_reg)
+        normalised_cov (bool): If True, normalise C by mu.outer(mu)
+        mu (ndarray or None): Mean vector (required if normalised_cov=True)
+
+    Returns:
+        tuple:
+            - Umap (ndarray): Projection matrix to nonsingular eigenspace
+            - good_eig (ndarray): Retained eigenvalues
+    """
+    reg_cov = regularise_covariance(C, lambda_reg=lambda_reg)
+
     if normalised_cov:
         if mu is None:
-            raise Exception("Mean not provided.")
-        else:
-            norm_cov = C/np.outer(mu,mu)
-            norm_reg_cov = regularise_covariance(norm_cov,
-                                                 lambda_reg= lambda_reg)
-            eig, U = scipy.linalg.eigh(norm_reg_cov)
+            raise ValueError("Mean 'mu' must be provided for normalised covariance.")
+        norm_cov = C / np.outer(mu, mu)
+        norm_reg_cov = regularise_covariance(norm_cov, lambda_reg=lambda_reg)
+        eig, U = scipy.linalg.eigh(norm_reg_cov)
     else:
         eig, U = scipy.linalg.eigh(reg_cov)
+
     if lambda_cut is None:
-        lambda_cut = 10*lambda_reg
-    bad_eig = np.where(eig < lambda_cut)[0]
-    good_eig = np.where(eig >= lambda_cut)[0]
-    #D = np.diag(eig[good_eig])
-    Umap = (U.T)[good_eig,:]
-    #Ctilde = np.matmul(Umap.T,np.matmul(D,Umap))
-    #Ctilde = (Ctilde.T + Ctilde)/2
-    return Umap, eig[good_eig]
+        lambda_cut = 10 * lambda_reg
+
+    good_eig = eig[eig >= lambda_cut]
+    Umap = U[:, eig >= lambda_cut].T  # Each row is a retained eigenvector
+
+    return Umap, good_eig
 
 
-def get_solved_residuals(samples,covariance,xbar,singular=False,
-                         normalised_cov=False,L=None,lambda_cut=1e-23,
-                         lambda_reg=1e-27,Umap=None,good_eig=None):
+def get_solved_residuals(samples, covariance, xbar,
+                         singular=False,
+                         normalised_cov=False,
+                         L=None,
+                         lambda_cut=1e-23,
+                         lambda_reg=1e-27,
+                         Umap=None,
+                         good_eig=None):
+    """
+    Compute whitened residuals for Gaussianity testing.
+
+    Supports both full-rank and projected cases using a reduced eigenbasis.
+
+    Parameters:
+        samples (ndarray): Shape (k, n) — k variables, n samples
+        covariance (ndarray): Covariance matrix (k x k)
+        xbar (ndarray): Mean of the samples (length k)
+        singular (bool): Whether to project into nonsingular subspace
+        normalised_cov (bool): Whether to normalise by the mean
+        L (ndarray or None): Cholesky factor of covariance (optional)
+        lambda_cut (float): Cutoff for eigenvalue retention
+        lambda_reg (float): Regularisation strength
+        Umap (ndarray or None): Projection matrix (optional)
+        good_eig (ndarray or None): Retained eigenvalues (optional)
+
+    Returns:
+        ndarray: Whitened residuals (projected or full)
+    """
+    k, n = samples.shape
     if not singular:
         if normalised_cov:
-                residual = samples/xbar[:,None] - 1.0
+            residual = samples / xbar[:, None] - 1.0
         else:
-            residual = samples - xbar[:,None]
+            residual = samples - xbar[:, None]
         if L is None:
-            reg_cov = regularise_covariance(covariance,lambda_reg= lambda_reg)
-            L = scipy.linalg.cholesky(reg_cov,lower=True)
-        solved_residuals = np.array(
-            [scipy.linalg.solve_triangular(L,residual[:,i],lower=True) 
-            for i in tools.progressbar(range(0,n))]).T
+            reg_cov = regularise_covariance(covariance, lambda_reg=lambda_reg)
+            L = scipy.linalg.cholesky(reg_cov, lower=True)
+        # Solve triangular system for each sample
+        solved_residuals = np.array([
+            scipy.linalg.solve_triangular(L, residual[:, i], lower=True)
+            for i in tools.progressbar(range(n))
+        ]).T
     else:
-        if (Umap is None) or (good_eig is None):
-            Umap, good_eig = get_nonsingular_subspace(covariance,lambda_reg,
-                                                      lambda_cut=lambda_cut,
-                                                      normalised_cov = False,
-                                                      mu=xbar)
+        # Project into reduced eigenspace
+        if Umap is None or good_eig is None:
+            Umap, good_eig = get_nonsingular_subspace(
+                covariance, lambda_reg=lambda_reg,
+                lambda_cut=lambda_cut,
+                normalised_cov=normalised_cov,
+                mu=xbar
+            )
         if normalised_cov:
-            residual = np.matmul(Umap,samples/xbar[:,None] - 1.0)
+            residual = Umap @ (samples / xbar[:, None] - 1.0)
         else:
-            residual = np.matmul(Umap,samples - xbar[:,None])
-        solved_residuals = residual/np.sqrt(good_eig[:,None])
+            residual = Umap @ (samples - xbar[:, None])
+        solved_residuals = residual / np.sqrt(good_eig[:, None])
     return solved_residuals
 
-def compute_normality_test_statistics(samples,covariance=None,xbar=None,
+
+def compute_normality_test_statistics(samples,
+                                      covariance=None,
+                                      xbar=None,
                                       solved_residuals=None,
-                                      low_memory_sum = False,**kwargs):
+                                      low_memory_sum=False,
+                                      **kwargs):
+    """
+    Compute test statistics to evaluate Gaussianity of residuals.
+
+    Statistics:
+      - A: Skewness-like cubic term
+      - B: Kurtosis-like quartic term
+
+    Parameters:
+        samples (ndarray): (k, n) array of samples
+        covariance (ndarray or None): Covariance matrix (used if residuals not provided)
+        xbar (ndarray or None): Mean vector (used if residuals not provided)
+        solved_residuals (ndarray or None): Precomputed whitened residuals
+        low_memory_sum (bool): If True, use a lower-memory summation loop
+
+    Returns:
+        list: [A, B] — test statistics
+    """
     n = samples.shape[1]
     k = samples.shape[0]
     if covariance is None:
         covariance = np.cov(samples)
     if xbar is None:
-        xbar = np.mean(samples,1)
+        xbar = np.mean(samples, axis=1)
     if solved_residuals is None:
-        solved_residuals = get_solved_residuals(samples, covariance,xbar,
-                                                **kwargs)
-    # Compute Skewness:
+        solved_residuals = get_solved_residuals(samples, covariance, xbar, **kwargs)
     if low_memory_sum:
-        Ai = np.array(
-            [np.sum(
-            np.sum((solved_residuals[:,i][:,None]*solved_residuals),0)**3)
-            for i in tools.progressbar(range(0,n))])
-        A = np.sum(Ai)/(6*n)
+        Ai = np.array([
+            np.sum(
+                np.sum(solved_residuals[:, i][:, None] * solved_residuals, axis=0) ** 3
+            ) for i in tools.progressbar(range(n))
+        ])
+        A = np.sum(Ai) / (6 * n)
     else:
-        product = np.matmul(solved_residuals.T,solved_residuals)
-        A = np.sum(product**3)/(6*n)
-    B = np.sqrt(n/(8*k*(k+2)))*(np.sum(np.sum(solved_residuals**2,0)**2)/n \
-                            - k*(k+2))
-    return [A,B]
+        product = solved_residuals.T @ solved_residuals
+        A = np.sum(product ** 3) / (6 * n)
+    B = np.sqrt(n / (8 * k * (k + 2))) * (
+        np.sum(np.sum(solved_residuals ** 2, axis=0) ** 2) / n - k * (k + 2)
+    )
+    return [A, B]
+
 
 #-------------------------------------------------------------------------------
 # STACKED DENSITY FIELDS
 
-def get_zspace_centres(halo_indices,snap_list,snap_list_rev,hrlist=None,
-                       recompute_zspace=False):
+def get_zspace_centres(halo_indices, snap_list, snap_list_rev,
+                       hrlist=None, recompute_zspace=False,
+                       swapXZ=False, reverse=True):
+    """
+    Compute redshift-space void centers from a halo catalogue (in reverse simulations).
+
+    This function:
+      - Loads the redshift-space positions of all particles in the forward snapshot
+      - Uses the halo catalogue (from reverse sim) to identify void particles
+      - Computes the redshift-space center for each void
+      - Applies remapping to shift into the final coordinate frame
+
+    Parameters:
+        halo_indices (list of lists): Per-snapshot list of halo indices representing voids
+        snap_list (list): Forward simulation snapshots (used for positions)
+        snap_list_rev (list): Reverse snapshots (used for halos = voids)
+        hrlist (list or None): If supplied, overrides halos loaded from snap_list_rev
+        recompute_zspace (bool): If True, force recomputation of redshift-space positions
+        swapXZ (bool): Whether to swap X and Z axes during coordinate remapping
+        reverse (bool): Whether to reflect coordinates around box center during remapping
+
+    Returns:
+        list of arrays: Redshift-space centers of voids for each snapshot
+    """
     if len(halo_indices) != len(snap_list):
-        raise Exception("halo_indices list does not match snapshot list.")
+        raise ValueError("halo_indices list does not match snapshot list.")
     num_samples = len(halo_indices)
-    centres = [np.ones((len(x),3))*np.nan for x in halo_indices]
-    for ns in range(0,num_samples):
+
+    # Preallocate list of centers, shape (N_voids, 3) per snapshot
+    centres = [np.full((len(halos), 3), np.nan) for halos in halo_indices]
+    for ns in range(num_samples):
         snap = snap_list[ns]
+        # Get particle index sort order (needed for consistent indexing)
         if os.path.isfile(snap.filename + ".snapsort.p"):
             sorted_indices = tools.loadPickle(snap.filename + ".snapsort.p")
         else:
             sorted_indices = np.argsort(snap['iord'])
-        if hrlist is None:
-            halos = snap_list_rev[ns].halos()
-        else:
-            halos = hrlist[ns]
+        # Load halos from reverse simulation (or use override list)
+        halos = hrlist[ns] if hrlist is not None else snap_list_rev[ns].halos()
         boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+        # Get redshift-space positions of all particles in forward snapshot
         positions = tools.loadOrRecompute(
-                snap.filename + ".z_space_pos.p",
-                simulation_tools.redshift_space_positions,
-                snap,centre=np.array([boxsize/2]*3),
-                _recomputeData=recompute_zspace)
-        for k in tools.progressbar(range(0,len(halo_indices[ns]))):
-            if halo_indices[ns][k] >= 0:
-                indices = halos[halo_indices[ns][k]+1]['iord']
-                centres[ns][k,:] = tools.remapAntiHaloCentre(
-                    context.computePeriodicCentreWeighted(
-                    positions[sorted_indices[indices],:],periodicity=boxsize),
-                    boxsize,swapXZ  = False,reverse = True)
+            snap.filename + ".z_space_pos.p",
+            simulation_tools.redshift_space_positions,
+            snap,
+            centre=np.array([boxsize / 2] * 3),
+            _recomputeData=recompute_zspace
+        )
+        for k in tools.progressbar(range(len(halo_indices[ns]))):
+            index = halo_indices[ns][k]
+            if index >= 0:
+                # Lookup particle indices in halo
+                particle_ids = halos[index + 1]['iord']
+                particle_pos = positions[sorted_indices[particle_ids], :]
+
+                # Compute center in redshift space, apply remapping
+                centre = context.computePeriodicCentreWeighted(
+                    particle_pos, periodicity=boxsize
+                )
+                centres[ns][k, :] = tools.remapAntiHaloCentre(
+                    centre,
+                    boxsize,
+                    swapXZ=swapXZ,
+                    reverse=reverse
+                )
     return centres
 
-# Function to combine lists of void los-coords in the same simulation into 
-# a single list.
-# UNUSED - possibly deprecate
 def combine_los_lists(los_lists):
-    lengths = np.array([len(x) for x in los_lists],dtype=int)
+    """
+    Combine multiple LOS particle lists into a single per-void list.
+
+    Each input in `los_lists` is expected to be a list of per-void arrays.
+    The combined result takes the non-empty list for each void from the 
+    most recent list that has valid data.
+
+    NOTE: This function is unused and may be deprecated. Originally used to 
+    combine multiple versions of LOS data (e.g., density vs velocity space).
+
+    Parameters:
+        los_lists (list of lists): Each element is a list of LOS arrays 
+                                   (same length across inputs)
+
+    Returns:
+        list: Combined list of LOS arrays (same length as inner lists)
+
+    Raises:
+        Exception: If input lists are not all the same length
+    """
+    lengths = np.array([len(x) for x in los_lists], dtype=int)
     if not np.all(lengths == lengths[0]):
-        raise Exception("Cannot combine los lists with different lengths.")
+        raise Exception("Cannot combine LOS lists with different lengths.")
     new_list = []
-    num_parts = np.vstack([np.array([len(x) for x in los_list],dtype=int) 
-        for los_list in los_lists]).T
-    to_use = -np.ones(lengths[0],dtype=int)
-    num_lists = len(los_lists)
-    for k in range(0,num_lists):
-        to_use[num_parts[:,k] > 0] = k
-    for k in range(0,lengths[0]):
+    # Build a matrix of particle counts for each void across the different lists
+    num_parts = np.vstack([
+        np.array([len(x) for x in los_list], dtype=int)
+        for los_list in los_lists
+    ]).T  # Shape: (N_voids, N_lists)
+    to_use = -np.ones(lengths[0], dtype=int)  # Index of list to use per void
+    for k in range(len(los_lists)):
+        to_use[num_parts[:, k] > 0] = k  # Use the latest list with valid data
+    for k in range(lengths[0]):
         if to_use[k] >= 0:
             new_list.append(los_lists[to_use[k]][k])
         else:
-            new_list.append(np.zeros((0,2)))
+            new_list.append(np.zeros((0, 2)))  # Empty fallback
     return new_list
 
-# 2D void stacks:
-def get_2d_void_stack_from_los_pos(los_pos,z_bins,d_bins,radii,stacked=True):
+
+def get_2d_void_stack_from_los_pos(los_pos, spar_bins, sperp_bins, radii, stacked=True):
+    """
+    Construct a stacked dataset of LOS positions around void centers, 
+    normalized by effective void radius (R_eff).
+
+    Parameters:
+        los_pos (list): Per-void list of LOS particle positions (usually 2D: void x LOS array)
+        spar_bins (array): Bins along the line of sight (s_parallel)
+        sperp_bins (array): Bins perpendicular to LOS (s_perp)
+        radii (list of arrays): Effective radii (R_eff) per void
+        stacked (bool): If True, return a single combined array of all particles;
+                        If False, return nested list of per-void normalized LOS data
+
+    Returns:
+        array or list: 
+            - If stacked=True: ndarray of shape (N_particles, 2)
+            - Else: List of per-void arrays of normalized LOS positions
+    """
+    # Identify voids with at least one non-empty LOS
     voids_used = [np.array([len(x) for x in los]) > 0 for los in los_pos]
-    # Filter out any unused voids as they just cause problems:
-    los_pos_filtered = [ [x for x in los if len(x) > 0] for los in los_pos]
-    # Cell volumes and void radii:
-    cell_volumes_reff = np.outer(np.diff(z_bins),np.diff(d_bins))
-    void_radii = [rad[filt] for rad, filt in zip(radii,voids_used)]
-    # LOS positions in units of Reff:
+    # Remove empty LOS entries to avoid stacking issues
+    los_pos_filtered = [[x for x in los if len(x) > 0] for los in los_pos]
+    # Compute cell volumes (not used here directly, possibly for weighting later)
+    # cell_volumes_reff = np.outer(np.diff(spar_bins), np.diff(sperp_bins))
+    # Filter radii accordingly
+    void_radii = [rad[filt] for rad, filt in zip(radii, voids_used)]
+    # Normalize LOS positions by R_eff (to work in R-scaled coordinates)
     los_list_reff = [
-        [np.abs(los/rad) for los, rad in zip(all_los,all_radii)] 
-        for all_los, all_radii in zip(los_pos_filtered,void_radii)]
-    # Stacked particles:
+        [np.abs(los / rad) for los, rad in zip(all_los, all_radii)]
+        for all_los, all_radii in zip(los_pos_filtered, void_radii)
+    ]
     if stacked:
-        stacked_particles_reff = np.vstack([np.vstack(los_list) 
-            for los_list in los_list_reff ])
+        # Flatten all voids into one large particle stack
+        stacked_particles_reff = np.vstack([np.vstack(los_list) for los_list in los_list_reff])
         return stacked_particles_reff
     else:
+        # Return per-void lists of normalized LOS positions
         return los_list_reff
 
 
@@ -1008,6 +1354,54 @@ def get_weights_for_stack(los_pos,void_radii,additional_weights = None,
     else:
         return v_weight
 
+def get_weights_for_stack(los_pos, void_radii, additional_weights=None, stacked=True):
+    """
+    Compute volume-based stacking weights for LOS particles.
+
+    This function was originally designed to apply both:
+      - A 1 / R_eff^3 scaling to account for void size (density normalization)
+      - Optional signal-to-noise or custom weights
+
+    In later refactors, these were separated into logically distinct steps.
+    May be deprecated.
+
+    Parameters:
+        los_pos (list): List of LOS particle arrays per void
+        void_radii (list): List of R_eff per void
+        additional_weights (list or scalar or None): Optional multiplicative weights
+        stacked (bool): If True, flatten the weights across all voids
+
+    Returns:
+        array or list of arrays:
+            - Flattened array if stacked=True
+            - Nested weight list matching los_pos structure if stacked=False
+    """
+    if additional_weights is None:
+        v_weight = [
+            [(1.0 / rad)**3 * np.ones(len(los))
+             for los, rad in zip(all_los, all_radii)]
+            for all_los, all_radii in zip(los_pos, void_radii)
+        ]
+    else:
+        if isinstance(additional_weights, list):
+            # Per-void weights (possibly per simulation)
+            v_weight = [
+                [(1.0 / rad)**3 * np.ones(len(los)) * weight
+                 for los, rad, weight in zip(all_los, all_radii, all_weights)]
+                for all_los, all_radii, all_weights in zip(los_pos, void_radii, additional_weights)
+            ]
+        else:
+            # Scalar weight broadcast across all
+            v_weight = [
+                [(1.0 / rad)**3 * np.ones(len(los)) * additional_weights
+                 for los, rad in zip(all_los, all_radii)]
+                for all_los, all_radii in zip(los_pos, void_radii)
+            ]
+    if stacked:
+        return np.hstack([np.hstack(rad) for rad in v_weight])
+    else:
+        return v_weight
+
 
 # Put all particles into a single pile and then bin them:
 def get_field_from_los_data(los_data,z_bins,d_bins,v_weight,void_count,
@@ -1021,27 +1415,79 @@ def get_field_from_los_data(los_data,z_bins,d_bins,v_weight,void_count,
         return hist[0]/(2*void_count*cell_volumes_reff)
 
 
-def get_2d_fields_per_void(los_per_void,sperp_bins,spar_bins,
-                           void_radii,nbar=None):
-    cell_volumes_reff = np.outer(np.diff(spar_bins),np.diff(sperp_bins))
-    hist = np.array([np.histogramdd(los,bins=[sperp_bins,spar_bins],
-                                     density=False,
-                                     weights = 1.0/(2*np.pi*los[:,1]))[0]
-                      for los in los_per_void])
-    volume_weight = (1/void_radii**3)
+def get_2d_fields_per_void(los_per_void, sperp_bins, spar_bins,
+                           void_radii, nbar=None):
+    """
+    Compute 2D density fields for a set of voids from their LOS particle positions.
+
+    The stacking is performed in coordinates rescaled by void radius R_eff,
+    so the resulting histograms are corrected to yield densities in physical units.
+
+    This involves:
+      - Histogramming each void’s LOS particles into (s_perp, s_par) bins
+      - Dividing by the Jacobian factor in cylindrical coordinates (2π * s_perp)
+      - Applying a 1/R_eff^3 scaling to convert back to real (Mpc^3) density
+      - Optionally normalizing by mean cosmic density nbar to yield 1 + δ
+
+    Parameters:
+        los_per_void (list): Per-void list of LOS particle positions, each shape (N, 2)
+        sperp_bins (array): Radial bins (perpendicular to LOS)
+        spar_bins (array): Bins along LOS
+        void_radii (array): R_eff per void (same length as los_per_void)
+        nbar (float or None): Mean particle density. If supplied, returns dimensionless density.
+
+    Returns:
+        ndarray: 3D array of shape (N_voids, N_spar_bins, N_sperp_bins) representing 2D density fields
+    """
+    # Compute cell volumes in scaled (R_eff) units
+    cell_volumes_reff = np.outer(np.diff(spar_bins), np.diff(sperp_bins))
+
+    # Compute 2D density histograms for each void (weighted by Jacobian correction)
+    histograms = np.array([
+        np.histogramdd(los, bins=[sperp_bins, spar_bins],
+                       density=False,
+                       weights=1.0 / (2 * np.pi * los[:, 1]))[0]
+        for los in los_per_void
+    ])
+    # Convert back to physical units (1 / R_eff^3 for scaling back from R_eff units)
+    volume_weight = 1.0 / void_radii**3
+    # Denominator accounts for volume and optional density normalization
     if nbar is not None:
-        denominator = (2*cell_volumes_reff*nbar)
+        denominator = 2 * cell_volumes_reff * nbar
     else:
-        denominator = (2*cell_volumes_reff)
-    density = volume_weight[:,None,None]*hist/denominator[None,:,:]
+        denominator = 2 * cell_volumes_reff
+    # Final normalized density: (1/R^3) * histogram / volume
+    density = volume_weight[:, None, None] * histograms / denominator[None, :, :]
     return density
 
-# Compute profile for each void individually, and then average them:
-def get_2d_field_from_stacked_voids(los_per_void,sperp_bins,spar_bins,
-                                    void_radii,weights=None,nbar=None):
-    density = get_2d_fields_per_void(los_per_void,sperp_bins,spar_bins,
-                                     void_radii,nbar=nbar)
-    return np.average(density, axis=0,weights = weights)
+
+def get_2d_field_from_stacked_voids(los_per_void, sperp_bins, spar_bins,
+                                    void_radii, weights=None, nbar=None):
+    """
+    Compute the average 2D density field from a collection of voids, 
+    each represented by LOS particles.
+
+    This function:
+        - Computes a 2D density histogram for each void
+        - Averages them (optionally weighted)
+
+    Parameters:
+        los_per_void (list): List of per-void particle LOS positions
+        sperp_bins (array): Radial bins perpendicular to LOS
+        spar_bins (array): Bins along the LOS direction
+        void_radii (list): Effective radii (R_eff) for each void
+        weights (array or None): Per-void weights for averaging (optional)
+        nbar (float or None): Mean particle density for normalization (optional)
+
+    Returns:
+        ndarray: Averaged 2D density field
+    """
+    # Compute per-void 2D density histograms
+    density = get_2d_fields_per_void(
+        los_per_void, sperp_bins, spar_bins, void_radii, nbar=nbar
+    )
+    # Average across voids (optionally weighted)
+    return np.average(density, axis=0, weights=weights)
 
 def profile_broken_power_log(r,A,r0,c1,f1,B):
     return np.log(np.abs(A + B*(r/r0)**2 + (r/r0)**4)) + \
