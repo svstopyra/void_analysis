@@ -506,6 +506,7 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
         return -0.5*np.matmul(np.matmul(delta_rho,inv_cov),delta_rho.T)
 
 # Likelihood function, parallelised. Requires global variables!:
+# UNUSED
 def log_likelihood_aptest_parallel(theta,z,**kwargs):
     s_par = scoords[:,0]
     s_perp = scoords[:,1]
@@ -559,6 +560,7 @@ def log_probability_aptest(theta,*args,**kwargs):
         return -np.inf
     return lp + log_likelihood_aptest(theta,*args,**kwargs)
 
+# UNUSED
 def log_probability_aptest_parallel(theta,*args,**kwargs):
     lp = log_prior_aptest(theta,**kwargs)
     if not np.isfinite(lp):
@@ -704,6 +706,7 @@ def get_zspace_centres(halo_indices,snap_list,snap_list_rev,hrlist=None,
 
 # Function to combine lists of void los-coords in the same simulation into 
 # a single list.
+# UNUSED - possibly deprecate
 def combine_los_lists(los_lists):
     lengths = np.array([len(x) for x in los_lists],dtype=int)
     if not np.all(lengths == lengths[0]):
