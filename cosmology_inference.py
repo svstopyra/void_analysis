@@ -32,12 +32,29 @@ import sys
 #-------------------------------------------------------------------------------
 # SNAPSHOT GROUP CLASS
 
-# Load properties file for a given snapshot. Allow for backwards compatibility
-# with older pickle version of the file:
-def get_antihalo_properties(snap,file_suffix = "AHproperties",
-                            default=".h5",low_memory_mode=True):
+def get_antihalo_properties(snap, file_suffix="AHproperties",
+                            default=".h5", low_memory_mode=True):
+    """
+    Load anti-halo property data for a given snapshot.
+
+    Attempts to load from an HDF5 file (.h5), and falls back to a legacy 
+    pickle format (.p) if necessary. Supports a low-memory mode that avoids 
+    loading the data into memory unless explicitly requested.
+
+    Parameters:
+        snap (pynbody.Snapshot): The simulation snapshot to load from.
+        file_suffix (str): Suffix for the filename (default: "AHproperties").
+        default (str): File extension to look for first (default: ".h5").
+        low_memory_mode (bool): If True, return just a file reference 
+                                instead of loading full data.
+
+    Returns:
+        If low_memory_mode is True and using legacy format:
+            str: Filename for later loading.
+        Else:
+            h5py.File or list: Anti-halo data loaded from file.
+    """
     filename = snap.filename + "." + file_suffix + default
-    # For backwards compatibility:
     filename_old = snap.filename + "." + file_suffix + ".p"
     if os.path.isfile(filename):
         return h5py.File(filename, "r")
@@ -49,11 +66,44 @@ def get_antihalo_properties(snap,file_suffix = "AHproperties",
     else:
         raise Exception("Anti-halo properties file not found.")
 
-
-# Class to organise anti-halo properties into a more convenient format
 class SnapshotGroup:
-    def __init__(self,snap_list,snap_list_reverse,low_memory_mode=True,
-                 swapXZ = False,reverse = False,remap_centres=False):
+    """
+    A container for managing forward and reverse simulation snapshots and 
+    accessing their associated void/halo properties.
+
+    This class handles:
+    - Loading multiple simulation snapshots (and their time-reversed counterparts)
+    - Accessing halo and void properties (e.g., positions, masses, radii)
+    - Remapping coordinates to Equatorial space via configurable transformations
+    - Efficient memory usage through optional lazy loading and caching
+
+    Coordinate System Note:
+    The underlying simulation snapshots may not be in Equatorial coordinates.
+    To convert to Equatorial space, properties like void centres or halo positions
+    are remapped via `tools.remapAntiHaloCentre`, which applies:
+        - A shift to box-centred coordinates
+        - Optional axis swapping (swapXZ=True swaps X and Z)
+        - Optional axis flipping (reverse=True mirrors positions)
+
+    These transformations are controlled by the `swapXZ` and `reverse` flags. 
+    Their default values assume a particular snapshot orientation, but users
+    should verify and adjust these flags if working with different conventions.
+    """
+
+    def __init__(self, snap_list, snap_list_reverse, low_memory_mode=True,
+                 swapXZ=False, reverse=False, remap_centres=False):
+        """
+        Initialize a SnapshotGroup from lists of forward and reverse snapshots.
+
+        Parameters:
+            snap_list (list): Forward-time simulation snapshots
+            snap_list_reverse (list): Corresponding reverse-time snapshots
+            low_memory_mode (bool): If True, avoid loading all properties into memory
+            swapXZ (bool): Whether to swap X and Z axes when remapping coordinates
+            reverse (bool): Whether to flip coordinates around box center
+            remap_centres (bool): (Not yet implemented - ignored) Whether to 
+                                  remap void/halo centres to Equatorial frame.
+        """
         self.snaps = [tools.getPynbodySnap(snap) for snap in snap_list]
         self.snaps_reverse = [tools.getPynbodySnap(snap) 
                               for snap in snap_list_reverse]
@@ -63,316 +113,504 @@ class SnapshotGroup:
             self.all_property_lists = [None for snap in snap_list]
         else:
             self.all_property_lists = [get_antihalo_properties(snap) 
-                                   for snap in snap_list]
-        self.property_list = ["halo_centres","halo_masses",
-                             "antihalo_centres","antihalo_masses",
-                             "cell_volumes","void_centres",
-                             "void_volumes","void_radii",
-                             "radius_bins","pair_counts",
-                             "bin_volumes","delta_central",
-                             "delta_average"]
-        self.additional_properties = {"halos":None,"antihalos":None,
-                                      "snaps":self.snaps,
-                                      "snaps_reverse":self.snaps_reverse}
-        self.property_map = {name:ind for name, ind in 
-            zip(self.property_list,range(0,len(self.property_list)))}
+                                       for snap in snap_list]
+        self.property_list = [
+            "halo_centres", "halo_masses",
+            "antihalo_centres", "antihalo_masses",
+            "cell_volumes", "void_centres",
+            "void_volumes", "void_radii",
+            "radius_bins", "pair_counts",
+            "bin_volumes", "delta_central",
+            "delta_average"
+        ]
+        self.additional_properties = {
+            "halos": None,
+            "antihalos": None,
+            "snaps": self.snaps,
+            "snaps_reverse": self.snaps_reverse
+        }
+        self.property_map = {name: idx for idx, name in enumerate(self.property_list)}
         self.reverse = reverse
         self.swapXZ = swapXZ
-        self.remap_centres = True
+        self.remap_centres = remap_centres
         self.boxsize = self.snaps[0].properties['boxsize'].ratio("Mpc a h**-1")
-        self.all_properties = [None for prop in self.property_list]
+        self.all_properties = [None for _ in self.property_list]
         self.snap_filenames = [snap.filename for snap in self.snaps]
-        self.snap_reverse_filenames = [snap.filename 
-                                       for snap in self.snaps_reverse]
-    def is_valid_property(self,prop):
-        if type(prop) is int:
-            return prop in range(0,len(self.property_list))
-        elif type(prop) is str:
+        self.snap_reverse_filenames = [snap.filename for snap in self.snaps_reverse]
+    def is_valid_property(self, prop):
+        if isinstance(prop, int):
+            return prop in range(len(self.property_list))
+        elif isinstance(prop, str):
             return prop in self.property_list
-        else:
-            return False
-    # Map named property to a property index, and check it is valid:
-    def get_property_index(self,prop):
-        if type(prop) is int:
-            if prop in range(0,len(self.property_list)):
+        return False
+    def get_property_index(self, prop):
+        if isinstance(prop, int):
+            if prop in range(len(self.property_list)):
                 return prop
-            else:
-                raise Exception("Property index is out of range.")
-        elif type(prop) is str:
+            raise Exception("Property index is out of range.")
+        elif isinstance(prop, str):
             if prop in self.property_list:
                 return self.property_map[prop]
-            else:
-                raise Exception("Requested property does not exist.")
+            raise Exception("Requested property does not exist.")
         else:
             raise Exception("Invalid property type")
-    # Map property index to a named property and check it is valid:
-    def get_property_name(self,prop):
-        if type(prop) is int:
-            if prop in range(0,len(self.property_list)):
+    def get_property_name(self, prop):
+        if isinstance(prop, int):
+            if prop in range(len(self.property_list)):
                 return self.property_list[prop]
-            else:
-                raise Exception("Property index is out of range.")
-        elif type(prop) is str:
+            raise Exception("Property index is out of range.")
+        elif isinstance(prop, str):
             if prop in self.property_list:
                 return prop
-            else:
-                raise Exception("Requested property does not exist.")
+            raise Exception("Requested property does not exist.")
         else:
             raise Exception("Invalid property type")
-    # Get the selected property:
-    def get_property(self,snap_index,property_name,recompute=False):
+    def get_property(self, snap_index, property_name, recompute=False):
+        """
+        Access a property for a single snapshot, loading from cache or disk.
+        """
         prop_index = self.get_property_index(property_name)
-        if (self.all_properties[prop_index] is not None) and (not recompute):
-            # Load the cachec properties if they exist:
+        if self.all_properties[prop_index] is not None and not recompute:
             return self.all_properties[prop_index][snap_index]
+
+        property_list = self.all_property_lists[snap_index]
+        if property_list is None:
+            property_list = get_antihalo_properties(self.snaps[snap_index])
+
+        if isinstance(property_list, h5py._hl.files.File):
+            return property_list[self.get_property_name(property_name)]
+        elif isinstance(property_list, list):
+            return property_list[self.get_property_index(property_name)]
+        elif isinstance(property_list, str):
+            props_list = tools.loadPickle(property_list)
+            return props_list[self.get_property_index(property_name)]
         else:
-            # Otherwise, recompute them:
-            property_list = self.all_property_lists[snap_index]
-            if property_list is None:
-                property_list = get_antihalo_properties(
-                                    self.snaps[snap_index])
-            # Load from hdf5 file:
-            if type(property_list) is h5py._hl.files.File:
-                return property_list[self.get_property_name(property_name)]
-            # Load from pickled list:
-            elif type(property_list) is list:
-                return property_list[self.get_property_index(property_name)]
-            # Load pickle, get property, then dispose of pickle to avoid
-            # keeping it in memory (used for low_memory_mode):
-            elif type(property_list) is str:
-                # Only load the file for as long as necessary:
-                props_list = tools.loadPickle(property_list)
-                return props_list[self.get_property_index(property_name)]
-            else:
-                raise Exception("Invalid Property Type")
-    # check if a property is something that should be remapped to the correct
-    # co-ordinates
-    def check_remappable(self,property_name):
+            raise Exception("Invalid Property Type")
+    def check_remappable(self, property_name):
+        """
+        Check if a property represents a position needing coordinate remapping.
+        """
         index = self.get_property_index(property_name)
-        return (index == 0) or (index == 5)
-    # Remap the centres to the correct co-ordiantes:
-    # Get a list of all properties:
-    def get_all_properties(self,property_name,cache = True,recompute=False):
+        return index in [0, 5]  # halo_centres or void_centres
+    def get_all_properties(self, property_name, cache=True, recompute=False):
+        """
+        Get a list of a given property for all snapshots.
+        Handles remapping to Equatorial coordinates if applicable.
+        """
         prop_index = self.get_property_index(property_name)
         if self.all_properties[prop_index] is None:
             if self.check_remappable(property_name):
-                properties = [tools.remapAntiHaloCentre(self.get_property(
-                              ind,property_name,recompute=recompute),
-                              boxsize,swapXZ  = self.swapXZ,
-                              reverse = self.reverse)
-                              for ind in range(0,self.N)]
+                # Remap positions to Equatorial coordinates
+                properties = [
+                    tools.remapAntiHaloCentre(
+                        self.get_property(i, property_name, recompute=recompute),
+                        boxsize=self.boxsize,
+                        swapXZ=self.swapXZ,
+                        reverse=self.reverse)
+                    for i in range(self.N)
+                ]
             else:
-                properties = [self.get_property(ind,property_name,
-                              recompute=recompute) 
-                              for ind in range(0,self.N)]
+                properties = [
+                    self.get_property(i, property_name, recompute=recompute)
+                    for i in range(self.N)
+                ]
             if cache:
                 self.all_properties[prop_index] = properties
             return properties
         else:
             return self.all_properties[prop_index]
-    def __getitem__(self,property_name):
+    def __getitem__(self, property_name):
+        """
+        Enable bracket-access to named or additional properties.
+        Automatically returns all-snapshot versions of properties.
+        """
         if self.is_valid_property(property_name):
             return self.get_all_properties(property_name)
-        else:
-            if type(property_name) is str:
-                if property_name in self.additional_properties:
-                    if self.additional_properties[property_name] is not None:
-                        return self.additional_properties[property_name]
-                    else:
-                        # Generate the property:
-                        if property_name == "halos":
-                            prop = self.additional_properties["halos"] = \
-                                [snap.halos() for snap in self.snaps]
-                        elif property_name == "antihalos":
-                            prop = self.additional_properties["antihalos"] = \
-                                [snap.halos() for snap in self.snaps_reverse]
-                        else:
-                            raise Exception("Invalid property_name")
-                        return prop
+        elif isinstance(property_name, str) and property_name in self.additional_properties:
+            if self.additional_properties[property_name] is not None:
+                return self.additional_properties[property_name]
             else:
-                raise Exception("Invalid property_name")
+                # Lazy-load derived properties
+                if property_name == "halos":
+                    self.additional_properties["halos"] = [snap.halos() for snap in self.snaps]
+                elif property_name == "antihalos":
+                    self.additional_properties["antihalos"] = [snap.halos() for snap in self.snaps_reverse]
+                else:
+                    raise Exception("Invalid property_name")
+                return self.additional_properties[property_name]
+        else:
+            raise Exception("Invalid property_name")
+
+
 
 
 #-------------------------------------------------------------------------------
 # COSMOLOGY FUNCTIONS
 
-# E(z)^2 function:
-def Ez2(z,Om,Or=0,Ok=0,Ol=None,**kwargs):
+def Ez2(z, Om, Or=0, Ok=0, Ol=None, **kwargs):
+    """
+    Compute E(z)^2, the square of the dimensionless Hubble parameter,
+    for general FLRW cosmologies.
+
+    E(z)^2 = Or*(1 + z)^4 + Om*(1 + z)^3 + Ok*(1 + z)^2 + Ol
+
+    Parameters:
+        z (float or array): Redshift(s)
+        Om (float): Matter density parameter
+        Or (float): Radiation density parameter (default: 0)
+        Ok (float): Curvature density parameter (default: 0)
+        Ol (float or None): Dark energy density parameter. If None, inferred
+                            from flatness (1 - Om - Ok - Or)
+
+    Returns:
+        float or array: E(z)^2
+    """
     if Ol is None:
         Ol = 1.0 - Om - Ok - Or
     return Or*(1 + z)**4 + Om*(1 + z)**3 + Ok*(1 + z)**2 + Ol
 
-# Linear growth rate in Lambda-CDM
-def f_lcdm(z,Om,gamma=0.55,Ol=None,Ok=0,Or=0,**kwargs):
-    Ez2_val = Ez2(z,Om,**kwargs)
-    return (Om*(1 + z)**3/Ez2_val)**gamma
+def f_lcdm(z, Om, gamma=0.55, Ol=None, Ok=0, Or=0, **kwargs):
+    """
+    Approximate the linear growth rate f(z) in ΛCDM cosmology.
 
-# Hubble rate as a function of H:
-def Hz(z,Om,h=None,Ol=None,Ok=0,Or=0,**kwargs):
+    f(z) ≈ [Ω_m(z)]^γ, where γ ≈ 0.55 for ΛCDM
+
+    Parameters:
+        z (float or array): Redshift(s)
+        Om (float): Present-day matter density
+        gamma (float): Growth index (default: 0.55)
+        (Other parameters as in Ez2)
+
+    Returns:
+        float or array: Linear growth rate f(z)
+    """
+    Ez2_val = Ez2(z, Om, Or=Or, Ok=Ok, Ol=Ol)
+    return (Om * (1 + z)**3 / Ez2_val)**gamma
+
+
+def Hz(z, Om, h=None, Ol=None, Ok=0, Or=0, **kwargs):
+    """
+    Compute the Hubble parameter H(z) in units of km/s/Mpc.
+
+    If h is None, assumes h=1 (returns H(z) / h), yielding units km*h/(s*Mpc).
+    If h is provided, computes H(z) directly in km/s/Mpc.
+
+    Parameters:
+        z (float or array): Redshift(s)
+        Om (float): Matter density
+        h (float or None): Dimensionless Hubble constant (H0/100). Default: None
+        (Other parameters as in Ez2)
+
+    Returns:
+        float or array: H(z) in km/s/Mpc
+    """
     if h is None:
-        # Use units of km/s/Mpc/h:
-        h = 1
-    return 100*h*np.sqrt(Ez2(z,Om,**kwargs))
+        h = 1.0
+    return 100 * h * np.sqrt(Ez2(z, Om, Or=Or, Ok=Ok, Ol=Ol))
 
-def ap_parameter(z,Om,Om_fid,h=0.7,h_fid = 0.7,**kwargs):
-    # Get cosmology
-    cosmo_fid = astropy.cosmology.FlatLambdaCDM(H0=100*h_fid,Om0=Om_fid)
-    cosmo_test = astropy.cosmology.FlatLambdaCDM(H0=100*h,Om0=Om)
-    # Get the ratio:
-    Hz = 100*h*np.sqrt(Om*(1 + z)**3 + 1.0 - Om)
-    Hzfid = 100*h_fid*np.sqrt(Om_fid*(1 + z)**3 + 1.0 - Om_fid)
+def ap_parameter(z, Om, Om_fid, h=0.7, h_fid=0.7, **kwargs):
+    """
+    Compute the Alcock-Paczynski parameter ε(z), which quantifies geometric
+    distortions due to miss-specified cosmological parameters.
+
+    ε(z) = [H(z) D_A(z)] / [H_fid(z) D_A_fid(z)]
+
+    Parameters:
+        z (float): Redshift
+        Om (float): Matter density in test cosmology
+        Om_fid (float): Fiducial matter density
+        h (float): Hubble constant for test cosmology
+        h_fid (float): Hubble constant for fiducial cosmology
+
+    Returns:
+        float: Alcock-Paczynski distortion parameter ε(z)
+    """
+    # Cosmologies:
+    cosmo_fid = astropy.cosmology.FlatLambdaCDM(H0=100*h_fid, Om0=Om_fid)
+    cosmo_test = astropy.cosmology.FlatLambdaCDM(H0=100*h, Om0=Om)
+    # Hubble rates:
+    Hz = 100 * h * np.sqrt(Om * (1 + z)**3 + 1.0 - Om)
+    Hz_fid = 100 * h_fid * np.sqrt(Om_fid * (1 + z)**3 + 1.0 - Om_fid)
+    # Angular diameter distances:
     Da = cosmo_test.angular_diameter_distance(z).value
-    Dafid = cosmo_fid.angular_diameter_distance(z).value
-    eps = Hz*Da/(Hzfid*Dafid)
-    return eps
+    Da_fid = cosmo_fid.angular_diameter_distance(z).value
+    return (Hz * Da) / (Hz_fid * Da_fid)
 
-# Peculiar velocity as a function of distance from a void centre along LOS, 
-# at linear level:
-def void_los_velocity(z,Delta,r_par,r_perp,Om,f=None,**kwargs):
-    # Assume lambda-cdm if no growth rate given:
+
+def void_los_velocity(z, Delta, r_par, r_perp, Om, f=None, **kwargs):
+    """
+    Compute the line-of-sight (LOS) peculiar velocity at a position 
+    relative to a void center, based on linear theory.
+
+    Parameters:
+        z (float): Redshift
+        Delta (function): Cumulative density contrast profile Δ(r)
+        r_par (float or array): LOS distance from void center
+        r_perp (float or array): Transverse distance from void center
+        Om (float): Matter density
+        f (float or None): Growth rate. If None, computed via f_lcdm()
+
+    Returns:
+        float or array: LOS velocity in km/s
+    """
     if f is None:
-        f = f_lcdm(z,Om,**kwargs)
-    # Hubble rate:
-    hz = Hz(z,Om,**kwargs)
-    # Distance from void centre:
+        f = f_lcdm(z, Om, **kwargs)
+    hz = Hz(z, Om, **kwargs)
     r = np.sqrt(r_par**2 + r_perp**2)
-    # Cumulative density at this distance:
     Dr = Delta(r)
-    return -(f/3.0)*(hz/(1.0 + z))*Dr*r_par
+    return -(f / 3.0) * (hz / (1.0 + z)) * Dr * r_par
 
-# Derivative of the peculiar velocity with LOS distance
-def void_los_velocity_derivative(z,Delta,delta,r_par,r_perp,Om,f=None,**kwargs):
-    # Distance from void centre:
+
+
+def void_los_velocity_derivative(z, Delta, delta, r_par, r_perp, Om, f=None, **kwargs):
+    """
+    Compute the derivative of the LOS velocity with respect to r.
+
+    Assumes Delta(r) is the cumulative density contrast profile (mass within 
+    a sphere), and delta(r) is the local density contrast (mass in a shell).
+    These are related via integration, but must both be provided as functions.
+
+    Parameters:
+        z (float): Redshift
+        Delta (function): Cumulative density profile Δ(r)
+        delta (function): Local density contrast δ(r)
+        r_par (float): LOS distance
+        r_perp (float): Transverse distance
+        Om (float): Matter density
+        f (float or None): Growth rate (Lambda-CDM value assumed if not provided)
+
+    Returns:
+        float: Derivative of velocity w.r.t. r
+    """
     r = np.sqrt(r_par**2 + r_perp**2)
-    # Cumulative density at this distance:
     Dr = Delta(r)
-    # Shell density at this distance:
     dr = delta(r)
-    # Hubble rate:
-    hz = Hz(z,Om,**kwargs)
-    # Assume lambda-cdm if no growth rate given:
+    hz = Hz(z, Om, **kwargs)
     if f is None:
-        f = f_lcdm(z,Om,**kwargs)
-    return -(f/3.0)*(hz/(1.0 + z))*Dr - \
-        f*(r_par/(r + 1e-12))**2*(hz/(1.0 + z))*(dr - Dr)
+        f = f_lcdm(z, Om, **kwargs)
+    return -(f / 3.0) * (hz / (1.0 + z)) * Dr - \
+           f * (r_par / (r + 1e-12))**2 * (hz / (1.0 + z)) * (dr - Dr)
 
-# Derivative of LOS distance in real space vs redshift space:
-def z_space_jacobian(z,Delta,delta,r_par,r_perp,Om,
-                     linearise_jacobian=True,**kwargs):
-    # Hubble rate:
-    hz = Hz(z,Om,**kwargs)
-    dudr = void_los_velocity_derivative(z,Delta,delta,r_par,r_perp,Om,**kwargs)
+
+def z_space_jacobian(z, Delta, delta, r_par, r_perp, Om, linearise_jacobian=True, **kwargs):
+    """
+    Compute the Jacobian for the transformation from real to redshift space.
+
+    Parameters:
+        z (float): Redshift
+        Delta (function): Cumulative density profile
+        delta (function): Local density profile
+        r_par (float): LOS distance
+        r_perp (float): Transverse distance
+        Om (float): Matter density
+        linearise_jacobian (bool): If True, return 1st-order approximation
+
+    Returns:
+        float: Jacobian of the transformation
+    """
+    hz = Hz(z, Om, **kwargs)
+    dudr = void_los_velocity_derivative(z, Delta, delta, r_par, r_perp, Om, **kwargs)
     if linearise_jacobian:
-        # Expand to first order:
-        return 1.0 -((1.0 + z)/hz)*dudr
+        return 1.0 - ((1.0 + z) / hz) * dudr
     else:
-        # Just compute without expanding:
-        return 1.0/(1.0 + ((1.0 + z)/hz)*dudr)
+        return 1.0 / (1.0 + ((1.0 + z) / hz) * dudr)
 
-# Redshift space transformation around voids:
-def to_z_space(r_par,r_perp,z,Om,Delta=None,u_par=None,f=None,**kwargs):
+
+def to_z_space(r_par, r_perp, z, Om, Delta=None, u_par=None, f=None, **kwargs):
+    """
+    Transform real-space LOS coordinates to redshift space.
+
+    If u_par is not supplied, a linear-theory velocity model is used
+    based on the cumulative density profile Δ(r). Otherwise, uses 
+    the explicitly provided velocity field u_par.
+
+    Parameters:
+        r_par (float or array): LOS coordinate in real space
+        r_perp (float or array): Transverse coordinate in real space
+        z (float): Redshift
+        Om (float): Matter density
+        Delta (function): Cumulative density profile Δ(r)
+        u_par (float or array): LOS velocity (optional)
+        f (float or None): Growth rate (Lambda-CDM value assumed if not provided)
+
+    Returns:
+        list: [s_par, s_perp] — redshift-space coordinates
+    """
     if u_par is None:
-        # Assume linear relationship:
         r = np.sqrt(r_par**2 + r_perp**2)
         if f is None:
-            f = f_lcdm(z,om,**kwargs)
-        s_par = (1.0  - (f/3.0)*Delta(r))*r_par
+            f = f_lcdm(z, Om, **kwargs)
+        s_par = (1.0 - (f / 3.0) * Delta(r)) * r_par
     else:
-        # Use supplied peculiar velocity:
-        # Hubble rate:
-        hz = Hz(z,Om,**kwargs)
-        s_par = r_par + (1.0 + z)*u_par/hz
+        hz = Hz(z, Om, **kwargs)
+        s_par = r_par + (1.0 + z) * u_par / hz
     s_perp = r_perp
-    return [s_par,s_perp]
+    return [s_par, s_perp]
 
-def iterative_zspace_inverse(s_par,f,Delta,N_max):
+
+def iterative_zspace_inverse(s_par, f, Delta, N_max, atol=1e-5, rtol=1e-5):
+    """
+    Numerically invert the redshift-space LOS coordinate to estimate
+    the real-space coordinate (r_par), assuming the linear-theory model.
+
+    Parameters:
+        s_par (float): LOS coordinate in redshift space
+        f (float): Linear growth rate
+        Delta (function): Cumulative density profile
+        N_max (int): Maximum number of iterations
+
+    Returns:
+        float: Estimated r_par
+    """
     r_par_guess = s_par
-    for k in range(0,N_max):
-        # Iteratively improve the guess:
-        r = np.sqrt((r_par_guess)**2 + r_perp**2)
-        r_par_new = s_par/(1.0  - (f/3.0)*Delta(r))
-        if (np.abs(r_par_new - r_par_guess) < atol) or \
-            (np.abs(r_par_new/r_par_guess - 1.0) < rtol):
+    for _ in range(N_max):
+        r = np.sqrt(r_par_guess**2 + r_perp**2)
+        r_par_new = s_par / (1.0 - (f / 3.0) * Delta(r))
+        if np.abs(r_par_new - r_par_guess) < atol or \
+           np.abs(r_par_new / r_par_guess - 1.0) < rtol:
             break
         r_par_guess = r_par_new
-    r_par = r_par_guess
-    return r_par
+    return r_par_guess
 
-# Transformation to real space, from redshift space, including geometric
-# distortions from a wrong-cosmology:
-def to_real_space(s_par,s_perp,z,Om,Om_fid=None,Delta=None,u_par=None,f=None,
-                  N_max = 5,atol=1e-5,rtol=1e-5,F_inv=None,
-                  **kwargs):
-    # Perpendicular distance is easy:
-    r_perp = s_perp
-    # Get the parallel distance:
+
+def to_real_space(s_par, s_perp, z, Om, Om_fid=None, Delta=None, u_par=None, f=None,
+                  N_max=5, atol=1e-5, rtol=1e-5, F_inv=None, **kwargs):
+    """
+    Convert redshift-space coordinates (s_par, s_perp) back into real-space 
+    coordinates (r_par, r_perp), assuming either:
+
+    - A linear-theory velocity model derived from the cumulative density profile Delta(r), or
+    - An explicit peculiar velocity field u_par
+
+    Optionally uses a precomputed inverse mapping function F_inv, or falls 
+    back to an iterative inversion method.
+
+    Parameters:
+        s_par (float): LOS redshift-space coordinate (must be scalar if inverting manually)
+        s_perp (float or array): Transverse redshift-space coordinate
+        z (float): Redshift
+        Om (float): Matter density
+        Om_fid (float or None): Fiducial matter density (unused here but may be passed downstream)
+        Delta (function): Cumulative density contrast profile Δ(r), required for linear inversion
+        u_par (float or array or None): LOS peculiar velocity (if supplied, used directly)
+        f (float or None): Growth rate; computed via f_lcdm if not supplied
+        N_max (int): Max number of iterations for manual inversion
+        atol (float): Absolute tolerance for iterative convergence
+        rtol (float): Relative tolerance for iterative convergence
+        F_inv (callable or None): Tabulated inverse mapping function
+
+    Returns:
+        list: [r_par, r_perp] — real-space coordinates
+    """
+    r_perp = s_perp  # Perpendicular component is unaffected
     if u_par is None:
-        # Assume linear relationship:
+        # Use linear velocity relation:
         if f is None:
-            f = f_lcdm(z,Om,**kwargs)
-        # Need to guess at r:
+            f = f_lcdm(z, Om, **kwargs)
         if F_inv is None:
-            # Manually invert:
+            # Manual inversion via iterative method:
             if not np.isscalar(s_par):
                 raise Exception("Must be a scalar to perform manual inversion")
-            r_par_guess = s_par
-            for k in range(0,N_max):
-                # Iteratively improve the guess:
-                r = np.sqrt((r_par_guess)**2 + r_perp**2)
-                r_par_new = s_par/(1.0  - (f/3.0)*Delta(r))
-                if (np.abs(r_par_new - r_par_guess) < atol) or \
-                    (np.abs(r_par_new/r_par_guess - 1.0) < rtol):
-                    break
-                r_par_guess = r_par_new
-            r_par = r_par_guess
+            if Delta is None:
+                raise ValueError("Delta profile must be supplied for linear inversion.")
+            # Use helper to handle the iterative logic
+            r_par = iterative_zspace_inverse(s_par, f, Delta, N_max,
+                                             atol = atol, rtol = rtol)
         else:
-            # Use the tabulated inverse:
-            r_par = F_inv(s_perp,s_par,f*np.ones(s_perp.shape))
+            # Use tabulated inverse function
+            r_par = F_inv(s_perp, s_par, f * np.ones(np.shape(s_perp)))
     else:
-        # Use supplied peculiar velocity:
-        # Hubble rate:
-        hz = Hz(z,Om,**kwargs)
-        r_par = (s_par - (1.0 + z)*u_par/hz)
-    return [r_par,r_perp]
+        # Use directly supplied LOS peculiar velocity
+        hz = Hz(z, Om, **kwargs)
+        r_par = s_par - (1.0 + z) * u_par / hz
+    return [r_par, r_perp]
 
-# Correct the geometry to account for miss-specified cosmology:
-def geometry_correction(s_par,s_perp,epsilon,**kwargs):
+
+def geometry_correction(s_par, s_perp, epsilon, **kwargs):
+    """
+    Apply the Alcock-Paczynski geometric correction to redshift-space 
+    coordinates (s_par, s_perp) to account for a misspecified cosmology.
+
+    This transformation rescales both the distance and the apparent angle 
+    between line-of-sight (LOS) and transverse components, correcting the 
+    apparent shape of cosmological voids distorted due to miss-specification
+    of the cosmological parameters
+
+    Based on the transformation:
+        - s_factor adjusts the total distance accounting for ε-dependent anisotropy.
+        - mus (cosine of LOS angle) is adjusted to mus_new.
+        - New coordinates are computed from these corrected values.
+
+    Parameters:
+        s_par (float or array): LOS redshift-space coordinate
+        s_perp (float or array): Transverse redshift-space coordinate
+        epsilon (float or None): Alcock-Paczynski distortion parameter ε
+                                 (set to 1.0 if None)
+
+    Returns:
+        tuple: (s_par_new, s_perp_new) — corrected redshift-space coordinates
+    """
     if epsilon is None:
         epsilon = 1.0
+    # Radial distance from void center
     s = np.sqrt(s_par**2 + s_perp**2)
-    mus = s_par/s
-    # Distance correction, accounting for change in void size:
-    s_factor = np.sqrt(1.0 + epsilon**2*(1.0/mus**2 - 1.0))
-    s_new = s*mus*epsilon**(-2.0/3.0)*s_factor
-    # Angle correction:
-    mus_new = np.sign(mus)/s_factor
-    # New co-ordinates:
-    s_par_new = mus_new*s_new
-    s_perp_new = np.sign(s_perp)*s_new*np.sqrt(1.0 - mus_new**2)
+    # Cosine of LOS angle
+    mus = s_par / s
+    # Distance correction factor
+    # This accounts for distortions in radial vs. transverse directions
+    s_factor = np.sqrt(1.0 + epsilon**2 * (1.0 / mus**2 - 1.0))
+    # Apply AP correction to total distance and angle
+    s_new = s * mus * epsilon**(-2.0 / 3.0) * s_factor
+    mus_new = np.sign(mus) / s_factor  # Corrected cosine of angle
+    # Compute corrected coordinates
+    s_par_new = mus_new * s_new
+    s_perp_new = np.sign(s_perp) * s_new * np.sqrt(1.0 - mus_new**2)
     return s_par_new, s_perp_new
 
-# Profile in redshift space:
-def z_space_profile(s_par,s_perp,rho_real,z,Om,Delta,delta,Om_fid = 0.3111,
-                    epsilon=None,apply_geometry=False,**kwargs):
-    # Apply geometric correction:
+
+def z_space_profile(s_par, s_perp, rho_real, z, Om, Delta, delta,
+                    Om_fid=0.3111, epsilon=None, apply_geometry=False, **kwargs):
+    """
+    Compute the redshift-space density profile ρ(s_par, s_perp) based on
+    a real-space density profile and a model of redshift-space distortions.
+
+    This includes:
+      - Optional Alcock-Paczynski geometric correction (applied to input coords)
+      - Coordinate transformation from redshift space to real space
+      - Jacobian of the transformation (density scaling)
+      - Evaluation of the density field at the mapped coordinates
+
+    Parameters:
+        s_par (float): LOS redshift-space coordinate
+        s_perp (float): Transverse redshift-space coordinate
+        rho_real (function): Real-space density profile ρ(r)
+        z (float): Redshift
+        Om (float): Matter density parameter of the assumed cosmology
+        Delta (function): Cumulative density contrast profile Δ(r)
+        delta (function): Local density contrast profile δ(r)
+        Om_fid (float): Fiducial matter density (default: 0.3111)
+        epsilon (float or None): Alcock-Paczynski distortion parameter ε.
+                                 If None and apply_geometry is True, it is computed.
+        apply_geometry (bool): Whether to apply the AP correction
+
+    Returns:
+        float: Redshift-space density ρ(s_par, s_perp)
+    """
+    # Step 1: Apply Alcock-Paczynski geometric correction (if requested)
     if apply_geometry:
         if epsilon is None:
-            epsilon = ap_parameter(z,Om,Om_fid,**kwargs)
-        s_par_new, s_perp_new = geometry_correction(s_par,s_perp,epsilon)
+            epsilon = ap_parameter(z, Om, Om_fid, **kwargs)
+        s_par_new, s_perp_new = geometry_correction(s_par, s_perp, epsilon)
     else:
         s_par_new = s_par
         s_perp_new = s_perp
-    # Get real-space co-ordinates:
-    [r_par,r_perp] = to_real_space(s_par_new,s_perp_new,z,Om,Delta=Delta,
-                                   **kwargs)
-    # Get Jacobian from the transformation:
-    jacobian = z_space_jacobian(z,Delta,delta,r_par,r_perp,Om,**kwargs)
-    # Compute distance from centre of the void:
+    # Step 2: Convert redshift-space coords back to real-space coords
+    r_par, r_perp = to_real_space(s_par_new, s_perp_new, z, Om, Delta=Delta, **kwargs)
+    # Step 3: Compute the Jacobian of the transformation (∂r/∂s)
+    jacobian = z_space_jacobian(z, Delta, delta, r_par, r_perp, Om, **kwargs)
+    # Step 4: Evaluate the real-space profile at the recovered radius
     r = np.sqrt(r_par**2 + r_perp**2)
-    # Evaluate profile:
-    return rho_real(r)*jacobian
-
-
+    return rho_real(r) * jacobian
 
 #-------------------------------------------------------------------------------
 # LIKELIHOOD AND POSTERIOR COMPUTATION
