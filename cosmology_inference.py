@@ -1693,6 +1693,8 @@ def get_1d_real_space_field(snaps,rbins=None,filter_list=None,
     if halo_indices is not None:
         if filter_list is None:
             filter_list = [halo_indices[ns] >= 0 for ns in range(0,snaps.N)]
+    if filter_list is None:
+        filter_list = [np.ones(len(x),dtype=bool) for x in snaps["pair_counts"]]
     # Load from snaps list:
     if use_precomputed_profiles:
         # Use stored pair counts, ignoring specified bins:
@@ -1716,28 +1718,33 @@ def get_1d_real_space_field(snaps,rbins=None,filter_list=None,
                 vorVolumes=snaps["cell_volumes"][ns])
             all_counts.append(counts)
             all_volumes.append(volumes)
+    # Indices of voids to use:
     if halo_indices is not None:
+        # Use specified void indices. Note that if halo_indices is provided, 
+        # we are assuming that the filter_list does not line up with the 
+        # full lists of halos stored in snaps. This happens when the filter
+        # list was derived from a void catalogue, for example.
         all_antihalos = [halo_indices[ns][halo_indices[ns] >= 0] - 1
                          for ns in range(0,snaps.N)]
+    elif filter_list is not None:
+        # Use the supplied boolean array of voids:
+        all_antihalos = [np.where(filt)[0] for filt in filter_list]
     else:
+        # No filtering, use the entire stack:
         all_antihalos = [np.arange(len(x)) for x in snaps["pair_counts"]]
-    if filter_list is not None:
-        voids_used = filter_list
-    else:
-        voids_used = [np.ones(len(x),dtype=bool) for x in snaps["pair_counts"]]
+    # Compute all individual void profiles:
     all_profiles = [counts[ind]/(vols[ind]*nbar) 
                     for counts, vols, ind in 
                     zip(all_counts,all_volumes,all_antihalos)]
-    # Compute the density profiles for each void:
     density = np.vstack(all_profiles)
     # Weights for voids:
     if additional_weights is not None:
         additional_weights_per_void = np.hstack([weights[used] 
-            for weights, used in zip(additional_weights,voids_used)])
+            for weights, used in zip(additional_weights,filter_list)])
     else:
         additional_weights_per_void = np.ones(density.shape[0])
     # Bootstrap to get (weighted) mean profile and it's error:
-    num_voids = np.sum([np.sum(x) for x in voids_used])
+    num_voids = np.sum([np.sum(x) for x in filter_list])
     np.random.seed(seed)
     bootstrap_samples = np.random.choice(num_voids,size=(num_voids,n_boot))
     bootstrap_profiles = np.array([np.average(

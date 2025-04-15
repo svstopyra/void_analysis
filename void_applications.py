@@ -576,10 +576,10 @@ tau, sampler = run_inference_pipeline(
 
 ri = plot_utilities.binCentres(rbins)
 
-params_lcdm = get_profile_parameters_fixed(ri,field_lcdm_1d-1,
-                                           field_lcdm_1d_sigma)
-params_borg = get_profile_parameters_fixed(ri,field_borg_1d-1,
-                                           field_borg_1d_sigma)
+params_lcdm = get_profile_parameters_fixed(plot_utilities.binCentres(
+    lcdm_snaps["radius_bins"][0]),field_lcdm_1d-1,field_lcdm_1d_sigma)
+params_borg = get_profile_parameters_fixed(plot_utilities.binCentres(
+    borg_snaps["radius_bins"][0]),field_borg_1d-1,field_borg_1d_sigma)
 
 
 plt.clf()
