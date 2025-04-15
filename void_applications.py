@@ -378,11 +378,11 @@ los_lcdm_zspace = get_los_positions_for_all_catalogues(
 los_lcdm_real = get_los_positions_for_all_catalogues(
     lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],
     lcdm_snaps["void_centres"],lcdm_snaps["void_radii"],all_particles=True,
-    filter_list=voids_used_lcdm,dist_max=10,rmin=10,rmax=20,
-    recompute=True,zspace=False,suffix=".lospos_all.p")
+    filter_list=voids_used_lcdm,dist_max=3,rmin=10,rmax=20,
+    recompute=False,zspace=False,suffix=".lospos_all.p")
 
 # BORG LOS positions:
-halo_indices = cat300.get_final_catalogue(void_filter=True,short_list=False)
+halo_indices = cat300.get_final_catalogue(void_filter=True,short_list=False).T
 filter_list_borg = [halo_indices[ns] >= 0 for ns in range(0,borg_snaps.N)]
 zcentres = tools.loadOrRecompute(data_folder + "zspace_centres.p",
                                  get_zspace_centres,halo_indices,
@@ -402,8 +402,8 @@ los_borg_real = get_los_positions_for_all_catalogues(
     borg_snaps["snaps"],borg_snaps["snaps_reverse"],
     cat300.getAllCentres(void_filter=True),
     cat300.getAllProperties("radii",void_filter=True).T,all_particles=True,
-    filter_list=filter_list_borg,dist_max=10,rmin=10,rmax=20,
-    void_indices = halo_indices,recompute=True,zspace=False,
+    filter_list=filter_list_borg,dist_max=3,rmin=10,rmax=20,
+    void_indices = halo_indices,recompute=False,zspace=False,
     suffix=".lospos_all.p")
 
 # Trimmed LOS lists:
@@ -422,7 +422,7 @@ additional_weights_unfiltered_borg = get_additional_weights_borg(cat300)
 additional_weights_borg = get_additional_weights_borg(
     cat300,voids_used = voids_used_borg)
 
-rbins = np.linspace(0,10,101)
+rbins = np.linspace(0,3,31)
 
 # BORG density field:
 field_borg_test = get_stacked_void_density_field(
@@ -432,12 +432,8 @@ field_borg_test = get_stacked_void_density_field(
     los_pos = los_borg_zspace,filter_list = filter_list_borg)
 
 field_borg_1d, field_borg_1d_sigma = get_1d_real_space_field(
-    borg_snaps,cat300.getAllProperties("radii",void_filter=True).T,
-    cat300.getAllCentres(void_filter=True),rbins,
-    filter_list=filter_list_borg,
-    additional_weights=additional_weights_unfiltered_borg,dist_max=3,
-    rmin=10,rmax=20,suffix=".lospos_all.p",
-    recompute=False,nbar=nbar,los_pos=los_borg_real)
+    borg_snaps,filter_list=filter_list_borg,
+    additional_weights=additional_weights_unfiltered_borg)
 
 
 # LCDM density field:
@@ -447,11 +443,7 @@ field_lcdm_test = get_stacked_void_density_field(
     los_pos = los_lcdm_zspace)
 
 field_lcdm_1d, field_lcdm_1d_sigma = get_1d_real_space_field(
-    lcdm_snaps,lcdm_snaps["void_radii"],
-    lcdm_snaps["void_centres"],rbins,
-    filter_list=voids_used_lcdm,dist_max=3,rmin=10,rmax=20,
-    suffix=".lospos_all.p",recompute=False,nbar=nbar,
-    los_pos = los_lcdm_real)
+    lcdm_snaps,filter_list=voids_used_lcdm)
 
 
 #-------------------------------------------------------------------------------

@@ -1682,11 +1682,10 @@ def get_stacked_void_density_field(snaps,void_radii_lists,void_centre_lists,
                                            weights=additional_weights_per_void,
                                            nbar=nbar)
 
-def get_1d_real_space_field(snaps,void_radii_lists,void_centre_lists,rbins,
-                            filter_list=None,additional_weights=None,
-                            dist_max=3,rmin=10,rmax=20,suffix=".lospos_all.p",
-                            los_pos=None,recompute=False,nbar=None,
-                            n_boot = 10000,seed = 42):
+
+def get_1d_real_space_field(snaps,rbins=None,filter_list=None,
+                            additional_weights=None,n_boot = 10000,seed = 42,
+                            halo_indices=None,use_precomputed_profiles=True):
     boxsize = snaps.boxsize
     nbar = len(snaps["snaps"][0])/boxsize**3
     # Filter out any invalid halo indices (usually only occurs for
@@ -1694,35 +1693,51 @@ def get_1d_real_space_field(snaps,void_radii_lists,void_centre_lists,rbins,
     if halo_indices is not None:
         if filter_list is None:
             filter_list = [halo_indices[ns] >= 0 for ns in range(0,snaps.N)]
-    # Get LOS positions:
-    if los_pos is None:
-        los_pos = get_los_positions_for_all_catalogues(
-            snaps["snaps"],snaps["snaps_reverse"],void_centre_lists,
-            void_radii_lists,all_particles=True,void_indices = halo_indices,
-            filter_list=filter_list,dist_max=dist_max,rmin=rmin,rmax=rmax,
-            recompute=recompute,zspace=False,suffix=suffix)
-    los_list_trimmed, voids_used = trim_los_list(los_pos,rbins,rbins,
-                                                 void_radii_lists)
-    r_list = [[np.sqrt(np.sum(x**2,1)) for x in y] for y in los_list_trimmed]
-    r_list_all = sum(r_list,[])
-    # Weights:
-    los_list_per_void = sum(los_list_trimmed,[])
-    void_radii_per_void = np.hstack([rad[used] 
-        for rad, used in zip(void_radii_lists,voids_used)])
+    # Load from snaps list:
+    if use_precomputed_profiles:
+        # Use stored pair counts, ignoring specified bins:
+        rbins = snaps["radius_bins"][0]
+        all_counts = snaps["pair_counts"]
+        all_volumes = snaps["bin_volumes"]
+    else:
+        # Reconstruct counts and volumes from scratch:
+        all_counts = []
+        all_volumes = []
+        if rbins is None:
+            # Assume a default set of bins:
+            rbins = np.linspace(0,3,31)
+        for ns in range(0,borg_snaps.N):
+            tree = scipy.spatial.cKDTree(borg_snaps["snaps"][ns]['pos'],
+                                         boxsize=boxsize)
+            [counts, volumes] = stacking.getPairCounts(\
+                snaps["void_centres"][ns],snaps["void_radii"][ns],
+                snaps["snaps"][ns],rbins,\
+                nThreads=-1,tree=tree,method="poisson",
+                vorVolumes=snaps["cell_volumes"][ns])
+            all_counts.append(counts)
+            all_volumes.append(volumes)
+    if halo_indices is not None:
+        all_antihalos = [halo_indices[ns][halo_indices[ns] >= 0] - 1
+                         for ns in range(0,snaps.N)]
+    else:
+        all_antihalos = [np.arange(len(x)) for x in snaps["pair_counts"]]
+    if filter_list is not None:
+        voids_used = filter_list
+    else:
+        voids_used = [np.ones(len(x),dtype=bool) for x in snaps["pair_counts"]]
+    all_profiles = [counts[ind]/(vols[ind]*nbar) 
+                    for counts, vols, ind in 
+                    zip(all_counts,all_volumes,all_antihalos)]
+    # Compute the density profiles for each void:
+    density = np.vstack(all_profiles)
+    # Weights for voids:
     if additional_weights is not None:
         additional_weights_per_void = np.hstack([weights[used] 
             for weights, used in zip(additional_weights,voids_used)])
     else:
-        additional_weights_per_void = np.ones(void_radii_per_void.shape)
-    v_weights_per_void = (np.ones(void_radii_per_void.shape)/
-        (void_radii_per_void**3))
-    # Binned density:
-    cell_volumes = 4*np.pi*(rbins[1:]**3 - rbins[0:-1]**3)/3
-    hist = np.vstack([np.histogram(rad,bins=rbins,density=False)[0] 
-                      for rad in r_list_all])
+        additional_weights_per_void = np.ones(density.shape[0])
+    # Bootstrap to get (weighted) mean profile and it's error:
     num_voids = np.sum([np.sum(x) for x in voids_used])
-    density = hist*v_weights_per_void[:,None]/(cell_volumes*nbar)
-    # Bootstrap to estimate the density profile  and it's uncertainty:
     np.random.seed(seed)
     bootstrap_samples = np.random.choice(num_voids,size=(num_voids,n_boot))
     bootstrap_profiles = np.array([np.average(
@@ -1877,7 +1892,7 @@ def get_profile_parameters_fixed(ri,rhoi,sigma_rhoi,
     nll = lambda *theta: -log_likelihood_profile(*theta)
     sol = scipy.optimize.minimize(nll, initial, bounds = bounds,
                                   args=(ri, rhoi, sigma_rhoi,
-                                        profile_modified_hamaus))
+                                        model))
     return sol.x
 
 
@@ -1957,7 +1972,9 @@ def run_inference_pipeline(field,cov,sperp_bins,spar_bins,ri,delta_i,
                            autocorr_filename = "autocorr.npy",disp=1e-2,
                            nwalkers=64,n_mcmc=10000,max_n=1000000,
                            batch_size=100,nbatch=100,redo_chain=False,
-                           backup_start=True):
+                           backup_start=True,
+                           delta_profile = profile_modified_hamaus,
+                           Delta_profile = integrated_profile_modified_hamaus):
     # Compute inverse covariance, or cholesky decomposition:
     if cholesky:
         # Instead of computing the inverse matrix, use cholesky decomposition
@@ -1977,18 +1994,14 @@ def run_inference_pipeline(field,cov,sperp_bins,spar_bins,ri,delta_i,
     data_field = field.flatten()[data_filter]
     # Profile functions:
     if infer_profile_args:
-        delta_func = profile_modified_hamaus
-        Delta_func = integrated_profile_modified_hamaus
-        rho_real = lambda *args: profile_modified_hamaus(*args) + 1.0
+        delta_func = delta_profile
+        Delta_func = Delta_profile
+        rho_real = lambda *args: delta_profile(*args) + 1.0
     else:
-        alpha,beta,rs,delta_c,delta_large, rv = get_profile_parameters_fixed(
-            ri,delta_i,sigma_delta_i)
-        delta_func = lambda r: profile_modified_hamaus(
-                                   r,alpha,beta,rs,delta_c,
-                                   delta_large = delta_large,rv=rv)
-        Delta_func = lambda r: integrated_profile_modified_hamaus(
-                                   r,alpha,beta,rs,delta_c,
-                                   delta_large = delta_large,rv=rv)
+        *profile_params, = get_profile_parameters_fixed(
+            ri,delta_i,sigma_delta_i,model=delta_profile)
+        delta_func = lambda r: delta_profile(r,*profile_params)
+        Delta_func = lambda r: Delta_profile(r,*profile_params)
         rho_real = lambda r: delta_func(r) + 1.0
     # Precompute inverse function. Only useful if profile parameters are fixed:
     if infer_profile_args or (not tabulate_inverse):
