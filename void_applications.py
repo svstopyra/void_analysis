@@ -572,24 +572,7 @@ log_cholesky_cov_lcdm = scipy.linalg.cholesky(logrho_cov_lcdm,lower=True)
 #A,r0,c1,f1,B = sol2.x
 
 
-# Inference for LCDM mock (end-to-end test):
 
-
-
-
-
-# Inference for Borg catalogue:
-tau, sampler = run_inference_pipeline(
-    field_lcdm_test,rho_cov_lcdm,sperp_bins,spar_bins,ri,
-    field_lcdm_1d_uncon-1.0,field_lcdm_1d_sigma_uncon,log_field=False,
-    infer_profile_args=True,tabulate_inverse=True,cholesky=True,
-    sample_epsilon=True,filter_data=False,z = 0.0225,lambda_cut=1e-23,
-    lambda_ref=1e-27,
-    profile_param_ranges = [[0,np.inf],[0,np.inf],[0,np.inf],[-1,0],[-1,1],
-    [0,2]],om_ranges = [[0.1,0.5]],eps_ranges = [[0.9,1.1]],f_ranges = [[0,1]],
-    Om_fid = 0.3111,filename = "inference_weighted.h5",
-    autocorr_filename = "autocorr.npy",disp=1e-2,nwalkers=64,n_mcmc=10000,
-    max_n=1000000,batch_size=100,nbatch=100,redo_chain=False,backup_start=True)
 
 
 # Profiles test:
@@ -623,6 +606,23 @@ plt.xlabel("$r/r_{\\mathrm{eff}}$")
 plt.ylabel("\\delta(r)")
 plt.savefig(figuresFolder + "profile_fit_test.pdf")
 plt.show()
+
+
+# Inference for LCDM mock (end-to-end test):
+
+# Inference for Borg catalogue:
+tau, sampler = run_inference_pipeline(
+    field_lcdm_test,rho_cov_lcdm,rhomean_lcdm,sperp_bins,spar_bins,ri_lcdm,
+    field_lcdm_1d_uncon-1.0,field_lcdm_1d_sigma_uncon,log_field=False,
+    infer_profile_args=True,tabulate_inverse=True,cholesky=True,
+    sample_epsilon=True,filter_data=False,z = 0.0225,lambda_cut=1e-23,
+    lambda_ref=1e-27,
+    profile_param_ranges = [[0,np.inf],[0,np.inf],[0,np.inf],[-1,0],[-1,1],
+    [0,2]],om_ranges = [[0.1,0.5]],eps_ranges = [[0.9,1.1]],f_ranges = [[0,1]],
+    Om_fid = 0.3111,filename = "inference_weighted.h5",
+    autocorr_filename = "autocorr.npy",disp=1e-2,nwalkers=64,n_mcmc=10000,
+    max_n=1000000,batch_size=100,nbatch=100,redo_chain=True,backup_start=True)
+
 
 
 

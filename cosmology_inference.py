@@ -28,7 +28,7 @@ from astropy.coordinates import SkyCoord
 import scipy
 import os
 import sys
-
+import emcee
 #-------------------------------------------------------------------------------
 # SNAPSHOT GROUP CLASS
 
@@ -727,10 +727,9 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
                         Delta_func(np.sqrt(r**2 + rperp_vals[i]**2)) \
                         - svals[j])
                     rvals[i,j] = scipy.optimize.fsolve(F,svals[j])
-            F_inv = lambda x, y: scipy.interpolate.interpn((rperp_vals,svals),
-                                                           rvals,
-                                                           np.vstack((x,y)).T,
-                                                           method='cubic')
+            F_inv = lambda x, y, z: scipy.interpolate.interpn(
+                                        (rperp_vals,svals),rvals,
+                                        np.vstack((x,y)).T,method='cubic')
             theory_val = z_space_profile(s_par_new,s_perp_new,
                                          lambda r: rho_real(r,*profile_args),
                                          z,Om,Delta_func,delta_func,f=f,
@@ -834,7 +833,6 @@ def log_likelihood_aptest_revised(theta, data_field, scoords, inv_cov, z,
         scoords = scoords[data_filter, :]
         if cholesky or not singular:
             inv_cov = inv_cov[data_filter, :][:, data_filter]
-
     s_par, s_perp = scoords[:, 0], scoords[:, 1]
     # Unpack parameter vector
     if sample_epsilon:
@@ -973,11 +971,9 @@ def log_probability_aptest(theta, *args, **kwargs):
     theta_ranges = kwargs.pop("theta_ranges", None)
     if theta_ranges is None:
         raise ValueError("Missing 'theta_ranges' in kwargs for prior evaluation.")
-
     lp = log_flat_prior(theta, theta_ranges)
     if not np.isfinite(lp):
         return -np.inf
-
     return lp + log_likelihood_aptest(theta, *args, **kwargs)
 
 # UNUSED
@@ -1087,7 +1083,6 @@ def get_nonsingular_subspace(C, lambda_reg,
             - good_eig (ndarray): Retained eigenvalues
     """
     reg_cov = regularise_covariance(C, lambda_reg=lambda_reg)
-
     if normalised_cov:
         if mu is None:
             raise ValueError("Mean 'mu' must be provided for normalised covariance.")
@@ -1096,13 +1091,10 @@ def get_nonsingular_subspace(C, lambda_reg,
         eig, U = scipy.linalg.eigh(norm_reg_cov)
     else:
         eig, U = scipy.linalg.eigh(reg_cov)
-
     if lambda_cut is None:
         lambda_cut = 10 * lambda_reg
-
     good_eig = eig[eig >= lambda_cut]
     Umap = U[:, eig >= lambda_cut].T  # Each row is a retained eigenvector
-
     return Umap, good_eig
 
 
@@ -2653,7 +2645,8 @@ def run_inference_pipeline(field, cov, mean, sperp_bins, spar_bins,
         'Umap': Umap,
         'good_eig': good_eig,
         'F_inv': F_inv,
-        'log_density': log_field
+        'log_density': log_field,
+        'infer_profile_args':infer_profile_args
     }
     # --- Step 8: Run MCMC
     tau, sampler = run_inference(
