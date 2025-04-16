@@ -351,8 +351,8 @@ from void_analysis.plot import draw_ellipse, plot_los_void_stack
 upper_dist_reff = 2
 spar_bins = np.linspace(0,upper_dist_reff,21)
 sperp_bins = np.linspace(0,upper_dist_reff,21)
-bin_z_centres = plot.binCentres(spar_bins)
-bin_d_centres = plot.binCentres(sperp_bins)
+bin_spar_centres = plot.binCentres(spar_bins)
+bin_sperp_centres = plot.binCentres(sperp_bins)
 
 # LCDM LOS positions
 # Get densities for MCMC simulations, so we can find comparable LCDM regions:
@@ -364,9 +364,9 @@ centres_file = data_folder2 + "random_centres_and_densities.p"
 voids_used_lcdm = get_lcdm_void_catalogue(
     lcdm_snaps,deltaMAPBootstrap.confidence_interval,
     centres_file = centres_file)
-voids_used_lcdm_all = get_lcdm_void_catalogue(
-    lcdm_snaps,deltaMAPBootstrap.confidence_interval,
-    centres_file = centres_file,flattened=False)
+# Sample of lcdm voids without applying density constraints:
+voids_used_lcdm_unconstrained = get_lcdm_void_catalogue(
+    lcdm_snaps,centres_file = centres_file)
 
 los_lcdm_zspace = get_los_positions_for_all_catalogues(
     lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],lcdm_snaps["void_centres"],
@@ -375,11 +375,18 @@ los_lcdm_zspace = get_los_positions_for_all_catalogues(
     rmin=10,rmax=20,recompute=False,zspace=True,recompute_zspace=False,
     suffix=".lospos_all_zspace_selected.p",flatten_filters=True)
 
-los_lcdm_real = get_los_positions_for_all_catalogues(
-    lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],
-    lcdm_snaps["void_centres"],lcdm_snaps["void_radii"],all_particles=True,
-    filter_list=voids_used_lcdm,dist_max=3,rmin=10,rmax=20,
-    recompute=False,zspace=False,suffix=".lospos_all.p")
+los_lcdm_zspace_unconstrained = get_los_positions_for_all_catalogues(
+    lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],lcdm_snaps["void_centres"],
+    lcdm_snaps["void_radii"],all_particles=True,
+    filter_list=voids_used_lcdm_unconstrained,dist_max=3,
+    rmin=10,rmax=20,recompute=True,zspace=True,recompute_zspace=False,
+    suffix=".lospos_all_zspace.p",flatten_filters=True)
+
+#los_lcdm_real = get_los_positions_for_all_catalogues(
+#    lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],
+#    lcdm_snaps["void_centres"],lcdm_snaps["void_radii"],all_particles=True,
+#    filter_list=voids_used_lcdm,dist_max=3,rmin=10,rmax=20,
+#    recompute=False,zspace=False,suffix=".lospos_all.p")
 
 # BORG LOS positions:
 halo_indices = cat300.get_final_catalogue(void_filter=True,short_list=False).T
@@ -398,13 +405,13 @@ los_borg_zspace = get_los_positions_for_all_catalogues(
     zspace=True,recompute_zspace=False,suffix=".lospos_all_zspace2.p")
 
 
-los_borg_real = get_los_positions_for_all_catalogues(
-    borg_snaps["snaps"],borg_snaps["snaps_reverse"],
-    cat300.getAllCentres(void_filter=True),
-    cat300.getAllProperties("radii",void_filter=True).T,all_particles=True,
-    filter_list=filter_list_borg,dist_max=3,rmin=10,rmax=20,
-    void_indices = halo_indices,recompute=False,zspace=False,
-    suffix=".lospos_all.p")
+#los_borg_real = get_los_positions_for_all_catalogues(
+#    borg_snaps["snaps"],borg_snaps["snaps_reverse"],
+#    cat300.getAllCentres(void_filter=True),
+#    cat300.getAllProperties("radii",void_filter=True).T,all_particles=True,
+#    filter_list=filter_list_borg,dist_max=3,rmin=10,rmax=20,
+#    void_indices = halo_indices,recompute=False,zspace=False,
+#    suffix=".lospos_all.p")
 
 # Trimmed LOS lists:
 void_radii_borg = cat300.getMeanProperty("radii",void_filter=True)[0]
@@ -436,7 +443,16 @@ field_borg_1d, field_borg_1d_sigma = get_1d_real_space_field(
     additional_weights=additional_weights_unfiltered_borg)
 
 
-# LCDM density field:
+# LCDM density field (with density constraint):
+field_lcdm_test = get_stacked_void_density_field(
+    lcdm_snaps,lcdm_snaps["void_radii"],lcdm_snaps["void_centres"],
+    spar_bins,sperp_bins,filter_list=voids_used_lcdm,recompute=False,
+    los_pos = los_lcdm_zspace)
+
+field_lcdm_1d, field_lcdm_1d_sigma = get_1d_real_space_field(
+    lcdm_snaps,filter_list=voids_used_lcdm)
+
+# LCDM density field (without density constraint):
 field_lcdm_test = get_stacked_void_density_field(
     lcdm_snaps,lcdm_snaps["void_radii"],lcdm_snaps["void_centres"],
     spar_bins,sperp_bins,filter_list=voids_used_lcdm,recompute=False,
@@ -575,24 +591,26 @@ tau, sampler = run_inference_pipeline(
 # Profiles test:
 
 ri = plot_utilities.binCentres(rbins)
-
-params_lcdm = get_profile_parameters_fixed(plot_utilities.binCentres(
-    lcdm_snaps["radius_bins"][0]),field_lcdm_1d-1,field_lcdm_1d_sigma)
-params_borg = get_profile_parameters_fixed(plot_utilities.binCentres(
-    borg_snaps["radius_bins"][0]),field_borg_1d-1,field_borg_1d_sigma)
+ri_lcdm = plot_utilities.binCentres(lcdm_snaps["radius_bins"][0])
+ri_borg = plot_utilities.binCentres(borg_snaps["radius_bins"][0])
+params_lcdm = get_profile_parameters_fixed(ri_lcdm,field_lcdm_1d-1,
+                                           field_lcdm_1d_sigma)
+params_borg = get_profile_parameters_fixed(ri_borg,field_borg_1d-1,
+                                           field_borg_1d_sigma)
 
 
 plt.clf()
-rrange = np.linspace(0,2,1000)
-plt.plot(rrange,profile_modified_hamaus(rrange,*params_lcdm),
+rrange_lcdm = np.linspace(0,10,1000)
+rrange_borg = np.linspace(0,3,1000)
+plt.plot(rrange_lcdm,profile_modified_hamaus(rrange_lcdm,*params_lcdm),
          color=seabornColormap[0],label="LCDM model")
-plt.fill_between(ri,field_lcdm_1d - 1 - field_lcdm_1d_sigma,
+plt.fill_between(ri_lcdm,field_lcdm_1d - 1 - field_lcdm_1d_sigma,
                  field_lcdm_1d - 1 + field_lcdm_1d_sigma,
                  color=seabornColormap[0],label="LCDM simulated",
                  alpha=0.5)
-plt.plot(rrange,profile_modified_hamaus(rrange,*params_borg),
+plt.plot(rrange_borg,profile_modified_hamaus(rrange_borg,*params_borg),
          color=seabornColormap[1],label="MCMC model")
-plt.fill_between(ri,field_borg_1d - 1 - field_borg_1d_sigma,
+plt.fill_between(ri_borg,field_borg_1d - 1 - field_borg_1d_sigma,
                  field_borg_1d - 1 + field_borg_1d_sigma,
                  color=seabornColormap[1],label="MCMC simulated",
                  alpha=0.5)
@@ -1101,8 +1119,8 @@ f_fid = f_lcdm(0.0225,0.3111)
 
 for i in range(0,len(spar_bins)-1):
     for j in range(0,len(sperp_bins)-1):
-        spar = bin_z_centres[i]
-        sperp = bin_d_centres[j]
+        spar = bin_spar_centres[i]
+        sperp = bin_sperp_centres[j]
         profile_2d[i,j] = z_space_profile(spar,sperp,
                                           lambda r: rho_real(r,*sol2.x),
                                           z,Om,Delta_func,delta_func,
@@ -1110,7 +1128,7 @@ for i in range(0,len(spar_bins)-1):
                                           f=f_fid,apply_geometry=True)
 
 plot_los_void_stack(\
-        profile_2d,bin_d_centres,bin_z_centres,
+        profile_2d,bin_sperp_centres,bin_spar_centres,
         cmap='Blues',vmin=0,vmax=0.06,fontsize=10,
         xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$ (Perpendicular distance)',
         ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$ (LOS distance)',
@@ -1120,7 +1138,7 @@ plot_los_void_stack(\
         colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})$")
 
 plot_los_void_stack(\
-        field_borg,bin_d_centres,bin_z_centres,
+        field_borg,bin_sperp_centres,bin_spar_centres,
         cmap='Blues',vmin=0,vmax=0.06,fontsize=10,
         xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$ (Perpendicular distance)',
         ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$ (LOS distance)',
@@ -1130,7 +1148,7 @@ plot_los_void_stack(\
         colorbar_title="$\\rho(s_{\\parallel},s_{\\perp})$")
 
 plot_los_void_stack(\
-        (profile_2d - field_borg)/field_borg,bin_d_centres,bin_z_centres,
+        (profile_2d - field_borg)/field_borg,bin_sperp_centres,bin_spar_centres,
         cmap='PuOr_r',
         vmin=0,vmax=200,fontsize=10,norm=colors.Normalize(vmin=-1,vmax=1),
         xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$ (Perpendicular distance)',
@@ -1143,7 +1161,7 @@ plot_los_void_stack(\
 
 
 plot_los_void_stack(\
-        profile_2d - field_borg,bin_d_centres,bin_z_centres,
+        profile_2d - field_borg,bin_sperp_centres,bin_spar_centres,
         cmap='PuOr_r',
         vmin=0,vmax=200,fontsize=10,norm=colors.Normalize(vmin=-3e-3,vmax=3e-3),
         xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$ (Perpendicular distance)',
@@ -1157,7 +1175,7 @@ plot_los_void_stack(\
 
 
 plot_los_void_stack(\
-        field_lcdm,bin_d_centres,bin_z_centres,
+        field_lcdm,bin_sperp_centres,bin_spar_centres,
         cmap='Blues',
         vmin=0,vmax=0.06,fontsize=10,
         xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$ (Perpendicular distance)',
@@ -1384,7 +1402,7 @@ plt.fill_between(r_values,
 #         linestyle=':',color=seabornColormap[0])
 #plt.plot(r_bin_centres,rho_r_fit_vals_borg,
 #         linestyle=':',color=seabornColormap[1])
-#plt.plot(bin_d_centres,field_borg[0],linestyle='-',color='k',
+#plt.plot(bin_sperp_centres,field_borg[0],linestyle='-',color='k',
 #    label="$\\rho_{\\mathrm{BORG}}(s_{\\perp},0)$")
 #plt.fill_between(r_bin_centres,
 #                 field_borg_fit_mean - field_borg_fit_std,
@@ -1392,7 +1410,7 @@ plt.fill_between(r_values,
 #                 alpha=0.5,color='k',
 #                 label="Fitting-formula, $\\rho(s_{\\parallel},s_{\\perp})$ " + 
 #                 " fit")
-#plt.plot(bin_d_centres,field_lcdm[0],linestyle='--',color='k',
+#plt.plot(bin_sperp_centres,field_lcdm[0],linestyle='--',color='k',
 #    label="$\\rho_{\\Lambda\\mathrm{CDM}}(s_{\\perp},0)$")
 
 plt.xlabel('$r/r_{\\mathrm{eff}}$')

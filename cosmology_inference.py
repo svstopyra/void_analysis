@@ -959,7 +959,7 @@ def log_probability_aptest_parallel(theta,*args,**kwargs):
 #-------------------------------------------------------------------------------
 # GAUSSIANITY TESTING
 
-def tikhonov_regularisation(cov_matrix, alpha=1e-10):
+def tikhonov_regularisation(cov_matrix, lambda_reg=1e-10):
     """
     Apply Tikhonov regularisation to a covariance matrix.
 
@@ -973,7 +973,7 @@ def tikhonov_regularisation(cov_matrix, alpha=1e-10):
     Returns:
         ndarray: Regularised covariance matrix
     """
-    return cov_matrix + alpha * np.eye(cov_matrix.shape[0])
+    return cov_matrix + lambda_reg * np.eye(cov_matrix.shape[0])
 
 def regularise_covariance(cov, lambda_reg=1e-10):
     """
@@ -1209,7 +1209,6 @@ def get_zspace_centres(halo_indices, snap_list, snap_list_rev,
     if len(halo_indices) != len(snap_list):
         raise ValueError("halo_indices list does not match snapshot list.")
     num_samples = len(halo_indices)
-
     # Preallocate list of centers, shape (N_voids, 3) per snapshot
     centres = [np.full((len(halos), 3), np.nan) for halos in halo_indices]
     for ns in range(num_samples):
@@ -1330,30 +1329,6 @@ def get_2d_void_stack_from_los_pos(los_pos, spar_bins, sperp_bins, radii, stacke
         return los_list_reff
 
 
-# Compute_volume weights:
-def get_weights_for_stack(los_pos,void_radii,additional_weights = None,
-                          stacked = True):
-    if additional_weights is None:
-        v_weight = [[(1.0/rad)**3*np.ones(len(los)) 
-                    for los, rad in zip(all_los,all_radii)] 
-                    for all_los, all_radii in zip(los_pos,void_radii)]
-    else:
-        if type(additional_weights) == list:
-            v_weight = [[(1.0/rad)**3*np.ones(len(los))*weight 
-                    for los, rad, weight in zip(all_los,all_radii,all_weights)] 
-                    for all_los, all_radii, all_weights,
-                    in zip(los_pos,void_radii,additional_weights)]
-        else:
-            v_weight = [[(1.0/rad)**3*np.ones(len(los))*weight 
-                    for los, rad, weight 
-                    in zip(all_los,all_radii,additional_weights)]
-                    for all_los, all_radii
-                    in zip(los_pos,void_radii)]
-    if stacked:
-        return np.hstack([np.hstack(rad) for rad in v_weight])
-    else:
-        return v_weight
-
 def get_weights_for_stack(los_pos, void_radii, additional_weights=None, stacked=True):
     """
     Compute volume-based stacking weights for LOS particles.
@@ -1403,16 +1378,35 @@ def get_weights_for_stack(los_pos, void_radii, additional_weights=None, stacked=
         return v_weight
 
 
-# Put all particles into a single pile and then bin them:
-def get_field_from_los_data(los_data,z_bins,d_bins,v_weight,void_count,
-                            nbar=None):
-    cell_volumes_reff = np.outer(np.diff(z_bins),np.diff(d_bins))
-    hist = np.histogramdd(los_data,bins=[z_bins,d_bins],density=False,
-                          weights = v_weight/(2*np.pi*los_data[:,1]))
+def get_field_from_los_data(los_data, spar_bins, sperp_bins, v_weight,
+                            void_count, nbar=None):
+    """
+    Bin all LOS particles into a 2D histogram to compute the stacked void density field.
+
+    Includes a cylindrical Jacobian factor and optional normalization by cosmic mean density.
+
+    Parameters:
+        los_data (ndarray): Array of shape (N_particles, 2) with (s_par, s_perp) values
+        spar_bins (array): Bin edges along LOS direction
+        sperp_bins (array): Bin edges perpendicular to LOS
+        v_weight (array): Weights for each particle (same length as los_data)
+        void_count (int): Total number of contributing voids
+        nbar (float or None): Mean number density. If supplied, normalizes output.
+
+    Returns:
+        ndarray: 2D stacked density field (shape: [N_spar_bins, N_sperp_bins])
+    """
+    cell_volumes_reff = np.outer(np.diff(spar_bins), np.diff(sperp_bins))
+    hist = np.histogramdd(
+        los_data,
+        bins=[spar_bins, sperp_bins],
+        density=False,
+        weights=v_weight / (2 * np.pi * los_data[:, 1])
+    )[0]
     if nbar is not None:
-        return hist[0]/(2*void_count*cell_volumes_reff*nbar)
+        return hist / (2 * void_count * cell_volumes_reff * nbar)
     else:
-        return hist[0]/(2*void_count*cell_volumes_reff)
+        return hist / (2 * void_count * cell_volumes_reff)
 
 
 def get_2d_fields_per_void(los_per_void, sperp_bins, spar_bins,
@@ -1489,66 +1483,176 @@ def get_2d_field_from_stacked_voids(los_per_void, sperp_bins, spar_bins,
     # Average across voids (optionally weighted)
     return np.average(density, axis=0, weights=weights)
 
-def profile_broken_power_log(r,A,r0,c1,f1,B):
-    return np.log(np.abs(A + B*(r/r0)**2 + (r/r0)**4)) + \
-        ((c1 - 4)/f1)*np.log(1 + (r/r0)**f1)
+def profile_broken_power_log(r, A, r0, c1, f1, B):
+    """
+    Logarithmic version of a broken power-law void density profile.
 
-def profile_broken_power(r,A,r0,c1,f1,B):
-    return np.exp(profile_broken_power_log(r,A,r0,c1,f1,B))
+    Used internally to simplify fitting and enforce positivity.
 
-# Modified Hamaus profile:
-def profile_modified_hamaus(r,alpha,beta,rs,delta_c,delta_large = 0.0,rv=1.0):
-    return (delta_c - delta_large)*(1.0 - (r/rs)**alpha)/(1 + (r/rv)**beta) \
-        + delta_large
+    Form:
+        log(ρ/ρ̄) = log|A + B(r/r₀)² + (r/r₀)^4| + ((c₁ - 4)/f₁) * log(1 + (r/r₀)^f₁)
 
-def integrated_profile_modified_hamaus(r,alpha,beta,rs,delta_c,
-                                       delta_large = 0.0,rv=1.0):
-    arg = ((r/rv)**beta)/(1 + (r/rv)**beta)
-    hyp_1 = scipy.special.hyp2f1(3/beta,3/beta,1 + 3/beta,arg)
-    hyp_2 = scipy.special.hyp2f1((alpha+3)/beta,
-                                 (alpha+3)/beta,1 + (alpha+3)/beta,arg)
-    return (delta_c - delta_large)*(
-         ((1.0 + (r/rv)**beta)**(-3/beta))*hyp_1 - 
-         (3/(alpha+3))*((r/rs)**alpha)*
-         ((1 + (r/rv)**beta)**(-(alpha+3)/beta))*hyp_2) + delta_large
+    Parameters:
+        r (float or array): Radial distance
+        A, B (float): Amplitude coefficients
+        r0 (float): Characteristic radius
+        c1, f1 (float): Shape parameters
+
+    Returns:
+        float or array: Logarithm of the void density profile
+    """
+    return np.log(np.abs(A + B * (r / r0)**2 + (r / r0)**4)) + \
+           ((c1 - 4) / f1) * np.log(1 + (r / r0)**f1)
+
+def profile_broken_power(r, A, r0, c1, f1, B):
+    """
+    Broken power-law profile for void density.
+
+    This is the exponential of profile_broken_power_log, ensuring a positive density.
+
+    Parameters:
+        r (float or array): Radial distance
+        A, B (float): Amplitude coefficients
+        r0 (float): Characteristic radius
+        c1, f1 (float): Shape parameters
+
+    Returns:
+        float or array: Density contrast profile δ(r)
+    """
+    return np.exp(profile_broken_power_log(r, A, r0, c1, f1, B))
+
+def profile_modified_hamaus(r, alpha, beta, rs, delta_c, delta_large=0.0, rv=1.0):
+    """
+    Modified Hamaus et al. (2014) void density profile.
+
+    Extends the Hamaus profile by adding a constant density offset (delta_large)
+    to allow for large-scale compensation or uniform overdensity.
+
+    Parameters:
+        r (float or array): Radius
+        alpha, beta (float): Shape parameters
+        rs (float): Void scale radius
+        delta_c (float): Central density contrast
+        delta_large (float): Large-scale offset (default: 0)
+        rv (float): Characteristic void radius (default: 1.0)
+
+    Returns:
+        float or array: Density contrast δ(r)
+    """
+    return ((delta_c - delta_large) * (1.0 - (r / rs)**alpha) /
+            (1.0 + (r / rv)**beta)) + delta_large
+
+def integrated_profile_modified_hamaus(r, alpha, beta, rs, delta_c,
+                                       delta_large=0.0, rv=1.0):
+    """
+    Integrated (cumulative) version of the modified Hamaus profile.
+
+    Computes the average density contrast Δ(r), i.e., the mass enclosed
+    within a sphere of radius r divided by the volume.
+
+    Uses hypergeometric functions to perform analytic integration of δ(r).
+
+    Parameters:
+        r (float or array): Radius
+        alpha, beta (float): Shape parameters
+        rs (float): Void scale radius
+        delta_c (float): Central density contrast
+        delta_large (float): Large-scale offset (default: 0)
+        rv (float): Characteristic void radius (default: 1.0)
+
+    Returns:
+        float or array: Cumulative density contrast Δ(r)
+    """
+    arg = (r / rv)**beta / (1.0 + (r / rv)**beta)
+    hyp_1 = scipy.special.hyp2f1(3 / beta, 3 / beta, 1 + 3 / beta, arg)
+    hyp_2 = scipy.special.hyp2f1((alpha + 3) / beta,
+                                 (alpha + 3) / beta,
+                                 1 + (alpha + 3) / beta,
+                                 arg)
+    return ((delta_c - delta_large) *
+            ((1 + (r / rv)**beta)**(-3 / beta)) * hyp_1 -
+            (3 / (alpha + 3)) * ((r / rs)**alpha) *
+            ((1 + (r / rv)**beta)**(-(alpha + 3) / beta)) * hyp_2
+            + delta_large)
+
+def rho_real(r, *profile_args):
+    """
+    Wrapper function for the real-space density profile.
+
+    Currently hardcoded to use the modified Hamaus profile. Could be 
+    generalized to allow switching between profile models.
+
+    Parameters:
+        r (float or array): Radius
+        *profile_args: Arguments passed to profile_modified_hamaus
+
+    Returns:
+        float or array: Real-space density profile ρ(r)
+    """
+    return profile_modified_hamaus(r, *profile_args)
 
 
-def rho_real(r,*profile_args):
-    #return profile_broken_power(r,A,r0,c1,f1,B)
-    return profile_modified_hamaus(r,*profile_args)
+def get_weights(los_zspace, void_radii, additional_weights=None):
+    """
+    Compute per-void stacking weights for redshift-space LOS data.
 
+    This combines:
+      - 1 / R_eff^3 volume-based scaling (via get_weights_for_stack)
+      - Optional user-supplied weights (e.g. inverse variance, reproducibility)
 
+    Parameters:
+        los_zspace (list): Per-snapshot list of LOS arrays (per void)
+        void_radii (list): Per-snapshot list of void radii
+        additional_weights (list or None): Optional weights per void (same structure)
 
-# Compute weights for each void contributing to the stack:
-def get_weights(los_zspace,void_radii,additional_weights = None):
-    voids_used = [np.array([len(x) for x in los]) > 0 
-        for los in los_zspace]
-    los_pos = [ [los[x] for x in np.where(ind)[0]] 
-        for los, ind in zip(los_zspace,voids_used) ]
+    Returns:
+        list of arrays: Per-void list of per-particle weights
+    """
+    # Mask voids that actually contribute LOS data
+    voids_used = [np.array([len(x) for x in los]) > 0 for los in los_zspace]
+    # Remove empty entries
+    los_pos = [[los[i] for i in np.where(ind)[0]] for los, ind in zip(los_zspace, voids_used)]
+    # Prepare additional weights
     if additional_weights is None:
         weights_list = None
     else:
-        all_additional_weights = np.hstack([weights[used] 
-                                       for weights, used in 
-                                       zip(additional_weights,voids_used)])
-        weights_list = [weights[used]/np.sum(all_additional_weights) 
-            for weights, used in zip(additional_weights,voids_used)]
+        all_additional_weights = np.hstack([
+            weights[used] for weights, used in zip(additional_weights, voids_used)
+        ])
+        weights_list = [
+            weights[used] / np.sum(all_additional_weights)
+            for weights, used in zip(additional_weights, voids_used)
+        ]
+    # Volume × optional weighting
     v_weight = get_weights_for_stack(
-        los_pos,[radii[used] for radii, used in zip(void_radii,voids_used)],
-        additional_weights = weights_list)
+        los_pos,
+        [radii[used] for radii, used in zip(void_radii, voids_used)],
+        additional_weights=weights_list
+    )
     return v_weight
 
 
-# This is actually not needed, because we can already do this in the 
-# catalogue class!
 def get_halo_indices(catalogue):
+    """
+    Map a void catalogue to halo indices in simulation snapshots.
+
+    Only needed if index mapping isn't already handled by the catalogue class.
+
+    NOTE: Deprecated in favor of direct access through catalogue object.
+
+    Parameters:
+        catalogue: Void catalogue with finalCatFrac + indexListShort
+
+    Returns:
+        list of arrays: Per-snapshot list of halo indices
+    """
     final_cat = catalogue.get_final_catalogue(void_filter=True)
-    halo_indices = [-np.ones(len(final_cat),dtype=int) 
-                    for ns in range(0,snaps.N)]
-    for ns in range(0,borg_snaps.N):
-        have_void = final_cat[:,ns] >= 0
-        halo_indices[ns][have_void] = \
-            catalogue.indexListShort[ns][final_cat[have_void,ns]-1]
+    halo_indices = [-np.ones(len(final_cat), dtype=int) for _ in range(catalogue.numCats)]
+    for ns in range(catalogue.numCats):
+        have_void = final_cat[:, ns] >= 0
+        halo_indices[ns][have_void] = catalogue.indexListShort[ns][
+            final_cat[have_void, ns] - 1
+        ]
     return halo_indices
 
 
@@ -1556,231 +1660,425 @@ def get_halo_indices(catalogue):
 #rep_scores = catalogue.property_with_filter(
 #    catalogue.finalCatFrac,void_filter=True)
 
-# Remove voids that don't contribute to the stacked field in any way, returning
-# a list of LOS positions, and boolean arrays flagging which voids were kept:
-def trim_los_list(los_list,spar_bins,sperp_bins,all_radii):
+def trim_los_list(los_list, spar_bins, sperp_bins, all_radii):
+    """
+    Remove voids that have no LOS particles within the stacking volume.
+
+    This filters the LOS list using the (s_par, s_perp) bins and void radii,
+    and returns:
+      - Trimmed list of LOS particles per void
+      - Boolean flags for which voids were retained
+
+    Parameters:
+        los_list (list): Per-snapshot list of LOS particle arrays (per void)
+        spar_bins (array): LOS bin edges
+        sperp_bins (array): Transverse bin edges
+        all_radii (list): Per-snapshot list of void radii
+
+    Returns:
+        tuple:
+            - los_list_trimmed (list of lists): Filtered LOS particle arrays
+            - voids_used (list of bool arrays): Mask of retained voids
+    """
     los_list_trimmed = get_2d_void_stack_from_los_pos(
-        los_list,spar_bins,sperp_bins,
-        [all_radii[ns] for ns in range(0,len(los_list))],stacked=False)
-    voids_used = [np.array([len(x) for x in los]) > 0 
-        for los in los_list]
+        los_list, spar_bins, sperp_bins,
+        [all_radii[ns] for ns in range(len(los_list))],
+        stacked=False
+    )
+    voids_used = [np.array([len(x) > 0 for x in los]) for los in los_list]
     return los_list_trimmed, voids_used
 
-def get_trimmed_los_list_per_void(los_pos,spar_bins,sperp_bins,void_radii_list):
-    los_list_trimmed, voids_used = trim_los_list(los_pos,rbins,rbins,
-                                                 void_radii_lists)
-    return sum(los_list_trimmed,[])
+def get_trimmed_los_list_per_void(los_pos, spar_bins, sperp_bins, void_radii_list):
+    """
+    Get a flat list of trimmed LOS particle arrays from all voids.
 
-def get_borg_density_estimate(snaps,densities_file = None,dist_max=135,
-                              seed = 1000,interval=0.68):
+    This wraps `trim_los_list()` and flattens the result to a single
+    per-void list, across all snapshots.
+
+    Parameters:
+        los_pos (list): Per-snapshot list of LOS arrays (per void)
+        spar_bins (array): LOS bin edges
+        sperp_bins (array): Transverse bin edges
+        void_radii_list (list): Per-snapshot list of void radii
+
+    Returns:
+        list: Flattened list of LOS particle arrays per void (trimmed)
+    """
+    los_list_trimmed, _ = trim_los_list(
+        los_pos, spar_bins, sperp_bins, void_radii_list
+    )
+    return sum(los_list_trimmed, [])
+
+def get_borg_density_estimate(snaps, densities_file=None, dist_max=135,
+                              seed=1000, interval=0.68):
+    """
+    Estimate the density contrast in a specified subvolume using BORG snapshots.
+
+    If precomputed density samples are provided, loads them from file.
+    Otherwise, computes them from raw snapshot data using spherical averaging.
+
+    Returns a bootstrap estimate of the MAP (maximum a posteriori) density contrast
+    and its uncertainty interval.
+
+    Parameters:
+        snaps (SnapHandler): Object containing snapshots in `snaps["snaps"]`
+        densities_file (str or None): Pickle file containing precomputed delta samples
+        dist_max (float): Radius (in Mpc/h) for subvolume used to compute densities
+        seed (int): RNG seed for reproducibility of bootstrap
+        interval (float): Confidence level for bootstrap interval (e.g., 0.68)
+
+    Returns:
+        tuple:
+            - deltaMAPBootstrap (BootstrapResult): Bootstrap distribution object
+            - deltaMAPInterval (ConfidenceInterval): Confidence interval of MAP estimate
+    """
     boxsize = snaps.boxsize
+    # Determine center of sphere based on particle positions
     if np.min(snaps["snaps"][0]["pos"]) < 0:
-        centre = np.array([0,0,0])
+        centre = np.array([0, 0, 0])
     else:
-        centre = np.array([boxsize/2]*3)
+        centre = np.array([boxsize / 2] * 3)
+    # Load or compute density samples
     if densities_file is not None:
         deltaMCMCList = tools.loadPickle(densities_file)
     else:
-        deltaMCMCList = np.array([simulation_tools.density_from_snapshot(
-                                     snap,centre,dist_max)
-                                  for snap in snaps["snaps"]])
+        deltaMCMCList = np.array([
+            simulation_tools.density_from_snapshot(snap, centre, dist_max)
+            for snap in snaps["snaps"]
+        ])
+    # Bootstrap MAP density estimator
     deltaMAPBootstrap = scipy.stats.bootstrap(
-        (deltaMCMCList,),simulation_tools.get_map_from_sample,
-        confidence_level = interval,vectorized=False,random_state=seed)
-    deltaMAPInterval = deltaMAPBootstrap.confidence_interval
-    return deltaMAPBootstrap, deltaMAPInterval
+        (deltaMCMCList,),
+        simulation_tools.get_map_from_sample,
+        confidence_level=interval,
+        vectorized=False,
+        random_state=seed
+    )
+    return deltaMAPBootstrap, deltaMAPBootstrap.confidence_interval
 
-def get_lcdm_void_catalogue(snaps,delta_interval,dist_max=135,
-                            radii_range=[10,20],centres_file = None,
-                            nRandCentres = 10000,seed=1000,flattened=True):
+def get_lcdm_void_catalogue(snaps, delta_interval=None, dist_max=135,
+                            radii_range=[10, 20], centres_file=None,
+                            nRandCentres=10000, seed=1000, flattened=True):
+    """
+    Construct a void selection mask from a ΛCDM simulation by:
+        1. Selecting random underdense regions with matching density
+        2. Removing overlapping regions
+        3. Filtering voids that fall in those regions and meet radius cuts
+
+    Parameters:
+        snaps (SnapHandler): Snapshot object with 'void_centres' and 'void_radii'
+        delta_interval (tuple or None): Density contrast bounds to select regions
+        dist_max (float): Radius of the spherical region used
+        radii_range (list): Acceptable radius range for void selection
+        centres_file (str or None): Pickle file path for caching random regions
+        nRandCentres (int): Number of random regions to generate if no cache
+        seed (int): Random seed for reproducibility
+        flattened (bool): Whether to flatten per-region void mask into a single list
+
+    Returns:
+        list of arrays: Boolean masks per snapshot indicating selected voids
+    """
     boxsize = snaps.boxsize
-    # Get random centres (usually pre-computed, but we can create them
-    # from scratch if necessary):
-    if centres_file is not None:
-        [randCentres,randOverDen] = tools.loadPickle(centres_file)
-    else:
-        [randCentres,randOverDen] = \
-            simulation_tools.get_random_centres_and_densities(
-                dist_max,snaps["snaps"],seed=seed,nRandCentres = nRandCentres)
-    # Select regions with similar density contrast the local supervolume:
-    comparableDensityMAP = [(delta <= delta_interval[1]) & \
-        (delta > delta_interval[0]) for delta in randOverDen]
-    centresToUse = [randCentres[comp] for comp in comparableDensityMAP]
-    # Get non-overlapping sphere:
-    rSep = 2*dist_max
-    indicesUnderdenseNonOverlapping = simulation_tools.getNonOverlappingCentres(
-        centresToUse,rSep,boxsize,returnIndices=True)
-    centresUnderdenseNonOverlapping = [centres[ind] \
-        for centres,ind in zip(centresToUse,indicesUnderdenseNonOverlapping)]
-    densityListUnderdenseNonOverlapping = [density[ind] \
-        for density, ind in zip(comparableDensityMAP,\
-        indicesUnderdenseNonOverlapping)]
-    densityUnderdenseNonOverlapping = np.hstack(
-        densityListUnderdenseNonOverlapping)
-    # Get the centres of the voids from their respective regions:
-    distances_from_centre_lcdm_selected = [[
-        np.sqrt(np.sum(snapedit.unwrap(centres - sphere_centre,boxsize)**2,1))
-        for sphere_centre in selected_regions]
-        for centres, selected_regions in zip(snaps["void_centres"],
-        centresUnderdenseNonOverlapping)]
-    # Filter voids to the radius range used in the catalogue:
-    filter_list_lcdm_by_region = [[
-        (dist < dist_max) & (radii > radii_range[0]) & (radii <= radii_range[1]) 
-        for dist in all_dists]
-        for all_dists, radii in 
-        zip(distances_from_centre_lcdm_selected,snaps["void_radii"])]
+    # Load or generate random region centres and densities
+    rand_centres, rand_densities = tools.loadOrRecompute(
+        centres_file,
+        simulation_tools.get_random_centres_and_densities,
+        dist_max,
+        snaps["snaps"],
+        seed=seed,
+        nRandCentres=nRandCentres
+    )
+    # Step 1: Filter regions by density (if delta bounds specified)
+    region_masks, centres_to_use = _filter_regions_by_density(
+        rand_centres, rand_densities, delta_interval
+    )
+    # Step 2: Prune overlapping regions
+    nonoverlapping_indices = simulation_tools.getNonOverlappingCentres(
+        centres_to_use, 2 * dist_max, boxsize, returnIndices=True
+    )
+    selected_region_centres = [
+        centres[idx] for centres, idx in zip(centres_to_use, nonoverlapping_indices)
+    ]
+    selected_region_masks = [
+        mask[idx] for mask, idx in zip(region_masks, nonoverlapping_indices)
+    ]
+    # Step 3: Compute distances from each void to selected regions
+    region_void_dists = _compute_void_distances(
+        snaps["void_centres"], selected_region_centres, boxsize
+    )
+    # Step 4: Apply radius and distance filters
+    void_masks_by_region = _filter_voids_by_distance_and_radius(
+        region_void_dists, snaps["void_radii"], dist_max, radii_range
+    )
+    # Step 5: Flatten masks if requested
     if flattened:
-        # Combine regions in the same simulation:
-        voids_used_lcdm = [simulation_tools.flatten_filter_list(filt_list) 
-                          for filt_list in filter_list_lcdm_by_region]
+        return [simulation_tools.flatten_filter_list(masks)
+                for masks in void_masks_by_region]
     else:
-        voids_used_lcdm = filter_list_lcdm_by_region
-    return voids_used_lcdm
+        return void_masks_by_region
+
+def _filter_regions_by_density(rand_centres, rand_densities, delta_interval):
+    """
+    Select underdense regions within a delta contrast range.
+
+    Returns:
+        - region_masks: Boolean masks for selected centres
+        - centres_to_use: Filtered centres as list of arrays per snapshot
+    """
+    if delta_interval is not None:
+        region_masks = [
+            (deltas > delta_interval[0]) & (deltas <= delta_interval[1])
+            for deltas in rand_densities
+        ]
+        centres_to_use = [
+            centres[mask] for centres, mask in zip(rand_centres, region_masks)
+        ]
+    else:
+        region_masks = [np.ones_like(deltas, dtype=bool) for deltas in rand_densities]
+        centres_to_use = [rand_centres for _ in rand_densities]
+    return region_masks, centres_to_use
+
+def _compute_void_distances(void_centres, region_centres, boxsize):
+    """
+    Compute distances from each void to every selected region.
+
+    Returns:
+        list of lists: [ [distances for region 1], [region 2], ... ] per snapshot
+    """
+    return [[
+        np.sqrt(np.sum(snapedit.unwrap(voids - region, boxsize)**2, axis=1))
+        for region in regions
+    ] for voids, regions in zip(void_centres, region_centres)]
+
+def _filter_voids_by_distance_and_radius(dist_lists, radii_lists, dist_max, radii_range):
+    """
+    Apply filtering to voids based on spatial and size constraints.
+
+    Returns:
+        list of lists of boolean arrays: One list per region per snapshot
+    """
+    return [[
+        (dist < dist_max) & (radii > radii_range[0]) & (radii <= radii_range[1])
+        for dist in region_dists
+    ] for region_dists, radii in zip(dist_lists, radii_lists)]
 
 
-
-def get_stacked_void_density_field(snaps,void_radii_lists,void_centre_lists,
-                                   bins_spar,bins_sperp,halo_indices=None,
-                                   filter_list=None,additional_weights=None,
-                                   dist_max=3,rmin=10,rmax=20,recompute=False,
-                                   zspace=True,recompute_zspace=False,
+def get_stacked_void_density_field(snaps, void_radii_lists, void_centre_lists,
+                                   spar_bins, sperp_bins, halo_indices=None,
+                                   filter_list=None, additional_weights=None,
+                                   dist_max=3, rmin=10, rmax=20,
+                                   recompute=False, zspace=True,
+                                   recompute_zspace=False,
                                    suffix=".lospos_all_zspace2.p",
-                                   los_pos=None,**kwargs):
+                                   los_pos=None, **kwargs):
+    """
+    Compute the 2D stacked density field from LOS particle data for a set of voids.
+
+    Handles filtering, redshift-space conversion, void trimming, and weighted stacking.
+
+    Parameters:
+        snaps (SnapHandler): Simulation snapshot handler (must include boxsize, snaps, etc.)
+        void_radii_lists (list): Per-snapshot list of void radii
+        void_centre_lists (list): Per-snapshot list of void centers
+        spar_bins, sperp_bins (array): Bin edges for LOS and transverse directions
+        halo_indices (list or None): Indices for each void (optional)
+        filter_list (list or None): Optional masks for void selection
+        additional_weights (list or None): Optional void weights
+        dist_max, (float): Stacking distance threshold
+        rmin, rmax, (float) minimum and maximum void radius to consider
+        recompute, zspace, recompute_zspace (bool): Control redshift-space position cache
+        recompute, (bool): if true, recompute LOS positions in the cache
+        zspace, (bool): if true, use redshift space positions, not real space
+        recompute_zspace, (bool): if true, recompute redshift space positions.
+        suffix (str): File suffix for LOS cache
+        los_pos (list or None): Precomputed LOS arrays (optional)
+        **kwargs: Passed to internal helper functions
+
+    Returns:
+        ndarray: 2D stacked density field
+    """
     boxsize = snaps.boxsize
-    nbar = len(snaps["snaps"][0])/boxsize**3
-    # Filter out any invalid halo indices (usually only occurs for
-    # BORG catalogues, where anti-halos are missing in some samples):
-    if halo_indices is not None:
-        if filter_list is None:
-            filter_list = [halo_indices[ns] >= 0 for ns in range(0,snaps.N)]
-    # Get LOS positions:
+    nbar = len(snaps["snaps"][0]) / boxsize**3
+    if halo_indices is not None and filter_list is None:
+        filter_list = [halo_indices[ns] >= 0 for ns in range(snaps.N)]
+    # Get LOS particle data
     if los_pos is None:
         los_pos = get_los_positions_for_all_catalogues(
-            snaps["snaps"],snaps["snaps_reverse"],void_centre_lists,
-            void_radii_lists,all_particles=True,void_indices = halo_indices,
-            filter_list=filter_list,dist_max=dist_max,rmin=rmin,rmax=rmax,
-            recompute=recompute,zspace=zspace,recompute_zspace=recompute_zspace,
-            suffix=suffix)
-    # Trimmed los lists:
-    los_list_trimmed, voids_used = trim_los_list(los_pos,bins_spar,bins_sperp,
-                                                 void_radii_lists)
-    los_list_per_void = sum(los_list_trimmed,[])
-    # Number of voids:
-    num_voids = np.sum([np.sum(x) for x in voids_used])
-    # Radii of each void:
-    void_radii_per_void = np.hstack([rad[used] 
-        for rad, used in zip(void_radii_lists,voids_used)])
-    # Weights for each void:
+            snaps["snaps"], snaps["snaps_reverse"],
+            void_centre_lists, void_radii_lists,
+            all_particles=True,
+            void_indices=halo_indices,
+            filter_list=filter_list,
+            dist_max=dist_max, rmin=rmin, rmax=rmax,
+            recompute=recompute,
+            zspace=zspace,
+            recompute_zspace=recompute_zspace,
+            suffix=suffix
+        )
+    # Trim voids with no useful particles
+    los_list_trimmed, voids_used = trim_los_list(
+        los_pos, spar_bins, sperp_bins, void_radii_lists
+    )
+    los_list_per_void = sum(los_list_trimmed, [])
+    num_voids = sum(np.sum(u) for u in voids_used)
+    # Per-void radius and weights
+    void_radii_per_void = np.hstack([r[used] for r, used in zip(void_radii_lists, voids_used)])
     if additional_weights is not None:
-        additional_weights_per_void = np.hstack([weights[used] 
-            for weights, used in zip(additional_weights,voids_used)])
+        additional_weights_per_void = np.hstack([
+            weights[used] for weights, used in zip(additional_weights, voids_used)
+        ])
     else:
-        additional_weights_per_void = np.ones(void_radii_per_void.shape)
-    # Compute stacked denstiy field:
-    return get_2d_field_from_stacked_voids(los_list_per_void,sperp_bins,
-                                           spar_bins,void_radii_per_void,
-                                           weights=additional_weights_per_void,
-                                           nbar=nbar)
+        additional_weights_per_void = np.ones(len(void_radii_per_void))
+    # Compute stacked field
+    return get_2d_field_from_stacked_voids(
+        los_list_per_void, sperp_bins, spar_bins,
+        void_radii_per_void,
+        weights=additional_weights_per_void,
+        nbar=nbar
+    )
 
 
-def get_1d_real_space_field(snaps,rbins=None,filter_list=None,
-                            additional_weights=None,n_boot = 10000,seed = 42,
-                            halo_indices=None,use_precomputed_profiles=True):
+
+def get_1d_real_space_field(snaps, rbins=None, filter_list=None,
+                            additional_weights=None, n_boot=10000, seed=42,
+                            halo_indices=None, use_precomputed_profiles=True):
+    """
+    Compute a bootstrapped real-space 1D void density profile (radial stacking).
+
+    Parameters:
+        snaps (SnapHandler): Object with snapshot data and precomputed pair counts
+        rbins (array or None): Radial bin edges. If None, defaults to linspace(0, 3)
+        filter_list (list or None): Per-snapshot list of boolean masks for void selection
+        additional_weights (list or None): Optional void-level weights
+        n_boot (int): Number of bootstrap samples
+        seed (int): RNG seed for bootstrap
+        halo_indices (list or None): Void indices to use (alternative to filter_list)
+        use_precomputed_profiles (bool): If True, use stored pair counts
+
+    Returns:
+        tuple:
+            - rho_mean (array): Bootstrapped mean profile
+            - rho_std (array): Profile standard deviation
+    """
     boxsize = snaps.boxsize
-    nbar = len(snaps["snaps"][0])/boxsize**3
-    # Filter out any invalid halo indices (usually only occurs for
-    # BORG catalogues, where anti-halos are missing in some samples):
-    if halo_indices is not None:
-        if filter_list is None:
-            filter_list = [halo_indices[ns] >= 0 for ns in range(0,snaps.N)]
+    nbar = len(snaps["snaps"][0]) / boxsize**3
+    # Fallback filter setup
+    if halo_indices is not None and filter_list is None:
+        filter_list = [halo_indices[ns] >= 0 for ns in range(snaps.N)]
     if filter_list is None:
-        filter_list = [np.ones(len(x),dtype=bool) for x in snaps["pair_counts"]]
-    # Load from snaps list:
+        filter_list = [np.ones(len(x), dtype=bool) for x in snaps["pair_counts"]]
+    # Load pair counts
     if use_precomputed_profiles:
-        # Use stored pair counts, ignoring specified bins:
         rbins = snaps["radius_bins"][0]
         all_counts = snaps["pair_counts"]
         all_volumes = snaps["bin_volumes"]
     else:
-        # Reconstruct counts and volumes from scratch:
-        all_counts = []
-        all_volumes = []
         if rbins is None:
-            # Assume a default set of bins:
-            rbins = np.linspace(0,3,31)
-        for ns in range(0,borg_snaps.N):
-            tree = scipy.spatial.cKDTree(borg_snaps["snaps"][ns]['pos'],
-                                         boxsize=boxsize)
-            [counts, volumes] = stacking.getPairCounts(\
-                snaps["void_centres"][ns],snaps["void_radii"][ns],
-                snaps["snaps"][ns],rbins,\
-                nThreads=-1,tree=tree,method="poisson",
-                vorVolumes=snaps["cell_volumes"][ns])
+            rbins = np.linspace(0, 3, 31)
+        all_counts, all_volumes = [], []
+        for ns in range(snaps.N):
+            tree = scipy.spatial.cKDTree(snaps["snaps"][ns]['pos'], boxsize=boxsize)
+            counts, volumes = stacking.getPairCounts(
+                snaps["void_centres"][ns], snaps["void_radii"][ns],
+                snaps["snaps"][ns], rbins,
+                nThreads=-1, tree=tree, method="poisson",
+                vorVolumes=snaps["cell_volumes"][ns]
+            )
             all_counts.append(counts)
             all_volumes.append(volumes)
-    # Indices of voids to use:
+    # Select voids
     if halo_indices is not None:
-        # Use specified void indices. Note that if halo_indices is provided, 
-        # we are assuming that the filter_list does not line up with the 
-        # full lists of halos stored in snaps. This happens when the filter
-        # list was derived from a void catalogue, for example.
-        all_antihalos = [halo_indices[ns][halo_indices[ns] >= 0] - 1
-                         for ns in range(0,snaps.N)]
+        all_antihalos = [halo_indices[ns][halo_indices[ns] >= 0] - 1 for ns in range(snaps.N)]
     elif filter_list is not None:
-        # Use the supplied boolean array of voids:
         all_antihalos = [np.where(filt)[0] for filt in filter_list]
     else:
-        # No filtering, use the entire stack:
         all_antihalos = [np.arange(len(x)) for x in snaps["pair_counts"]]
-    # Compute all individual void profiles:
-    all_profiles = [counts[ind]/(vols[ind]*nbar) 
-                    for counts, vols, ind in 
-                    zip(all_counts,all_volumes,all_antihalos)]
+    # Compute all individual density profiles
+    all_profiles = [counts[idx] / (vols[idx] * nbar)
+                    for counts, vols, idx in zip(all_counts, all_volumes, all_antihalos)]
     density = np.vstack(all_profiles)
-    # Weights for voids:
+    # Weights
     if additional_weights is not None:
-        additional_weights_per_void = np.hstack([weights[used] 
-            for weights, used in zip(additional_weights,filter_list)])
+        additional_weights_per_void = np.hstack([
+            weights[used] for weights, used in zip(additional_weights, filter_list)
+        ])
     else:
         additional_weights_per_void = np.ones(density.shape[0])
-    # Bootstrap to get (weighted) mean profile and it's error:
-    num_voids = np.sum([np.sum(x) for x in filter_list])
+    # Bootstrap over voids
     np.random.seed(seed)
-    bootstrap_samples = np.random.choice(num_voids,size=(num_voids,n_boot))
-    bootstrap_profiles = np.array([np.average(
-        density[bootstrap_samples[:,k],:],
-        axis=0,weights=additional_weights_per_void[bootstrap_samples[:,k]]) 
-        for k in tools.progressbar(range(0,n_boot))]).T
-    rho_mean = np.mean(bootstrap_profiles,1)
-    rho_std = np.std(bootstrap_profiles,1)
+    num_voids = len(additional_weights_per_void)
+    bootstrap_samples = np.random.choice(num_voids, size=(num_voids, n_boot))
+    bootstrap_profiles = np.array([
+        np.average(density[bootstrap_samples[:, k], :], axis=0,
+                   weights=additional_weights_per_void[bootstrap_samples[:, k]])
+        for k in tools.progressbar(range(n_boot))
+    ]).T
+    rho_mean = np.mean(bootstrap_profiles, axis=1)
+    rho_std = np.std(bootstrap_profiles, axis=1)
     return rho_mean, rho_std
 
-# Get additional weighting factor for BORG voids based on their
-# reproducibility score:
-def get_additional_weights_borg(cat,voids_used=None):
-    rep_scores = cat.property_with_filter(cat.finalCatFrac,void_filter=True)
+def get_additional_weights_borg(cat, voids_used=None):
+    """
+    Get reproducibility-based weights for BORG voids.
+
+    Uses the finalCatFrac property as a proxy for the confidence or reproducibility
+    of a void detection. These are normalized across all voids used in stacking.
+
+    Parameters:
+        cat (BorgVoidCatalogue): Void catalogue object
+        voids_used (list of bool arrays or None): Optional mask per snapshot
+
+    Returns:
+        list of arrays: Normalized reproducibility weights for each void (per snapshot)
+    """
+    rep_scores = cat.property_with_filter(cat.finalCatFrac, void_filter=True)
     if voids_used is None:
-        voids_used = [np.ones(rep_scores.shape[0],dtype=bool) 
-                         for x in range(0,cat.numCats)]
+        voids_used = [np.ones(rep_scores.shape[0], dtype=bool)
+                      for _ in range(cat.numCats)]
     all_rep_scores = np.hstack([rep_scores[used] for used in voids_used])
-    all_void_radii_borg = cat.getAllProperties("radii",void_filter=True).T
-    num_voids = np.sum([np.sum(x) for x in voids_used])
-    return [rep_scores[used]/np.sum(rep_scores) for used in voids_used]
+    norm_factors = np.sum(all_rep_scores)
+    return [rep_scores[used] / norm_factors for used in voids_used]
+
 
 #-------------------------------------------------------------------------------
 # COVARIANCE MATRIX CALCULATION
 
-# Compute final weighting for each void:
-def get_void_weights(los_list_trimmed,voids_used,all_radii,
+def get_void_weights(los_list_trimmed, voids_used, all_radii,
                      additional_weights=None):
-    return get_weights_for_stack(los_list_trimmed,
-        [rad[used] for used, rad in zip(voids_used,all_radii)],
-        additional_weights = additional_weights,stacked=False)
+    """
+    Compute the total stacking weight for each void in the dataset.
 
+    This wraps get_weights_for_stack(), filtering the void radii using the
+    `voids_used` boolean masks to match the trimmed LOS list.
+
+    Weights combine:
+      - A volume-based scaling (1 / R_eff^3)
+      - Optional additional weights (e.g. for S/N or inverse variance)
+
+    NOTE: This function may be deprecated if weights are split into separate
+    logical operations (e.g., volume normalization vs S/N weighting).
+
+    Parameters:
+        los_list_trimmed (list): List of per-void LOS particle arrays (2D)
+        voids_used (list of bool arrays): Per-snapshot mask of valid voids
+        all_radii (list of arrays): R_eff for all voids (before masking)
+        additional_weights (list or scalar or None): Optional multiplicative weights
+
+    Returns:
+        list of arrays: Per-void weights (unstacked)
+    """
+    # Apply void selection mask to radii
+    filtered_radii = [rad[used] for used, rad in zip(voids_used, all_radii)]
+    return get_weights_for_stack(
+        los_list_trimmed,
+        filtered_radii,
+        additional_weights=additional_weights,
+        stacked=False
+    )
 
 
 # Covariance function:
-def get_covariance_matrix(los_list,void_radii_all,bins_spar,bins_sperp,nbar,
+def get_covariance_matrix(los_list,void_radii_all,spar_bins,sperp_bins,nbar,
                           additional_weights = None,n_boot=10000,seed=42,
                           lambda_reg = 1e-15,cholesky=True,regularise=True,
                           log_field=False,return_mean=False):
@@ -1792,9 +2090,9 @@ def get_covariance_matrix(los_list,void_radii_all,bins_spar,bins_sperp,nbar,
         for rad, used in zip(void_radii_all,voids_used)])
     num_voids = len(void_radii_per_void)
     stacked_fields = get_2d_fields_per_void(
-        los_per_void,bins_sperp,bins_spar,
+        los_per_void,sperp_bins,spar_bins,
         void_radii_per_void,nbar=nbar).reshape(num_voids,
-        (len(bins_spar) - 1)*(len(bins_sperp) - 1))
+        (len(spar_bins) - 1)*(len(sperp_bins) - 1))
     # Weights, accounting for differing lengths of the void catalogues
     # in each sample:
     # Weights for each void:
@@ -1834,128 +2132,257 @@ def get_covariance_matrix(los_list,void_radii_all,bins_spar,bins_sperp,nbar,
 #-------------------------------------------------------------------------------
 # COSMOLOGICAL INFERENCE
 
-# Get a maximum-likelihood estimate for the initial parameters to use for
-# inference:
-def get_mle_estimate(initial_guess_eps,theta_ranges_epsilon,*args,**kwargs):
-    nll = lambda theta: -log_likelihood_aptest(theta,*args,**kwargs)
-    mle_estimate = scipy.optimize.minimize(nll,initial_guess_eps,
-                                           bounds=theta_ranges_epsilon)
+def get_mle_estimate(initial_guess_eps, theta_ranges_epsilon, *args, **kwargs):
+    """
+    Compute the Maximum Likelihood Estimate (MLE) for cosmological parameters,
+    by minimizing the negative log-likelihood function.
+
+    Parameters:
+        initial_guess_eps (array): Initial guess for [epsilon, f] or [Omega_m, f]
+        theta_ranges_epsilon (list of tuples): Parameter bounds
+        *args: Arguments passed to the likelihood function
+        **kwargs: Keyword args for the likelihood
+
+    Returns:
+        OptimizeResult: Output from scipy.optimize.minimize
+    """
+    nll = lambda theta: -log_likelihood_aptest(theta, *args, **kwargs)
+    mle_estimate = scipy.optimize.minimize(
+        nll,
+        initial_guess_eps,
+        bounds=theta_ranges_epsilon
+    )
     return mle_estimate
 
-# Tabulate the inverse function used for moving to redshift-space, to speed
-# up the inference. Only useful if the inverse is not a function of the 
-# parameters being inferred.
-def get_fixed_inverse(Delta_func,ntab=100,ntaf_f=100,sval_range = [0,3],
-                      rperp_range=[0,3],f_val_range = [0,1],):
-    # Tabulated inverse:
-    svals = np.linspace(sval_range[0],sval_range[1],ntab)
-    rperp_vals = np.linspace(rperp_range[0],rperp_range[1],ntab)
-    f_vals = np.linspace(f_val_range[0],f_val_range[1],ntab_f)
-    F_inv_vals = np.zeros((ntab,ntab,ntab_f))
-    for i in tools.progressbar(range(0,ntab)):
-        for j in range(0,ntab):
-            for k in range(0,ntab_f):
-                F = (lambda r: r - r*(f_vals[k]/3)*\
-                    Delta_func(np.sqrt(r**2 + rperp_vals[i]**2)) \
-                    - svals[j])
-                F_inv_vals[i,j,k] = scipy.optimize.fsolve(F,svals[j])
-    F_inv = lambda x, y, z: scipy.interpolate.interpn((rperp_vals,svals,f_vals),
-                                                   F_inv_vals,
-                                                   np.vstack((x,y,z)).T,
-                                                   method='cubic')
+
+def get_fixed_inverse(Delta_func, ntab=100, ntab_f=100,
+                      sval_range=[0, 3], rperp_range=[0, 3],
+                      f_val_range=[0, 1]):
+    """
+    Precompute and tabulate the inverse mapping from redshift-space
+    (s_parallel) to real-space (r_parallel), assuming fixed profile parameters.
+
+    This accelerates likelihood evaluations when the inverse is not dependent
+    on sampled parameters.
+
+    Parameters:
+        Delta_func (function): Cumulative density profile Δ(r)
+        ntab (int): Number of grid points for r_perp and s_parallel
+        ntab_f (int): Number of grid points for f
+        sval_range (list): Range of s_parallel values
+        rperp_range (list): Range of r_perp values
+        f_val_range (list): Range of f values
+
+    Returns:
+        function: Interpolated inverse mapping function F_inv(s_perp, s_par, f)
+    """
+    svals = np.linspace(sval_range[0], sval_range[1], ntab)
+    rperp_vals = np.linspace(rperp_range[0], rperp_range[1], ntab)
+    f_vals = np.linspace(f_val_range[0], f_val_range[1], ntab_f)
+    F_inv_vals = np.zeros((ntab, ntab, ntab_f))
+    for i in tools.progressbar(range(ntab)):
+        for j in range(ntab):
+            for k in range(ntab_f):
+                f = f_vals[k]
+                rperp = rperp_vals[i]
+                spar = svals[j]
+                func = lambda r: r - r * (f / 3.0) * Delta_func(np.sqrt(r**2 + rperp**2)) - spar
+                F_inv_vals[i, j, k] = scipy.optimize.fsolve(func, spar)
+
+    F_inv = lambda x, y, z: scipy.interpolate.interpn(
+        (rperp_vals, svals, f_vals),
+        F_inv_vals,
+        np.vstack((x, y, z)).T,
+        method="cubic"
+    )
     return F_inv
 
-def generate_scoord_grid(sperp_bins,spar_bins):
-    spar = np.hstack([s*np.ones(len(sperp_bins)-1) 
-        for s in plot.binCentres(spar_bins)])
-    sperp = np.hstack([plot.binCentres(sperp_bins) 
-        for s in plot.binCentres(spar_bins)])
-    return np.vstack([spar,sperp]).T
+def generate_scoord_grid(sperp_bins, spar_bins):
+    """
+    Generate (s_par, s_perp) bin-centre coordinate pairs for all bins
+    in the 2D stacked void field.
 
-# Data filter, that attempts to restrict to a region with high S/N:
-def generate_data_filter(cov,mean,scoords,cov_thresh=5,
-                         srad_thresh = 1.5):
-    # Apply filter on the normalised covariance matrix:
-    norm_cov = cov/np.outer(mean,mean)
-    data_filter = np.where((1.0/np.sqrt(np.diag(norm_cov)) > cov_thresh) & \
-        (np.sqrt(np.sum(scoords**2,1)) < srad_thresh) )[0]
+    Parameters:
+        sperp_bins (array): Bin edges in transverse direction
+        spar_bins (array): Bin edges in line-of-sight direction
+
+    Returns:
+        ndarray: Array of shape (N_bins, 2), where each row is [s_par, s_perp]
+    """
+    spar = np.hstack([
+        s * np.ones(len(sperp_bins) - 1)
+        for s in plot.binCentres(spar_bins)
+    ])
+    sperp = np.hstack([
+        plot.binCentres(sperp_bins)
+        for _ in plot.binCentres(spar_bins)
+    ])
+    return np.vstack([spar, sperp]).T
+
+
+def generate_data_filter(cov, mean, scoords, cov_thresh=5, srad_thresh=1.5):
+    """
+    Apply a data mask to exclude noisy or poorly constrained bins.
+
+    Parameters:
+        cov (ndarray): Covariance matrix
+        mean (ndarray): Mean stacked profile
+        scoords (ndarray): Grid coordinates (s_par, s_perp)
+        cov_thresh (float): Inverse S/N threshold (1/sigma > cov_thresh)
+        srad_thresh (float): Max radial distance to include (in units of R_eff)
+
+    Returns:
+        ndarray: Array of indices for bins that pass the filter
+    """
+    norm_cov = cov / np.outer(mean, mean)
+    inv_sigma = 1.0 / np.sqrt(np.diag(norm_cov))
+    radial_dist = np.sqrt(np.sum(scoords**2, axis=1))
+    data_filter = np.where((inv_sigma > cov_thresh) & (radial_dist < srad_thresh))[0]
     return data_filter
 
-# Likelihood for the real-space profile (fixed):
-def log_likelihood_profile(theta, x, y, yerr,profile_model):
-    #rho0,p,C,rb = theta
-    #A,r0,c1,f1,B = theta
-    #model = profile_broken_power_log(x, A,r0,c1,f1,B)
-    model = profile_model(x,*theta)
-    sigma2 = yerr**2
-    return -0.5 * np.sum( (y - model)**2/sigma2 + np.log(sigma2) )
+def log_likelihood_profile(theta, x, y, yerr, profile_model):
+    """
+    Gaussian log-likelihood for a real-space density profile model.
 
-# Get parameters for the fixed profile:
-def get_profile_parameters_fixed(ri,rhoi,sigma_rhoi,
+    Parameters:
+        theta (array): Profile parameters
+        x (array): Radial coordinates
+        y (array): Observed densities
+        yerr (array): Uncertainties
+        profile_model (function): Model function ρ(x, *theta)
+
+    Returns:
+        float: Log-likelihood
+    """
+    model = profile_model(x, *theta)
+    sigma2 = yerr**2
+    return -0.5 * np.sum((y - model)**2 / sigma2 + np.log(sigma2))
+
+
+def get_profile_parameters_fixed(ri, rhoi, sigma_rhoi,
                                  model=profile_modified_hamaus,
-                                 initial = np.array([1.0,1.0,1.0,-0.2,0.0,1.0]),
-                                 bounds = [(0,None),(0,None),(0,None),(-1,0),
-                                           (-1,1),(0,2)]):
+                                 initial=np.array([1.0, 1.0, 1.0, -0.2, 0.0, 1.0]),
+                                 bounds=[(0, None), (0, None), (0, None),
+                                         (-1, 0), (-1, 1), (0, 2)]):
+    """
+    Fit a fixed-profile model to a 1D void density profile using MLE.
+
+    Parameters:
+        ri (array): Radial bin centres (in units of R_eff)
+        rhoi (array): Measured density values at ri
+        sigma_rhoi (array): Uncertainties on density
+        model (function): Parametric profile function δ(r, *params)
+        initial (array): Initial guess for profile parameters
+        bounds (list of tuples): Parameter bounds for optimization
+
+    Returns:
+        array: Best-fit parameter values
+    """
+    # Define negative log-likelihood function for optimizer
     nll = lambda *theta: -log_likelihood_profile(*theta)
-    sol = scipy.optimize.minimize(nll, initial, bounds = bounds,
-                                  args=(ri, rhoi, sigma_rhoi,
-                                        model))
+    # Perform bounded minimization
+    sol = scipy.optimize.minimize(
+        nll,
+        initial,
+        bounds=bounds,
+        args=(ri, rhoi, sigma_rhoi, model)
+    )
     return sol.x
 
 
-def run_inference(data_field,theta_ranges_list,theta_initial,filename,
-                  log_probability,*args,
+
+def run_inference(data_field, theta_ranges_list, theta_initial, filename,
+                  log_probability, *args,
                   redo_chain=False,
-                  backup_start=True,nwalkers=64,sample="all",n_mcmc=10000,
-                  disp=1e-4,Om_fid=0.3111,max_n=1000000,z=0.0225,
-                  parallel=False,batch_size=100,n_batches=100,
-                  data_filter=None,autocorr_file=None,**kwargs):
+                  backup_start=True,
+                  nwalkers=64, sample="all", n_mcmc=10000,
+                  disp=1e-4, Om_fid=0.3111, max_n=1000000, z=0.0225,
+                  parallel=False, batch_size=100, n_batches=100,
+                  data_filter=None, autocorr_file=None, **kwargs):
+    """
+    Run MCMC inference using emcee to sample posterior over cosmological + profile parameters.
+
+    Parameters:
+        data_field (array): Flattened observed density field (after filtering)
+        theta_ranges_list (list of tuples): Parameter bounds
+        theta_initial (array): Initial guess for parameters
+        filename (str): Path to HDF5 file for emcee backend
+        log_probability (function): Log-posterior function to sample
+        *args: Arguments passed to log_probability
+        redo_chain (bool): If True, erase and restart chain
+        backup_start (bool): If True, backup existing chain to .old
+        nwalkers (int): Number of walkers
+        sample (str or array): "all" or boolean array specifying sampled parameters
+        n_mcmc (int): Number of MCMC steps
+        disp (float): Walker spread around initial guess
+        Om_fid (float): Fiducial Omega_m
+        max_n (int): Maximum number of samples to allow
+        z (float): Redshift
+        parallel (bool): If True, use multiprocessing Pool
+        batch_size (int): MCMC steps per batch
+        n_batches (int): Max number of batches
+        data_filter (array or None): Indices of used bins
+        autocorr_file (str or None): Path to save autocorrelation data
+        **kwargs: Passed to log_probability
+
+    Returns:
+        tau (array): Autocorrelation time estimates for each parameter
+        sampler (emcee.EnsembleSampler): Final MCMC sampler object
+    """
     if sample == "all":
-        sample = np.array([True for theta in theta_ranges_list])
+        sample = np.array([True for _ in theta_ranges_list])
     ndims = np.sum(sample)
     ndata = len(data_field)
     if data_filter is None:
-        data_filter = np.arange(0,ndata)
-    # Setup run:
-    initial = theta_initial + disp*np.random.randn(nwalkers,ndims)
+        data_filter = np.arange(ndata)
+    # --- Initial walker positions
+    initial = theta_initial + disp * np.random.randn(nwalkers, ndims)
+    # --- Optional: backup old file
     filename_initial = filename + ".old"
     if backup_start:
-        os.system("cp " + filename + " " + filename_initial)
+        os.system(f"cp {filename} {filename_initial}")
     backend = emcee.backends.HDFBackend(filename)
     if redo_chain:
         backend.reset(nwalkers, ndims)
-    # Inference run:
+    # --- Run in parallel
     if parallel:
         with Pool() as pool:
             sampler = emcee.EnsembleSampler(
-                nwalkers, ndims, log_probability_aptest_parallel, 
+                nwalkers, ndims, log_probability_aptest_parallel,
                 args=(z,),
-                kwargs={'Om_fid':Om_fid,'cholesky':True,'tabulate_inverse':True,
-                        'sample_epsilon':True},
-                backend=backend,pool=pool)
-            sampler.run_mcmc(initial,n_mcmc , progress=True)
+                kwargs={'Om_fid': Om_fid, 'cholesky': True,
+                        'tabulate_inverse': True, 'sample_epsilon': True},
+                backend=backend, pool=pool
+            )
+            sampler.run_mcmc(initial, n_mcmc, progress=True)
     else:
-        #data_filter = np.where((1.0/np.sqrt(np.diag(reg_norm_cov)) > 5) & \
-        #    (np.sqrt(np.sum(scoords**2,1)) < 1.5) )[0]
-        #reg_cov_filtered = reg_cov[data_filter,:][:,data_filter]
-        #cholesky_cov_filtered = scipy.linalg.cholesky(reg_cov_filtered,lower=True)
-        sampler = emcee.EnsembleSampler(nwalkers, ndims, log_probability,
-                                        args=args,kwargs=kwargs,backend=backend)
-        if redo_chain or (autocorr_file is None):
-            autocorr = np.zeros((ndims,0))
+        # --- Serial run with convergence monitoring
+        sampler = emcee.EnsembleSampler(
+            nwalkers, ndims, log_probability,
+            args=args,
+            kwargs=kwargs,
+            backend=backend
+        )
+        # Load or initialize autocorrelation array
+        if redo_chain or autocorr_file is None:
+            autocorr = np.zeros((ndims, 0))
         else:
             autocorr = np.load(autocorr_file)
         old_tau = np.inf
-        for k in range(0,n_batches):
-            if (k == 0 and redo_chain):
-                sampler.run_mcmc(initial,batch_size , progress=True)
+        for k in range(n_batches):
+            if k == 0 and redo_chain:
+                sampler.run_mcmc(initial, batch_size, progress=True)
             else:
-                sampler.run_mcmc(None,batch_size,progress=True)
-            tau = sampler.get_autocorr_time(tol=0)
-            autocorr = np.hstack([autocorr,tau.reshape((ndims,1))])
+                sampler.run_mcmc(None, batch_size, progress=True)
+            # --- Autocorrelation monitoring
+            try:
+                tau = sampler.get_autocorr_time(tol=0)
+            except emcee.autocorr.AutocorrError:
+                tau = old_tau  # fallback
+            autocorr = np.hstack([autocorr, tau.reshape((ndims, 1))])
             if autocorr_file is not None:
-                np.save(autocorr_file,autocorr)
-            # Check convergence
+                np.save(autocorr_file, autocorr)
+            # --- Convergence check
             converged = np.all(tau * 100 < sampler.iteration)
             converged &= np.all(np.abs(old_tau - tau) / tau < 0.01)
             if converged:
@@ -1964,97 +2391,168 @@ def run_inference(data_field,theta_ranges_list,theta_initial,filename,
     return tau, sampler
 
 
-
-def run_inference_pipeline(field,cov,sperp_bins,spar_bins,ri,delta_i,
-                           sigma_delta_i,log_field=False,
-                           infer_profile_args=True,tabulate_inverse=True,
-                           cholesky=True,sample_epsilon=True,filter_data=False,
-                           z = 0.0225,lambda_cut=1e-23,lambda_ref=1e-27,
-                           profile_param_ranges = [[0,np.inf],[0,np.inf],
-                                                   [0,np.inf],[-1,0],[-1,1],
-                                                   [0,2]],
-                           om_ranges = [[0.1,0.5]],eps_ranges = [[0.9,1.1]],
-                           f_ranges = [[0,1]],Om_fid = 0.3111,
-                           filename = "inference_weighted.h5",
-                           autocorr_filename = "autocorr.npy",disp=1e-2,
-                           nwalkers=64,n_mcmc=10000,max_n=1000000,
-                           batch_size=100,nbatch=100,redo_chain=False,
+def run_inference_pipeline(field, cov, mean, sperp_bins, spar_bins,
+                           ri, delta_i, sigma_delta_i,
+                           log_field=False,
+                           infer_profile_args=True,
+                           tabulate_inverse=True,
+                           cholesky=True,
+                           sample_epsilon=True,
+                           filter_data=False,
+                           z=0.0225,
+                           lambda_cut=1e-23,
+                           lambda_ref=1e-27,
+                           profile_param_ranges=[[0, np.inf], [0, np.inf], [0, np.inf],
+                                                 [-1, 0], [-1, 1], [0, 2]],
+                           om_ranges=[[0.1, 0.5]],
+                           eps_ranges=[[0.9, 1.1]],
+                           f_ranges=[[0, 1]],
+                           Om_fid=0.3111,
+                           filename="inference_weighted.h5",
+                           autocorr_filename="autocorr.npy",
+                           disp=1e-2,
+                           nwalkers=64,
+                           n_mcmc=10000,
+                           max_n=1000000,
+                           batch_size=100,
+                           nbatch=100,
+                           redo_chain=False,
                            backup_start=True,
-                           delta_profile = profile_modified_hamaus,
-                           Delta_profile = integrated_profile_modified_hamaus):
-    # Compute inverse covariance, or cholesky decomposition:
+                           delta_profile=profile_modified_hamaus,
+                           Delta_profile=integrated_profile_modified_hamaus):
+    """
+    Full inference pipeline to constrain cosmological parameters from
+    stacked void density fields in redshift space.
+
+    Steps:
+        1. Compute inverse covariance or Cholesky factor
+        2. Filter data spatially and based on S/N
+        3. Define density profile model (fixed or inferred)
+        4. Precompute redshift-space inverse mapping (optional)
+        5. Prepare parameter bounds and priors
+        6. Run MCMC inference
+
+    Parameters:
+        field (2D array): Stacked void field
+        cov (2D array): Covariance matrix for the field
+        sperp_bins, spar_bins (arrays): Bin edges in LOS and transverse directions
+        ri, delta_i, sigma_delta_i (arrays): Real-space profile and uncertainties
+        log_field (bool): If True, use log-density field
+        infer_profile_args (bool): If True, sample profile parameters
+        tabulate_inverse (bool): If True, precompute redshift-space inverse mapping
+        cholesky (bool): If True, use Cholesky factor of covariance
+        sample_epsilon (bool): If True, sample epsilon and f instead of Om and f
+        filter_data (bool): If True, apply data mask to reduce noise
+        z (float): Redshift
+        lambda_cut (float): Eigenvalue cutoff for filtering singular modes
+        lambda_ref (float): Tikhonov regularization for nonsingular subspace
+        profile_param_ranges (list): Parameter bounds for profile model
+        om_ranges, eps_ranges, f_ranges (list): Bounds for Om/epsilon, f
+        Om_fid (float): Fiducial Omega_m for model evaluation
+        filename (str): HDF5 file to save MCMC chain
+        autocorr_filename (str): Path to store autocorrelation history
+        disp (float): Initial walker spread
+        nwalkers (int): Number of MCMC walkers
+        n_mcmc (int): Total MCMC steps
+        max_n (int): Max samples (unused)
+        batch_size (int): Steps per convergence-check batch
+        nbatch (int): Max number of batches
+        redo_chain (bool): If True, overwrite previous chain
+        backup_start (bool): Backup old chain before overwrite
+        delta_profile, Delta_profile (functions): Density and cumulative profile models
+
+    Returns:
+        tau (array): Autocorrelation times
+        sampler (EnsembleSampler): Final MCMC sampler object
+    """
+    # --- Step 1: Covariance preparation
     if cholesky:
-        # Instead of computing the inverse matrix, use cholesky decomposition
-        # to evaluate the likelihood. Likelihood will interpret the 
-        # 'inverse_matrix' argument as the cholesky decomposition, instead of
-        # an inverse
-        inverse_matrix = scipy.linalg.cholesky(cov,lower=True)
+        inverse_matrix = scipy.linalg.cholesky(cov, lower=True)
     else:
-        inverse_matrix = get_inverse_covariance(cov,lambda_reg = 1e-23)
-    # Generate a data filter:
-    scoords = generate_scoord_grid(sperp_bins,spar_bins)
+        inverse_matrix = get_inverse_covariance(cov, lambda_reg=lambda_ref)
+    # --- Step 2: Filter data
+    scoords = generate_scoord_grid(sperp_bins, spar_bins)
     if filter_data:
-        data_filter = generate_data_filter(cov,mean,scoords)
+        data_filter = generate_data_filter(cov, mean, scoords)
     else:
-        data_filter = np.ones(field.flatten().shape,dtype=bool)
-    # Field to use for inference:
+        data_filter = np.ones(field.flatten().shape, dtype=bool)
     data_field = field.flatten()[data_filter]
-    # Profile functions:
+    # --- Step 3: Choose profile model
     if infer_profile_args:
         delta_func = delta_profile
         Delta_func = Delta_profile
         rho_real = lambda *args: delta_profile(*args) + 1.0
     else:
-        *profile_params, = get_profile_parameters_fixed(
-            ri,delta_i,sigma_delta_i,model=delta_profile)
-        delta_func = lambda r: delta_profile(r,*profile_params)
-        Delta_func = lambda r: Delta_profile(r,*profile_params)
+        profile_params = get_profile_parameters_fixed(
+            ri, delta_i, sigma_delta_i, model=delta_profile
+        )
+        delta_func = lambda r: delta_profile(r, *profile_params)
+        Delta_func = lambda r: Delta_profile(r, *profile_params)
         rho_real = lambda r: delta_func(r) + 1.0
-    # Precompute inverse function. Only useful if profile parameters are fixed:
-    if infer_profile_args or (not tabulate_inverse):
+    # --- Step 4: Tabulated inverse (optional)
+    if infer_profile_args or not tabulate_inverse:
         F_inv = None
     else:
-        # Tabulate the inverse:
         F_inv = get_fixed_inverse(Delta_func)
-    # Setup parameter initial guesses:
+    # --- Step 5: Parameter bounds and initial guess
     if sample_epsilon:
-        initial_guess_MG = np.array([1.0,f_lcdm(z,Om_fid)])
-    else:
-        initial_guess_MG = np.array([Om_fid,f_lcdm(z,Om_fid)])
-    if infer_profile_args:
-        profile_params = get_profile_parameters_fixed(ri,delta_i,sigma_delta_i)
-        initial_guess = np.hstack([initial_guess_MG,profile_params])
-    else:
-        initial_guess = initial_guess_MG
-    # Parameter bounds:
-    if sample_epsilon:
+        initial_guess_MG = np.array([1.0, f_lcdm(z, Om_fid)])
         theta_ranges = eps_ranges + f_ranges + profile_param_ranges
     else:
+        initial_guess_MG = np.array([Om_fid, f_lcdm(z, Om_fid)])
         theta_ranges = om_ranges + f_ranges + profile_param_ranges
-    # Setup Umap to fitler out bad eigenvalue of the covariance matrix:
-    Umap, good_eig = get_nonsingular_subspace(cov,lambda_ref,
-                                              lambda_cut=lambda_cut,
-                                              normalised_cov = False,mu=mean)
-    # Arguments to supply to the MCMC run:
-    args = (data_field,scoords[data_filter,:],
-            inverse_matrix[data_filter,:][:,data_filter],z,Delta_func,
-            delta_func,rho_real)
-    kwargs = {'cholesky':cholesky,'tabulate_inverse':tabulate_inverse,
-              'sample_epsilon':sample_epsilon,'theta_ranges':theta_ranges,
-              'singular':False,'Umap':Umap,'good_eig':good_eig,'F_inv':F_inv,
-              'log_density':True}
-    # Run MCMC:
-    tau, sampler = run_inference(data_field,theta_ranges,initial_guess,
-                                 filename,log_probability_aptest,*args,
-                                 redo_chain=redo_chain,
-                                 backup_start=backup_start,nwalkers=nwalkers,
-                                 sample="all",n_mcmc=n_mcmc,disp=disp,
-                                 max_n=max_n,z=z,parallel=False,
-                                 Om_fid=Om_fid,batch_size=batch_size,
-                                 n_batches=n_batches,
-                                 autocorr_file = autocorr_filename,**kwargs)
+    if infer_profile_args:
+        profile_params = get_profile_parameters_fixed(ri, delta_i, sigma_delta_i)
+        initial_guess = np.hstack([initial_guess_MG, profile_params])
+    else:
+        initial_guess = initial_guess_MG
+    # --- Step 6: Filter singular modes
+    Umap, good_eig = get_nonsingular_subspace(
+        cov, lambda_reg=lambda_ref,
+        lambda_cut=lambda_cut, normalised_cov=False,
+        mu=mean)
+    )
+    # --- Step 7: Assemble args and kwargs for MCMC
+    args = (
+        data_field,
+        scoords[data_filter, :],
+        inverse_matrix[data_filter][:, data_filter],
+        z,
+        Delta_func,
+        delta_func,
+        rho_real
+    )
+    kwargs = {
+        'cholesky': cholesky,
+        'tabulate_inverse': tabulate_inverse,
+        'sample_epsilon': sample_epsilon,
+        'theta_ranges': theta_ranges,
+        'singular': False,
+        'Umap': Umap,
+        'good_eig': good_eig,
+        'F_inv': F_inv,
+        'log_density': log_field
+    }
+    # --- Step 8: Run MCMC
+    tau, sampler = run_inference(
+        data_field, theta_ranges, initial_guess, filename,
+        log_probability_aptest, *args,
+        redo_chain=redo_chain,
+        backup_start=backup_start,
+        nwalkers=nwalkers,
+        sample="all",
+        n_mcmc=n_mcmc,
+        disp=disp,
+        max_n=max_n,
+        z=z,
+        parallel=False,
+        Om_fid=Om_fid,
+        batch_size=batch_size,
+        n_batches=nbatch,
+        autocorr_file=autocorr_filename,
+        **kwargs
+    )
     return tau, sampler
-
 
 
 
