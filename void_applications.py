@@ -423,6 +423,9 @@ los_list_trimmed_borg, voids_used_borg = trim_los_list(
 los_list_trimmed_lcdm, voids_used_lcdm = trim_los_list(
     los_lcdm_zspace,spar_bins,sperp_bins,lcdm_snaps["void_radii"])
 
+los_list_trimmed_lcdm_unconstrainted, voids_used_lcdm_unconstrained = \
+    trim_los_list(los_lcdm_zspace_unconstrained,spar_bins,sperp_bins,
+                  lcdm_snaps["void_radii"])
 
 # Additional weights for BORG, based on reproducibility score:
 additional_weights_unfiltered_borg = get_additional_weights_borg(cat300)
@@ -453,13 +456,13 @@ field_lcdm_1d, field_lcdm_1d_sigma = get_1d_real_space_field(
     lcdm_snaps,filter_list=voids_used_lcdm)
 
 # LCDM density field (without density constraint):
-field_lcdm_test = get_stacked_void_density_field(
+field_lcdm_uncon = get_stacked_void_density_field(
     lcdm_snaps,lcdm_snaps["void_radii"],lcdm_snaps["void_centres"],
-    spar_bins,sperp_bins,filter_list=voids_used_lcdm,recompute=False,
-    los_pos = los_lcdm_zspace)
+    spar_bins,sperp_bins,filter_list=voids_used_lcdm_unconstrained,
+    recompute=False,los_pos = los_lcdm_zspace_unconstrained)
 
-field_lcdm_1d, field_lcdm_1d_sigma = get_1d_real_space_field(
-    lcdm_snaps,filter_list=voids_used_lcdm)
+field_lcdm_1d_uncon, field_lcdm_1d_sigma_uncon = get_1d_real_space_field(
+    lcdm_snaps,filter_list=voids_used_lcdm_unconstrained)
 
 
 #-------------------------------------------------------------------------------

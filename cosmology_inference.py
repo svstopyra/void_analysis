@@ -1013,7 +1013,7 @@ def get_inverse_covariance(cov, lambda_reg=1e-10):
     regularised_cov = regularise_covariance(cov, lambda_reg=lambda_reg)
     L = np.linalg.cholesky(regularised_cov)      # Lower triangular matrix
     P = np.linalg.inv(L)                         # Inverse of L
-    inv_cov = np.matmul(P, P.T)                  # Reconstruct full inverse
+    inv_cov = np.matmul(P.T, P)                  # Reconstruct full inverse
     return inv_cov
 
 
@@ -2511,7 +2511,6 @@ def run_inference_pipeline(field, cov, mean, sperp_bins, spar_bins,
         cov, lambda_reg=lambda_ref,
         lambda_cut=lambda_cut, normalised_cov=False,
         mu=mean)
-    )
     # --- Step 7: Assemble args and kwargs for MCMC
     args = (
         data_field,
