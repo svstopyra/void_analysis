@@ -448,13 +448,14 @@ def to_z_space(r_par, r_perp, z, Om, Delta=None, u_par=None, f=None, **kwargs):
     return [s_par, s_perp]
 
 
-def iterative_zspace_inverse(s_par, f, Delta, N_max, atol=1e-5, rtol=1e-5):
+def iterative_zspace_inverse(s_par, s_perp, f, Delta, N_max, atol=1e-5, rtol=1e-5):
     """
     Numerically invert the redshift-space LOS coordinate to estimate
     the real-space coordinate (r_par), assuming the linear-theory model.
 
     Parameters:
         s_par (float): LOS coordinate in redshift space
+        s_perp (float): Perpendicular co-ordinate in refshift space
         f (float): Linear growth rate
         Delta (function): Cumulative density profile
         N_max (int): Maximum number of iterations
@@ -463,6 +464,7 @@ def iterative_zspace_inverse(s_par, f, Delta, N_max, atol=1e-5, rtol=1e-5):
         float: Estimated r_par
     """
     r_par_guess = s_par
+    r_perp = s_perp
     for _ in range(N_max):
         r = np.sqrt(r_par_guess**2 + r_perp**2)
         r_par_new = s_par / (1.0 - (f / 3.0) * Delta(r))
@@ -514,7 +516,7 @@ def to_real_space(s_par, s_perp, z, Om, Om_fid=None, Delta=None, u_par=None, f=N
             if Delta is None:
                 raise ValueError("Delta profile must be supplied for linear inversion.")
             # Use helper to handle the iterative logic
-            r_par = iterative_zspace_inverse(s_par, f, Delta, N_max,
+            r_par = iterative_zspace_inverse(s_par, s_perp, f, Delta, N_max,
                                              atol = atol, rtol = rtol)
         else:
             # Use tabulated inverse function
@@ -720,7 +722,7 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
         for k in range(0,M):
             data_val = data_field[k]
             theory_val = z_space_profile(s_par_new[k],s_perp_new[k],
-                                         lambda r: rho_real(r,A,r0,c1,f1,B),
+                                         lambda r: rho_real(r,*profile_args),
                                          z,Om,Delta_func,delta_func,f=f,
                                          **kwargs)
             if normalised:

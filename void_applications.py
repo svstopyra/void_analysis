@@ -555,13 +555,13 @@ log_cholesky_cov_borg = scipy.linalg.cholesky(logrho_cov_borg,lower=True)
 
 
 rho_cov_lcdm, rhomean_lcdm = get_covariance_matrix(
-    los_lcdm_zspace,lcdm_snaps["void_radii"],
+    los_lcdm_zspace_unconstrained,lcdm_snaps["void_radii"],
     spar_bins,sperp_bins,nbar,additional_weights=None,
     return_mean=True,cholesky=False)
 cholesky_cov_lcdm = scipy.linalg.cholesky(rho_cov_lcdm,lower=True)
 
 logrho_cov_lcdm, logrho_mean_lcdm = get_covariance_matrix(
-    los_lcdm_zspace,lcdm_snaps["void_radii"],
+    los_lcdm_zspace_unconstrained,lcdm_snaps["void_radii"],
     spar_bins,sperp_bins,nbar,additional_weights=None,
     return_mean=True,cholesky=False,log_field=True)
 log_cholesky_cov_lcdm = scipy.linalg.cholesky(logrho_cov_lcdm,lower=True)
@@ -580,10 +580,11 @@ log_cholesky_cov_lcdm = scipy.linalg.cholesky(logrho_cov_lcdm,lower=True)
 
 # Inference for Borg catalogue:
 tau, sampler = run_inference_pipeline(
-    field_lcdm_test,rho_cov_lcdm,sperp_bins,spar_bins,ri,field_lcdm_1d-1.0,
-    field_lcdm_1d_sigma,log_field=False,infer_profile_args=True,
-    tabulate_inverse=True,cholesky=True,sample_epsilon=True,filter_data=False,
-    z = 0.0225,lambda_cut=1e-23,lambda_ref=1e-27,
+    field_lcdm_test,rho_cov_lcdm,sperp_bins,spar_bins,ri,
+    field_lcdm_1d_uncon-1.0,field_lcdm_1d_sigma_uncon,log_field=False,
+    infer_profile_args=True,tabulate_inverse=True,cholesky=True,
+    sample_epsilon=True,filter_data=False,z = 0.0225,lambda_cut=1e-23,
+    lambda_ref=1e-27,
     profile_param_ranges = [[0,np.inf],[0,np.inf],[0,np.inf],[-1,0],[-1,1],
     [0,2]],om_ranges = [[0.1,0.5]],eps_ranges = [[0.9,1.1]],f_ranges = [[0,1]],
     Om_fid = 0.3111,filename = "inference_weighted.h5",
@@ -596,8 +597,8 @@ tau, sampler = run_inference_pipeline(
 ri = plot_utilities.binCentres(rbins)
 ri_lcdm = plot_utilities.binCentres(lcdm_snaps["radius_bins"][0])
 ri_borg = plot_utilities.binCentres(borg_snaps["radius_bins"][0])
-params_lcdm = get_profile_parameters_fixed(ri_lcdm,field_lcdm_1d-1,
-                                           field_lcdm_1d_sigma)
+params_lcdm = get_profile_parameters_fixed(ri_lcdm,field_lcdm_1d_uncon-1,
+                                           field_lcdm_1d_sigma_uncon)
 params_borg = get_profile_parameters_fixed(ri_borg,field_borg_1d-1,
                                            field_borg_1d_sigma)
 
@@ -607,8 +608,8 @@ rrange_lcdm = np.linspace(0,10,1000)
 rrange_borg = np.linspace(0,3,1000)
 plt.plot(rrange_lcdm,profile_modified_hamaus(rrange_lcdm,*params_lcdm),
          color=seabornColormap[0],label="LCDM model")
-plt.fill_between(ri_lcdm,field_lcdm_1d - 1 - field_lcdm_1d_sigma,
-                 field_lcdm_1d - 1 + field_lcdm_1d_sigma,
+plt.fill_between(ri_lcdm,field_lcdm_1d_uncon - 1 - field_lcdm_1d_sigma_uncon,
+                 field_lcdm_1d_uncon - 1 + field_lcdm_1d_sigma_uncon,
                  color=seabornColormap[0],label="LCDM simulated",
                  alpha=0.5)
 plt.plot(rrange_borg,profile_modified_hamaus(rrange_borg,*params_borg),
