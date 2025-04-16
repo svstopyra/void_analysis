@@ -60,10 +60,36 @@ def test_log_probability_aptest_sanity():
                                    Umap=None, good_eig=None)
     assert np.isfinite(logp)
 
-# ---------------------- REGRESSION TEST ----------------------
+# ---------------------- REGRESSION TESTS ----------------------
 
 def test_profile_fit_regression(synthetic_profile_data):
     r, delta_noisy, sigma, _ = synthetic_profile_data
     best_fit = get_profile_parameters_fixed(r, delta_noisy, sigma, model=profile_modified_hamaus)
     ref = np.load(os.path.join(SNAPSHOT_DIR, "profile_fit_params_ref.npy"))
     np.testing.assert_allclose(best_fit, ref, rtol=1e-5, atol=1e-7)
+
+
+def test_log_probability_aptest_regression():
+    np.random.seed(42)
+    theta = [0.99, 0.5]
+    z = 0.02
+    field = np.random.normal(1.0, 0.01, size=100)
+    scoords = np.random.rand(100, 2)
+    cov = np.eye(100)
+    Delta = lambda r: 0.2 * np.exp(-r**2)
+    delta = lambda r: -0.2 * np.exp(-r**2)
+    rho_real = lambda r: delta(r) + 1.0
+    logp = log_probability_aptest(
+        theta, field, scoords, cov, z, Delta, delta, rho_real,
+        cholesky=False,
+        tabulate_inverse=False,
+        sample_epsilon=True,
+        theta_ranges=[[0.9, 1.1], [0.0, 1.0]],
+        singular=False,
+        log_density=False,
+        F_inv=None,
+        Umap=None,
+        good_eig=None
+    )
+    ref = np.load(os.path.join(SNAPSHOT_DIR, "logprob_aptest_ref.npy"))
+    np.testing.assert_allclose(logp, ref, rtol=1e-6)

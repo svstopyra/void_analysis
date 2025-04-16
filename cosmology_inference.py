@@ -448,7 +448,7 @@ def to_z_space(r_par, r_perp, z, Om, Delta=None, u_par=None, f=None, **kwargs):
     return [s_par, s_perp]
 
 
-def iterative_zspace_inverse(s_par, s_perp, f, Delta, N_max, atol=1e-5, rtol=1e-5):
+def iterative_zspace_inverse_scalar(s_par, s_perp, f, Delta, N_max = 5, atol=1e-5, rtol=1e-5):
     """
     Numerically invert the redshift-space LOS coordinate to estimate
     the real-space coordinate (r_par), assuming the linear-theory model.
@@ -459,6 +459,8 @@ def iterative_zspace_inverse(s_par, s_perp, f, Delta, N_max, atol=1e-5, rtol=1e-
         f (float): Linear growth rate
         Delta (function): Cumulative density profile
         N_max (int): Maximum number of iterations
+        atol (float): Absolute tolerance for convergence
+        rtol (float): Relative tolerance for convergence
 
     Returns:
         float: Estimated r_par
@@ -473,6 +475,37 @@ def iterative_zspace_inverse(s_par, s_perp, f, Delta, N_max, atol=1e-5, rtol=1e-
             break
         r_par_guess = r_par_new
     return r_par_guess
+
+def iterative_zspace_inverse(s_par, s_perp, f, Delta, N_max=5, atol=1e-5, rtol=1e-5):
+    """
+    Array-compatible wrapper for iterative_zspace_inverse_scalar.
+
+    Parameters:
+        s_par (float or np.ndarray): LOS redshift-space coordinate(s)
+        s_perp (float or np.ndarray): Perpendicular coordinate(s)
+        f (float): Linear growth rate
+        Delta (function): Cumulative density profile
+        N_max (int): Max iterations
+        atol (float): Absolute convergence tolerance
+        rtol (float): Relative convergence tolerance
+
+    Returns:
+        np.ndarray or float: Estimated real-space LOS coordinate(s)
+    """
+    s_par = np.asarray(s_par)
+    s_perp = np.asarray(s_perp)
+    if s_par.shape != s_perp.shape:
+        raise ValueError("s_par and s_perp must have the same shape")
+    # Scalar input case
+    if s_par.ndim == 0:
+        return iterative_zspace_inverse_scalar(s_par, s_perp, f, Delta,
+                                               N_max=N_max, atol=atol, rtol=rtol)
+    # Vectorized case (apply element-wise)
+    return np.array([
+        iterative_zspace_inverse_scalar(sp, sp_perp, f, Delta,
+                                        N_max=N_max, atol=atol, rtol=rtol)
+        for sp, sp_perp in zip(s_par.flat, s_perp.flat)]
+    ).reshape(s_par.shape)
 
 
 def to_real_space(s_par, s_perp, z, Om, Om_fid=None, Delta=None, u_par=None, f=None,
@@ -511,8 +544,6 @@ def to_real_space(s_par, s_perp, z, Om, Om_fid=None, Delta=None, u_par=None, f=N
             f = f_lcdm(z, Om, **kwargs)
         if F_inv is None:
             # Manual inversion via iterative method:
-            if not np.isscalar(s_par):
-                raise Exception("Must be a scalar to perform manual inversion")
             if Delta is None:
                 raise ValueError("Delta profile must be supplied for linear inversion.")
             # Use helper to handle the iterative logic
@@ -2078,9 +2109,99 @@ def get_void_weights(los_list_trimmed, voids_used, all_radii,
         stacked=False
     )
 
+def get_covariance_matrix(los_list, void_radii_all,
+                          spar_bins, sperp_bins, nbar,
+                          additional_weights=None,
+                          n_boot=10000, seed=42,
+                          lambda_reg=1e-15,
+                          cholesky=True, regularise=True,
+                          log_field=False, return_mean=False):
+    """
+    Estimate the covariance matrix (or its Cholesky decomposition) of a
+    2D stacked void density field using bootstrap resampling.
+
+    Steps:
+        1. Trims voids with no contributing LOS particles
+        2. Computes 2D density fields for each individual void
+        3. Bootstraps the mean stacked profile over voids
+        4. Computes the covariance matrix (or its log)
+        5. Optionally regularizes and/or returns Cholesky decomposition
+
+    Parameters:
+        los_list (list): Per-snapshot list of LOS particle arrays (per void)
+        void_radii_all (list): Per-snapshot list of void radii
+        spar_bins (array): LOS bin edges
+        sperp_bins (array): Transverse bin edges
+        nbar (float): Mean number density
+        additional_weights (list or None): Optional void weights per snapshot
+        n_boot (int): Number of bootstrap realizations
+        seed (int): RNG seed for reproducibility
+        lambda_reg (float): Regularization strength for covariance
+        cholesky (bool): If True, return lower-triangular Cholesky factor
+        regularise (bool): If True, apply regularization to covariance
+        log_field (bool): If True, compute covariance of log-density
+        return_mean (bool): If True, return the bootstrap mean as well
+
+    Returns:
+        cov (ndarray): Covariance matrix (or Cholesky factor if cholesky=True)
+        mean (ndarray, optional): Mean field if return_mean=True
+    """
+    # --- Step 1: Trim out voids with no contributing particles
+    los_list_trimmed, voids_used = trim_los_list(
+        los_list, spar_bins, sperp_bins, void_radii_all
+    )
+    los_per_void = sum(los_list_trimmed, [])
+    void_radii_per_void = np.hstack([
+        radii[used] for radii, used in zip(void_radii_all, voids_used)
+    ])
+    num_voids = len(void_radii_per_void)
+    # --- Step 2: Compute stacked 2D field per void (flattened)
+    stacked_fields = get_2d_fields_per_void(
+        los_per_void, sperp_bins, spar_bins,
+        void_radii_per_void, nbar=nbar
+    ).reshape(num_voids, (len(spar_bins) - 1) * (len(sperp_bins) - 1))
+    # --- Step 3: Prepare void weights
+    if additional_weights is not None:
+        additional_weights_per_void = np.hstack([
+            weights[used] for weights, used in zip(additional_weights, voids_used)
+        ])
+    else:
+        additional_weights_per_void = np.ones(num_voids)
+    # --- Step 4: Bootstrap stacking over voids
+    np.random.seed(seed)
+    bootstrap_samples = np.random.choice(num_voids, size=(num_voids, n_boot))
+    bootstrap_stacks = np.array([
+        np.average(
+            stacked_fields[bootstrap_samples[:, k], :],
+            axis=0,
+            weights=additional_weights_per_void[bootstrap_samples[:, k]]
+        )
+        for k in tools.progressbar(range(n_boot))
+    ]).T  # shape: [n_bins, n_boot]
+    # --- Step 5: Compute covariance matrix
+    if log_field:
+        log_samples = np.log(bootstrap_stacks)
+        finite_mask = np.all(np.isfinite(log_samples), axis=0)
+        log_samples = log_samples[:, finite_mask]
+        cov = np.cov(log_samples)
+        mean = np.mean(log_samples, axis=1)
+    else:
+        cov = np.cov(bootstrap_stacks)
+        mean = np.mean(bootstrap_stacks, axis=1)
+    # --- Step 6: Regularization
+    if regularise:
+        cov = regularise_covariance(cov, lambda_reg=lambda_reg)
+    # --- Step 7: Cholesky decomposition (if requested)
+    if cholesky:
+        cov = scipy.linalg.cholesky(cov, lower=True)
+    if return_mean:
+        return cov, mean
+    else:
+        return cov
+
 
 # Covariance function:
-def get_covariance_matrix(los_list,void_radii_all,spar_bins,sperp_bins,nbar,
+def get_covariance_matrix_old(los_list,void_radii_all,spar_bins,sperp_bins,nbar,
                           additional_weights = None,n_boot=10000,seed=42,
                           lambda_reg = 1e-15,cholesky=True,regularise=True,
                           log_field=False,return_mean=False):
