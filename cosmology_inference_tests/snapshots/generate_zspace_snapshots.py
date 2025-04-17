@@ -1,0 +1,52 @@
+# generate_zspace_snapshots.py
+
+import numpy as np
+from void_analysis.cosmology_inference import (
+    to_real_space,
+    z_space_jacobian,
+    z_space_profile,
+    to_z_space
+)
+
+GENERATED_SNAPSHOTS = [
+    "to_real_space_ref.npy",
+    "to_z_space_ref.npy",
+    "zspace_jacobian_ref.npy",
+    "zspace_profile_ref.npy"
+]
+
+def generate_snapshots():
+    np.random.seed(42)
+
+    r_par = np.linspace(-2.0, 2.0, 100)
+    r_perp = np.linspace(0.1, 2.0, 100)
+    z = 0.1
+    Om = 0.3
+    f = 0.8
+
+    Delta = lambda r: 0.2 * np.exp(-r**2)
+    delta = lambda r: -0.2 * np.exp(-r**2)
+    rho_real_func = lambda r: delta(r) + 1.0
+
+    # Save to_real_space snapshot
+    s_par_real, s_perp_real = to_real_space(r_par, r_perp, z, Om, Delta=Delta, f=f)
+    np.save("to_real_space_ref.npy", np.vstack([s_par_real, s_perp_real]))
+
+    # Save to_z_space snapshot
+    s_par_z, s_perp_z = to_z_space(r_par, r_perp, z, Om, Delta=Delta, f=f)
+    np.save("to_z_space_ref.npy", np.vstack([s_par_z, s_perp_z]))
+
+    # Save z_space_jacobian snapshot
+    J = z_space_jacobian(z, Delta, delta, r_par, r_perp, Om)
+    np.save("zspace_jacobian_ref.npy", J)
+
+    # Save z_space_profile snapshot
+    density = z_space_profile(s_par_real, s_perp_real, rho_real_func, z, Om, Delta, delta)
+    np.save("zspace_profile_ref.npy", density)
+
+    print("Snapshots for to_real_space, to_z_space, z_space_jacobian, and z_space_profile saved.")
+
+if __name__ == "__main__":
+    generate_snapshots()
+
+

@@ -2,7 +2,11 @@
 import numpy as np
 from void_analysis.cosmology_inference import log_probability_aptest
 
-def generate_snapshot():
+GENERATED_SNAPSHOTS = [
+    "logprob_aptest_ref.npy"
+]
+
+def generate_snapshots():
     np.random.seed(42)
 
     theta = [0.99, 0.5]
@@ -32,4 +36,4 @@ def generate_snapshot():
     print("Saved log-probability snapshot.")
 
 if __name__ == "__main__":
-    generate_snapshot()
+    generate_snapshots()

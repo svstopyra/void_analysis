@@ -1,9 +1,15 @@
 import numpy as np
-from cosmology_inference import (
+from void_analysis.cosmology_inference import (
     profile_modified_hamaus,
     integrated_profile_modified_hamaus,
     profile_broken_power
 )
+
+GENERATED_SNAPSHOTS = [
+    "modified_hamaus_ref.npy",
+    "integrated_hamaus_ref.npy",
+    "broken_power_ref.npy"
+]
 
 def generate_snapshots():
     r = np.linspace(0.1, 3.0, 100)

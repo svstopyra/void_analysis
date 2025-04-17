@@ -3,7 +3,11 @@ import numpy as np
 import os
 from void_analysis.cosmology_inference import get_covariance_matrix
 
-def generate_snapshot():
+GENERATED_SNAPSHOTS = [
+    "covariance_ref.npy"
+]
+
+def generate_snapshots():
     np.random.seed(1)
     los_list = [[np.random.rand(10, 2) * 3.0 for _ in range(5)] for _ in range(2)]
     radii = [np.random.uniform(1.0, 2.0, size=5),
@@ -22,4 +26,4 @@ def generate_snapshot():
     print("Covariance snapshot saved.")
 
 if __name__ == "__main__":
-    generate_snapshot()
+    generate_snapshots()

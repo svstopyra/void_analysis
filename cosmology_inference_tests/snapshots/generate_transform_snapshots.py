@@ -2,7 +2,11 @@
 import numpy as np
 from void_analysis.cosmology_inference import to_z_space
 
-def generate_snapshot():
+GENERATED_SNAPSHOTS = [
+    "zspace_transform_ref.npy"
+]
+
+def generate_snapshots():
     z = 0.1
     Om = 0.3
     f = 0.8
@@ -17,4 +21,4 @@ def generate_snapshot():
     print("Saved z-space transform snapshot.")
 
 if __name__ == "__main__":
-    generate_snapshot()
+    generate_snapshots()

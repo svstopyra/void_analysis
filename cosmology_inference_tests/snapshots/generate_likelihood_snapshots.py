@@ -5,7 +5,11 @@ from void_analysis.cosmology_inference import (
     profile_modified_hamaus
 )
 
-def generate_snapshot():
+GENERATED_SNAPSHOTS = [
+    "profile_fit_params_ref.npy"
+]
+
+def generate_snapshots():
     np.random.seed(1)
     r = np.linspace(0.1, 10.0, 300)
     true_params = (1.5, 3.0, 1.0, -0.5, 0.1, 1.0)
@@ -18,4 +22,4 @@ def generate_snapshot():
     print("Saved regression snapshot for best-fit profile parameters.")
 
 if __name__ == "__main__":
-    generate_snapshot()
+    generate_snapshots()

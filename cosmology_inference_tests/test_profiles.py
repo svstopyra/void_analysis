@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import os
 from cosmology_inference import (
     profile_modified_hamaus,
     integrated_profile_modified_hamaus,
@@ -8,7 +9,7 @@ from cosmology_inference import (
     rho_real
 )
 
-SNAPSHOT_PATH = os.path.join(os.path.dirname(__file__), "snapshots", "modified_hamaus_ref.npy")
+SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "snapshots")
 
 # Basic radial test grid
 @pytest.fixture
@@ -50,7 +51,7 @@ def test_modified_hamaus_regression():
     params = (1.5, 3.0, 1.0, -0.5, 0.1, 1.0)
     current_output = profile_modified_hamaus(r, *params)
     # Load saved reference data
-    reference_output = np.load(SNAPSHOT_PATH)
+    reference_output = np.load(os.path.join(SNAPSHOT_DIR, "modified_hamaus_ref.npy"))
     # Regression check
     np.testing.assert_allclose(current_output, reference_output, rtol=1e-6, atol=1e-10)
 
