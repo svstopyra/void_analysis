@@ -7,7 +7,9 @@ from void_analysis.cosmology_inference import (
     z_space_profile,
     to_z_space,
     iterative_zspace_inverse_scalar,
-    iterative_zspace_inverse
+    iterative_zspace_inverse,
+    void_los_velocity,
+    void_los_velocity_derivative
 )
 
 GENERATED_SNAPSHOTS = [
@@ -16,7 +18,9 @@ GENERATED_SNAPSHOTS = [
     "zspace_jacobian_ref.npy",
     "zspace_profile_ref.npy",
     "iterative_zspace_inverse_scalar_ref.npy",
-    "iterative_zspace_inverse_ref.npy"
+    "iterative_zspace_inverse_ref.npy",
+    "void_los_velocity_ref.npy",
+    "void_los_velocity_derivative_ref.npy"
 ]
 
 def generate_snapshots():
@@ -60,6 +64,16 @@ def generate_snapshots():
     s_perp_array = np.linspace(0.1, 1.0, 5)
     r_par_array = iterative_zspace_inverse(s_par_array, s_perp_array, f_scalar, lambda r: 0.0)
     np.save("iterative_zspace_inverse_ref.npy", r_par_array)
+
+    # New snapshots for LOS velocity and derivative
+    r = np.linspace(0.1, 2.0, 50)
+    Delta_func = lambda r: 0.2 * np.exp(-r**2)
+    dDelta_func = lambda r: -2 * r * 0.2 * np.exp(-r**2)
+    v_los = void_los_velocity(z, Delta_func, r_par,r_perp,Om)
+    v_los_deriv = void_los_velocity_derivative(z, Delta_func, dDelta_func,
+                                               r_par,r_perp,Om)
+    np.save("void_los_velocity_ref.npy", v_los)
+    np.save("void_los_velocity_derivative_ref.npy", v_los_deriv)
 
     print("Snapshots for to_real_space, to_z_space, z_space_jacobian, z_space_profile, iterative_zspace_inverse_scalar, and iterative_zspace_inverse saved.")
 

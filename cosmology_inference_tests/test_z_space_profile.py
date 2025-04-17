@@ -9,7 +9,9 @@ from void_analysis.cosmology_inference import (
     z_space_jacobian,
     to_z_space,
     iterative_zspace_inverse_scalar,
-    iterative_zspace_inverse
+    iterative_zspace_inverse,
+    void_los_velocity,
+    void_los_velocity_derivative
 )
 
 SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "snapshots")
@@ -89,6 +91,20 @@ def test_iterative_zspace_inverse_array_matches_scalar(simple_delta_function):
     r_par_array = iterative_zspace_inverse(s_par, s_perp, f, simple_delta_function)
     np.testing.assert_allclose(r_par_array, r_par_scalar, rtol=1e-5)
 
+def test_void_los_velocity_positive_near_centre(synthetic_profile_data):
+    r_par, r_perp, z, Om, Delta, delta, _ = synthetic_profile_data
+    Delta = lambda r: 0.2 * np.exp(-r**2)
+    v_los = void_los_velocity(z, Delta,r_par,r_perp,Om)
+    assert np.all(np.isfinite(v_los))
+
+def test_void_los_velocity_derivative_consistency(synthetic_profile_data):
+    r_par, r_perp, z, Om, Delta, delta, _ = synthetic_profile_data
+    Delta = lambda r: 0.2 * np.exp(-r**2)
+    dDelta = lambda r: -2 * r * 0.2 * np.exp(-r**2)
+    v_los_deriv = void_los_velocity_derivative(z, Delta, dDelta,r_par,r_perp,Om)
+    assert np.all(np.isfinite(v_los_deriv))
+
+
 # ---------------------- REGRESSION TESTS ----------------------
 
 def test_z_space_profile_regression(synthetic_profile_data):
@@ -134,4 +150,19 @@ def test_iterative_zspace_inverse_regression(simple_delta_function):
     r_par_array = iterative_zspace_inverse(s_par, s_perp, f, simple_delta_function)
     ref = np.load(os.path.join(SNAPSHOT_DIR, "iterative_zspace_inverse_ref.npy"))
     np.testing.assert_allclose(r_par_array, ref, rtol=1e-6)
+
+def test_void_los_velocity_regression(synthetic_profile_data):
+    r_par, r_perp, z, Om, Delta, delta, _ = synthetic_profile_data
+    Delta = lambda r: 0.2 * np.exp(-r**2)
+    v_los = void_los_velocity(z, Delta,r_par,r_perp,Om)
+    ref = np.load(os.path.join(SNAPSHOT_DIR, "void_los_velocity_ref.npy"))
+    np.testing.assert_allclose(v_los, ref, rtol=1e-6)
+
+def test_void_los_velocity_derivative_regression(synthetic_profile_data):
+    r_par, r_perp, z, Om, Delta, delta, _ = synthetic_profile_data
+    Delta = lambda r: 0.2 * np.exp(-r**2)
+    dDelta = lambda r: -2 * r * 0.2 * np.exp(-r**2)
+    v_los_deriv = void_los_velocity_derivative(z, Delta, dDelta,r_par,r_perp,Om)
+    ref = np.load(os.path.join(SNAPSHOT_DIR, "void_los_velocity_derivative_ref.npy"))
+    np.testing.assert_allclose(v_los_deriv, ref, rtol=1e-6)
 

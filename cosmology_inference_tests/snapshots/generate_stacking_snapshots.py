@@ -2,6 +2,8 @@
 
 import numpy as np
 from void_analysis.cosmology_inference import (
+    get_stacked_void_density_field,
+    get_1d_real_space_field,
     get_2d_void_stack_from_los_pos,
     get_2d_field_from_stacked_voids,
     get_2d_fields_per_void,
@@ -17,7 +19,10 @@ GENERATED_SNAPSHOTS = [
     "get_field_from_los_data_ref.npy",
     "trim_los_list_ref.npy",
     "voids_used_ref.npy",
-    "get_trimmed_los_list_per_void_ref.npy"
+    "get_trimmed_los_list_per_void_ref.npy",
+    "stacked_void_density_ref.npy",
+    "real_space_profile_mean_ref.npy",
+    "real_space_profile_std_ref.npy"
 ]
 
 def generate_snapshots():
@@ -26,6 +31,33 @@ def generate_snapshots():
     spar_bins = np.linspace(0, 3, 6)
     sperp_bins = np.linspace(0, 3, 6)
     radii = [np.random.uniform(1.0, 2.0, size=5)]
+    boxsize = 300
+    
+    class DummySnap:
+        def __init__(self):
+            self.boxsize = 300
+            self.snaps = [np.zeros((100, 3))]
+            self.snaps_reverse = [np.zeros((100, 3))]
+            self.N = 1
+            self.pair_counts = [np.ones(len(spar_bins)-1)]
+            self.bin_volumes = [np.ones(len(spar_bins)-1)]
+            self.radius_bins = [spar_bins]
+            self.cell_volumes = [np.ones(100)]
+            self.void_centres = [np.zeros((5, 3))]
+            self.void_radii = [np.ones(5)]
+            self.property_list = {
+                "snaps":self.snaps,
+                "snaps_reverse":self.snaps_reverse,
+                "pair_counts":self.pair_counts,
+                "bin_volumes":self.bin_volumes,
+                "radius_bins":self.radius_bins,
+                "cell_volumes":self.cell_volumes,
+                "void_centres":self.void_centres,
+                "void_radii":self.void_radii
+            }
+        def __getitem__(self, property_name):
+            return self.property_list[property_name]
+    snaps = DummySnap()
 
     # Generate and save stacked particles
     stacked_particles = get_2d_void_stack_from_los_pos(los_pos, spar_bins, sperp_bins, radii, stacked=True)
@@ -54,6 +86,20 @@ def generate_snapshots():
 
     los_list_per_void = get_trimmed_los_list_per_void(los_pos, spar_bins, sperp_bins, radii)
     np.save("get_trimmed_los_list_per_void_ref.npy", np.array(los_list_per_void, dtype=object))
+
+    # 2D stacked void field
+    stacked_field = get_stacked_void_density_field(
+        snaps, radii, los_pos, spar_bins, sperp_bins, halo_indices=None,
+        filter_list=None, additional_weights=None, dist_max=3, rmin=10, rmax=20,
+        recompute=False, zspace=True, recompute_zspace=False, suffix=".lospos_all_zspace2.p",
+        los_pos=los_pos
+    )
+    np.save("stacked_void_density_ref.npy", stacked_field)
+
+    # 1D real-space density profile
+    rho_mean, rho_std = get_1d_real_space_field(snaps, rbins=spar_bins)
+    np.save("real_space_profile_mean_ref.npy", rho_mean)
+    np.save("real_space_profile_std_ref.npy", rho_std)
 
     print("✅ Stacking snapshots generated successfully.")
 

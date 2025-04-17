@@ -332,8 +332,8 @@ def ap_parameter(z, Om, Om_fid, h=0.7, h_fid=0.7, **kwargs):
     Hz = 100 * h * np.sqrt(Om * (1 + z)**3 + 1.0 - Om)
     Hz_fid = 100 * h_fid * np.sqrt(Om_fid * (1 + z)**3 + 1.0 - Om_fid)
     # Angular diameter distances:
-    Da = cosmo_test.angular_diameter_distance(z).value
-    Da_fid = cosmo_fid.angular_diameter_distance(z).value
+    Da = np.fmax(cosmo_test.angular_diameter_distance(z).value,1e-16)
+    Da_fid = np.fmax(cosmo_fid.angular_diameter_distance(z).value,1e-16)
     return (Hz * Da) / (Hz_fid * Da_fid)
 
 
@@ -655,14 +655,14 @@ def covariance(data):
     # We seek to compute an M x M covariance matrix of this data
     N, M = data.shape
     mean = np.mean(data,0)
-    diff = data.T - mean
+    diff = data.T - mean[:,None]
     cov = np.matmul(diff,diff.T)/N
     return cov
 
 # Estimate covariance of the profile using the jackknife method:
 def profile_jackknife_covariance(data,profile_function,**kwargs):
     N, M = data.shape
-    jacknife_data = np.zeros(N,M)
+    jacknife_data = np.zeros((N,M))
     for k in range(0,N):
         sample = np.setdiff1d(range(0,N),np.array([k]))
         jacknife_data[k,:] = profile_function(data[sample,:],**kwargs)
@@ -1631,7 +1631,7 @@ def get_weights(los_zspace, void_radii, additional_weights=None):
         additional_weights (list or None): Optional weights per void (same structure)
 
     Returns:
-        list of arrays: Per-void list of per-particle weights
+        Array of weights for all particles in all voids in all snapshots
     """
     # Mask voids that actually contribute LOS data
     voids_used = [np.array([len(x) for x in los]) > 0 for los in los_zspace]
