@@ -1850,17 +1850,23 @@ def _filter_regions_by_density(rand_centres, rand_densities, delta_interval):
         - region_masks: Boolean masks for selected centres
         - centres_to_use: Filtered centres as list of arrays per snapshot
     """
+    if isinstance(rand_centres,list):
+        centres_list = rand_centres
+    elif isinstance(rand_centres,np.ndarray):
+        centres_list = [rand_centres for _ in rand_densities]
+    else:
+        raise Exception("Invalid rand_centres")
     if delta_interval is not None:
         region_masks = [
             (deltas > delta_interval[0]) & (deltas <= delta_interval[1])
             for deltas in rand_densities
         ]
         centres_to_use = [
-            centres[mask] for centres, mask in zip(rand_centres, region_masks)
+            centres[mask,:] for centres, mask in zip(centres_list, region_masks)
         ]
     else:
         region_masks = [np.ones_like(deltas, dtype=bool) for deltas in rand_densities]
-        centres_to_use = [rand_centres for _ in rand_densities]
+        centres_to_use = centres_list
     return region_masks, centres_to_use
 
 def _compute_void_distances(void_centres, region_centres, boxsize):

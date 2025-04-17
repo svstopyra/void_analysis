@@ -379,7 +379,7 @@ los_lcdm_zspace_unconstrained = get_los_positions_for_all_catalogues(
     lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],lcdm_snaps["void_centres"],
     lcdm_snaps["void_radii"],all_particles=True,
     filter_list=voids_used_lcdm_unconstrained,dist_max=3,
-    rmin=10,rmax=20,recompute=True,zspace=True,recompute_zspace=False,
+    rmin=10,rmax=20,recompute=False,zspace=True,recompute_zspace=False,
     suffix=".lospos_all_zspace.p",flatten_filters=True)
 
 #los_lcdm_real = get_los_positions_for_all_catalogues(
