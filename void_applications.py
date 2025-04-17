@@ -813,7 +813,9 @@ tau, sampler = run_inference(data_field,theta_ranges_epsilon,mle_estimate.x,
 sampler = emcee.backends.HDFBackend(
     data_folder + "inference_weighted_2025_04_03.h5")
 tau = sampler.get_autocorr_time(tol=0)
-chain = sampler.get_chain(discard=2000)
+#chain = sampler.get_chain(discard=2000)
+tau_max = np.max(tau)
+chain = sampler.get_chain()
 
 jump = 100
 intervals = np.arange(0,chain.shape[0],jump)
@@ -823,9 +825,17 @@ for k in tools.progressbar(range(0,chain.shape[1])):
         taus[l,k,:] = emcee.autocorr.integrated_time(chain[0:intervals[l+1],
                                                      [k],:],tol=0)
 
+
+param_labels = ["$\\epsilon$","$f$","$\\alpha$","$\\beta$","$r_s$",
+                   "$\\delta_c$","$\\delta_{\\mathrm{large}}$","$r_v$"]
+
 # Taus plot:
 plt.clf()
-plt.plot(intervals[1:],taus[:,5,:])
+plt.plot(intervals[1:],np.mean(taus,1),
+         label = param_labels)
+plt.xlabel("MCMC Steps")
+plt.ylabel("Correlation Length")
+plt.legend(frameon=False)
 plt.savefig(figuresFolder + "taus.pdf")
 plt.show()
 
@@ -838,8 +848,11 @@ tau_mean = emcee.autocorr.integrated_time(
 # Chains plot:
 plt.clf()
 #plt.plot(np.sign(mean_chain)*np.log10(1 + np.abs(mean_chain)))
-plt.plot(chain[:,5,:])
-plt.ylim([-5,5])
+plt.plot(np.mean(chain,1),label=param_labels)
+#plt.ylim([-5,5])
+plt.xlabel("MCMC step")
+plt.ylabel("Parameter")
+plt.legend(frameon=False)
 plt.savefig(figuresFolder + "all_chains.pdf")
 plt.show()
 
@@ -881,13 +894,17 @@ flat_range = np.percentile(flat_samples,[16,84],axis=0)
 import corner
 
 plt.clf()
+Om = lcdm_snaps["snaps"][0].properties["omegaM0"]
+f_truth = f_lcdm(0,Om)
+eps_truth = 1.0
 #fig = corner.corner(flat_samples, labels=["$\\Omega_{m}$","$f$","A"])
 #fig = corner.corner(flat_samples, labels=["$\\epsilon$","$f$","$A$","$r_0$",
 #    "$c_1$","$f_1$","$B$"])
-#param_ranges = [[0.9,1.1],[0,1.0]]
-param_ranges = None
-fig = corner.corner(flat_samples,labels=["$\\epsilon$","$f$"],
-                    range=param_ranges)
+param_ranges = [[0.9,1.1],[0,1.0]]
+#param_ranges = None
+fig = corner.corner(flat_samples[:,0:2],labels=["$\\epsilon$","$f$"],
+                    range=param_ranges,truths=[eps_truth,f_truth],
+                    truth_color="grey",)
 fig.suptitle("$\\Lambda$-CDM Inference from Void Catalogue")
 plt.savefig(figuresFolder + "corner_plot_cosmo_inference_cosmo_only.pdf")
 plt.show()
