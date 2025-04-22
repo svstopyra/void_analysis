@@ -437,7 +437,7 @@ recompute_fields = False
 
 # BORG density field:
 field_borg_test = tools.loadOrRecompute(data_folder + "borg_field_2d.p",
-    get_stacked_void_density_field(
+    get_stacked_void_density_field,
     borg_snaps,cat300.getAllProperties("radii",void_filter=True).T,zcentres,
     spar_bins,sperp_bins,
     additional_weights = additional_weights_unfiltered_borg,
@@ -559,7 +559,7 @@ rho_cov_borg, rhomean_borg = tools.loadOrRecompute(
     los_borg_zspace,cat300.getAllProperties("radii",void_filter=True).T,
     spar_bins,sperp_bins,nbar,
     additional_weights=additional_weights_unfiltered_borg,return_mean=True,
-    cholesky=False,_recomputeData = recompute_covarariances)
+    cholesky=False,_recomputeData = recompute_covariances)
 cholesky_cov_borg = scipy.linalg.cholesky(rho_cov_borg,lower=True)
 
 logrho_cov_borg, logrho_mean_borg = tools.loadOrRecompute(
@@ -567,7 +567,7 @@ logrho_cov_borg, logrho_mean_borg = tools.loadOrRecompute(
     los_borg_zspace,cat300.getAllProperties("radii",void_filter=True).T,
     spar_bins,sperp_bins,nbar,
     additional_weights=additional_weights_unfiltered_borg,return_mean=True,
-    cholesky=False,log_field=True,_recomputeData = recompute_covarariances)
+    cholesky=False,log_field=True,_recomputeData = recompute_covariances)
 log_cholesky_cov_borg = scipy.linalg.cholesky(logrho_cov_borg,lower=True)
 
 
@@ -575,7 +575,7 @@ rho_cov_lcdm, rhomean_lcdm = tools.loadOrRecompute(
     data_folder + "lcdm_cov.p",get_covariance_matrix,
     los_lcdm_zspace_unconstrained,lcdm_snaps["void_radii"],
     spar_bins,sperp_bins,nbar,additional_weights=None,
-    return_mean=True,cholesky=False,_recomputeData = recompute_covarariances)
+    return_mean=True,cholesky=False,_recomputeData = recompute_covariances)
 cholesky_cov_lcdm = scipy.linalg.cholesky(rho_cov_lcdm,lower=True)
 
 logrho_cov_lcdm, logrho_mean_lcdm = tools.loadOrRecompute(
@@ -583,7 +583,7 @@ logrho_cov_lcdm, logrho_mean_lcdm = tools.loadOrRecompute(
     los_lcdm_zspace_unconstrained,lcdm_snaps["void_radii"],
     spar_bins,sperp_bins,nbar,additional_weights=None,
     return_mean=True,cholesky=False,log_field=True,
-    _recomputeData = recompute_covarariances)
+    _recomputeData = recompute_covariances)
 log_cholesky_cov_lcdm = scipy.linalg.cholesky(logrho_cov_lcdm,lower=True)
 
 
@@ -643,9 +643,258 @@ tau, sampler = run_inference_pipeline(
     autocorr_filename = "autocorr.npy",disp=1e-2,nwalkers=64,n_mcmc=10000,
     max_n=1000000,batch_size=100,nbatch=100,redo_chain=True,backup_start=True)
 
+sampler = emcee.backends.HDFBackend("inference_weighted.h5")
+tau = sampler.get_autocorr_time(tol=0)
+
+
+# MLE Test:
+
+profile_param_ranges = [[0,np.inf],[0,np.inf],[0,np.inf],[-1,0],[-1,1],[0,2]]
+om_ranges = [[0.1,0.5]]
+eps_ranges = [[0.9,1.1]]
+f_ranges = [[0,1]]
+z = 0.0225
+Om_fid = 0.3111
+eps_initial_guess = np.array([1.0,f_lcdm(z,Om_fid)])
+theta_initial_guess = np.array([0.3,f_lcdm(z,0.3)])
+
+profile_params = get_profile_parameters_fixed(ri_lcdm, field_lcdm_1d_uncon-1.0, 
+                                              field_lcdm_1d_sigma_uncon)
+
+
+initial_guess_eps = np.hstack([eps_initial_guess,profile_params])
+initial_guess_theta = np.hstack([theta_initial_guess,profile_params])
+
+theta_ranges=om_ranges + f_ranges + profile_param_ranges
+theta_ranges_epsilon = eps_ranges + f_ranges + profile_param_ranges
+
+Umap, good_eig = get_nonsingular_subspace(
+        rho_cov_lcdm, lambda_reg=1e-27,
+        lambda_cut=1e-23, normalised_cov=False,
+        mu=rhomean_lcdm)
+
+F_inv = None
+
+data_field = field_lcdm_uncon.flatten()
+data_filter = np.ones(data_field.flatten().shape, dtype=bool)
+delta = profile_modified_hamaus
+Delta = integrated_profile_modified_hamaus
+rho_real = lambda *args: delta(*args) + 1.0
+cholesky_matrix = scipy.linalg.cholesky(rho_cov_lcdm, lower=True)
+
+scoords = generate_scoord_grid(sperp_bins, spar_bins)
+
+args = (data_field[data_filter],scoords[data_filter,:],
+        cholesky_matrix[data_filter,:][:,data_filter],z,Delta,
+        delta,rho_real)
+kwargs = {'cholesky':True,'tabulate_inverse':True,
+          'sample_epsilon':True,'theta_ranges':theta_ranges_epsilon,
+          'singular':False,'Umap':Umap,'good_eig':good_eig,'F_inv':F_inv,
+          'log_density':False,'infer_profile_args':True}
+
+# Wrapper allowing us to pass arbitrary arguments that won't be sampled over:
+def posterior_wrapper(theta,additional_args,*args,**kwargs):
+    theta_comb = np.hstack([theta,additional_args])
+    return log_probability_aptest(theta_comb,*args,**kwargs)
+
+nll = lambda theta: -log_likelihood_aptest(theta,*args,**kwargs)
+mle_estimate = scipy.optimize.minimize(nll,initial_guess_eps,
+                                       bounds=theta_ranges_epsilon)
+
+
+plt.clf()
+rrange_lcdm = np.linspace(0,10,1000)
+smax = np.sqrt(np.max(spar_bins)**2 + np.max(sperp_bins)**2)
+fig, ax = plt.subplots(figsize=(textwidth,0.45*textwidth))
+plt.plot(rrange_lcdm,
+         profile_modified_hamaus(rrange_lcdm,*mle_estimate.x[2:]),
+         label="MLE Profile (joint inference)")
+plt.plot(rrange_lcdm,
+         profile_modified_hamaus(rrange_lcdm,*profile_params),
+         label="MLE Profile (Separate inference)")
+plt.fill_between(ri_lcdm,field_lcdm_1d_uncon - 1 - field_lcdm_1d_sigma_uncon,
+                 field_lcdm_1d_uncon - 1 + field_lcdm_1d_sigma_uncon,
+                 color=seabornColormap[0],label="LCDM simulated",
+                 alpha=0.5)
+plt.axvline(smax,label="2D Inference Max r",linestyle=':',color='grey')
+plt.xlabel('$r/r_{\\mathrm{eff}}$')
+plt.ylabel('$\\delta(r)$')
+plt.xlim([0,10])
+plt.ylim([-1,0.1])
+#plt.yscale('log')
+#plt.xscale('log')
+plt.legend(frameon=False,loc="lower right")
+plt.tight_layout()
+plt.savefig(figuresFolder + "profile_fit_test_mle.pdf")
+plt.show()
+
+
+# Relative error:
+plt.clf()
+rrange_lcdm = np.linspace(0,10,1000)
+smax = np.sqrt(np.max(spar_bins)**2 + np.max(sperp_bins)**2)
+fig, ax = plt.subplots(figsize=(textwidth,0.45*textwidth))
+plt.plot(ri_lcdm,
+         profile_modified_hamaus(ri_lcdm,*mle_estimate.x[2:]) - 
+         field_lcdm_1d_uncon + 1,
+         label="MLE Profile (joint inference)")
+plt.plot(ri_lcdm,
+         profile_modified_hamaus(ri_lcdm,*profile_params) - 
+         field_lcdm_1d_uncon + 1,
+         label="MLE Profile (Separate inference)")
+plt.fill_between(ri_lcdm,-field_lcdm_1d_sigma_uncon,field_lcdm_1d_sigma_uncon,
+                 color=seabornColormap[0],label="LCDM simulation uncertainty",
+                 alpha=0.5)
+plt.axvline(smax,label="2D Inference Max r",linestyle=':',color='grey')
+plt.xlabel('$r/r_{\\mathrm{eff}}$')
+plt.ylabel('$\\delta_{\\mathrm{model}}(r) - \\delta_{\\mathrm{data}}$')
+plt.xlim([0,10])
+plt.ylim([-0.05,0.05])
+plt.legend(frameon=False,loc="upper right")
+plt.tight_layout()
+plt.savefig(figuresFolder + "profile_fit_test_mle_relative.pdf")
+plt.show()
+
+
+def integrated_profile_modified_hamaus(r, alpha, beta, rs, delta_c,
+                                       delta_large=0.0, rv=1.0):
+    """
+    Integrated (cumulative) version of the modified Hamaus profile.
+
+    Computes the average density contrast Δ(r), i.e., the mass enclosed
+    within a sphere of radius r divided by the volume.
+
+    Uses hypergeometric functions to perform analytic integration of δ(r).
+
+    Parameters:
+        r (float or array): Radius
+        alpha, beta (float): Shape parameters
+        rs (float): Void scale radius
+        delta_c (float): Central density contrast
+        delta_large (float): Large-scale offset (default: 0)
+        rv (float): Characteristic void radius (default: 1.0)
+
+    Returns:
+        float or array: Cumulative density contrast Δ(r)
+    """
+    #arg = (r / rv)**beta / (1.0 + (r / rv)**beta)
+    arg = (r / rv)**beta
+    hyp_1 = scipy.special.hyp2f1(1,3 / beta, 1 + (3 / beta), -arg)
+    hyp_2 = scipy.special.hyp2f1(1,(alpha + 3) / beta, 1 + ( (alpha + 3) / beta), -arg)
+    #hyp_1 = scipy.special.hyp2f1(3 / beta, 3 / beta, 1 + 3 / beta, arg)
+    #hyp_2 = scipy.special.hyp2f1((alpha + 3) / beta,
+    #                             (alpha + 3) / beta,
+    #                             1 + (alpha + 3) / beta,
+    #                             arg)
+    #return ((delta_c - delta_large) *
+    #        ((1 + (r / rv)**beta)**(-3 / beta)) * hyp_1 -
+    #        (3 / (alpha + 3)) * ((r / rs)**alpha) *
+    #        ((1 + (r / rv)**beta)**(-(alpha + 3) / beta)) * hyp_2
+    #        + delta_large)
+    return delta_large + (delta_c - delta_large)*( hyp_1 - 
+        ( 3 / (alpha + 3) ) * ( r / rs )**alpha * hyp_2 )
 
 
 
+# Test profile function integration?
+
+r_range = np.logspace(-3,1,1001)
+del_func = lambda r: profile_modified_hamaus(r,*profile_params)
+Del_func = lambda r: integrated_profile_modified_hamaus(r,*profile_params)
+Del_val_true = np.array([scipy.integrate.quad(
+                            lambda r: del_func(r)*r**2,0,r)[0] * (3/(r**3))
+                         for r in r_range])
+Del_val_test = Del_func(r_range)
+
+plt.clf()
+plt.plot(r_range,Del_val_true,label="Numerical Integration")
+plt.plot(r_range,Del_val_test,label="Analytic Integration")
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "integrated_profile_test.pdf")
+plt.show()
+
+
+plt.clf()
+plt.plot(r_range,Del_val_test - Del_val_true,label="Analytic - Numerical")
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "integrated_profile_test_diff.pdf")
+plt.show()
+
+
+
+# Likelihood plot:
+
+
+f_range = np.linspace(0,1,41)
+f_range_centres = plot.binCentres(f_range)
+eps_range = np.linspace(0.9,1.1,41)
+eps_centres = plot.binCentres(eps_range)
+
+
+
+
+log_like_ap_joint = np.zeros((40,40))
+log_like_ap_sep = np.zeros((40,40))
+params_joint = mle_estimate.x[2:]
+params_sep = profile_params
+for i in tools.progressbar(range(0,len(eps_centres))):
+    for j in range(0,len(f_range_centres)):
+        theta_joint = np.array([eps_range[i],f_range_centres[j],*params_joint])
+        theta_sep = np.array([eps_range[i],f_range_centres[j],*params_sep])
+        log_like_ap_joint[i,j] = log_likelihood_aptest(theta_joint,*args,**kwargs)
+        log_like_ap_sep[i,j] = log_likelihood_aptest(theta_sep,*args,**kwargs)
+        #log_like_ap[i,j] = log_probability_aptest(theta,*args,**kwargs)
+
+filename = figuresFolder + "likelihood_test_plot_eps.pdf"
+
+def plot_likelihood_distribution(
+        log_like,eps_range,f_range,vmin=100,vmax=25000,
+        levels = [100,500,1000,2000,5000,10000,15000,20000],
+        f_fid=None,eps_fid=1.0,mle=None,filename=None,Om_fid = 0.3111,
+        z = 0.0225):
+    plt.clf()
+    #im = plt.imshow(-log_like_ap.T,
+    #           extent=(eps_range[0],eps_range[-1],f_range[0],f_range[-1]),
+    #           norm=colors.LogNorm(vmin=1e9,vmax=1e10),cmap='Blues',
+    #           aspect='auto',origin='lower')
+    im = plt.imshow(-log_like.T,
+               extent=(eps_range[0],eps_range[-1],f_range[0],f_range[-1]),
+               norm=colors.LogNorm(vmin=vmin,vmax=vmax),cmap='Blues',
+               aspect='auto',origin='lower')
+    f_range_centres = plot.binCentres(f_range)
+    eps_centres = plot.binCentres(eps_range)
+    X, Y = np.meshgrid(eps_centres,f_range_centres)
+    CS = plt.contour(X,Y,-log_like.T,levels = levels)
+    plt.clabel(CS, inline=True, fontsize=10)
+    plt.axvline(eps_fid,linestyle=':',color='k',label='Fiducial $\\Lambda$CDM')
+    if f_fid is None:
+        f_fid = f_lcdm(z,Om_fid)
+    plt.axhline(f_fid,linestyle=':',color='k')
+    if mle is not None:
+        plt.scatter(mle[0],mle[1],marker='x',color='k',label='MLE')
+    plt.xlabel('$\\epsilon$')
+    plt.ylabel('$f$')
+    plt.colorbar(im,label='Negative Log Likelihood')
+    #plt.colorbar(im,label='Negative Log Posterior')
+    plt.legend(frameon=False,loc="upper left")
+    if filename is not None:
+        plt.savefig(filename)
+    plt.show()
+
+plot_likelihood_distribution(log_like_ap_joint,eps_range,f_range,
+                             filename = figuresFolder + "likelihood_joint.pdf",
+                             mle = mle_estimate.x)
+plot_likelihood_distribution(log_like_ap_sep,eps_range,f_range,
+                             filename = figuresFolder + "likelihood_sep.pdf",
+                             mle = mle_estimate.x)
+
+plt.clf()
+plt.plot(f_range_centres,log_like_ap[20,:])
+plt.xlabel('f')
+plt.ylabel('Log Likelihood')
+plt.title("Likelihood at $\\epsilon = " + ("%.2g" % eps_range[20]) + "$")
+plt.savefig(figuresFolder + "nll_plot_f.pdf")
+plt.show()
 
 
 
@@ -757,61 +1006,6 @@ F_inv = lambda x, y, z: scipy.interpolate.interpn((rperp_vals,svals,f_vals),
 
 # Run the inference:
 #profile_param_ranges = [[-np.inf,np.inf],[0,2],[-np.inf,0],[0,np.inf],[-1,1]]
-profile_param_ranges = [[0,np.inf],[0,np.inf],[0,np.inf],[-1,0],[-1,1],[0,2]]
-om_ranges = [[0.1,0.5]]
-eps_ranges = [[0.9,1.1]]
-f_ranges = [[0,1]]
-z = 0.0225
-Om_fid = 0.3111
-eps_initial_guess = np.array([1.0,f_lcdm(z,Om_fid)])
-theta_initial_guess = np.array([0.3,f_lcdm(z,0.3)])
-
-initial_guess_eps = np.hstack([eps_initial_guess,sol2.x])
-initial_guess_theta = np.hstack([theta_initial_guess,sol2.x])
-
-theta_ranges=om_ranges + f_ranges + profile_param_ranges
-theta_ranges_epsilon = eps_ranges + f_ranges + profile_param_ranges
-
-args = (data_field[data_filter],scoords[data_filter,:],
-        cholesky_matrix[data_filter,:][:,data_filter],z,Delta_func,
-        delta_func,rho_real)
-kwargs = {'cholesky':True,'tabulate_inverse':True,
-          'sample_epsilon':True,'theta_ranges':theta_ranges_epsilon,
-          'singular':False,'Umap':Umap,'good_eig':good_eig,'F_inv':F_inv,
-          'log_density':True}
-
-# Wrapper allowing us to pass arbitrary arguments that won't be sampled over:
-def posterior_wrapper(theta,additional_args,*args,**kwargs):
-    theta_comb = np.hstack([theta,additional_args])
-    return log_probability_aptest(theta_comb,*args,**kwargs)
-
-nll = lambda theta: -log_likelihood_aptest(theta,*args,**kwargs)
-mle_estimate = scipy.optimize.minimize(nll,initial_guess_eps,
-                                       bounds=theta_ranges_epsilon)
-
-
-plt.clf()
-fig, ax = plt.subplots(figsize=(textwidth,0.45*textwidth))
-plt.errorbar(rBinStackCentres,delta_borg,yerr=sigma_delta_borg,linestyle='-',
-             color=seabornColormap[1],label="BORG profile")
-plt.plot(rBinStackCentres,
-         profile_modified_hamaus(rBinStackCentres,*mle_estimate.x[2:]),
-         label="MLE Profile (joint inference)")
-plt.plot(rBinStackCentres,
-         profile_modified_hamaus(rBinStackCentres,*sol2.x),
-         label="MLE Profile (Separate inference)")
-
-plt.xlabel('$r/r_{\\mathrm{eff}}$')
-plt.ylabel('$\\rho(r)$')
-plt.xlim([0,10])
-plt.ylim([0,1.1])
-#plt.yscale('log')
-#plt.xscale('log')
-plt.legend(frameon=False,loc="lower right")
-plt.tight_layout()
-plt.savefig(figuresFolder + "profile_fit_test3.pdf")
-plt.show()
-
 
 
 

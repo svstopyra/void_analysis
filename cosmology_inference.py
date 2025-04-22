@@ -1588,17 +1588,13 @@ def integrated_profile_modified_hamaus(r, alpha, beta, rs, delta_c,
     Returns:
         float or array: Cumulative density contrast Δ(r)
     """
-    arg = (r / rv)**beta / (1.0 + (r / rv)**beta)
-    hyp_1 = scipy.special.hyp2f1(3 / beta, 3 / beta, 1 + 3 / beta, arg)
-    hyp_2 = scipy.special.hyp2f1((alpha + 3) / beta,
-                                 (alpha + 3) / beta,
-                                 1 + (alpha + 3) / beta,
-                                 arg)
-    return ((delta_c - delta_large) *
-            ((1 + (r / rv)**beta)**(-3 / beta)) * hyp_1 -
-            (3 / (alpha + 3)) * ((r / rs)**alpha) *
-            ((1 + (r / rv)**beta)**(-(alpha + 3) / beta)) * hyp_2
-            + delta_large)
+    arg = (r / rv)**beta
+    hyp_1 = scipy.special.hyp2f1(1,3 / beta, 1 + (3 / beta), -arg)
+    hyp_2 = scipy.special.hyp2f1(1,(alpha + 3) / beta, 1 + ( (alpha + 3) / beta), -arg)
+    return delta_large + (delta_c - delta_large)*( hyp_1 - 
+        ( 3 / (alpha + 3) ) * ( r / rs )**alpha * hyp_2 )
+
+
 
 def rho_real(r, *profile_args):
     """
