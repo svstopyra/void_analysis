@@ -433,36 +433,51 @@ additional_weights_borg = get_additional_weights_borg(
     cat300,voids_used = voids_used_borg)
 
 rbins = np.linspace(0,3,31)
+recompute_fields = False
 
 # BORG density field:
-field_borg_test = get_stacked_void_density_field(
+field_borg_test = tools.loadOrRecompute(data_folder + "borg_field_2d.p",
+    get_stacked_void_density_field(
     borg_snaps,cat300.getAllProperties("radii",void_filter=True).T,zcentres,
     spar_bins,sperp_bins,
     additional_weights = additional_weights_unfiltered_borg,
-    los_pos = los_borg_zspace,filter_list = filter_list_borg)
+    los_pos = los_borg_zspace,filter_list = filter_list_borg,
+    _recomputeData = recompute_fields)
 
-field_borg_1d, field_borg_1d_sigma = get_1d_real_space_field(
+field_borg_1d, field_borg_1d_sigma = \
+    tools.loadOrRecompute(data_folder + "borg_field_1d.p",
+    get_1d_real_space_field,
     borg_snaps,filter_list=filter_list_borg,
-    additional_weights=additional_weights_unfiltered_borg)
+    additional_weights=additional_weights_unfiltered_borg,
+    _recomputeData = recompute_fields)
 
 
 # LCDM density field (with density constraint):
-field_lcdm_test = get_stacked_void_density_field(
+field_lcdm_test = tools.loadOrRecompute(data_folder + "lcdm_field_2d.p",
+    get_stacked_void_density_field,
     lcdm_snaps,lcdm_snaps["void_radii"],lcdm_snaps["void_centres"],
     spar_bins,sperp_bins,filter_list=voids_used_lcdm,recompute=False,
-    los_pos = los_lcdm_zspace)
+    los_pos = los_lcdm_zspace,_recomputeData = recompute_fields)
 
-field_lcdm_1d, field_lcdm_1d_sigma = get_1d_real_space_field(
-    lcdm_snaps,filter_list=voids_used_lcdm)
+field_lcdm_1d, field_lcdm_1d_sigma = \
+    tools.loadOrRecompute(data_folder + "lcdm_field_1d.p",
+    get_1d_real_space_field,lcdm_snaps,filter_list=voids_used_lcdm,
+    _recomputeData=recompute_fields)
 
 # LCDM density field (without density constraint):
-field_lcdm_uncon = get_stacked_void_density_field(
+field_lcdm_uncon = \
+    tools.loadOrRecompute(data_folder + "lcdm_field_uncon_2d.p",
+    get_stacked_void_density_field,
     lcdm_snaps,lcdm_snaps["void_radii"],lcdm_snaps["void_centres"],
     spar_bins,sperp_bins,filter_list=voids_used_lcdm_unconstrained,
-    recompute=False,los_pos = los_lcdm_zspace_unconstrained)
+    recompute=False,los_pos = los_lcdm_zspace_unconstrained,
+    _recomputeData = recompute_fields)
 
-field_lcdm_1d_uncon, field_lcdm_1d_sigma_uncon = get_1d_real_space_field(
-    lcdm_snaps,filter_list=voids_used_lcdm_unconstrained)
+field_lcdm_1d_uncon, field_lcdm_1d_sigma_uncon = \
+    tools.loadOrRecompute(data_folder + "lcdm_field_uncon_1d.p",
+    get_1d_real_space_field,
+    lcdm_snaps,filter_list=voids_used_lcdm_unconstrained,
+    _recomputeData = recompute_fields)
 
 
 #-------------------------------------------------------------------------------
@@ -528,7 +543,7 @@ A = 0.013
 #-------------------------------------------------------------------------------
 # COVARIANCE MATRIX ESTIMATION:
 
-
+recompute_covariances = False
 
 v_weights_all_borg = get_void_weights(
     los_list_trimmed_borg,voids_used_borg,void_individual_radii_borg,
@@ -539,31 +554,36 @@ v_weights_all_lcdm = get_void_weights(los_list_trimmed_lcdm,voids_used_lcdm,
 
 
 
-rho_cov_borg, rhomean_borg = get_covariance_matrix(
+rho_cov_borg, rhomean_borg = tools.loadOrRecompute(
+    data_folder + "borg_cov.p",get_covariance_matrix,
     los_borg_zspace,cat300.getAllProperties("radii",void_filter=True).T,
     spar_bins,sperp_bins,nbar,
     additional_weights=additional_weights_unfiltered_borg,return_mean=True,
-    cholesky=False)
+    cholesky=False,_recomputeData = recompute_covarariances)
 cholesky_cov_borg = scipy.linalg.cholesky(rho_cov_borg,lower=True)
 
-logrho_cov_borg, logrho_mean_borg = get_covariance_matrix(
+logrho_cov_borg, logrho_mean_borg = tools.loadOrRecompute(
+    data_folder + "borg_logcov.p",get_covariance_matrix,
     los_borg_zspace,cat300.getAllProperties("radii",void_filter=True).T,
     spar_bins,sperp_bins,nbar,
     additional_weights=additional_weights_unfiltered_borg,return_mean=True,
-    cholesky=False,log_field=True)
+    cholesky=False,log_field=True,_recomputeData = recompute_covarariances)
 log_cholesky_cov_borg = scipy.linalg.cholesky(logrho_cov_borg,lower=True)
 
 
-rho_cov_lcdm, rhomean_lcdm = get_covariance_matrix(
+rho_cov_lcdm, rhomean_lcdm = tools.loadOrRecompute(
+    data_folder + "lcdm_cov.p",get_covariance_matrix,
     los_lcdm_zspace_unconstrained,lcdm_snaps["void_radii"],
     spar_bins,sperp_bins,nbar,additional_weights=None,
-    return_mean=True,cholesky=False)
+    return_mean=True,cholesky=False,_recomputeData = recompute_covarariances)
 cholesky_cov_lcdm = scipy.linalg.cholesky(rho_cov_lcdm,lower=True)
 
-logrho_cov_lcdm, logrho_mean_lcdm = get_covariance_matrix(
+logrho_cov_lcdm, logrho_mean_lcdm = tools.loadOrRecompute(
+    data_folder + "lcdm_logcov.p",get_covariance_matrix,
     los_lcdm_zspace_unconstrained,lcdm_snaps["void_radii"],
     spar_bins,sperp_bins,nbar,additional_weights=None,
-    return_mean=True,cholesky=False,log_field=True)
+    return_mean=True,cholesky=False,log_field=True,
+    _recomputeData = recompute_covarariances)
 log_cholesky_cov_lcdm = scipy.linalg.cholesky(logrho_cov_lcdm,lower=True)
 
 
