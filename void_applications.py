@@ -756,46 +756,6 @@ plt.savefig(figuresFolder + "profile_fit_test_mle_relative.pdf")
 plt.show()
 
 
-def integrated_profile_modified_hamaus(r, alpha, beta, rs, delta_c,
-                                       delta_large=0.0, rv=1.0):
-    """
-    Integrated (cumulative) version of the modified Hamaus profile.
-
-    Computes the average density contrast Δ(r), i.e., the mass enclosed
-    within a sphere of radius r divided by the volume.
-
-    Uses hypergeometric functions to perform analytic integration of δ(r).
-
-    Parameters:
-        r (float or array): Radius
-        alpha, beta (float): Shape parameters
-        rs (float): Void scale radius
-        delta_c (float): Central density contrast
-        delta_large (float): Large-scale offset (default: 0)
-        rv (float): Characteristic void radius (default: 1.0)
-
-    Returns:
-        float or array: Cumulative density contrast Δ(r)
-    """
-    #arg = (r / rv)**beta / (1.0 + (r / rv)**beta)
-    arg = (r / rv)**beta
-    hyp_1 = scipy.special.hyp2f1(1,3 / beta, 1 + (3 / beta), -arg)
-    hyp_2 = scipy.special.hyp2f1(1,(alpha + 3) / beta, 1 + ( (alpha + 3) / beta), -arg)
-    #hyp_1 = scipy.special.hyp2f1(3 / beta, 3 / beta, 1 + 3 / beta, arg)
-    #hyp_2 = scipy.special.hyp2f1((alpha + 3) / beta,
-    #                             (alpha + 3) / beta,
-    #                             1 + (alpha + 3) / beta,
-    #                             arg)
-    #return ((delta_c - delta_large) *
-    #        ((1 + (r / rv)**beta)**(-3 / beta)) * hyp_1 -
-    #        (3 / (alpha + 3)) * ((r / rs)**alpha) *
-    #        ((1 + (r / rv)**beta)**(-(alpha + 3) / beta)) * hyp_2
-    #        + delta_large)
-    return delta_large + (delta_c - delta_large)*( hyp_1 - 
-        ( 3 / (alpha + 3) ) * ( r / rs )**alpha * hyp_2 )
-
-
-
 # Test profile function integration?
 
 r_range = np.logspace(-3,1,1001)

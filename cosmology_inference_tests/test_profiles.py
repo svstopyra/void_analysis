@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 import os
+import scipy
 from cosmology_inference import (
     profile_modified_hamaus,
     integrated_profile_modified_hamaus,
@@ -15,6 +16,8 @@ SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "snapshots")
 @pytest.fixture
 def r_grid():
     return np.linspace(0.1, 3.0, 100)
+
+# ---------------------- UNIT TESTS: profile_modified_hamaus -------------------
 
 def test_modified_hamaus_output_shape(r_grid):
     params = (1.5, 3.0, 1.0, -0.5, 0.1, 1.0)
@@ -33,17 +36,33 @@ def test_integrated_profile_finite(r_grid):
     assert np.all(np.isfinite(delta))
     assert delta.shape == r_grid.shape
 
+# ---------------------- UNIT TESTS: profile_broken_power_log ------------------
+
 def test_broken_power_log_consistency(r_grid):
     params = (1.0, 1.0, 2.0, 1.0, 0.5)
     log_val = profile_broken_power_log(r_grid, *params)
     val = profile_broken_power(r_grid, *params)
     assert np.allclose(val, np.exp(log_val), rtol=1e-5)
 
+# ---------------------- UNIT TESTS: rho_real ------------------
+
 def test_rho_real_matches_hamaus(r_grid):
     profile_args = (1.5, 3.0, 1.0, -0.5, 0.1, 1.0)
     rho = rho_real(r_grid, *profile_args)
     expected = profile_modified_hamaus(r_grid, *profile_args)
     assert np.allclose(rho, expected, rtol=1e-5)
+
+# ---------------------- UNIT TESTS: integrated_profile_modified_hamaus --------
+
+def test_integrated_matches_numerical(r_grid):
+    profile_args = (1.5, 3.0, 1.0, -0.5, 0.1, 1.0)
+    delta_func = lambda r: profile_modified_hamaus(r,*profile_args) * r**2
+    Delta_numerical = np.array([
+        scipy.integrate.quad(delta_func,0,r)[0] * (3/(r**3)) for r in r_grid])
+    Delta_analytic = integrated_profile_modified_hamaus(r_grid,*profile_args)
+    assert np.allclose(Delta_analytic,Delta_numerical,rtol=1e-5)
+
+# ---------------------- REGRESSION TESTS ----------------------
 
 def test_modified_hamaus_regression():
     # Fixed test case (input + parameters)
