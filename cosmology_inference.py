@@ -558,6 +558,76 @@ def to_real_space(s_par, s_perp, z, Om, Om_fid=None, Delta=None, u_par=None, f=N
         r_par = s_par - (1.0 + z) * u_par / hz
     return [r_par, r_perp]
 
+def ratio_where_finite(x,y,undefined_value = 0.0):
+    """
+    Return the ratio of x and y, except where y is zero, in which case
+    return the specified undefined value (default 0.0)
+    
+    Parameters:
+        x (float or array): Numerator(s)
+        y (float or array): Denominator(s)
+        undefined_value (default 0.0): Value to use for ratio when y is zero.
+    
+    Returns:
+        ratio (float or array), same shape as x/y
+    """
+    if np.isscalar(y):
+        if y == 0.0:
+            return undefined_value
+        else:
+            return x/y
+    else:
+        res = np.full(y.shape,undefined_value)
+        nz = (y != 0)
+        if np.isscalar(x):
+            res[nz] = x/y[nz]
+        else:
+            res[nz] = x[nz]/y[nz]
+        return res
+
+def product_where_finite(x,y,undefined_value = 0.0):
+    """
+    Return the product of x and y, except where x or y is infinite, in which case
+    return the specified undefined value (default 0.0)
+    
+    Parameters:
+        x, y (float or array): Values to multiply
+        undefined_value (default 0.0): Value to use for product when x or y is
+            not finite.
+    
+    Returns:
+        ratio (float or array), same shape as x*y
+    """
+    if np.isscalar(x):
+        if np.isscalar(y):
+            if np.isfinite(x) and np.isfinite(y):
+                return x*y
+            else:
+                return undefined_value
+        else:
+            if np.isfinite(x):
+                res = np.full(y.shape,undefined_value)
+                finite = np.isfinite(y)
+                res[finite] = x*y[finite]
+                return res
+            else:
+                return np.full(y.shape,undefined_value)
+    else:
+        if np.isscalar(y):
+            if np.isfinite(y):
+                res = np.full(x.shape,undefined_value)
+                finite = np.isfinite(x)
+                res[finite] = x[finite]*y
+                return res
+            else:
+                return undefined_value
+        else:
+            finite_x = np.isfinite(x)
+            finite_y = np.isfinite(y)
+            res = np.full(y.shape,undefined_value)
+            finite = finite_x & finite_y
+            res[finite] = x[finite]*y[finite]
+            return res
 
 def geometry_correction(s_par, s_perp, epsilon, **kwargs):
     """
@@ -588,13 +658,16 @@ def geometry_correction(s_par, s_perp, epsilon, **kwargs):
     # Radial distance from void center
     s = np.sqrt(s_par**2 + s_perp**2)
     # Cosine of LOS angle
-    mus = s_par / s
+    mus = ratio_where_finite(s_par,s,undefined_value=0.0)
     # Distance correction factor
     # This accounts for distortions in radial vs. transverse directions
-    s_factor = np.sqrt(1.0 + epsilon**2 * (1.0 / mus**2 - 1.0))
+    mus_rec = ratio_where_finite(1.0,mus,undefined_value=np.inf)
+    s_factor = np.sqrt(1.0 + epsilon**2 * (mus_rec**2 - 1.0))
     # Apply AP correction to total distance and angle
-    s_new = s * mus * epsilon**(-2.0 / 3.0) * s_factor
-    mus_new = np.sign(mus) / s_factor  # Corrected cosine of angle
+    s_new = product_where_finite(s * mus * epsilon**(-2.0 / 3.0), s_factor,
+                                 undefined_value = 0.0)
+    # Corrected cosine of angle
+    mus_new = ratio_where_finite(np.sign(mus) , s_factor)
     # Compute corrected coordinates
     s_par_new = mus_new * s_new
     s_perp_new = np.sign(s_perp) * s_new * np.sqrt(1.0 - mus_new**2)
@@ -878,22 +951,6 @@ def log_likelihood_aptest_revised(theta, data_field, scoords, inv_cov, z,
         return -0.5 * np.dot(alpha, alpha)
     else:
         return -0.5 * np.dot(delta_vec, inv_cov @ delta_vec)
-
-
-# Likelihood function, parallelised. Requires global variables!:
-# UNUSED
-def log_likelihood_aptest_parallel(theta,z,**kwargs):
-    s_par = scoords[:,0]
-    s_perp = scoords[:,1]
-    Om, f , A = theta
-    M = len(s_par)
-    delta_rho = np.zeros(s_par.shape)
-    # Evaluate the profile for the supplied value of the parameters:
-    for k in range(0,M):
-        delta_rho[k] = data_field[k] - \
-            z_space_profile(s_par[k],s_perp[k],lambda r: rho_real(r,A),
-                            z,Om,Delta_func,delta_func,f=f,**kwargs)
-    return -0.5*np.matmul(np.matmul(delta_rho,inv_cov),delta_rho.T)
 
 
 # Un-normalised log prior:
@@ -1460,7 +1517,6 @@ def get_2d_fields_per_void(los_per_void, sperp_bins, spar_bins,
     """
     # Compute cell volumes in scaled (R_eff) units
     cell_volumes_reff = np.outer(np.diff(spar_bins), np.diff(sperp_bins))
-
     # Compute 2D density histograms for each void (weighted by Jacobian correction)
     histograms = np.array([
         np.histogramdd(los, bins=[sperp_bins, spar_bins],

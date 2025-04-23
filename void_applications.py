@@ -479,6 +479,23 @@ field_lcdm_1d_uncon, field_lcdm_1d_sigma_uncon = \
     lcdm_snaps,filter_list=voids_used_lcdm_unconstrained,
     _recomputeData = recompute_fields)
 
+#-------------------------------------------------------------------------------
+# VELOCITY DISTRIBUTION TEST
+box_centre = np.array([boxsize/2]*3)
+vel_and_vols = [tools.loadOrRecompute(
+                    data_folder + "velocity_data.p",
+                    stacking.getRadialVelocityAverages,
+                    snapedit.wrap(box_centre - centres[filt,:],boxsize),
+                    radii[filt],snap,rbins,nThreads=-1,tree=None,
+                    vorVolumes=cell_vols,_recomputeData = True)
+                    for centres, radii, snap, cell_vols, filt, i in 
+                    zip(lcdm_snaps["void_centres"],lcdm_snaps["void_radii"],
+                        lcdm_snaps["snaps"],lcdm_snaps["cell_volumes"],
+                        voids_used_lcdm_unconstrained, 
+                        tools.progressbar(range(lcdm_snaps.N)))]
+
+all_velocities = np.vstack([prof[0] for prof in vel_and_vols])
+v_prof = np.average(all_velocities,axis=0)
 
 #-------------------------------------------------------------------------------
 # TEST PLOTS FOR REAL SPACE FIELD
@@ -632,7 +649,7 @@ plt.show()
 
 # Inference for Borg catalogue:
 tau, sampler = run_inference_pipeline(
-    field_lcdm_test,rho_cov_lcdm,rhomean_lcdm,sperp_bins,spar_bins,ri_lcdm,
+    field_lcdm_uncon,rho_cov_lcdm,rhomean_lcdm,sperp_bins,spar_bins,ri_lcdm,
     field_lcdm_1d_uncon-1.0,field_lcdm_1d_sigma_uncon,log_field=False,
     infer_profile_args=True,tabulate_inverse=True,cholesky=True,
     sample_epsilon=True,filter_data=False,z = 0.0225,lambda_cut=1e-23,
@@ -690,7 +707,8 @@ args = (data_field[data_filter],scoords[data_filter,:],
 kwargs = {'cholesky':True,'tabulate_inverse':True,
           'sample_epsilon':True,'theta_ranges':theta_ranges_epsilon,
           'singular':False,'Umap':Umap,'good_eig':good_eig,'F_inv':F_inv,
-          'log_density':False,'infer_profile_args':True}
+          'log_density':False,'infer_profile_args':True,
+          'linearise_jacobian':False}
 
 # Wrapper allowing us to pass arbitrary arguments that won't be sampled over:
 def posterior_wrapper(theta,additional_args,*args,**kwargs):
@@ -856,8 +874,147 @@ plt.title("Likelihood at $\\epsilon = " + ("%.2g" % eps_range[20]) + "$")
 plt.savefig(figuresFolder + "nll_plot_f.pdf")
 plt.show()
 
+def get_theory_field(theta,spar_bins,sperp_bins,
+                     Delta=integrated_profile_modified_hamaus,
+                     delta=profile_modified_hamaus,ntab=10,
+                     z=0.0225,Om = 0.3111):
+    # Parse arguments:
+    epsilon, f, *profile_args = theta
+    # Co-ordinate grid:
+    scoords = generate_scoord_grid(sperp_bins, spar_bins)
+    s_par = scoords[:,0]
+    s_perp = scoords[:,1]
+    # Geometry correction:
+    s_par_new, s_perp_new = geometry_correction(s_par,s_perp,epsilon)
+    # Density profile functions:
+    Delta_func = lambda r: Delta(r,*profile_args)
+    delta_func = lambda r: delta(r,*profile_args)
+    rho_real = lambda r: delta_func(r) + 1.0
+    # Precomputed inverse function:
+    svals = np.linspace(np.min(s_par_new),np.max(s_par_new),ntab)
+    rperp_vals = np.linspace(np.min(s_perp_new),np.max(s_perp_new),ntab)
+    rvals = np.zeros((ntab,ntab))
+    for i in range(0,ntab):
+        for j in range(0,ntab):
+            F = (lambda r: r - r*(f/3)*\
+                Delta_func(np.sqrt(r**2 + rperp_vals[i]**2)) \
+                - svals[j])
+            rvals[i,j] = scipy.optimize.fsolve(F,svals[j])
+    F_inv = lambda x, y, z: scipy.interpolate.interpn(
+                                (rperp_vals,svals),rvals,
+                                np.vstack((x,y)).T,method='cubic')
+    theory_val = z_space_profile(s_par_new,s_perp_new,
+                                 rho_real,
+                                 z,Om,Delta_func,delta_func,f=f,
+                                 F_inv=F_inv)
+    return theory_val
+
+def get_diff_vector(N,i):
+    base = np.zeros(N)
+    base[i] = 1
+    return base
+
+def get_diffs(theta,spar_bins,sperp_bins,step=0.01,**kwargs):
+    N = len(theta)
+    diff_vectors = np.array([get_diff_vector(N,i)*step for i in range(N)])
+    upp_fields = [get_theory_field(theta + vector,spar_bins,sperp_bins,
+                                   **kwargs) for vector in diff_vectors]
+    low_fields = [get_theory_field(theta - vector,spar_bins,sperp_bins,
+                                   **kwargs) for vector in diff_vectors]
+    derivatives = [(upp - low) / ( 2 * step ) 
+                   for upp, low in zip(upp_fields, low_fields)]
+    return derivatives
+
+derivs = get_diffs(mle_estimate.x,spar_bins,sperp_bins)
+theory_field = get_theory_field(mle_estimate.x,spar_bins,sperp_bins)
+
+# Plot of derivatives:
+plt.clf()
+nrows = 2
+ncols = 4
+param_labels = ["$\\epsilon$","$f$","$\\alpha$","$\\beta$","$r_s$",
+                   "$\\delta_c$","$\\delta_{\\mathrm{large}}$","$r_v$"]
+spar_centres = plot.binCentres(spar_bins)
+sperp_centres = plot.binCentres(sperp_bins)
+fig, ax = plt.subplots(nrows,ncols,figsize=(textwidth,0.5*textwidth))
+for i in range(nrows):
+    for j in range(ncols):
+        k = i*ncols + j
+        axij = ax[i,j]
+        im = plot.plot_los_void_stack(\
+            derivs[k].reshape((20,20))/theory_field.reshape((20,20)),
+            sperp_centres,spar_centres,ax=axij,
+            cmap='PuOr_r',vmin=-1,vmax=1,
+            xlabel = '$d/R_{\\mathrm{eff}}$',
+            ylabel = '$z/R_{\\mathrm{eff}}$',fontfamily='serif',
+            title=param_labels[k])
+        if j > 0:
+            axij.yaxis.label.set_visible(False)
+            axij.yaxis.set_major_formatter(NullFormatter())
+            axij.yaxis.set_minor_formatter(NullFormatter())
+        if i < nrows - 1:
+            axij.xaxis.label.set_visible(False)
+            axij.xaxis.set_major_formatter(NullFormatter())
+            axij.xaxis.set_minor_formatter(NullFormatter())
+
+plt.subplots_adjust(wspace=0.0,hspace=0.025,top=0.97,bottom=0.1)
+fig.colorbar(im, ax=ax.ravel().tolist(),shrink=0.9,
+    label='Fractional derivative, $(\\mathrm{d}\\rho/\\mathrm{d}\\theta)/\\rho$')
+plt.savefig(figuresFolder + "derivatives_map.pdf")
+plt.show()
 
 
+theory_field_init = get_theory_field(initial_guess_eps,spar_bins,sperp_bins)
+filename = figuresFolder + "theory_vs_simulation_difference_map.pdf"
+
+
+# Difference map:
+def plot_difference_map(field,theory_field,sperp_centres,spar_centres,
+                        vmin=-0.1,vmax=0.1,filename=None):
+    plt.clf()
+    diff = field - theory_field.reshape(field.shape)
+    im = plot.plot_los_void_stack(\
+                diff/theory_field.reshape(field.shape),
+                sperp_centres,spar_centres,
+                cmap='PuOr_r',vmin=vmin,vmax=vmax,
+                xlabel = '$d/R_{\\mathrm{eff}}$',
+                ylabel = '$z/R_{\\mathrm{eff}}$',fontfamily='serif',
+                colorbar=True,colorbar_title = "Fractional Difference")
+    ax = plt.gca()
+    ax.set_title("Simulation - Theory Stack")
+    if filename is not None:
+        plt.savefig(filename)
+    plt.show()
+
+plot_difference_map(
+    field_lcdm_uncon,theory_field_init,sperp_centres,spar_centres,
+    vmin=-1,vmax=1,
+    filename = figuresFolder + "theory_vs_simulation_initial.pdf")
+
+plot_difference_map(
+    field_lcdm_uncon,theory_field,sperp_centres,spar_centres,
+    vmin=-0.1,vmax=0.1,
+    filename = figuresFolder + "theory_vs_simulation_mle.pdf")
+
+plot.plot_los_void_stack(\
+        theory_field_init.reshape((20,20)),
+        sperp_centres,spar_centres,
+        cmap='Blues',vmin=0,vmax=1.0,
+        xlabel = '$d/R_{\\mathrm{eff}}$',
+        ylabel = '$z/R_{\\mathrm{eff}}$',fontfamily='serif',
+        title="Theory Field, initial guess",colorbar=True,
+        colorbar_title = "Fractional Difference",
+        savename=figuresFolder + "initial_theory_field.pdf")
+
+plot.plot_los_void_stack(\
+        field_lcdm_uncon,
+        sperp_centres,spar_centres,
+        cmap='Blues',vmin=0,vmax=1.0,
+        xlabel = '$d/R_{\\mathrm{eff}}$',
+        ylabel = '$z/R_{\\mathrm{eff}}$',fontfamily='serif',
+        title="Simulated field",colorbar=True,
+        colorbar_title = "Fractional Difference",
+        savename=figuresFolder + "initial_simulation_field.pdf")
 
 # Eigenvalue quality filter:
 
