@@ -246,7 +246,8 @@ def stackUnconstrainedWithConstrainedRadii(snapListUn,rBins,antihaloRadiusBins,\
     return [nbarjUnSameRadii,sigmaUnSameRadii]
 
 def getRadialVelocityAverages(voidCentres,voidRadii,snap,rBins,\
-        nThreads=thread_count,tree=None,method="poisson",vorVolumes=None):
+        nThreads=thread_count,tree=None,method="poisson",vorVolumes=None,
+        relative_velocity=False):
     if (vorVolumes is None) and (method == "VTFE"):
             raise Exception("Must provide voronoi volumes for VTFE.")
     # Generate KDTree
@@ -257,26 +258,32 @@ def getRadialVelocityAverages(voidCentres,voidRadii,snap,rBins,\
     rBinsLow = rBins[0:-1]
     volumes = 4*np.pi*(rBinsUp**3 - rBinsLow**3)/3
     vRList = np.zeros((len(voidCentres),len(rBins)-1))
-    nPartList = np.zeros((len(voidCentres),len(rBins)-1),dtype=np.int64)
     volumesList = np.outer(voidRadii**3,volumes)
     for k in range(0,len(vRList)):
         indicesList = np.array(tree.query_ball_point(voidCentres[k,:],\
-            rBins[-1]*voidRadii[k],workers=nThreads),dtype=np.int32)
+            rBins[-1]*voidRadii[k],workers=nThreads),dtype=np.int64)
         disp = snap['pos'][indicesList,:] - voidCentres[k,:]
         r = np.array(np.sqrt(np.sum(disp**2,1)))
         sort = np.argsort(r)
         indicesSorted = indicesList[sort]
         boundaries = np.searchsorted(r[sort],rBins*voidRadii[k])
-        vR = np.sum(disp*snap['vel'][indicesSorted,:],1)*\
-            vorVolumes[indicesSorted]/r
+        if relative_velocity:
+            # get velocity relative to void centre:
+            v_centre = np.average(snap['vel'][indicesSorted,:],axis=0,
+                                  weights=vorVolumes[indicesSorted])
+            velocity = snap['vel'][indicesSorted,:] - v_centre
+        else:
+            velocity = snap['vel'][indicesSorted,:]
+        vR = np.sum(disp*velocity,1)/r
         #print("Doing void " + str(k) + " of " + str(len(vRList)))
         for l in range(0,len(rBins)-1):
             indices = indicesSorted[boundaries[l]:boundaries[l+1]]
             if len(indices) > 0:
                 #indicesSphere = sort[boundaries[l]:boundaries[l+1]]
-                vRList[k,l] = np.sum(vR[boundaries[l]:boundaries[l+1]])/\
-                    np.sum(vorVolumes[boundaries[l]:boundaries[l+1]])
-                nPartList[k,l] = len(indices)
+                vRList[k,l] = np.average(
+                    vR[boundaries[l]:boundaries[l+1]],
+                    weights = vorVolumes[boundaries[l]:boundaries[l+1]]
+                )
     return [vRList,volumesList]
 
 # Stack from individual void profiles:

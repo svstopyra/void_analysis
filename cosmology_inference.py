@@ -127,7 +127,9 @@ class SnapshotGroup:
             "halos": None,
             "antihalos": None,
             "snaps": self.snaps,
-            "snaps_reverse": self.snaps_reverse
+            "snaps_reverse": self.snaps_reverse,
+            "trees": None,
+            "trees_reverse": None
         }
         self.property_map = {name: idx for idx, name in enumerate(self.property_list)}
         self.reverse = reverse
@@ -232,9 +234,23 @@ class SnapshotGroup:
             else:
                 # Lazy-load derived properties
                 if property_name == "halos":
-                    self.additional_properties["halos"] = [snap.halos() for snap in self.snaps]
+                    self.additional_properties["halos"] = [
+                        snap.halos() for snap in self.snaps
+                    ]
                 elif property_name == "antihalos":
-                    self.additional_properties["antihalos"] = [snap.halos() for snap in self.snaps_reverse]
+                    self.additional_properties["antihalos"] = [
+                        snap.halos() for snap in self.snaps_reverse
+                    ]
+                elif property_name == "trees":
+                    self.additional_properties["trees"] = [
+                        scipy.spatial.cKDTree(snap['pos'],boxsize=self.boxsize)
+                        for snap in self.snaps
+                    ]
+                elif property_name == "trees_reverse":
+                    self.additional_properties["trees_reverse"] = [
+                        scipy.spatial.cKDTree(snap['pos'],boxsize=self.boxsize)
+                        for snap in self.snaps_reverse
+                    ]
                 else:
                     raise Exception("Invalid property_name")
                 return self.additional_properties[property_name]

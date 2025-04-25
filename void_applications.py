@@ -487,7 +487,7 @@ vel_and_vols = [tools.loadOrRecompute(
                     stacking.getRadialVelocityAverages,
                     snapedit.wrap(box_centre - centres[filt,:],boxsize),
                     radii[filt],snap,rbins,nThreads=-1,tree=None,
-                    vorVolumes=cell_vols,_recomputeData = True)
+                    vorVolumes=cell_vols,_recomputeData = False)
                     for centres, radii, snap, cell_vols, filt, i in 
                     zip(lcdm_snaps["void_centres"],lcdm_snaps["void_radii"],
                         lcdm_snaps["snaps"],lcdm_snaps["cell_volumes"],
@@ -496,6 +496,242 @@ vel_and_vols = [tools.loadOrRecompute(
 
 all_velocities = np.vstack([prof[0] for prof in vel_and_vols])
 v_prof = np.average(all_velocities,axis=0)
+
+def get_unit_vector(v):
+    """
+    Compute a normalised unit vector parallel to v
+        
+    Parameters:
+        v (array): vector to normalise.
+        
+    Returns
+        array: same shape as v, normalised
+    """
+    return v/np.sqrt(np.sum(v**2))
+
+
+def comoving_distance_to_redshift(dist,cosmo=None):
+    if cosmo is None:
+        cosmo = astropy.cosmology.LambdaCDM(70,0.3,0.7)
+    return astropy.cosmology.z_at_value(cosmo.comoving_distance,
+        dist*astropy.units.Mpc
+    ).value
+
+def get_los_velocities_for_void(void_centre,void_radius,snap,rbins,cell_vols=None,
+                                tree=None,observer=None,n_threads=-1):
+    """
+    Compute the component of the velocity of tracers relative to a void
+    centre, along the line of sight to the centre of the void.
+    
+    Parameters:
+        void_centre (array, 3 components): Centre of the void
+        void_radius (float): Radius of the void
+        snap (pynbody.snapshot): Simulation snapshot
+        rbins: Radius bins 
+        cell_vols (array): Array of Voronoi volume weights for each tracer.
+                           Assumes equal weight if not supplied.
+        tree (cKD Tree): KD Tree for snapshot. Generated if not supplied.
+        observer (array): Position of observer in the simulation.
+                          Assumed to be the centre of the box if not supplied.
+        n_threads (int): Number of threads to use for KD tree search. Default
+                         -1 (all threads)
+    
+    Returns:
+        r_par (array): Parallel components of the displacement from void centre
+        u_par (array): Parallel components of velocity relative to void centre
+        u: Velocity relative to void centre
+        disp: Displacement from void centre
+    """
+    boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+    if observer is None:
+        # assume observer is in the box centre:
+        observer = np.array([boxsize/2]*3)
+    los_vector = get_unit_vector(
+        snapedit.unwrap(void_centre - observer,boxsize)
+    )
+    if tree is None:
+        tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
+    indices_list = np.array(tree.query_ball_point(void_centre,\
+            rbins[-1]*void_radius,workers=n_threads),dtype=np.int64)
+    disp = snapedit.unwrap(snap['pos'][indices_list,:] - void_centre,boxsize)
+    r = np.array(np.sqrt(np.sum(disp**2,1)))
+    velocities_v = snap['vel'][indices_list,:]
+    if cell_vols is None:
+        cell_vols = np.ones(len(snap))
+    weights = cell_vols[indices_list]
+    v_centre = np.average(velocities_v,axis=0,weights=weights)
+    u = velocities_v - v_centre
+    u_par = u @ los_vector
+    r_par = disp @ los_vector
+    return r_par, u_par, disp, u
+
+def get_weighted_samples(data,weights,n_boot = 10000,axis=None):
+    n_data = len(data)
+    bootstrap_samples = np.random.choice(n_data,size=(n_data,n_boot))
+    bootstrap_averages = np.array([np.average(
+        data[bootstrap_samples[:,k]],
+        axis=axis,weights=weights[bootstrap_samples[:,k]]) 
+        for k in tools.progressbar(range(0,n_boot))]).T
+    return bootstrap_averages
+
+def weighted_boostrap_error(data,weights,n_boot = 10000,axis=None):
+    bootstrap_averages = get_weighted_samples(data,weights,n_boot=n_boot,
+                                              axis=axis)
+    return np.std(bootstrap_averages)
+
+
+# Test plot:
+filt = voids_used_lcdm_unconstrained[0]
+cell_vols = lcdm_snaps["cell_volumes"][0]
+snap = lcdm_snaps["snaps"][0]
+radii = lcdm_snaps["void_radii"][0]
+centres = lcdm_snaps["void_centres"][0]
+
+
+void_radius = radii[filt][0]
+void_centre = snapedit.wrap(box_centre - centres[filt,:],boxsize)[0]
+tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
+r_par, u_par, disp, u = get_los_velocities_for_void(
+    void_centre,void_radius,snap,rbins,cell_vols=cell_vols,tree=tree
+)
+r = np.array(np.sqrt(np.sum(disp**2,1)))
+[indices,counts] = plot.binValues(r,rbins*void_radius)
+Delta_r = np.cumsum(counts)/(4*np.pi*nbar*rbins[1:]**3*void_radius**3/3) - 1.0
+indices_list = np.array(tree.query_ball_point(void_centre,\
+            rbins[-1]*void_radius,workers=n_threads),dtype=np.int64)
+
+ur_norm = np.sum(np.array(u * disp),1)/r**2
+
+ur_profile = np.array([
+    np.average(ur_norm[ind],weights=cell_vols[indices_list][ind]) 
+    for ind in indices
+])
+
+ur_profile_error = np.array([
+    weighted_boostrap_error(ur_norm[ind],cell_vols[indices_list][ind])
+    for ind in indices
+])
+
+
+
+# Profile test:
+z_void = 0
+pre_factor = -f_lcdm(z_void,Om_fid)*Hz(z_void,Om_fid)/(3*(1 + z_void))
+rbin_centres = plot.binCentres(rbins)
+r_range = np.linspace(0,3,101)
+plt.clf()
+plt.errorbar(rbin_centres, ur_profile,yerr=ur_profile_error,label="$u_r/r$",
+         linestyle="-",color=seabornColormap[0])
+plt.plot(rbin_centres, pre_factor*Delta_r,label="$-fH(z)/(3(1+z))$",
+         linestyle=":",color=seabornColormap[0])
+plt.xlabel("$r/r_{\\mathrm{eff}} [\\mathrm{Mpc}h^{-1}]$")
+plt.ylabel("$u_r/r [h\\mathrm{km}\\mathrm{s}^{-1}\\mathrm{Mpc}]$")
+plt.legend()
+plt.savefig(figuresFolder + "ur_profile_plot.pdf")
+plt.show()
+
+# Average over multiple voids:
+
+def get_ur_profile_for_void(void_centre,void_radius,rbins,snap,tree=None,
+                            cell_vols=None):
+    boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+    nbar = len(snap)/boxsize**3
+    # KD Tree:
+    if tree is None:
+        tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
+    # Get particles around the void:
+    indices_list = np.array(tree.query_ball_point(void_centre,\
+            rbins[-1]*void_radius,workers=n_threads),dtype=np.int64)
+    # Displacement from void centre:
+    disp = snapedit.unwrap(snap['pos'][indices_list,:] - void_centre,boxsize)
+    r = np.array(np.sqrt(np.sum(disp**2,1)))
+    # Velocities of void centre:
+    velocities_v = snap['vel'][indices_list,:]
+    if cell_vols is None:
+        cell_vols = np.ones(len(snap))
+    weights = cell_vols[indices_list]
+    v_centre = np.average(velocities_v,axis=0,weights=weights)
+    # Velocity relative to void centre:
+    u = velocities_v - v_centre
+    # Ratio between radial velocity and radius:
+    ur_norm = np.sum(np.array(u * disp),1)/r**2
+    [indices, counts] = plot.binValues(r,rbins*void_radius)
+    Delta_r = np.cumsum(counts)/(4*np.pi*nbar*rbins[1:]**3*void_radius**3/3)-1.0
+    # Profile as a function of r:
+    ur_profile = np.array([
+        np.average(
+            ur_norm[ind],weights=cell_vols[indices_list][ind]
+        ) if len(ind) > 0 else 0.0
+        for ind in indices
+    ])
+    return ur_profile, Delta_r
+
+def get_all_ur_profiles(centres, radii,rbins,snap,tree=None,cell_vols=None):
+    if tree is None:
+        tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
+    profiles = [
+        get_ur_profile_for_void(void_centre,void_radius,rbins,snap,
+                                tree=tree,cell_vols=cell_vols
+        )
+        for void_centre, void_radius, i in zip(
+            centres,radii,tools.progressbar(range(len(centres)))
+        )
+    ]
+    ur_profiles = np.vstack([prof[0] for prof in profiles])
+    Delta_r_profiles = np.vstack([prof[1] for prof in profiles])
+    return ur_profiles,Delta_r_profiles
+
+trees = [scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize) 
+    for snap in lcdm_snaps["snaps"]
+]
+
+all_ur_and_Delta_profiles = [
+    tools.loadOrRecompute(
+        snap.filename + ".void_ur_profiles.p",
+        get_all_ur_profiles,centres[filt,:], radii[filt],rbins,snap,
+        tree=tree,cell_vols=cell_vols,_recomputeData=False
+    )
+    for centres, radii, snap, filt, tree, cell_vols in zip(
+        lcdm_snaps["void_centres"],lcdm_snaps["void_radii"], 
+        lcdm_snaps["snaps"], voids_used_lcdm_unconstrained, trees,
+        lcdm_snaps["cell_volumes"]
+    )
+]
+
+all_ur_profiles = np.vstack([prof[0] for prof in all_ur_and_Delta_profiles])
+all_Delta_profiles = np.vstack([prof[1] for prof in all_ur_and_Delta_profiles])
+
+
+void_dist = np.sqrt(
+    np.sum(snapedit.unwrap(void_centre - box_centre,boxsize)**2)
+)
+
+z_void = comoving_distance_to_redshift(void_dist,cosmo=cosmo)
+Om_fid = 0.3111
+
+
+
+plt.clf()
+bin_select = [5,10,15,20,25]
+for i in range(len(bin_select)):
+    plt.scatter(r_par[indices[bin_select[i]]],u_par[indices[bin_select[i]]],
+        label=("$" + "%.2g" % (rbins[bin_select[i]] * void_radius) + 
+        "\\,\\mathrm{Mpc}h^{-1}$"),
+        color=seabornColormap[np.mod(i,len(seabornColormap))])
+    r_range = np.linspace(np.min(r_par[indices[bin_select[i]]]),
+                          np.max(r_par[indices[bin_select[i]]]),101)
+    plt.plot(r_range,pre_factor*Delta_r[bin_select[i]]*r_range,linestyle='--',
+             color = seabornColormap[np.mod(i,len(seabornColormap))]
+    )
+
+plt.xlabel("$r_{\\parallel}$")
+plt.ylabel("$u_{\\parallel}$")
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "linear_velocity_test.pdf")
+plt.show()
+
+
+
 
 #-------------------------------------------------------------------------------
 # TEST PLOTS FOR REAL SPACE FIELD
