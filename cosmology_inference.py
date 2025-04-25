@@ -377,10 +377,32 @@ def void_los_velocity(z, Delta, r_par, r_perp, Om, f=None, **kwargs):
     return -(f / 3.0) * (hz / (1.0 + z)) * Dr * r_par
 
 
-
-def void_los_velocity_derivative(z, Delta, delta, r_par, r_perp, Om, f=None, **kwargs):
+def get_dudr_hz_o1pz(Delta, delta, r_par, r_perp, f, reg_factor = 1e-12):
     """
-    Compute the derivative of the LOS velocity with respect to r.
+    Compute the derivative of the los velocity with respect to r_par,
+    multiplied by H(z)/(1+z). The advantage of this is that it is free from
+    explicit dependence on z and Om (only depending on these via the 
+    void profiles, \Delta(r) and \delta(r)).
+    
+    Parameters:
+        Delta (function): Cumulative density profile Δ(r)
+        delta (function): Local density contrast δ(r)
+        r_par (float): LOS distance
+        r_perp (float): Transverse distance
+        f (float or None): Growth rate
+
+    Returns:
+        float: Derivative of velocity w.r.t. r_par
+    """
+    r = np.sqrt(r_par**2 + r_perp**2)
+    Dr = Delta(r)
+    dr = delta(r)
+    return -(f / 3.0) * Dr - f * (r_par / (r + reg_factor))**2 * (dr - Dr)
+
+def void_los_velocity_derivative(z, Delta, delta, r_par, r_perp, Om, f=None, 
+                                 reg_factor = 1e-12, **kwargs):
+    """
+    Compute the derivative of the LOS velocity with respect to r_par.
 
     Assumes Delta(r) is the cumulative density contrast profile (mass within 
     a sphere), and delta(r) is the local density contrast (mass in a shell).
@@ -396,19 +418,17 @@ def void_los_velocity_derivative(z, Delta, delta, r_par, r_perp, Om, f=None, **k
         f (float or None): Growth rate (Lambda-CDM value assumed if not provided)
 
     Returns:
-        float: Derivative of velocity w.r.t. r
+        float: Derivative of velocity w.r.t. r_par
     """
-    r = np.sqrt(r_par**2 + r_perp**2)
-    Dr = Delta(r)
-    dr = delta(r)
     hz = Hz(z, Om, **kwargs)
     if f is None:
         f = f_lcdm(z, Om, **kwargs)
-    return -(f / 3.0) * (hz / (1.0 + z)) * Dr - \
-           f * (r_par / (r + 1e-12))**2 * (hz / (1.0 + z)) * (dr - Dr)
+    return (hz / (1.0 + z))*get_dudr_hz_o1pz(Delta,delta,r_par,r_perp,f,
+                                             reg_factor=reg_factor)
 
 
-def z_space_jacobian(z, Delta, delta, r_par, r_perp, Om, linearise_jacobian=True, **kwargs):
+def z_space_jacobian(Delta, delta, r_par, r_perp, f=None, z = 0, Om=0.3,
+                     Om_fid=0.3111,linearise_jacobian=True, **kwargs):
     """
     Compute the Jacobian for the transformation from real to redshift space.
 
@@ -424,12 +444,14 @@ def z_space_jacobian(z, Delta, delta, r_par, r_perp, Om, linearise_jacobian=True
     Returns:
         float: Jacobian of the transformation
     """
-    hz = Hz(z, Om, **kwargs)
-    dudr = void_los_velocity_derivative(z, Delta, delta, r_par, r_perp, Om, **kwargs)
+    if f is None:
+        f = f_lcdm(z, Om, **kwargs)
+    dudr_hz_o1pz = get_dudr_hz_o1pz(Delta,delta,r_par,r_perp,f,
+                                    reg_factor=reg_factor)
     if linearise_jacobian:
-        return 1.0 - ((1.0 + z) / hz) * dudr
+        return 1.0 - dudr_hz_o1pz
     else:
-        return 1.0 / (1.0 + ((1.0 + z) / hz) * dudr)
+        return 1.0 / (1.0 + dudr_hz_o1pz)
 
 
 def to_z_space(r_par, r_perp, z, Om, Delta=None, u_par=None, f=None, **kwargs):
@@ -524,7 +546,7 @@ def iterative_zspace_inverse(s_par, s_perp, f, Delta, N_max=5, atol=1e-5, rtol=1
     ).reshape(s_par.shape)
 
 
-def to_real_space(s_par, s_perp, z, Om, Om_fid=None, Delta=None, u_par=None, f=None,
+def to_real_space(s_par, s_perp, Delta=None, u_par=None, f=None,z=0, Om=0.3, 
                   N_max=5, atol=1e-5, rtol=1e-5, F_inv=None, **kwargs):
     """
     Convert redshift-space coordinates (s_par, s_perp) back into real-space 
@@ -690,7 +712,7 @@ def geometry_correction(s_par, s_perp, epsilon, **kwargs):
     return s_par_new, s_perp_new
 
 
-def z_space_profile(s_par, s_perp, rho_real, z, Om, Delta, delta,
+def z_space_profile(s_par, s_perp, rho_real, Delta, delta, f=None,z=0, Om=0.3,
                     Om_fid=0.3111, epsilon=None, apply_geometry=False, **kwargs):
     """
     Compute the redshift-space density profile ρ(s_par, s_perp) based on
@@ -727,9 +749,11 @@ def z_space_profile(s_par, s_perp, rho_real, z, Om, Delta, delta,
         s_par_new = s_par
         s_perp_new = s_perp
     # Step 2: Convert redshift-space coords back to real-space coords
-    r_par, r_perp = to_real_space(s_par_new, s_perp_new, z, Om, Delta=Delta, **kwargs)
+    r_par, r_perp = to_real_space(s_par_new, s_perp_new, f=f, z=z, Om=Om, 
+                                  Delta=Delta, **kwargs)
     # Step 3: Compute the Jacobian of the transformation (∂r/∂s)
-    jacobian = z_space_jacobian(z, Delta, delta, r_par, r_perp, Om, **kwargs)
+    jacobian = z_space_jacobian(Delta, delta, r_par, r_perp, Om=Om,z=z,f=f,
+                                **kwargs)
     # Step 4: Evaluate the real-space profile at the recovered radius
     r = np.sqrt(r_par**2 + r_perp**2)
     return rho_real(r) * jacobian
@@ -821,12 +845,12 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
                                         np.vstack((x,y)).T,method='cubic')
             theory_val = z_space_profile(s_par_new,s_perp_new,
                                          lambda r: rho_real(r,*profile_args),
-                                         z,Om,Delta_func,delta_func,f=f,
+                                         Delta_func,delta_func,f=f,z=z,Om=Om,
                                          F_inv=F_inv,**kwargs)
         else:
             theory_val = z_space_profile(s_par_new,s_perp_new,
                                          lambda r: rho_real(r,*profile_args),
-                                         z,Om,Delta_func,delta_func,f=f,
+                                         Delta_func,delta_func,f=f,z=z,Om=Om,
                                          F_inv=lambda x, y, z: F_inv(x,y,z),
                                          **kwargs)
         if log_density:
@@ -842,7 +866,7 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
             data_val = data_field[k]
             theory_val = z_space_profile(s_par_new[k],s_perp_new[k],
                                          lambda r: rho_real(r,*profile_args),
-                                         z,Om,Delta_func,delta_func,f=f,
+                                         Delta_func,delta_func,f=f,z=z,Om=Om,
                                          **kwargs)
             if normalised:
                 delta_rho[k] = 1.0 - theory_val/data_val
@@ -946,10 +970,10 @@ def log_likelihood_aptest_revised(theta, data_field, scoords, inv_cov, z,
         F_inv = tools.inverse_los_map(z, Om, Delta_func, f, ntab=ntab, **kwargs)
     # Evaluate the model at each (s_par, s_perp) coordinate
     model_field = np.array([
-        z_space_profile(sp, st, rho_func, z, Om, Delta_func, delta_func,
-                        Om_fid=Om_fid, epsilon=epsilon,
+        z_space_profile(sp, st, rho_func, Delta_func, delta_func,f=f,
+                        z=z, Om=Om, epsilon=epsilon,
                         apply_geometry=sample_epsilon,
-                        F_inv=F_inv, f=f,
+                        F_inv=F_inv,
                         **kwargs)
         for sp, st in zip(s_par, s_perp)
     ])

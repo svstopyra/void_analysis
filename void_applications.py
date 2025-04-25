@@ -565,8 +565,10 @@ def get_los_velocities_for_void(void_centre,void_radius,snap,rbins,cell_vols=Non
     r_par = disp @ los_vector
     return r_par, u_par, disp, u
 
-def get_weighted_samples(data,weights,n_boot = 10000,axis=None):
+def get_weighted_samples(data,weights=None,n_boot = 10000,axis=None):
     n_data = len(data)
+    if weights is None:
+        weights = np.ones(n_data)
     bootstrap_samples = np.random.choice(n_data,size=(n_data,n_boot))
     bootstrap_averages = np.array([np.average(
         data[bootstrap_samples[:,k]],
@@ -586,8 +588,9 @@ cell_vols = lcdm_snaps["cell_volumes"][0]
 snap = lcdm_snaps["snaps"][0]
 radii = lcdm_snaps["void_radii"][0]
 centres = lcdm_snaps["void_centres"][0]
+n_threads= -1
 
-
+box_centre = np.array([boxsize/2]*3)
 void_radius = radii[filt][0]
 void_centre = snapedit.wrap(box_centre - centres[filt,:],boxsize)[0]
 tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
@@ -607,22 +610,28 @@ ur_profile = np.array([
     for ind in indices
 ])
 
-ur_profile_error = np.array([
-    weighted_boostrap_error(ur_norm[ind],cell_vols[indices_list][ind])
+#ur_profile_error = np.array([
+#    weighted_boostrap_error(ur_norm[ind],cell_vols[indices_list][ind])
+#    for ind in indices
+#])
+
+ur_profile_error = ur_profile = np.array([
+    np.sqrt(
+        stacking.weightedVariance(ur_norm[ind],cell_vols[indices_list][ind]) *
+        np.sum(cell_vols[indices_list][ind]**2)) 
     for ind in indices
 ])
 
-
-
 # Profile test:
 z_void = 0
+Om_fid = 0.3111
 pre_factor = -f_lcdm(z_void,Om_fid)*Hz(z_void,Om_fid)/(3*(1 + z_void))
 rbin_centres = plot.binCentres(rbins)
 r_range = np.linspace(0,3,101)
 plt.clf()
 plt.errorbar(rbin_centres, ur_profile,yerr=ur_profile_error,label="$u_r/r$",
          linestyle="-",color=seabornColormap[0])
-plt.plot(rbin_centres, pre_factor*Delta_r,label="$-fH(z)/(3(1+z))$",
+plt.plot(rbin_centres, pre_factor*Delta_r,label="$-fH(z)\\Delta(r)/(3(1+z))$",
          linestyle=":",color=seabornColormap[0])
 plt.xlabel("$r/r_{\\mathrm{eff}} [\\mathrm{Mpc}h^{-1}]$")
 plt.ylabel("$u_r/r [h\\mathrm{km}\\mathrm{s}^{-1}\\mathrm{Mpc}]$")
@@ -681,25 +690,129 @@ def get_all_ur_profiles(centres, radii,rbins,snap,tree=None,cell_vols=None):
     Delta_r_profiles = np.vstack([prof[1] for prof in profiles])
     return ur_profiles,Delta_r_profiles
 
-trees = [scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize) 
-    for snap in lcdm_snaps["snaps"]
-]
+#trees = [scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize) 
+#    for snap in lcdm_snaps["snaps"]
+#]
 
+# Use all 20 simulations:
 all_ur_and_Delta_profiles = [
     tools.loadOrRecompute(
         snap.filename + ".void_ur_profiles.p",
-        get_all_ur_profiles,centres[filt,:], radii[filt],rbins,snap,
-        tree=tree,cell_vols=cell_vols,_recomputeData=False
+        get_all_ur_profiles,
+        snapedit.wrap(box_centre - centres[filt,:],boxsize),
+        radii[filt],rbins,snap,tree=None,cell_vols=cell_vols,
+        _recomputeData=False
     )
-    for centres, radii, snap, filt, tree, cell_vols in zip(
+    for centres, radii, snap, filt, cell_vols in zip(
         lcdm_snaps["void_centres"],lcdm_snaps["void_radii"], 
-        lcdm_snaps["snaps"], voids_used_lcdm_unconstrained, trees,
+        lcdm_snaps["snaps"], voids_used_lcdm_unconstrained,
         lcdm_snaps["cell_volumes"]
     )
 ]
 
 all_ur_profiles = np.vstack([prof[0] for prof in all_ur_and_Delta_profiles])
 all_Delta_profiles = np.vstack([prof[1] for prof in all_ur_and_Delta_profiles])
+
+all_void_radii = np.hstack(
+    [
+        radii[filt] for radii, filt in zip(
+            lcdm_snaps["void_radii"],voids_used_lcdm_unconstrained
+        )
+    ]
+)
+
+# Temp fix (use 1 simulation only):
+all_ur_and_Delta_profiles = get_all_ur_profiles(
+    snapedit.wrap(box_centre - centres[filt,:],boxsize),
+    radii[filt],rbins,snap,tree=tree,cell_vols=cell_vols,
+)
+all_ur_profiles = all_ur_and_Delta_profiles[0]
+all_Delta_profiles = all_ur_and_Delta_profiles[1]
+
+
+
+ur_mean = np.mean(all_ur_profiles,0)
+ur_error = np.std(all_ur_profiles,0)/np.sqrt(all_Delta_profiles.shape[0])
+ur_mean_samples = get_weighted_samples(all_ur_profiles,axis=0)
+ur_range = np.percentile(ur_mean_samples,[16,84],axis=1)
+
+Delta_mean = np.mean(all_Delta_profiles,0)
+Delta_std = np.std(all_Delta_profiles,0)
+Delta_mean_samples = get_weighted_samples(all_Delta_profiles,axis=0)
+Delta_range = np.percentile(Delta_mean_samples,[16,84],axis=1)
+
+
+def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
+                           filename=None,ur_range=None):
+    if ax is None:
+        fig, ax = plt.subplots()
+    pre_factor = -f_lcdm(z_void,Om_fid)*Hz(z_void,Om_fid)/(3*(1 + z_void))
+    u_pred_1lpt = pre_factor*Delta
+    u_pred_2lpt = pre_factor*(Delta - (3/7)*(f_lcdm(z_void,Om_fid)/(1+z_void))*Delta**2)
+    if ur_range is not None:
+        ax.fill_between(rbin_centres,ur_range[0],ur_range[1],
+                 color=seabornColormap[0],label="$Simulation, 68\\% interval$",alpha=0.5,
+        )
+    ax.plot(rbin_centres,ur,
+             color=seabornColormap[0],label="$Simulation$",alpha=0.5,
+    )
+    ax.plot(rbin_centres,u_pred_1lpt,linestyle=":",
+             label="Linear Model (1LPT)",color=seabornColormap[1],
+    )
+    ax.plot(rbin_centres,u_pred_2lpt,linestyle=":",
+             label="2LPT Model",color=seabornColormap[2],
+    )
+    ax.set_xlabel("$r/r_{\\mathrm{eff}}$")
+    ax.set_ylabel("$u_r/r [h\\mathrm{kms}^{-1}\\mathrm{Mpc}^{-1}]$")
+    #plt.yscale("log")
+    plt.legend(frameon=False)
+    if filename is not None:
+        plt.savefig(filename)
+
+plt.clf()
+plot_velocity_profiles(rbin_centres,ur_mean,Delta_mean,
+                       filename = figuresFolder + "ur_profiles_average.pdf",
+                       ur_range=ur_range)
+plt.show()
+
+# By radius bin:
+plt.clf()
+radius_bins = [10,12.5,15,17.5,20]
+n_bins = len(radius_bins) - 1
+nrows = 2
+ncols = 2
+fig, ax = plt.subplots(nrows,ncols,figsize=(textwidth,0.7*textwidth))
+for i in range(nrows):
+    for j in range(ncols):
+        k = i*ncols + j
+        radius_filter = (all_void_radii >= radius_bins[k]) & \
+            (all_void_radii < radius_bins[k+1])
+        ur_mean_samples = get_weighted_samples(all_ur_profiles[radius_filter,:],
+                                               axis=0,n_boot=1000)
+        ur_range = np.percentile(ur_mean_samples,[16,84],axis=1)
+        axij = ax[i,j]
+        plot_velocity_profiles(
+            rbin_centres,np.mean(all_ur_profiles[radius_filter,:],0),
+            np.mean(all_Delta_profiles[radius_filter,:],0),ax=axij,
+            filename = figuresFolder + "ur_profiles_average.pdf",
+            ur_range=ur_range
+        )
+        axij.set_title(
+            "$" + ("%.3g" % radius_bins[k]) + 
+            " < r/(\\mathrm{Mpc}h^{-1}) < " + ("%.3g" % radius_bins[k+1]) + "$")
+        if j > 0:
+            axij.yaxis.label.set_visible(False)
+            axij.yaxis.set_major_formatter(NullFormatter())
+            axij.yaxis.set_minor_formatter(NullFormatter())
+        if i < nrows - 1:
+            axij.xaxis.label.set_visible(False)
+            axij.xaxis.set_major_formatter(NullFormatter())
+            axij.xaxis.set_minor_formatter(NullFormatter())
+
+plt.subplots_adjust(wspace=0.0,hspace=0.0)
+plt.savefig(figuresFolder + "ur_profiles_by_radius.pdf")
+plt.show()
+
 
 
 void_dist = np.sqrt(
@@ -1213,8 +1326,8 @@ def plot_difference_map(field,theory_field,sperp_centres,spar_centres,
                 diff/theory_field.reshape(field.shape),
                 sperp_centres,spar_centres,
                 cmap='PuOr_r',vmin=vmin,vmax=vmax,
-                xlabel = '$d/R_{\\mathrm{eff}}$',
-                ylabel = '$z/R_{\\mathrm{eff}}$',fontfamily='serif',
+                xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$',
+                ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$',fontfamily='serif',
                 colorbar=True,colorbar_title = "Fractional Difference")
     ax = plt.gca()
     ax.set_title("Simulation - Theory Stack")
@@ -1236,8 +1349,8 @@ plot.plot_los_void_stack(\
         theory_field_init.reshape((20,20)),
         sperp_centres,spar_centres,
         cmap='Blues',vmin=0,vmax=1.0,
-        xlabel = '$d/R_{\\mathrm{eff}}$',
-        ylabel = '$z/R_{\\mathrm{eff}}$',fontfamily='serif',
+        xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$',
+        ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$',fontfamily='serif',
         title="Theory Field, initial guess",colorbar=True,
         colorbar_title = "Fractional Difference",
         savename=figuresFolder + "initial_theory_field.pdf")
@@ -1246,8 +1359,8 @@ plot.plot_los_void_stack(\
         field_lcdm_uncon,
         sperp_centres,spar_centres,
         cmap='Blues',vmin=0,vmax=1.0,
-        xlabel = '$d/R_{\\mathrm{eff}}$',
-        ylabel = '$z/R_{\\mathrm{eff}}$',fontfamily='serif',
+        xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$',
+        ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$',fontfamily='serif',
         title="Simulated field",colorbar=True,
         colorbar_title = "Fractional Difference",
         savename=figuresFolder + "initial_simulation_field.pdf")
