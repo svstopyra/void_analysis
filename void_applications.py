@@ -721,6 +721,14 @@ all_void_radii = np.hstack(
     ]
 )
 
+# Velocities:
+rbins_physical = np.outer(all_void_radii,rbin_centres)
+all_u_profiles = all_ur_profiles*rbins_physical
+u_mean = np.mean(all_u_profiles,0)
+u_error = np.std(all_u_profiles,0)/np.sqrt(all_u_profiles.shape[0])
+Delta_r_profiles = all_Delta_profiles*rbins_physical
+Delta_r_mean = np.mean(Delta_r_profiles,0)
+
 # Temp fix (use 1 simulation only):
 all_ur_and_Delta_profiles = get_all_ur_profiles(
     snapedit.wrap(box_centre - centres[filt,:],boxsize),
@@ -728,6 +736,8 @@ all_ur_and_Delta_profiles = get_all_ur_profiles(
 )
 all_ur_profiles = all_ur_and_Delta_profiles[0]
 all_Delta_profiles = all_ur_and_Delta_profiles[1]
+
+
 
 
 
@@ -743,37 +753,76 @@ Delta_range = np.percentile(Delta_mean_samples,[16,84],axis=1)
 
 
 def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
-                           filename=None,ur_range=None):
+                           filename=None,ur_range=None,ur_ratio=True,Delta_r=None,
+                           ylabel="$u_r/r [h\\mathrm{kms}^{-1}\\mathrm{Mpc}^{-1}]$",
+                           xlabel="$r/r_{\\mathrm{eff}}$",velocity=False):
     if ax is None:
         fig, ax = plt.subplots()
     pre_factor = -f_lcdm(z_void,Om_fid)*Hz(z_void,Om_fid)/(3*(1 + z_void))
-    u_pred_1lpt = pre_factor*Delta
-    u_pred_2lpt = pre_factor*(Delta - (3/7)*(f_lcdm(z_void,Om_fid)/(1+z_void))*Delta**2)
-    if ur_range is not None:
-        ax.fill_between(rbin_centres,ur_range[0],ur_range[1],
-                 color=seabornColormap[0],label="$Simulation, 68\\% interval$",alpha=0.5,
+    #u_pred_2lpt = pre_factor*(Delta - (3/7)*(f_lcdm(z_void,Om_fid)/(1+z_void))*Delta**2)
+    f2 = 2*f_lcdm(z_void,Om_fid,gamma=(4.0/7.0))
+    f1 = f_lcdm(z_void,Om_fid)
+    D2_factor = (1.0/7.0)*f_lcdm(z_void,Om_fid,gamma=-1.0/143.0)
+    if Delta_r is not None:
+        u_pred_2lpt = pre_factor*Delta_r*(1.0 + D2_factor*f2*Delta/f1)
+        u_pred_1lpt = pre_factor*Delta_r
+    else:
+        u_pred_2lpt = pre_factor*(Delta + D2_factor*f2*Delta**2/(f1))
+        u_pred_1lpt = pre_factor*Delta
+    if velocity:
+        u_pred_1lpt = u_pred_1lpt * rbin_centres
+        u_pred_2lpt = u_pred_2lpt * rbin_centres
+    if ur_ratio:
+        if ur_range is not None:
+            ax.fill_between(rbin_centres,ur_range[0],ur_range[1],
+                     color=seabornColormap[0],label="$Simulation, 68\\% interval$",alpha=0.5,
+            )
+        ax.plot(rbin_centres,ur,
+                 color=seabornColormap[0],label="$Simulation$",alpha=0.5,
         )
-    ax.plot(rbin_centres,ur,
-             color=seabornColormap[0],label="$Simulation$",alpha=0.5,
-    )
-    ax.plot(rbin_centres,u_pred_1lpt,linestyle=":",
-             label="Linear Model (1LPT)",color=seabornColormap[1],
-    )
-    ax.plot(rbin_centres,u_pred_2lpt,linestyle=":",
-             label="2LPT Model",color=seabornColormap[2],
-    )
-    ax.set_xlabel("$r/r_{\\mathrm{eff}}$")
-    ax.set_ylabel("$u_r/r [h\\mathrm{kms}^{-1}\\mathrm{Mpc}^{-1}]$")
+        ax.plot(rbin_centres,u_pred_1lpt,linestyle=":",
+                 label="Linear Model (1LPT)",color=seabornColormap[1],
+        )
+        ax.plot(rbin_centres,u_pred_2lpt,linestyle=":",
+                 label="2LPT Model",color=seabornColormap[2],
+        )
+    else:
+        if ur_range is not None:
+            ax.fill_between(rbin_centres,ur_range[0]*rbin_centres,ur_range[1]*rbin_centres,
+                     color=seabornColormap[0],label="$Simulation, 68\\% interval$",alpha=0.5,
+            )
+        ax.plot(rbin_centres,ur*rbin_centres,
+                 color=seabornColormap[0],label="$Simulation$",alpha=0.5,
+        )
+        ax.plot(rbin_centres,u_pred_1lpt*rbin_centres,linestyle=":",
+                 label="Linear Model (1LPT)",color=seabornColormap[1],
+        )
+        ax.plot(rbin_centres,u_pred_2lpt*rbin_centres,linestyle=":",
+                 label="2LPT Model",color=seabornColormap[2],
+        )
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
     #plt.yscale("log")
     plt.legend(frameon=False)
     if filename is not None:
         plt.savefig(filename)
 
 plt.clf()
+plot_velocity_profiles(rbin_centres,u_mean,Delta_mean,
+                       filename = figuresFolder + "u_profiles_average.pdf",
+                       ur_range=np.vstack([u_mean-u_error,u_mean + u_error]),
+                       ylabel="$u_r [\\mathrm{kms}^{-1}]$",velocity=False,
+                       Delta_r = Delta_r_mean)
+plt.show()
+
+
+plt.clf()
 plot_velocity_profiles(rbin_centres,ur_mean,Delta_mean,
                        filename = figuresFolder + "ur_profiles_average.pdf",
                        ur_range=ur_range)
 plt.show()
+
+
 
 # By radius bin:
 plt.clf()
@@ -794,7 +843,6 @@ for i in range(nrows):
         plot_velocity_profiles(
             rbin_centres,np.mean(all_ur_profiles[radius_filter,:],0),
             np.mean(all_Delta_profiles[radius_filter,:],0),ax=axij,
-            filename = figuresFolder + "ur_profiles_average.pdf",
             ur_range=ur_range
         )
         axij.set_title(
