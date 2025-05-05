@@ -640,9 +640,10 @@ plt.savefig(figuresFolder + "ur_profile_plot.pdf")
 plt.show()
 
 # Average over multiple voids:
+from void_analysis.cosmology_inference import spherical_lpt_velocity
 
 def get_ur_profile_for_void(void_centre,void_radius,rbins,snap,tree=None,
-                            cell_vols=None):
+                            cell_vols=None,relative_velocity=True):
     boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
     nbar = len(snap)/boxsize**3
     # KD Tree:
@@ -661,7 +662,7 @@ def get_ur_profile_for_void(void_centre,void_radius,rbins,snap,tree=None,
     weights = cell_vols[indices_list]
     v_centre = np.average(velocities_v,axis=0,weights=weights)
     # Velocity relative to void centre:
-    u = velocities_v - v_centre
+    u = velocities_v - v_centre if relative_velocity else velocities_v
     # Ratio between radial velocity and radius:
     ur_norm = np.sum(np.array(u * disp),1)/r**2
     [indices, counts] = plot.binValues(r,rbins*void_radius)
@@ -675,12 +676,14 @@ def get_ur_profile_for_void(void_centre,void_radius,rbins,snap,tree=None,
     ])
     return ur_profile, Delta_r
 
-def get_all_ur_profiles(centres, radii,rbins,snap,tree=None,cell_vols=None):
+def get_all_ur_profiles(centres, radii,rbins,snap,tree=None,cell_vols=None,
+                        relative_velocity=True):
     if tree is None:
         tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
     profiles = [
         get_ur_profile_for_void(void_centre,void_radius,rbins,snap,
-                                tree=tree,cell_vols=cell_vols
+                                tree=tree,cell_vols=cell_vols,
+                                relative_velocity=True
         )
         for void_centre, void_radius, i in zip(
             centres,radii,tools.progressbar(range(len(centres)))
@@ -737,6 +740,12 @@ all_ur_and_Delta_profiles = get_all_ur_profiles(
 all_ur_profiles = all_ur_and_Delta_profiles[0]
 all_Delta_profiles = all_ur_and_Delta_profiles[1]
 
+all_vr_and_Delta_profiles = get_all_ur_profiles(
+    snapedit.wrap(box_centre - centres[filt,:],boxsize),
+    radii[filt],rbins,snap,tree=tree,cell_vols=cell_vols,
+    relative_velocity=False
+)
+all_vr_profiles = all_vr_and_Delta_profiles[0]
 
 
 
@@ -745,6 +754,12 @@ ur_mean = np.mean(all_ur_profiles,0)
 ur_error = np.std(all_ur_profiles,0)/np.sqrt(all_Delta_profiles.shape[0])
 ur_mean_samples = get_weighted_samples(all_ur_profiles,axis=0)
 ur_range = np.percentile(ur_mean_samples,[16,84],axis=1)
+
+vr_mean = np.mean(all_vr_profiles,0)
+vr_error = np.std(all_vr_profiles,0)/np.sqrt(all_Delta_profiles.shape[0])
+vr_mean_samples = get_weighted_samples(all_vr_profiles,axis=0)
+vr_range = np.percentile(vr_mean_samples,[16,84],axis=1)
+
 
 Delta_mean = np.mean(all_Delta_profiles,0)
 Delta_std = np.std(all_Delta_profiles,0)
@@ -758,20 +773,38 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
                            xlabel="$r/r_{\\mathrm{eff}}$",velocity=False):
     if ax is None:
         fig, ax = plt.subplots()
-    pre_factor = -f_lcdm(z_void,Om_fid)*Hz(z_void,Om_fid)/(3*(1 + z_void))
+    #pre_factor = -f_lcdm(z_void,Om_fid)*Hz(z_void,Om_fid)/(3*(1 + z_void))
     #u_pred_2lpt = pre_factor*(Delta - (3/7)*(f_lcdm(z_void,Om_fid)/(1+z_void))*Delta**2)
-    f2 = 2*f_lcdm(z_void,Om_fid,gamma=(4.0/7.0))
-    f1 = f_lcdm(z_void,Om_fid)
-    D2_factor = (1.0/7.0)*f_lcdm(z_void,Om_fid,gamma=-1.0/143.0)
+    #f2 = 2*f_lcdm(z_void,Om_fid,gamma=(4.0/7.0))
+    #f1 = f_lcdm(z_void,Om_fid)
+    #D2_factor = (1.0/7.0)*f_lcdm(z_void,Om_fid,gamma=-1.0/143.0)
+    radial_fraction = (not velocity)
     if Delta_r is not None:
-        u_pred_2lpt = pre_factor*Delta_r*(1.0 + D2_factor*f2*Delta/f1)
-        u_pred_1lpt = pre_factor*Delta_r
+        u_pred_3lpt = spherical_lpt_velocity(rbin_centres,Delta_r,order=3,
+                                             Om=Om_fid,
+                                             radial_fraction=radial_fraction,
+                                             fixed_delta=True,normalised=True)
+        u_pred_2lpt = spherical_lpt_velocity(rbin_centres,Delta_r,order=2,
+                                             Om=Om_fid,
+                                             radial_fraction=radial_fraction,
+                                             fixed_delta=True,normalised=True)
+        u_pred_1lpt = spherical_lpt_velocity(rbin_centres,Delta_r,order=1,
+                                             Om=Om_fid,
+                                             radial_fraction=radial_fraction,
+                                             fixed_delta=True,normalised=True)
     else:
-        u_pred_2lpt = pre_factor*(Delta + D2_factor*f2*Delta**2/(f1))
-        u_pred_1lpt = pre_factor*Delta
-    if velocity:
-        u_pred_1lpt = u_pred_1lpt * rbin_centres
-        u_pred_2lpt = u_pred_2lpt * rbin_centres
+        u_pred_3lpt = spherical_lpt_velocity(rbin_centres,Delta,order=3,
+                                             Om=Om_fid,
+                                             radial_fraction=radial_fraction,
+                                             fixed_delta=True,normalised=True)
+        u_pred_2lpt = spherical_lpt_velocity(rbin_centres,Delta,order=2,
+                                             Om=Om_fid,
+                                             radial_fraction=radial_fraction,
+                                             fixed_delta=True,normalised=True)
+        u_pred_1lpt = spherical_lpt_velocity(rbin_centres,Delta,order=1,
+                                             Om=Om_fid,
+                                             radial_fraction=radial_fraction,
+                                             fixed_delta=True,normalised=True)
     if ur_ratio:
         if ur_range is not None:
             ax.fill_between(rbin_centres,ur_range[0],ur_range[1],
@@ -785,6 +818,9 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
         )
         ax.plot(rbin_centres,u_pred_2lpt,linestyle=":",
                  label="2LPT Model",color=seabornColormap[2],
+        )
+        ax.plot(rbin_centres,u_pred_3lpt,linestyle=":",
+                 label="3LPT Model",color=seabornColormap[3],
         )
     else:
         if ur_range is not None:
@@ -800,6 +836,9 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
         ax.plot(rbin_centres,u_pred_2lpt*rbin_centres,linestyle=":",
                  label="2LPT Model",color=seabornColormap[2],
         )
+        ax.plot(rbin_centres,u_pred_3lpt*rbin_centres,linestyle=":",
+                 label="3LPT Model",color=seabornColormap[3],
+        )
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     #plt.yscale("log")
@@ -811,14 +850,22 @@ plt.clf()
 plot_velocity_profiles(rbin_centres,u_mean,Delta_mean,
                        filename = figuresFolder + "u_profiles_average.pdf",
                        ur_range=np.vstack([u_mean-u_error,u_mean + u_error]),
-                       ylabel="$u_r [\\mathrm{kms}^{-1}]$",velocity=False,
-                       Delta_r = Delta_r_mean)
+                       ylabel="$u_r [\\mathrm{kms}^{-1}]$",velocity=True,
+                       Delta_r = None)
 plt.show()
 
 
 plt.clf()
 plot_velocity_profiles(rbin_centres,ur_mean,Delta_mean,
                        filename = figuresFolder + "ur_profiles_average.pdf",
+                       ur_range=ur_range)
+plt.show()
+
+
+
+plt.clf()
+plot_velocity_profiles(rbin_centres,vr_mean,Delta_mean,
+                       filename = figuresFolder + "vr_profiles_average.pdf",
                        ur_range=ur_range)
 plt.show()
 

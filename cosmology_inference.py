@@ -285,6 +285,21 @@ def Ez2(z, Om, Or=0, Ok=0, Ol=None, **kwargs):
         Ol = 1.0 - Om - Ok - Or
     return Or*(1 + z)**4 + Om*(1 + z)**3 + Ok*(1 + z)**2 + Ol
 
+def Omega_z(z,Om,Ol=None, Ok=0, Or=0,**kwargs):
+    """
+    Matter density parameter as a function of redshift
+    
+    Parameters:
+        z (float or array): Redshift(s)
+        Om (float): Present-day matter density
+        (Other parameters as in Ez2)
+    
+    Returns:
+        float or array: \Omega_m(z)
+    """
+    Ez2_val = Ez2(z, Om, Or=Or, Ok=Ok, Ol=Ol)
+    return (Om * (1 + z)**3 / Ez2_val)
+
 def f_lcdm(z, Om, gamma=0.55, Ol=None, Ok=0, Or=0, **kwargs):
     """
     Approximate the linear growth rate f(z) in ΛCDM cosmology.
@@ -300,8 +315,303 @@ def f_lcdm(z, Om, gamma=0.55, Ol=None, Ok=0, Or=0, **kwargs):
     Returns:
         float or array: Linear growth rate f(z)
     """
+    return (Omega_z(z,Om,Ol=Ol, Ok=Ok, Or=Or))**gamma
+
+def D1_CPT(z,Omz,Olz = None):
+    """
+    Carrol, Press, Turner (1992) approximation of the linear growth factor
+    
+    Parameters:
+        z (float or array): Redshift(s)
+        Omz (float or array): Omega matter at redshift z
+        Oml (float or array): Omega lambda at redshift z (if not given, 
+                              computed by assuming flat space)
+    
+    Returns:
+        float: un-normalised linear growth factor.
+    """
+    if Olz is None:
+        Olz = 1.0 - Omz
+    a = 1/(1 + z)
+    return a*(5*Omz/2)/(Omz**(4/7) - Olz + (1 + Omz/2)*(1 + Olz/70))
+
+def D1(z,Om,Ol=None,Ok = 0,Or = 0,normalised=True,**kwargs):
+    """
+    Linear growth factor, D_1(z)
+    
+    Parameters:
+        z (float or array): Redshift at which to compute D_1
+        Om (float): Omega matter value for the cosmology:
+        Ol (float): Omega lambda value (inferred if not given)
+        Ok (float): Curvature density (defaults to 0)
+        Or (float): Radiation density (defaults to 0)
+        normalised (bool): If True, returns D_1(z)/D_1(0)
+    """
+    if Ol is None:
+        Ol = 1 - Om - Ok - Or
+    Omz = Omega_z(z,Om,Ol=Ol, Ok=Ok, Or=Or)
     Ez2_val = Ez2(z, Om, Or=Or, Ok=Ok, Ol=Ol)
-    return (Om * (1 + z)**3 / Ez2_val)**gamma
+    Olz = Ol/Ez2_val
+    if normalised:
+        denom = D1_CPT(0,Om,Ol)
+    else:
+        denom = 1
+    return D1_CPT(z,Omz,Olz)/denom
+
+def get_bin_edges_from_centres(bin_centres,edge_1 = None):
+    """
+    Computes the edges of the bins for a given list of bin centres. First
+    element is computed assuming equally spaced bins, but can be over-ridden if
+    this doesn't hold.
+    
+    Parameters:
+        bin_centres (array): centres of the bins
+        edge_1 (float or None): first bin edge. If None, computed assuming equal
+                                spacing.
+
+    Returns:
+        array: Edges of the bins.
+    """
+    diffs = np.diff(bin_centres)
+    bin_edges = np.zeros(len(bin_centres) + 1)
+    if edge_1 is None:
+        # Assume equal spacing to get the first edge:
+        edge_1 = (3/2)*bin_centres[0] - bin_centres[1]/2
+    bin_edges[0] = edge_1
+    for k in range(len(bin_centres)):
+        bin_edges[k+1] = 2*bin_centres[k] - bin_edges[k]
+    return bin_edges
+
+def estimate_delta_from_Delta(r,Delta):
+    """
+    Given a cumulative density, Delta(r), at points r, obtain the local
+    density.
+    
+    Parameters:
+        r (array): Points at which Delta is known.
+        Delta (array): Delta at r
+    
+    Returns:
+        array: delta(r), where Delta(r) = (3/r)\int_{0}^{r}\delta(r)r^2dr
+    """
+    rbins = get_bin_edges_from_centres(r,edge_1 = 0)
+    Delta_diff = np.diff(rbins)
+    result = np.zeros(Delta.shape)
+    result[1:] = (r[0:-1]/3)*(Delta[1:] - Delta[0:-1])/Delta_diff[1:]
+    result[0] = Delta[0]
+    return result
+
+def get_profile_derivative(r,Delta,order,delta=None,deltap = None,deltapp=None,
+                           params = None,epsilon = 1e-10):
+    """
+    Computes the derivative of the function Delta(r), with respect to r.
+    
+    Parameters:
+        r (float or array): Value of r at which to evaluate the derivative.
+        Delta(float, array, or function): If float or array, the values of the 
+                                          function at r (must be same type/size
+                                          as r). If a function, must take r
+                                          as an argument.
+        order (int): Order of the derivative to compute
+        delta (float, array, or function): Local shell density. 
+                                           Delta=(3/r^3)\int_{0}^{r}\delta(r)r^2dr
+                                           Estimated if not known. 
+        deltap (float, array, or function): 1st derivative of delta
+        deltapp (float, array, or function): 2nd derivative of delta
+
+    Returns:
+        float or array: Derivative of Delta at requested order.
+    """
+    if order not in [0,1,2,3]:
+        raise Exception("Derivative order not implemented or invalid.")
+    Delta_vals = Delta(r) if callable(Delta) else Delta
+    # 0th derivative:
+    if order == 0:
+        return Delta_vals
+    # 1st derivative:
+    if delta is None:
+        # Obtain a profile model:
+        if params is None:
+            params = get_profile_parameters_fixed(
+                r,Delta_vals,0.05*Delta_vals,
+                model = integrated_profile_modified_hamaus
+            )
+        delta = lambda r: profile_modified_hamaus(r,*params)
+    delta_vals = delta(r)
+    if order == 1:
+        # Carefully treat r = 0 case:
+        return -3*ratio_where_finite(Delta_vals - delta_vals,r,
+                                     undefined_value = 0.0)
+    # 2nd derivative:
+    if deltap is None:
+        if params is None:
+            params = get_profile_parameters_fixed(
+                r,Delta_vals,0.05*Delta_vals,
+                model = integrated_profile_modified_hamaus
+            )
+        deltap = lambda r: profile_modified_hamaus_derivative(r,1,*params)
+    if deltapp is None:
+        if params is None:
+            params = get_profile_parameters_fixed(
+                r,Delta_vals,0.05*Delta_vals,
+                model = integrated_profile_modified_hamaus
+            )
+        deltapp = lambda r: profile_modified_hamaus_derivative(r,2,*params)
+    deltap_vals = deltap(r)
+    if order == 2:
+        # Carefully treat r = 0 case:
+        if deltap(0) == 0:
+            return (12*ratio_where_finite(Delta_vals - delta_vals,r**2,
+                                          undefined_value = (3/5)*deltapp(0)) 
+                    + 3*ratio_where_finite(deltap_vals,r,
+                                           undefined_value = deltapp(0)))
+        else:
+            return (12*ratio_where_finite(Delta_vals - delta_vals,r**2,
+                                          undefined_value = np.inf) 
+                    + 3*ratio_where_finite(deltap_vals,r,
+                                           undefined_value = np.inf))
+    # 3rd derivative:
+    deltapp_vals = deltapp(r)
+    if order == 3:
+        # Carefully treat r = 0 case:
+        if deltapp(0) == 0:
+            # Rough regularisation:
+            Delta_vals = Delta(r + epsilon)
+            delta_vals = delta(r + epsilon)
+            deltap_vals = deltap(r + epsilon)
+            deltapp_vals = deltapp(r + epsilon)
+            return (-(60/(r + epsilon)**3)*(Delta_vals - delta_vals) 
+                    -15*deltap_vals/(r + epslilon)**2
+                    + 3*deltapp_vals/(r + epsilon))
+        else:
+            return (-60*ratio_where_finite(Delta_vals - delta_vals,r**3,
+                                           undefined_value=np.inf)
+                    -15*ratio_where_finite(deltap_vals,r**2,
+                                           undefined_value=np.inf)
+                    +4*ratio_where_finite(deltapp_vals,r,
+                                          undefined_value=np.inf))
+
+
+
+
+
+def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
+                               n2 = -1/143,nf1 = 5/9,
+                               nf2 = 6/11,n3a = -4/275,n3b = -269/17875,
+                               nf3a = 13/24,nf3b = 13/24,
+                               radial_fraction = False,**kwargs):
+    """
+    Compute the radial component of the displacement field, in Lagrangian 
+    perturbation theory, assuming spherical symmetry for the density field.
+    
+    Parameters:
+        r (float or array): Radius/radii at which to compute the displacement
+        Delta (scalar function): Final density field, as a function of r
+        order (int): Order of expansion for LPT. Only 1,2, or 3 implemented
+        z (float): Redshift at which to compute the displacement field.
+        Om (float): Value of Omega_matter
+        n2 (float): Exponent of Omega_m(z) used to approximate D_2(t)
+        nf1 (float): Exponent of Omega_m(z) used to approximate f_1(t)
+        nf2 (float): Exponent of Omega_m(z) used to approximate f_2(t)
+        n3a (float): Exponent of Omega_m(z) used to approximate D_{3a}(t)
+        n3b (float): Exponent of Omega_m(z) used to approximate D_{3b}(t)
+        nf3a (float): Exponent of Omega_m(z) used to approximate f_{3a}(t)
+        nf3b (float): Exponent of Omega_m(z) used to approximate f_{3b}(t)
+        radial_fraction (bool): If True, compute Psi_r/r, rather than Psi_r 
+        fixed_delta (bool): If True, Delta is assumed to be a pre-computed
+                            array, rather than a function.
+
+    Returns:
+        float or array: Radial component of the displacement field.
+    """
+    if order not in [1,2,3]:
+        raise Exception("Perturbation order invalid or not implemented.")
+    if radial_fraction:
+        rval = 1.0
+    else:
+        rval = r
+    D1_val = D1(z,Om,**kwargs)
+    Delta_r = Delta if fixed_delta else Delta(r)
+    # 1st order estimate of Psi_r:
+    Psi_r = -D1_val*rval*Delta_r/3
+    if order == 1:
+        return Psi_r
+    # 2nd order estimate of Psi_r:
+    Omz = Omega_z(z,Om,**kwargs)
+    D2_val = -(3/7)*(Omz**n2)*D1_val**2
+    Psi_r = Psi_r + D2_val*(rval/9)*Delta_r**2
+    if order == 2:
+        return Psi_r
+    # 3rd order estimate of Psi_r:
+    D3a_val = -(1/3)*(Omz**n3a)*D1_val**3
+    D3b_val = (10/21)*(Omz**n3b)*D1_val**3
+    Psi_r = Psi_r - D3a_val*(rval/81)*Delta_r**3 - D3b_val*(2*rval/27)*Delta_r**3
+    return Psi_r
+
+def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
+                               n2 = -1/143,nf1 = 5/9,
+                               nf2 = 6/11,n3a = -4/275,n3b = -269/17875,
+                               nf3a = 13/24,nf3b = 13/24,h=1.0,
+                               radial_fraction = False,fixed_delta = False,
+                               **kwargs):
+    """
+    Compute the radial component of the velocity field, in Lagrangian 
+    perturbation theory, assuming spherical symmetry for the density field.
+    
+    Parameters:
+        r (float or array): Radius/radii at which to compute the velocity. If
+                            h = 1, assumes units of Mpc/h
+        Delta (scalar function): Final density field, as a function of r
+        order (int): Order of expansion for LPT. Only 1,2, or 3 implemented
+        z (float): Redshift at which to compute the velocity field.
+        Om (float): Value of Omega_matter
+        n2 (float): Exponent of Omega_m(z) used to approximate D_2(t)
+        nf1 (float): Exponent of Omega_m(z) used to approximate f_1(t)
+        nf2 (float): Exponent of Omega_m(z) used to approximate f_2(t)
+        n3a (float): Exponent of Omega_m(z) used to approximate D_{3a}(t)
+        n3b (float): Exponent of Omega_m(z) used to approximate D_{3b}(t)
+        nf3a (float): Exponent of Omega_m(z) used to approximate f_{3a}(t)
+        nf3b (float): Exponent of Omega_m(z) used to approximate f_{3b}(t)
+        h (float): Dimensionless Hubble rate. Defaults to 1.0, which means we
+                   assume distances are in Mpc/h. Otherwise, non-zero h means
+                   distances are expected to be in Mpc.
+        radial_fraction (bool): If True, compute v/r, rather than v
+        fixed_delta (bool): If True, Delta is assumed to be a pre-computed
+                            array, rather than a function.
+    
+    Returns:
+        float or array: Radial component of the velocity field.
+    """
+    if order not in [1,2,3]:
+        raise Exception("Perturbation order invalid or not implemented.")
+    D1_val = D1(z,Om,**kwargs)
+    Delta_r = Delta if fixed_delta else Delta(r)
+    a = 1/(1+z)
+    H = Hz(z,Om,h=h,**kwargs)
+    Omz = Omega_z(z,Om,**kwargs)
+    if radial_fraction:
+        rval = 1.0/h # Divide by h, so that velocity is always km/s
+    else:
+        rval = r
+    # 1st order estimate of v_r:
+    f1 = Omz**nf1
+    v_r = -a*H*f1*D1_val*rval*Delta_r/3
+    if order == 1:
+        return v_r
+    # 2nd order estimate of v_r:
+    D2_val = -(3/7)*(Omz**n2)*D1_val**2
+    f2_val = 2*(Omz**nf2)
+    v_r = v_r + a*H*f2_val*D2_val*(rval/9)*Delta_r**2
+    if order == 2:
+        return v_r
+    # 3rd order estimate of v_r:
+    f3a = 3*(Omz**nf3a)
+    f3b = 3*(Omz**nf3b)
+    D3a_val = -(1/3)*(Omz**n3a)*D1_val**3
+    D3b_val = (10/21)*(Omz**n3b)*D1_val**3
+    v_r = (v_r - a*H*f3a*D3a_val*(rval/81)*Delta_r**3
+            - a*H*f3b*D3b_val*(2*rval/27)*Delta_r**3)
+    return v_r
 
 
 def Hz(z, Om, h=None, Ol=None, Ok=0, Or=0, **kwargs):
@@ -1662,6 +1972,44 @@ def profile_modified_hamaus(r, alpha, beta, rs, delta_c, delta_large=0.0, rv=1.0
     """
     return ((delta_c - delta_large) * (1.0 - (r / rs)**alpha) /
             (1.0 + (r / rv)**beta)) + delta_large
+
+def profile_modified_hamaus_derivative(r,order,alpha,beta,rs,delta_c,
+                                       delta_large=0,rv=1.0):
+    """
+    Returns derivatives of profile_modified_hamaus
+    
+    Parameters:
+        r (float or array): Radius
+        order (int): order of the derivative to return
+        Other parameters as in profile_modified_hamaus
+    
+    Returns:
+        float or array: Derivative at r
+    """
+    if order not in [0,1,2]:
+        raise Exception("Derivative order not valid or not implemented.")
+    if order == 0:
+        return profile_modified_hamaus(r,alpha,beta,rs,delta_c,
+                                       delta_large=delta_large,rv=rv)
+    numerator = 1 - (r/rs)**alpha
+    denominator = 1 + (r/rv)**beta
+    extra_factor = ( (alpha/rs)*(r/rs)**(alpha-1)/numerator
+                    +(beta/rv)*(r/rv)**(beta-1)/denominator)
+    if order == 1:
+        delta = profile_modified_hamaus(r,alpha,beta,rs,delta_c,
+                                       delta_large=delta_large,rv=rv)
+        return -(delta - delta_large)*extra_factor
+    if order == 2:
+        deltap = profile_modified_hamaus_derivative(r,1,alpha,beta,rs,delta_c,
+                                                    delta_large=delta_large,
+                                                    rv=rv)
+        return -deltap*extra_factor - (delta - delta_large)*(
+            (alpha*(alpha-1)/rs**2)*(r/rs)**(alpha-2)/numerator
+            + (beta*(beta-1)/rv**2)*(r/rv)**(beta-2)/denominator
+            + (alpha/rs)**2*(r/rs)**(2*alpha - 2)/numerator**2
+            - (beta/rv)**2*(r/rv)**(2*beta-2)/denominator**2
+
+
 
 def integrated_profile_modified_hamaus(r, alpha, beta, rs, delta_c,
                                        delta_large=0.0, rv=1.0):
