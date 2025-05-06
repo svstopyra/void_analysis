@@ -491,15 +491,44 @@ def get_profile_derivative(r,Delta,order,delta=None,deltap = None,deltapp=None,
                     +4*ratio_where_finite(deltapp_vals,r,
                                           undefined_value=np.inf))
 
+def get_S1r(Delta_r,rval,order,z,Om,n2,n3a,n3b,correct_ics=True,**kwargs):
+    D10 = D1(0,Om,**kwargs)
+    if correct_ics:
+        # Apply relevant correction terms up to specified order:
+        D20 = -(3/7)*(Om**n2)*D10**2
+        D3a0 = -(1/3)*(Om**n3a)*D10**3
+        D3b0 = (10/21)*(Om**n3b)*D10**3
+        if order >= 1:
+            S1r = -rval*Delta_r/(3*D10)
+        if order >= 2:
+            S1r = S1r - rval*(D20/D10**2 - 1)*Delta_r**2/9
+        if order >= 3:
+            S1r = S1r + (rval/27)*(2 + 2*D3b0/D10**3
+                                + D20*D3a0/(3*D10**2*D3b0) - D20**2/D10**4
+                                + 3*D20/D10**2
+                               )*Delta_r**3
+    else:
+        S1r = -rval*Delta_r/(3*D10)
+    return S1r
 
-
-
+def get_S2r(Delta_r,rval,order,z,Om,n2,correct_ics=True,**kwargs):
+    if correct_ics:
+        D10 = D1(0,Om,**kwargs)
+        D20 = -(3/7)*(Om**n2)*D10**2
+        if order >= 2:
+            S2r = rval*Delta_r**2/(9*D10**2)
+        if order >= 3:
+            S2r = S2r + 2*rval*(D20 - D10**2)*Delta_r**3/(D10**4)
+    else:
+        S2r = (rval/9)*Delta_r**2
+    return S2r
 
 def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
                                n2 = -1/143,nf1 = 5/9,
                                nf2 = 6/11,n3a = -4/275,n3b = -269/17875,
                                nf3a = 13/24,nf3b = 13/24,
-                               radial_fraction = False,**kwargs):
+                               radial_fraction = False,correct_ics = True,
+                               **kwargs):
     """
     Compute the radial component of the displacement field, in Lagrangian 
     perturbation theory, assuming spherical symmetry for the density field.
@@ -520,6 +549,8 @@ def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
         radial_fraction (bool): If True, compute Psi_r/r, rather than Psi_r 
         fixed_delta (bool): If True, Delta is assumed to be a pre-computed
                             array, rather than a function.
+        correct_ics (bool): If True, perturbative update the initial conditions
+                            (used when Delta is the final density)
 
     Returns:
         float or array: Radial component of the displacement field.
@@ -531,21 +562,27 @@ def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
     else:
         rval = r
     D1_val = D1(z,Om,**kwargs)
+    D10 = D1(0,Om,**kwargs)
     Delta_r = Delta if fixed_delta else Delta(r)
     # 1st order estimate of Psi_r:
-    Psi_r = -D1_val*rval*Delta_r/3
+    S1r = get_S1r(Delta_r,rval,order,z,Om,n2,n3a,n3b,correct_ics=correct_ics,
+                  **kwargs)
+    Psi_r = D1_val*S1r
     if order == 1:
         return Psi_r
     # 2nd order estimate of Psi_r:
     Omz = Omega_z(z,Om,**kwargs)
     D2_val = -(3/7)*(Omz**n2)*D1_val**2
-    Psi_r = Psi_r + D2_val*(rval/9)*Delta_r**2
+    S2r = get_S2r(Delta_r,rval,order,z,Om,n2,correct_ics=correct_ics,**kwargs)
+    Psi_r = Psi_r + D2_val*S2r
     if order == 2:
         return Psi_r
     # 3rd order estimate of Psi_r:
     D3a_val = -(1/3)*(Omz**n3a)*D1_val**3
     D3b_val = (10/21)*(Omz**n3b)*D1_val**3
-    Psi_r = Psi_r - D3a_val*(rval/81)*Delta_r**3 - D3b_val*(2*rval/27)*Delta_r**3
+    S3ar = -(rval/(81*D10**3))*Delta_r**3
+    S3br = - (2*rval/(27*D10**3))*Delta_r**3
+    Psi_r = Psi_r + D3a_val*S3ar + D3b_val*S3br
     return Psi_r
 
 def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
@@ -553,7 +590,7 @@ def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
                                nf2 = 6/11,n3a = -4/275,n3b = -269/17875,
                                nf3a = 13/24,nf3b = 13/24,h=1.0,
                                radial_fraction = False,fixed_delta = False,
-                               **kwargs):
+                               correct_ics = True,**kwargs):
     """
     Compute the radial component of the velocity field, in Lagrangian 
     perturbation theory, assuming spherical symmetry for the density field.
@@ -578,6 +615,8 @@ def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
         radial_fraction (bool): If True, compute v/r, rather than v
         fixed_delta (bool): If True, Delta is assumed to be a pre-computed
                             array, rather than a function.
+        correct_ics (bool): If True, perturbative update the initial conditions
+                            (used when Delta is the final density)
     
     Returns:
         float or array: Radial component of the velocity field.
@@ -595,13 +634,16 @@ def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
         rval = r
     # 1st order estimate of v_r:
     f1 = Omz**nf1
-    v_r = -a*H*f1*D1_val*rval*Delta_r/3
+    S1r = get_S1r(Delta_r,rval,order,z,Om,n2,n3a,n3b,correct_ics=correct_ics,
+                  **kwargs)
+    v_r = a*H*f1*D1_val*S1r
     if order == 1:
         return v_r
     # 2nd order estimate of v_r:
     D2_val = -(3/7)*(Omz**n2)*D1_val**2
     f2_val = 2*(Omz**nf2)
-    v_r = v_r + a*H*f2_val*D2_val*(rval/9)*Delta_r**2
+    S2r = get_S2r(Delta_r,rval,order,z,Om,n2,correct_ics=correct_ics,**kwargs)
+    v_r = v_r + a*H*f2_val*D2_val*S2r
     if order == 2:
         return v_r
     # 3rd order estimate of v_r:
@@ -609,8 +651,9 @@ def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
     f3b = 3*(Omz**nf3b)
     D3a_val = -(1/3)*(Omz**n3a)*D1_val**3
     D3b_val = (10/21)*(Omz**n3b)*D1_val**3
-    v_r = (v_r - a*H*f3a*D3a_val*(rval/81)*Delta_r**3
-            - a*H*f3b*D3b_val*(2*rval/27)*Delta_r**3)
+    S3ar = -(rval/81)*Delta_r**3
+    S3br = - (2*rval/27)*Delta_r**3
+    v_r = (v_r + a*H*f3a*D3a_val*S3ar + a*H*f3b*D3b_val*S3br)
     return v_r
 
 

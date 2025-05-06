@@ -770,7 +770,8 @@ Delta_range = np.percentile(Delta_mean_samples,[16,84],axis=1)
 def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
                            filename=None,ur_range=None,ur_ratio=True,Delta_r=None,
                            ylabel="$u_r/r [h\\mathrm{kms}^{-1}\\mathrm{Mpc}^{-1}]$",
-                           xlabel="$r/r_{\\mathrm{eff}}$",velocity=False):
+                           xlabel="$r/r_{\\mathrm{eff}}$",velocity=False,
+                           normalised=True,fixed_delta=True,correct_ics=True):
     if ax is None:
         fig, ax = plt.subplots()
     #pre_factor = -f_lcdm(z_void,Om_fid)*Hz(z_void,Om_fid)/(3*(1 + z_void))
@@ -783,28 +784,40 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
         u_pred_3lpt = spherical_lpt_velocity(rbin_centres,Delta_r,order=3,
                                              Om=Om_fid,
                                              radial_fraction=radial_fraction,
-                                             fixed_delta=True,normalised=True)
+                                             fixed_delta=fixed_delta,
+                                             normalised=normalised,
+                                             correct_ics=correct_ics)
         u_pred_2lpt = spherical_lpt_velocity(rbin_centres,Delta_r,order=2,
                                              Om=Om_fid,
                                              radial_fraction=radial_fraction,
-                                             fixed_delta=True,normalised=True)
+                                             fixed_delta=fixed_delta,
+                                             normalised=normalised,
+                                             correct_ics=correct_ics)
         u_pred_1lpt = spherical_lpt_velocity(rbin_centres,Delta_r,order=1,
                                              Om=Om_fid,
                                              radial_fraction=radial_fraction,
-                                             fixed_delta=True,normalised=True)
+                                             fixed_delta=fixed_delta,
+                                             normalised=normalised,
+                                             correct_ics=correct_ics)
     else:
         u_pred_3lpt = spherical_lpt_velocity(rbin_centres,Delta,order=3,
                                              Om=Om_fid,
                                              radial_fraction=radial_fraction,
-                                             fixed_delta=True,normalised=True)
+                                             fixed_delta=fixed_delta,
+                                             normalised=normalised,
+                                             correct_ics=correct_ics)
         u_pred_2lpt = spherical_lpt_velocity(rbin_centres,Delta,order=2,
                                              Om=Om_fid,
                                              radial_fraction=radial_fraction,
-                                             fixed_delta=True,normalised=True)
+                                             fixed_delta=fixed_delta,
+                                             normalised=normalised,
+                                             correct_ics=correct_ics)
         u_pred_1lpt = spherical_lpt_velocity(rbin_centres,Delta,order=1,
                                              Om=Om_fid,
                                              radial_fraction=radial_fraction,
-                                             fixed_delta=True,normalised=True)
+                                             fixed_delta=fixed_delta,
+                                             normalised=normalised,
+                                             correct_ics=correct_ics)
     if ur_ratio:
         if ur_range is not None:
             ax.fill_between(rbin_centres,ur_range[0],ur_range[1],
@@ -842,6 +855,7 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     #plt.yscale("log")
+    ax.set_ylim([0,20])
     plt.legend(frameon=False)
     if filename is not None:
         plt.savefig(filename)
