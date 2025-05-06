@@ -2007,7 +2007,7 @@ def profile_modified_hamaus_derivative(r,order,alpha,beta,rs,delta_c,
             (alpha*(alpha-1)/rs**2)*(r/rs)**(alpha-2)/numerator
             + (beta*(beta-1)/rv**2)*(r/rv)**(beta-2)/denominator
             + (alpha/rs)**2*(r/rs)**(2*alpha - 2)/numerator**2
-            - (beta/rv)**2*(r/rv)**(2*beta-2)/denominator**2
+            - (beta/rv)**2*(r/rv)**(2*beta-2)/denominator**2)
 
 
 
