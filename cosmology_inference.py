@@ -491,7 +491,29 @@ def get_profile_derivative(r,Delta,order,delta=None,deltap = None,deltapp=None,
                     +4*ratio_where_finite(deltapp_vals,r,
                                           undefined_value=np.inf))
 
-def get_S1r(Delta_r,rval,order,z,Om,n2,n3a,n3b,correct_ics=True,**kwargs):
+def get_S1r(Delta_r,rval,Om,order=1,n2 = -1/143,n3a = -4/275,n3b = -269/17875,
+            correct_ics=True,**kwargs):
+    """
+    Compute the spatial part of the first order Lagrangian perturbation, by 
+    matching to the provided final density field.
+    
+    Parameters:
+        Delta_r (float or array): Final density to match, as a function of radius
+        rval (float or array): Radius at which to compute, must match Delta_r
+        Om (float): Matter density parameter
+        order (int): Order of Lagrangian perturbation theory being used. Note 
+                     that the correction can be different at different orders 
+                     due to corrections to the initial conditions.
+        n2 (float): Exponent for the second roder growth function
+        n3a (float): Exponent for the first 3rd-order growth function.
+        n3b (float): Exponent for the second 3rd order growth function.
+        correct_ics (bool): If True, apply perturbative corrections to the 
+                            initial conditions. If False, same correction at all
+                            orders.
+        
+    Returns:
+        float or array: Value of S_{1r}
+    """
     D10 = D1(0,Om,**kwargs)
     if correct_ics:
         # Apply relevant correction terms up to specified order:
@@ -501,27 +523,130 @@ def get_S1r(Delta_r,rval,order,z,Om,n2,n3a,n3b,correct_ics=True,**kwargs):
         if order >= 1:
             S1r = -rval*Delta_r/(3*D10)
         if order >= 2:
-            S1r = S1r - rval*(D10**2 - D20)*Delta_r**2/(9*D10**3)
+            S1r = S1r + rval*(D10**2 - D20)*Delta_r**2/(9*D10**3)
         if order >= 3:
             S1r = S1r - (rval/(27*D10**3))*(
-                               5*D20 - 5*D10**2/3 - 2*D20**2/D10**2
+                               -3*D20 + 7*D10**2/3 + 2*D20**2/D10**2
                                - D3a0/(3*D10) - 2*D3b0/D10 - 2*D20*D3a0/D3b0
                                )*Delta_r**3
+        if order >=4:
+            raise Exception("Corrections of order " + str(order) + 
+                            " not yet implemented.")
     else:
         S1r = -rval*Delta_r/(3*D10)
     return S1r
 
-def get_S2r(Delta_r,rval,order,z,Om,n2,correct_ics=True,**kwargs):
+def get_S2r(Delta_r,rval,Om,n2 = -1/143,order=2,correct_ics=True,**kwargs):
+    """
+    Compute the spatial part of the second order Lagrangian perturbation, by 
+    matching to the provided final density field.
+    
+    Parameters:
+        Delta_r (float or array): Final density to match, as a function of radius
+        rval (float or array): Radius at which to compute, must match Delta_r
+        Om (float): Matter density parameter
+        order (int): Order of Lagrangian perturbation theory being used. Note 
+                     that the correction can be different at different orders 
+                     due to corrections to the initial conditions.
+        n2 (float): Exponent for the second roder growth function
+        correct_ics (bool): If True, apply perturbative corrections to the 
+                            initial conditions. If False, same correction at all
+                            orders.
+    Returns:
+        float or array: Value of S_{2r}
+    """
     if correct_ics:
         D10 = D1(0,Om,**kwargs)
         D20 = -(3/7)*(Om**n2)*D10**2
         if order >= 2:
             S2r = rval*Delta_r**2/(9*D10**2)
         if order >= 3:
-            S2r = S2r + rval*(D10**2 - 2*D20)*Delta_r**3/(27*D10**4)
+            S2r = S2r - rval*(3*D10**2 - 2*D20)*Delta_r**3/(27*D10**4)
     else:
         S2r = (rval/9)*Delta_r**2
     return S2r
+
+def get_S3r(Delta_r,rval,Om,order=3,**kwargs):
+    """
+    Compute the spatial part of the first order Lagrangian perturbation, by 
+    matching to the provided final density field.
+    
+    Note: currently no higher order corrections, so changing order doesn't
+    alter anything. However, we retain it in case we want to extend to higher
+    orders, which would entail futher corrections.
+    
+    Parameters:
+        Delta_r (float or array): Final density to match, as a function of radius
+        rval (float or array): Radius at which to compute, must match Delta_r
+        Om (float): Matter density parameter
+        order (int): Order of Lagrangian perturbation theory being used. Note 
+                     that the correction can be different at different orders 
+                     due to corrections to the initial conditions.
+                     
+    Returns:
+        S3ar (float or array): Value of S_{3ar}
+        S3br (float or array): Value of S_{3br}
+    """
+    if order >=4:
+        raise Exception("Corrections of order " + str(order) + 
+                        " not yet implemented.")
+    D10 = D1(0,Om,**kwargs)
+    S3ar = -(rval/(81*D10**3))*Delta_r**3
+    S3br = - (2*rval/(27*D10**3))*Delta_r**3
+    return S3ar, S3br
+
+def get_delta_lpt(Delta_r,z=0,order=1,Om=0.3,n2 = -1/143,nf1 = 5/9,
+                  nf2 = 6/11,n3a = -4/275,n3b = -269/17875,nf3a = 13/24,
+                  nf3b = 13/24,correct_ics = True,
+                  return_all=False,**kwargs):
+    if order not in [1,2,3]:
+        raise Exception("Perturbation order invalid or not implemented.")
+    # Spatial parts, as S(r)/r
+    if order >= 1:
+        S1r_rat = get_S1r(Delta_r,1.0,Om,order=order,n2=n2,n3a=n3a,n3b=n3b,
+                          correct_ics=correct_ics,**kwargs)
+    if order >=2:
+        S2r_rat = get_S2r(Delta_r,1.0,Om,order=order,n2=n2,correct_ics=correct_ics,
+                          **kwargs)
+    if order >=3:
+        S3ar_rat, S3br_rat = get_S3r(Delta_r,1.0,Om,order=order,**kwargs)
+    # Time dependent parts:
+    if order >=1:
+        D1_val = D1(z,Om,**kwargs)
+        Omz = Omega_z(z,Om,**kwargs)
+    if order >=2:
+        D2_val = -(3/7)*(Omz**n2)*D1_val**2
+    if order >=3:
+        D3a_val = -(1/3)*(Omz**n3a)*D1_val**3
+        D3b_val = (10/21)*(Omz**n3b)*D1_val**3
+    # Displacement fields:
+    if order >= 1:
+        Psi_1r_rat = D1_val*S1r_rat
+    if order >=2:
+        Psi_2r_rat = D2_val*S2r_rat
+    if order >=3:
+        Psi_3r_rat = D3a_val*S3ar_rat + D3b_val*S3br_rat 
+    # Density estimate:
+    if order >= 1:
+        Delta_1 = -3*Psi_1r_rat
+        Delta = Delta_1
+    if order >=2:
+        Delta_2 = 6*Psi_1r_rat**2 - 3*(1 + D1_val**2/D2_val)*Psi_2r_rat
+        Delta = Delta + Delta_2
+    if order >=3:
+        Delta_3 = (6*(2 + D1_val**2/D2_val)*Psi_2r_rat*Psi_1r_rat 
+                 -3*(1 + D1_val*D2_val/D3b_val)*Psi_3r_rat
+                 -(2 + D2_val*D3a_val/(D3b_val*D1_val**2))*Psi_1r_rat**3)
+        Delta = Delta + Delta_3
+    if return_all:
+        if order == 1:
+            return Delta_1
+        if order == 2:
+            return Delta_1, Delta_2
+        if order == 3:
+            return Delta_1, Delta_2, Delta_3
+    else:
+        return Delta
 
 def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
                                n2 = -1/143,nf1 = 5/9,
@@ -565,23 +690,23 @@ def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
     D10 = D1(0,Om,**kwargs)
     Delta_r = Delta if fixed_delta else Delta(r)
     # 1st order estimate of Psi_r:
-    S1r = get_S1r(Delta_r,rval,order,z,Om,n2,n3a,n3b,correct_ics=correct_ics,
-                  **kwargs)
+    S1r = get_S1r(Delta_r,rval,Om,order=order,n2=n2,n3a=n3a,n3b=n3b,
+                  correct_ics=correct_ics,**kwargs)
     Psi_r = D1_val*S1r
     if order == 1:
         return Psi_r
     # 2nd order estimate of Psi_r:
     Omz = Omega_z(z,Om,**kwargs)
     D2_val = -(3/7)*(Omz**n2)*D1_val**2
-    S2r = get_S2r(Delta_r,rval,order,z,Om,n2,correct_ics=correct_ics,**kwargs)
+    S2r = get_S2r(Delta_r,rval,Om,order=order,n2=n2,correct_ics=correct_ics,
+                  **kwargs)
     Psi_r = Psi_r + D2_val*S2r
     if order == 2:
         return Psi_r
     # 3rd order estimate of Psi_r:
     D3a_val = -(1/3)*(Omz**n3a)*D1_val**3
     D3b_val = (10/21)*(Omz**n3b)*D1_val**3
-    S3ar = -(rval/(81*D10**3))*Delta_r**3
-    S3br = - (2*rval/(27*D10**3))*Delta_r**3
+    S3ar, S3br = get_S3r(Delta_r,rval,Om,order=order,**kwargs)
     Psi_r = Psi_r + D3a_val*S3ar + D3b_val*S3br
     return Psi_r
 
@@ -634,15 +759,16 @@ def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
         rval = r
     # 1st order estimate of v_r:
     f1 = Omz**nf1
-    S1r = get_S1r(Delta_r,rval,order,z,Om,n2,n3a,n3b,correct_ics=correct_ics,
-                  **kwargs)
+    S1r = get_S1r(Delta_r,rval,Om,order=order,n2=n2,n3a=n3a,n3b=n3b,
+                  correct_ics=correct_ics,**kwargs)
     v_r = a*H*f1*D1_val*S1r
     if order == 1:
         return v_r
     # 2nd order estimate of v_r:
     D2_val = -(3/7)*(Omz**n2)*D1_val**2
     f2_val = 2*(Omz**nf2)
-    S2r = get_S2r(Delta_r,rval,order,z,Om,n2,correct_ics=correct_ics,**kwargs)
+    S2r = get_S2r(Delta_r,rval,Om,order=order,n2=n2,correct_ics=correct_ics,
+                  **kwargs)
     v_r = v_r + a*H*f2_val*D2_val*S2r
     if order == 2:
         return v_r
@@ -651,8 +777,7 @@ def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
     f3b = 3*(Omz**nf3b)
     D3a_val = -(1/3)*(Omz**n3a)*D1_val**3
     D3b_val = (10/21)*(Omz**n3b)*D1_val**3
-    S3ar = -(rval/81)*Delta_r**3
-    S3br = - (2*rval/27)*Delta_r**3
+    S3ar, S3br = get_S3r(Delta_r,rval,Om,order=order,**kwargs)
     v_r = (v_r + a*H*f3a*D3a_val*S3ar + a*H*f3b*D3b_val*S3br)
     return v_r
 
