@@ -501,11 +501,11 @@ def get_S1r(Delta_r,rval,order,z,Om,n2,n3a,n3b,correct_ics=True,**kwargs):
         if order >= 1:
             S1r = -rval*Delta_r/(3*D10)
         if order >= 2:
-            S1r = S1r - rval*(D20/D10**2 - 1)*Delta_r**2/9
+            S1r = S1r - rval*(D10**2 - D20)*Delta_r**2/(9*D10**3)
         if order >= 3:
-            S1r = S1r + (rval/27)*(2 + 2*D3b0/D10**3
-                                + D20*D3a0/(3*D10**2*D3b0) - D20**2/D10**4
-                                + 3*D20/D10**2
+            S1r = S1r - (rval/(27*D10**3))*(
+                               5*D20 - 5*D10**2/3 - 2*D20**2/D10**2
+                               - D3a0/(3*D10) - 2*D3b0/D10 - 2*D20*D3a0/D3b0
                                )*Delta_r**3
     else:
         S1r = -rval*Delta_r/(3*D10)
@@ -518,7 +518,7 @@ def get_S2r(Delta_r,rval,order,z,Om,n2,correct_ics=True,**kwargs):
         if order >= 2:
             S2r = rval*Delta_r**2/(9*D10**2)
         if order >= 3:
-            S2r = S2r + 2*rval*(D20 - D10**2)*Delta_r**3/(D10**4)
+            S2r = S2r + rval*(D10**2 - 2*D20)*Delta_r**3/(27*D10**4)
     else:
         S2r = (rval/9)*Delta_r**2
     return S2r
