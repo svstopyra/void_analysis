@@ -771,7 +771,8 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
                            filename=None,ur_range=None,ur_ratio=True,Delta_r=None,
                            ylabel="$u_r/r [h\\mathrm{kms}^{-1}\\mathrm{Mpc}^{-1}]$",
                            xlabel="$r/r_{\\mathrm{eff}}$",velocity=False,
-                           normalised=True,fixed_delta=True,correct_ics=True):
+                           treat_2lpt_separately=True,show_error_estimates=False,
+                           **kwargs):
     if ax is None:
         fig, ax = plt.subplots()
     #pre_factor = -f_lcdm(z_void,Om_fid)*Hz(z_void,Om_fid)/(3*(1 + z_void))
@@ -780,44 +781,43 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
     #f1 = f_lcdm(z_void,Om_fid)
     #D2_factor = (1.0/7.0)*f_lcdm(z_void,Om_fid,gamma=-1.0/143.0)
     radial_fraction = (not velocity)
+    Delta_val = Delta_r if Delta_r is not None else Delta
+    Psir_ratio_1 = spherical_lpt_displacement(1.0,Delta_val,z=z_void,Om=Om,
+                                            fixed_delta=True,order=1)
+    Psir_ratio_2 = spherical_lpt_displacement(1.0,Delta_val,z=z_void,Om=Om,
+                                            fixed_delta=True,order=2)
+    Psir_ratio_3 = spherical_lpt_displacement(1.0,Delta_val,z=z_void,Om=Om,
+                                            fixed_delta=True,order=3)
+    # 2LPT is a special case:
+    kwargs2 = dict(kwargs)
+    if treat_2lpt_separately:
+        kwargs2['correct_ics'] = False
     if Delta_r is not None:
         u_pred_3lpt = spherical_lpt_velocity(rbin_centres,Delta_r,order=3,
                                              Om=Om_fid,
                                              radial_fraction=radial_fraction,
-                                             fixed_delta=fixed_delta,
-                                             normalised=normalised,
-                                             correct_ics=correct_ics)
+                                             **kwargs)
         u_pred_2lpt = spherical_lpt_velocity(rbin_centres,Delta_r,order=2,
                                              Om=Om_fid,
                                              radial_fraction=radial_fraction,
-                                             fixed_delta=fixed_delta,
-                                             normalised=normalised,
-                                             correct_ics=correct_ics)
+                                             **kwargs2)
         u_pred_1lpt = spherical_lpt_velocity(rbin_centres,Delta_r,order=1,
                                              Om=Om_fid,
                                              radial_fraction=radial_fraction,
-                                             fixed_delta=fixed_delta,
-                                             normalised=normalised,
-                                             correct_ics=correct_ics)
+                                             **kwargs)
     else:
         u_pred_3lpt = spherical_lpt_velocity(rbin_centres,Delta,order=3,
                                              Om=Om_fid,
                                              radial_fraction=radial_fraction,
-                                             fixed_delta=fixed_delta,
-                                             normalised=normalised,
-                                             correct_ics=correct_ics)
+                                             **kwargs)
         u_pred_2lpt = spherical_lpt_velocity(rbin_centres,Delta,order=2,
                                              Om=Om_fid,
                                              radial_fraction=radial_fraction,
-                                             fixed_delta=fixed_delta,
-                                             normalised=normalised,
-                                             correct_ics=correct_ics)
+                                             **kwargs2)
         u_pred_1lpt = spherical_lpt_velocity(rbin_centres,Delta,order=1,
                                              Om=Om_fid,
                                              radial_fraction=radial_fraction,
-                                             fixed_delta=fixed_delta,
-                                             normalised=normalised,
-                                             correct_ics=correct_ics)
+                                             **kwargs)
     if ur_ratio:
         if ur_range is not None:
             ax.fill_between(rbin_centres,ur_range[0],ur_range[1],
@@ -852,6 +852,20 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
         ax.plot(rbin_centres,u_pred_3lpt*rbin_centres,linestyle=":",
                  label="3LPT Model",color=seabornColormap[3],
         )
+    if show_error_estimates:
+        if ur_ratio:
+            factor = 1
+        else:
+            factor = rbin_centres
+        ax.fill_between(rbin_centres,u_pred_1lpt*(1 - Psir_ratio_1)*factor,
+                        u_pred_1lpt*(1 + Psir_ratio_1)*factor,alpha=0.5,
+                        color=seabornColormap[1],label="Expected 2LPT corrections")
+        ax.fill_between(rbin_centres,u_pred_2lpt*(1 - Psir_ratio_2**2)*factor,
+                        u_pred_2lpt*(1 + Psir_ratio_2**2)*factor,alpha=0.5,
+                        color=seabornColormap[2],label="Expected 3LPT corrections")
+        ax.fill_between(rbin_centres,u_pred_3lpt*(1 - Psir_ratio_3**3)*factor,
+                        u_pred_3lpt*(1 + Psir_ratio_3**3)*factor,alpha=0.5,
+                        color=seabornColormap[3],label="Expected 4LPT corrections")
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     #plt.yscale("log")
@@ -865,15 +879,50 @@ plot_velocity_profiles(rbin_centres,u_mean,Delta_mean,
                        filename = figuresFolder + "u_profiles_average.pdf",
                        ur_range=np.vstack([u_mean-u_error,u_mean + u_error]),
                        ylabel="$u_r [\\mathrm{kms}^{-1}]$",velocity=True,
-                       Delta_r = None)
+                       Delta_r = None,normalised=True,correct_ics=True,
+                       fixed_delta=True,perturbative_ics=False,
+                       use_linear_on_fail=False,treat_2lpt_separately=False,
+                       show_error_estimates=True)
 plt.show()
 
 
 plt.clf()
 plot_velocity_profiles(rbin_centres,ur_mean,Delta_mean,
                        filename = figuresFolder + "ur_profiles_average.pdf",
-                       ur_range=ur_range)
+                       ur_range=ur_range,normalised=True,correct_ics=True,
+                       fixed_delta=True,perturbative_ics=False,
+                       use_linear_on_fail=False,treat_2lpt_separately=False,
+                       show_error_estimates=True)
 plt.show()
+
+# Plot showing the expected error from 4th order corrections:
+Psir_ratio_1 = spherical_lpt_displacement(1.0,Delta_mean,z=0,Om=0.3111,
+                                        fixed_delta=True,order=1)
+Psir_ratio_2 = spherical_lpt_displacement(1.0,Delta_mean,z=0,Om=0.3111,
+                                        fixed_delta=True,order=2)
+Psir_ratio_3 = spherical_lpt_displacement(1.0,Delta_mean,z=0,Om=0.3111,
+                                        fixed_delta=True,order=3)
+
+D10 = 1.0
+n2 = -1/143
+D20 = D2_val = -(3/7)*(Om**n2)*D10**2
+Delta_min = -3/(4*(1 - D20))
+
+plt.clf()
+plt.title("Expected relative error from next order correction")
+plt.plot(rbin_centres,Psir_ratio_1,label="1LPT",color=seabornColormap[1])
+plt.plot(rbin_centres,Psir_ratio_2**2,label="2LPT",color=seabornColormap[2])
+plt.plot(rbin_centres,Psir_ratio_3**3,label="3LPT",color=seabornColormap[3])
+plt.plot(rbin_centres,-Delta_mean,label="$-\\Delta(r)$",color="k",
+         linestyle='--')
+plt.axhline(-Delta_min,linestyle=":",color="grey",label="2LPT density threshold")
+plt.xlabel('$r/r_{\\mathrm{eff}}$')
+plt.ylabel('Relative error')
+plt.yscale('log')
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "lpt_error_plot.pdf")
+plt.show()
+
 
 
 
