@@ -572,7 +572,7 @@ def get_initial_condition(Delta,order=1,Om=0.3,n2 = -1/143,n3a = -4/275,
         A1 = -3
         A2 = 3*(D10 - D20/D10)
         A0 = -Delta/D10
-        A3 = 3*D20 - 3*D10**2 - D3a0/D10 - 6*D3b0/D10
+        A3 = 3*D20 - D10**2 - D3a0/D10 - 3*D3b0/D10
         # Solve numerically:
         guess = -Delta/(3*D10)
         f = lambda u: A3*u**3 + A2*u**2 + A1*u
@@ -616,7 +616,7 @@ def get_S1r(Delta_r,rval,Om,order=1,n2 = -1/143,n3a = -4/275,n3b = -269/17875,
             # Apply relevant correction terms up to specified order:
             D20 = -(3/7)*(Om**n2)*D10**2
             D3a0 = -(1/3)*(Om**n3a)*D10**3
-            D3b0 = (10/21)*(Om**n3b)*D10**3
+            D3b0 = +(10/21)*(Om**n3b)*D10**3
             if order >= 1:
                 S1r = -rval*Delta_r/(3*D10)
             if order >= 2:
@@ -671,12 +671,15 @@ def get_S2r(Delta_r,rval,Om,n2 = -1/143,n3a = -4/275,n3b = -269/17875,order=2,
             # Solve for initial conditions (numerically if 3rd order):
             if S1r is None:
                 S1r = get_S1r(Delta_r,rval,Om,order=order,n2 = n2,n3a = n3a,
-                              n3b = n3b,correct_ics=True,
-                              perturbative_ics = False,**kwargs)
+                              n3b = n3b,correct_ics=correct_ics,
+                              perturbative_ics = perturbative_ics,**kwargs)
             S2r = ratio_where_finite(S1r**2,rval,undefined_value=0.0)
             if order == 3:
                 S2r = S2r + D10*ratio_where_finite(S1r**3,rval**2,
                                                    undefined_value=0.0)
+                #D20 = -(3/7)*(Om**n2)*D10**2
+                #Psir = D10*S1r + D20*S2r
+                #S2r = S2r/(1 - Psir/rval)
     else:
         S2r = (rval/9)*Delta_r**2
     return S2r
@@ -713,10 +716,10 @@ def get_S3r(Delta_r,rval,Om,order=3,correct_ics=True,perturbative_ics = False,
                           n3b = n3b,correct_ics=True,
                           perturbative_ics = False,**kwargs)
         S3ar = ratio_where_finite(S1r**3,3*rval**2,undefined_value=0.0)
-        S3br = ratio_where_finite(2*S1r**3,rval**2,undefined_value=0.0)
+        S3br = ratio_where_finite(S1r**3,rval**2,undefined_value=0.0)
     else:
         S3ar = -(rval/(81*D10**3))*Delta_r**3
-        S3br = - (2*rval/(27*D10**3))*Delta_r**3
+        S3br = - (rval/(27*D10**3))*Delta_r**3
     return S3ar, S3br
 
 def get_psi_n_r(Delta_r,rval,n,z=0,Om=0.3,order=None,n2 = -1/143,
@@ -796,22 +799,25 @@ def get_delta_lpt(Delta_r,z=0,Om=0.3,order=1,return_all=False,**kwargs):
         Psi_r_rat = spherical_lpt_displacement(1.0,Delta_r,order=order,
                                                fixed_delta=True,Om=Om,**kwargs)
         # Exact spherical result for the density field
-        return -3*(Psi_r_rat - Psi_r_rat**2 + Psi_r_rat**3)
+        return (-3*Psi_r_rat + 3*Psi_r_rat**2 - Psi_r_rat**3)
     else:
         # Displacement field corrections/r at each order:
         S1r = get_S1r(Delta_r,1.0,Om,order=order,**kwargs) # Precompute 
         Psi_r1 = get_psi_n_r(Delta_r,1.0,1,z=z,Om=Om,order=order,S1r=S1r,
                              **kwargs)
+        Delta_1 = -3*Psi_r1
+        if order == 1:
+            return Delta_1
         Psi_r2 = get_psi_n_r(Delta_r,1.0,2,z=z,Om=Om,order=order,S1r=S1r,
                              **kwargs)
+        Delta_2 = -3*Psi_r2 + 3*Psi_r1**2
+        if order == 2:
+            return Delta_1, Delta_2
         Psi_r2_un = get_psi_n_r(Delta_r,1.0,2,z=z,Om=Om,order=2,S1r=S1r,
                              **kwargs)
         Psi_r3 = get_psi_n_r(Delta_r,1.0,3,z=z,Om=Om,order=order,S1r=S1r,
                              **kwargs)
-        # Perturbative corrections, order by order to the density field:
-        Delta_1 = -3*Psi_r1
-        Delta_2 = -3*Psi_r2 + 3*Psi_r1**2
-        Delta_3 = -3*Psi_r3 + 6*Psi_r1*Psi_r2_un - 3*Psi_r1**3
+        Delta_3 = -3*Psi_r3 + 6*Psi_r1*Psi_r2_un - Psi_r1**3
         return Delta_1, Delta_2, Delta_3
 
 def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
@@ -854,7 +860,7 @@ def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
         rval = r
     Delta_r = Delta if fixed_delta else Delta(r)
     # 1st order estimate of Psi_r:
-    S1r = get_S1r(Delta_r,rval,Om,order=order,**kwargs) # Precompute 
+    S1r = get_S1r(Delta_r,rval,Om,order=order,correct_ics=correct_ics,**kwargs)
     Psi_r1 = get_psi_n_r(Delta_r,rval,1,order=order,n2=n2,n3a=n3a,n3b=n3b,
                          Om=Om,z=z,correct_ics=correct_ics,S1r=S1r,**kwargs)
     Psi_r = Psi_r1

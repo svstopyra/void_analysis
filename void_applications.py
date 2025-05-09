@@ -639,6 +639,84 @@ plt.legend()
 plt.savefig(figuresFolder + "ur_profile_plot.pdf")
 plt.show()
 
+
+# Plot of the Initial conditions polynomial:
+D10 = D1(0,Om,normalised=True)
+D2z = lambda Om: -(3/7)*D10**2*Om**(-1/143)
+D3az = lambda Om: -(1/3)*D10**3*Om**(-4/275)
+D3bz = lambda Om: (10/21)*D10**3*Om**(-269/17857)
+A3z = lambda Om: 3*D10*D2z(Om) - D3az(Om) - 3*D3bz(Om) - D10**3
+A2z = lambda Om: 3*(D10**2 - D2z(Om))
+A1z = -3*D10
+Om = 0.3111
+p3 = lambda u: A3z(Om)*u**3 + A2z(Om)*u**2 + A1z*u
+p2 = lambda u: A2z(Om)*u**2 + A1z*u
+p1 = lambda u: A1z*u
+# Minimum value of p2:
+p2min = p2(-A1z/(2*A2z(Om)))
+
+plt.clf()
+uvals = np.linspace(-1,1,1000)
+fig, ax = plt.subplots(figsize = (0.45*textwidth,0.45*textwidth))
+plt.axhline(-1.0,color="grey",linestyle=":")
+plt.axhline(p2min,color="grey",linestyle="-.",
+            label="$\\Delta_f = $" + ("%.2g" % p2min))
+plt.axhline(0.0,color="grey",linestyle=":")
+plt.plot(uvals,p1(uvals),color=seabornColormap[1],linestyle=":",label="$p_1(u)$")
+plt.plot(uvals,p2(uvals),color=seabornColormap[2],linestyle="--",label="$p_2(u)$")
+plt.plot(uvals,p3(uvals),color=seabornColormap[3],linestyle="-",label="$p_3(u)$")
+plt.xlabel("$u = S_{1r}/r$")
+plt.ylabel("$p_n(u), \Delta_f$")
+plt.ylim([-1.1,1.1])
+plt.xlim([-1,1])
+plt.legend(frameon=False,loc="upper right")
+#plt.tight_layout()
+plt.subplots_adjust(left=0.25,bottom=0.15,right=0.95,top=0.95)
+plt.savefig(figuresFolder + "pn_plot.pdf")
+plt.show()
+
+# Plot of the inverses:
+Delta_xrange = np.linspace(-1,0.0,1000)
+p1inv = get_initial_condition(Delta_xrange,order=1,Om=0.3111)
+p2inv = get_initial_condition(Delta_xrange,order=2,Om=0.3111)
+p3inv = get_initial_condition(Delta_xrange,order=3,Om=0.3111)
+
+plt.clf()
+plt.plot(Delta_xrange,p1inv,color=seabornColormap[1],linestyle=":",label="1LPT")
+plt.plot(Delta_xrange,p2inv,color=seabornColormap[2],linestyle=":",label="2LPT")
+plt.plot(Delta_xrange,p3inv,color=seabornColormap[3],linestyle=":",label="3LPT")
+plt.ylim([0,1])
+plt.xlim([-1,0])
+plt.xlabel('$\\Delta_f$')
+plt.ylabel('$u = S_{1r}/r$')
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "pn_inverse_plot.pdf")
+plt.show()
+
+# Plot of S1r:
+plt.clf()
+p1inv_r = get_initial_condition(Delta_mean,order=1,Om=0.3111)
+p2inv_r = get_initial_condition(Delta_mean,order=2,Om=0.3111)
+p3inv_r = get_initial_condition(Delta_mean,order=3,Om=0.3111)
+plt.plot(rbin_centres,p1inv_r,color=seabornColormap[1],linestyle=":",label="1LPT")
+plt.plot(rbin_centres,p2inv_r,color=seabornColormap[2],linestyle=":",label="2LPT")
+plt.plot(rbin_centres,p3inv_r,color=seabornColormap[3],linestyle=":",label="3LPT")
+plt.ylim([0,1])
+plt.xlim([0,3])
+plt.xlabel('$r/r_{\\mathrm{eff}}$')
+plt.ylabel('$u = S_{1r}/r$')
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "pn_inverse_r_plot.pdf")
+plt.show()
+
+
+
+
+
+
+
+
+
 # Average over multiple voids:
 from void_analysis.cosmology_inference import spherical_lpt_velocity
 
@@ -893,6 +971,65 @@ plot_velocity_profiles(rbin_centres,ur_mean,Delta_mean,
                        fixed_delta=True,perturbative_ics=False,
                        use_linear_on_fail=False,treat_2lpt_separately=False,
                        show_error_estimates=True)
+plt.show()
+
+
+# Density comparison:
+perturbative_consistency = False
+if perturbative_consistency:
+    Delta_1lpt = get_delta_lpt(Delta_mean,Om=0.3111,order=1,perturbative_ics=False,
+                               use_linear_on_fail=False,correct_ics=True,return_all=True)
+    Delta_2lpt = np.sum(get_delta_lpt(Delta_mean,Om=0.3111,order=2,perturbative_ics=False,
+                               use_linear_on_fail=False,correct_ics=True,return_all=True),0)
+    Delta_3lpt = np.sum(get_delta_lpt(Delta_mean,Om=0.3111,order=3,perturbative_ics=False,
+                               use_linear_on_fail=False,correct_ics=True,return_all=True),0)
+else:
+    Delta_1lpt = get_delta_lpt(Delta_mean,Om=0.3111,order=1,perturbative_ics=False,
+                               use_linear_on_fail=False,correct_ics=True)
+    Delta_2lpt = get_delta_lpt(Delta_mean,Om=0.3111,order=2,perturbative_ics=False,
+                               use_linear_on_fail=False,correct_ics=True)
+    Delta_3lpt = get_delta_lpt(Delta_mean,Om=0.3111,order=3,perturbative_ics=False,
+                               use_linear_on_fail=False,correct_ics=True)
+
+
+Psir_ratio_1 = spherical_lpt_displacement(1.0,Delta_mean,z=0,Om=0.3111,
+                                        fixed_delta=True,order=1,
+                                        perturbative_ics=False,
+                                        use_linear_on_fail=False,
+                                        correct_ics=True)
+Psir_ratio_2 = spherical_lpt_displacement(1.0,Delta_mean,z=0,Om=0.3111,
+                                        fixed_delta=True,order=2,
+                                        perturbative_ics=False,
+                                        use_linear_on_fail=False,
+                                        correct_ics=True)
+Psir_ratio_3 = spherical_lpt_displacement(1.0,Delta_mean,z=0,Om=0.3111,
+                                        fixed_delta=True,order=3,
+                                        perturbative_ics=False,
+                                        use_linear_on_fail=False,
+                                        correct_ics=True)
+
+plt.clf()
+plt.plot(rbin_centres,Delta_mean,color=seabornColormap[0],linestyle="-",
+         label="Simulation")
+plt.plot(rbin_centres,Delta_1lpt,color=seabornColormap[1],linestyle=":",
+         label="1LPT")
+plt.plot(rbin_centres,Delta_2lpt,color=seabornColormap[2],linestyle=":",
+         label="2LPT")
+plt.plot(rbin_centres,Delta_3lpt,color=seabornColormap[3],linestyle=":",
+         label="3LPT")
+plt.fill_between(rbin_centres,Delta_1lpt*(1 - Psir_ratio_1),
+                 Delta_1lpt*(1 + Psir_ratio_1),alpha=0.5,
+                 color=seabornColormap[1])
+plt.fill_between(rbin_centres,Delta_2lpt*(1 - Psir_ratio_2**2),
+                 Delta_2lpt*(1 + Psir_ratio_2**2),alpha=0.5,
+                 color=seabornColormap[2])
+plt.fill_between(rbin_centres,Delta_3lpt*(1 - Psir_ratio_3**3),
+                 Delta_3lpt*(1 + Psir_ratio_3**3),alpha=0.5,
+                 color=seabornColormap[3])
+plt.xlabel("$r/r_{\\mathrm{eff}}$")
+plt.ylabel("$\\Delta_f(r)$")
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "Delta_lpt_test.pdf")
 plt.show()
 
 # Plot showing the expected error from 4th order corrections:
