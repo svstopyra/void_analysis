@@ -652,27 +652,96 @@ Om = 0.3111
 p3 = lambda u: A3z(Om)*u**3 + A2z(Om)*u**2 + A1z*u
 p2 = lambda u: A2z(Om)*u**2 + A1z*u
 p1 = lambda u: A1z*u
+
+
+# EdS values:
+A1eds = -3*D10
+A2eds = 30*D10**2/7
+A3eds = -71*D10**3/21
+A4eds = 2272*D10**4/1617
+A5eds = -16635*D10**5/7007
+p5 = lambda u: A5eds*u**5 + A4eds*u**4 + A3eds*u**3 + A2eds*u**2 + A1eds*u
+p4 = lambda u: A4eds*u**4 + A3eds*u**3 + A2eds*u**2 + A1eds*u
+p3 = lambda u: A3eds*u**3 + A2eds*u**2 + A1eds*u
+p2 = lambda u: A2eds*u**2 + A1eds*u
+p1 = lambda u: A1eds*u
+p_exact = lambda u: -3*u + 3*u**2 - u**3
+p4p = lambda u: 4*A4eds*u**3 + 3*A3eds*u**2 + 2*A2eds*u + A1eds
+turning_point = scipy.optimize.fsolve(p4p,0.5)[0]
+delta_min4 = p4(turning_point)
+
+# Work out all the coefficients using fractions package, to avoid errors:
+from fractions import Fraction
+D1eds = Fraction(1,1)
+Gfactor = Fraction(2,3)
+power1 = Fraction(2,3)
+def deriv_factor(p):
+    return p**2 + p/3 - Fraction(2,3)
+D2eds = -Gfactor*D1eds**2/deriv_factor(2*power1)
+D3aeds = -2*Gfactor*(D1eds**3)/deriv_factor(3*power1)
+D3beds = -2*Gfactor*(D1eds**3*(D2eds/D1eds**2 - 1))/deriv_factor(3*power1)
+D4aeds = 2*Gfactor*D1eds*(2*D1eds**3 - D3aeds)/deriv_factor(4*power1)
+D4beds = 2*Gfactor*D1eds*(2*D1eds*D2eds - 2*D1eds**3 - D3beds)/deriv_factor(4*power1)
+D4ceds = Gfactor*(2*D1eds**2*D2eds - D2eds**2)/deriv_factor(4*power1)
+D4deds = Gfactor*D1eds**4/deriv_factor(4*power1)
+D5aeds = -2*Gfactor*D1eds*(4*D1eds**4 - 4*D1eds*D3aeds + D4aeds)/deriv_factor(5*power1)
+D5beds = -2*Gfactor*D1eds*(4*D1eds**2*D2eds - 4*D1eds**4 - 2*D1eds*D3beds + D4beds)/deriv_factor(5*power1)
+D5ceds = -2*Gfactor*D1eds*(2*D1eds**2*D2eds - D2eds**2 + D4ceds)/deriv_factor(5*power1)
+D5deds = -2*Gfactor*D1eds*(D1eds**4 + D4deds)/deriv_factor(5*power1)
+D5eeds = 2*Gfactor*(2*D1eds**3*D2eds - D3aeds*D2eds + D3aeds*D1eds**2)/deriv_factor(5*power1)
+D5feds = 2*Gfactor*(2*D1eds*D2eds**2 - 2*D1eds**3*D2eds - D3beds*D2eds + D3beds*D1eds**2)/deriv_factor(5*power1)
+
+# Values of psi:
+psir1 = lambda u: D1eds*u
+psir2 = lambda u: D1eds*u + D2eds*u**2
+psir3 = lambda u: psir2(u) + (D3aeds/3 + D3beds)*u**3
+psir4 = lambda u: psir3(u) + (D4aeds/3 + D4beds + D4ceds + D4deds)*u**4
+psir5 = lambda u: psir4(u) + (D5aeds/3 + D5beds + D5ceds + D5deds + D5eeds/3 + D5feds)*u**5
+Delta_f_func = lambda u :-3*u + 3*u**2 - u**3
+
+uvals = np.linspace(-1,1,1000)
+plt.clf()
+fig, ax = plt.subplots()
+plt.plot(uvals,Delta_f_func(psir1(uvals)),color=seabornColormap[1],linestyle="-",label="1LPT")
+plt.plot(uvals,Delta_f_func(psir2(uvals)),color=seabornColormap[2],linestyle="--",label="2LPT")
+plt.plot(uvals,Delta_f_func(psir3(uvals)),color=seabornColormap[3],linestyle="-",label="3LPT")
+plt.plot(uvals,Delta_f_func(psir4(uvals)),color=seabornColormap[4],linestyle="--",label="4LPT")
+plt.plot(uvals,Delta_f_func(psir5(uvals)),color=seabornColormap[5],linestyle="-",label="5LPT")
+plt.xlabel("$u = S_{1r}/r$")
+plt.ylabel("$\Delta_f$")
+plt.ylim([-1.1,1.1])
+plt.xlim([-1,1])
+plt.legend(frameon=False,loc="upper right")
+#plt.tight_layout()
+plt.subplots_adjust(left=0.25,bottom=0.15,right=0.95,top=0.95)
+plt.savefig(figuresFolder + "Deltaf_plot_all.pdf")
+plt.show()
+
+
 # Minimum value of p2:
 p2min = p2(-A1z/(2*A2z(Om)))
 
 plt.clf()
 uvals = np.linspace(-1,1,1000)
 fig, ax = plt.subplots(figsize = (0.45*textwidth,0.45*textwidth))
+plt.plot(uvals,p1(uvals),color=seabornColormap[1],linestyle="-",label="$p_1(u)$")
+plt.plot(uvals,p2(uvals),color=seabornColormap[2],linestyle="--",label="$p_2(u)$")
+plt.plot(uvals,p3(uvals),color=seabornColormap[3],linestyle="-",label="$p_3(u)$")
+plt.plot(uvals,p4(uvals),color=seabornColormap[4],linestyle="--",label="$p_4(u)$")
+plt.plot(uvals,p5(uvals),color=seabornColormap[6],linestyle="-",label="$p_5(u)$")
+#plt.plot(uvals,p_exact(uvals),color=seabornColormap[6],linestyle=":",label="$Exact, \\Psi_r/r$")
 plt.axhline(-1.0,color="grey",linestyle=":")
 plt.axhline(p2min,color="grey",linestyle="-.",
             label="$\\Delta_f = $" + ("%.2g" % p2min))
 plt.axhline(0.0,color="grey",linestyle=":")
-plt.plot(uvals,p1(uvals),color=seabornColormap[1],linestyle=":",label="$p_1(u)$")
-plt.plot(uvals,p2(uvals),color=seabornColormap[2],linestyle="--",label="$p_2(u)$")
-plt.plot(uvals,p3(uvals),color=seabornColormap[3],linestyle="-",label="$p_3(u)$")
 plt.xlabel("$u = S_{1r}/r$")
 plt.ylabel("$p_n(u), \Delta_f$")
 plt.ylim([-1.1,1.1])
 plt.xlim([-1,1])
-plt.legend(frameon=False,loc="upper right")
+plt.legend(frameon=False,loc="upper left")
 #plt.tight_layout()
 plt.subplots_adjust(left=0.25,bottom=0.15,right=0.95,top=0.95)
-plt.savefig(figuresFolder + "pn_plot.pdf")
+plt.savefig(figuresFolder + "pn_plot_all.pdf")
 plt.show()
 
 # Plot of the inverses:
