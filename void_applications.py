@@ -641,6 +641,7 @@ plt.show()
 
 
 # Plot of the Initial conditions polynomial:
+Om = 0.3111
 D10 = D1(0,Om,normalised=True)
 D2z = lambda Om: -(3/7)*D10**2*Om**(-1/143)
 D3az = lambda Om: -(1/3)*D10**3*Om**(-4/275)
@@ -648,7 +649,6 @@ D3bz = lambda Om: (10/21)*D10**3*Om**(-269/17857)
 A3z = lambda Om: 3*D10*D2z(Om) - D3az(Om) - 3*D3bz(Om) - D10**3
 A2z = lambda Om: 3*(D10**2 - D2z(Om))
 A1z = -3*D10
-Om = 0.3111
 p3 = lambda u: A3z(Om)*u**3 + A2z(Om)*u**2 + A1z*u
 p2 = lambda u: A2z(Om)*u**2 + A1z*u
 p1 = lambda u: A1z*u
@@ -659,7 +659,8 @@ A1eds = -3*D10
 A2eds = 30*D10**2/7
 A3eds = -71*D10**3/21
 A4eds = 2272*D10**4/1617
-A5eds = -16635*D10**5/7007
+#A5eds = -16635*D10**5/7007
+A5eds = -3*(D5aeds/3 + D5beds + D5ceds + D5deds + D5eeds/3 + D5feds) - 3*D2eds*(D3aeds/3 + D3beds) - 3*D1eds*(D4aeds/3 + D4beds + D4ceds + D4deds)
 p5 = lambda u: A5eds*u**5 + A4eds*u**4 + A3eds*u**3 + A2eds*u**2 + A1eds*u
 p4 = lambda u: A4eds*u**4 + A3eds*u**3 + A2eds*u**2 + A1eds*u
 p3 = lambda u: A3eds*u**3 + A2eds*u**2 + A1eds*u
@@ -677,6 +678,7 @@ Gfactor = Fraction(2,3)
 power1 = Fraction(2,3)
 def deriv_factor(p):
     return p**2 + p/3 - Fraction(2,3)
+
 D2eds = -Gfactor*D1eds**2/deriv_factor(2*power1)
 D3aeds = -2*Gfactor*(D1eds**3)/deriv_factor(3*power1)
 D3beds = -2*Gfactor*(D1eds**3*(D2eds/D1eds**2 - 1))/deriv_factor(3*power1)
@@ -729,7 +731,7 @@ plt.plot(uvals,p2(uvals),color=seabornColormap[2],linestyle="--",label="$p_2(u)$
 plt.plot(uvals,p3(uvals),color=seabornColormap[3],linestyle="-",label="$p_3(u)$")
 plt.plot(uvals,p4(uvals),color=seabornColormap[4],linestyle="--",label="$p_4(u)$")
 plt.plot(uvals,p5(uvals),color=seabornColormap[6],linestyle="-",label="$p_5(u)$")
-#plt.plot(uvals,p_exact(uvals),color=seabornColormap[6],linestyle=":",label="$Exact, \\Psi_r/r$")
+#plt.plot(uvals,p_exact(uvals),color=seabornColormap[7],linestyle=":",label="$Exact, \\Psi_r/r$")
 plt.axhline(-1.0,color="grey",linestyle=":")
 plt.axhline(p2min,color="grey",linestyle="-.",
             label="$\\Delta_f = $" + ("%.2g" % p2min))
@@ -935,11 +937,23 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
                                             fixed_delta=True,order=2)
     Psir_ratio_3 = spherical_lpt_displacement(1.0,Delta_val,z=z_void,Om=Om,
                                             fixed_delta=True,order=3)
+    Psir_ratio_4 = spherical_lpt_displacement(1.0,Delta_val,z=z_void,Om=Om,
+                                            fixed_delta=True,order=4)
+    Psir_ratio_5 = spherical_lpt_displacement(1.0,Delta_val,z=z_void,Om=Om,
+                                            fixed_delta=True,order=5)
     # 2LPT is a special case:
     kwargs2 = dict(kwargs)
     if treat_2lpt_separately:
         kwargs2['correct_ics'] = False
     if Delta_r is not None:
+        u_pred_5lpt = spherical_lpt_velocity(rbin_centres,Delta_r,order=5,
+                                             Om=Om_fid,
+                                             radial_fraction=radial_fraction,
+                                             **kwargs)
+        u_pred_4lpt = spherical_lpt_velocity(rbin_centres,Delta_r,order=4,
+                                             Om=Om_fid,
+                                             radial_fraction=radial_fraction,
+                                             **kwargs)
         u_pred_3lpt = spherical_lpt_velocity(rbin_centres,Delta_r,order=3,
                                              Om=Om_fid,
                                              radial_fraction=radial_fraction,
@@ -953,6 +967,14 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
                                              radial_fraction=radial_fraction,
                                              **kwargs)
     else:
+        u_pred_5lpt = spherical_lpt_velocity(rbin_centres,Delta,order=5,
+                                             Om=Om_fid,
+                                             radial_fraction=radial_fraction,
+                                             **kwargs)
+        u_pred_4lpt = spherical_lpt_velocity(rbin_centres,Delta,order=4,
+                                             Om=Om_fid,
+                                             radial_fraction=radial_fraction,
+                                             **kwargs)
         u_pred_3lpt = spherical_lpt_velocity(rbin_centres,Delta,order=3,
                                              Om=Om_fid,
                                              radial_fraction=radial_fraction,
@@ -982,6 +1004,12 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
         ax.plot(rbin_centres,u_pred_3lpt,linestyle=":",
                  label="3LPT Model",color=seabornColormap[3],
         )
+        ax.plot(rbin_centres,u_pred_4lpt,linestyle=":",
+                 label="4LPT Model",color=seabornColormap[4],
+        )
+        ax.plot(rbin_centres,u_pred_5lpt,linestyle=":",
+                 label="5LPT Model",color=seabornColormap[6],
+        )
     else:
         if ur_range is not None:
             ax.fill_between(rbin_centres,ur_range[0]*rbin_centres,ur_range[1]*rbin_centres,
@@ -999,6 +1027,12 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
         ax.plot(rbin_centres,u_pred_3lpt*rbin_centres,linestyle=":",
                  label="3LPT Model",color=seabornColormap[3],
         )
+        ax.plot(rbin_centres,u_pred_3lpt*rbin_centres,linestyle=":",
+                 label="4LPT Model",color=seabornColormap[4],
+        )
+        ax.plot(rbin_centres,u_pred_3lpt*rbin_centres,linestyle=":",
+                 label="5LPT Model",color=seabornColormap[6],
+        )
     if show_error_estimates:
         if ur_ratio:
             factor = 1
@@ -1013,6 +1047,12 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
         ax.fill_between(rbin_centres,u_pred_3lpt*(1 - Psir_ratio_3**3)*factor,
                         u_pred_3lpt*(1 + Psir_ratio_3**3)*factor,alpha=0.5,
                         color=seabornColormap[3],label="Expected 4LPT corrections")
+        ax.fill_between(rbin_centres,u_pred_4lpt*(1 - Psir_ratio_4**4)*factor,
+                        u_pred_4lpt*(1 + Psir_ratio_4**4)*factor,alpha=0.5,
+                        color=seabornColormap[4],label="Expected 5LPT corrections")
+        ax.fill_between(rbin_centres,u_pred_5lpt*(1 - Psir_ratio_5**5)*factor,
+                        u_pred_5lpt*(1 + Psir_ratio_5**5)*factor,alpha=0.5,
+                        color=seabornColormap[6],label="Expected 6LPT corrections")
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     #plt.yscale("log")

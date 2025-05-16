@@ -496,6 +496,7 @@ def get_profile_derivative(r,Delta,order,delta=None,deltap = None,deltapp=None,
 
 def get_D_coefficients(Om,order=1,n2 = -1/143,n3a = -4/275,
                        n3b = -269/17875,n4a = 0.0,n4b=0.0,n4c = 0.0,n4d = 0.0,
+                       n5a=0.0,n5b=0.0,n5c=0.0,n5d=0.0,n5e=0.0,n5f=0.0,
                        return_all = False,**kwargs):
     if order not in [1,2,3,4,5]:
         raise Exception("Perturbation order invalid or not implemented.")
@@ -514,7 +515,7 @@ def get_D_coefficients(Om,order=1,n2 = -1/143,n3a = -4/275,
         D3a0 = -(1/3)*(Om**n3a)*D10**3
         D3b0 = (10/21)*(Om**n3b)*D10**3
         if order == 3:
-            if return all:
+            if return_all:
                 return [D10, D20, D3a0, D3b0]
             else:
                 return [D3a0, D3b0]
@@ -537,8 +538,8 @@ def get_D_coefficients(Om,order=1,n2 = -1/143,n3a = -4/275,
         D4b0 = C4b0*D10**4*(Om**n4b)
         D4c0 = C4c0*D10**4*(Om**n4c)
         D4d0 = C4d0*D10**4*(Om**n4d)
-        if order == 3:
-            if return all:
+        if order == 4:
+            if return_all:
                 return [D10, D20, D3a0, D3b0, D4a0, D4b0, D4c0, D4d0]
             else:
                 return [D4a0, D4b0, D4c0, D4d0]
@@ -558,8 +559,8 @@ def get_D_coefficients(Om,order=1,n2 = -1/143,n3a = -4/275,
         D5b0 = C5b0*D10**5*(Om**n5b)
         D5c0 = C5c0*D10**5*(Om**n5c)
         D5d0 = C5d0*D10**5*(Om**n5d)
-        D5e0 = C5d0*D10**5*(Om**n5e)
-        D5f0 = C5d0*D10**5*(Om**n5f)
+        D5e0 = C5e0*D10**5*(Om**n5e)
+        D5f0 = C5f0*D10**5*(Om**n5f)
         if order == 5:
             if return_all:
                 return [D10, D20, D3a0, D3b0, D4a0, D4b0, D4c0, D4d0, D5a0, 
@@ -574,7 +575,7 @@ def get_ic_polynomial_coefficients(order,Om=0.3,n2 = -1/143,n3a = -4/275,
     coeffs = get_D_coefficients(
         Om,order=order,n2 = n2,n3a = n3a,n3b = n3b,return_all = True,**kwargs
     )
-    if order => 1:
+    if order >= 1:
         D10 = coeffs[0]
         A1 = -3
         if order == 1:
@@ -597,7 +598,7 @@ def get_ic_polynomial_coefficients(order,Om=0.3,n2 = -1/143,n3a = -4/275,
     if order >= 5:
         [D5a0, D5b0, D5c0, D5d0, D5e0, D5f0] = coeffs[8:14]
         A5 = (-D20*(D3a0 + 3*D3b0) - D10*(D4a0 + 3*D4b0 + 3*D4c0 + 3*D4d0)
-           - (D5a0 + 3*D5b0 + 3*D5c0 + 3*D5d0 + D5e0 + 3*D5f0))
+           - (D5a0 + 3*D5b0 + 3*D5c0 + 3*D5d0 + D5e0 + 3*D5f0))/D10
         if order == 5:
             return A1, A2, A3, A4, A5
 
@@ -711,7 +712,7 @@ def get_initial_condition(Delta,order=1,Om=0.3,n2 = -1/143,n3a = -4/275,
         Delta_max = np.max(Delta)
         ulow = -Delta_max/(3*D10)
         count = 0
-        while f(ulow) < Delta_max:
+        while f(ulow) < Delta_max/D10:
             ulow *= 10
             count += 1
             if count > 10:
@@ -727,7 +728,7 @@ def get_initial_condition(Delta,order=1,Om=0.3,n2 = -1/143,n3a = -4/275,
                           "does not exist.")
                     return np.nan
             else:
-                return scipy.optimize.brentq(lambda u: f(u) + A0,ulow,uupp)[0]
+                return scipy.optimize.brentq(lambda u: f(u) + A0,ulow,uupp)
         else:
             have_no_solution = (Delta < delta_min4)
             solution = np.zeros(Delta.shape)
@@ -735,13 +736,13 @@ def get_initial_condition(Delta,order=1,Om=0.3,n2 = -1/143,n3a = -4/275,
                 solution[have_no_solution] = -Delta[have_no_solution]/(3*D10)
             else:
                 if np.any(have_no_solution):
-                    print("Warning: no 2LPT solution for some values of " + 
+                    print("Warning: no 4LPT solution for some values of " + 
                           "input. Returning nan for these values.")
                 solution[have_no_solution] = np.nan
             have_solution = np.logical_not(have_no_solution)
-            solution = np.array(
-                [scipy.optimize.brentq(lambda u: f(u) + C,ulow,uupp)[0]
-                for C in A0]
+            solution[have_solution] = np.array(
+                [scipy.optimize.brentq(lambda u: f(u) + C,ulow,uupp)
+                for C in A0[have_solution]]
             )
             return solution
     if order == 5:
@@ -757,12 +758,23 @@ def get_initial_condition(Delta,order=1,Om=0.3,n2 = -1/143,n3a = -4/275,
         f = lambda u: A5*u**5 + A4*u**4 + A3*u**3 + A2*u**2 + A1*u
         # Solve numerically:
         guess = -Delta/(3*D10)
+        # Figure out the correct bounds for the problem:
+        Delta_max = np.max(Delta)
+        ulow = -Delta_max/(3*D10)
+        uupp = 1
+        count = 0
+        while f(ulow) < Delta_max/D10:
+            ulow *= 10
+            count += 1
+            if count > 10:
+                raise Exception("Failing to find valid boundary for solver.")
+        # Solve:
         if np.isscalar(Delta):
-            solution = scipy.optimize.fsolve(lambda u: f(u) + A0,guess)[0]
+            solution = scipy.optimize.brentq(lambda u: f(u) + A0,ulow,uupp)
         else:
             solution = np.array(
-                [scipy.optimize.fsolve(lambda u: f(u) + C,x0)[0]
-                for C, x0 in zip(A0,guess)]
+                [scipy.optimize.brentq(lambda u: f(u) + C,ulow,uupp)
+                for C in A0]
             )
         return solution
 
@@ -1081,7 +1093,7 @@ def get_psi_n_r(Delta_r,rval,n,z=0,Om=0.3,order=None,n2 = -1/143,
             Delta_r,rval,Om,order=order,S1r=S1r,**kwargs
         )
         if n == 4:
-            return np.sum([D*S for D, S in zip(all_D4, all_S4)])
+            return np.sum([D*S for D, S in zip(all_D4, all_S4)],0)
     if n >=5:
         all_D5 = get_D_coefficients(
             Om,order=5,return_all = False,**kwargs
@@ -1090,7 +1102,7 @@ def get_psi_n_r(Delta_r,rval,n,z=0,Om=0.3,order=None,n2 = -1/143,
             Delta_r,rval,Om,order=order,S1r=S1r,**kwargs
         )
         if n == 5:
-            return np.sum([D*S for D, S in zip(all_D5, all_S5)])
+            return np.sum([D*S for D, S in zip(all_D5, all_S5)],0)
 
 def get_delta_lpt(Delta_r,z=0,Om=0.3,order=1,return_all=False,**kwargs):
     """
@@ -1282,7 +1294,7 @@ def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
     Returns:
         float or array: Radial component of the velocity field.
     """
-    if order not in [1,2,3]:
+    if order not in [1,2,3,4,5]:
         raise Exception("Perturbation order invalid or not implemented.")
     D1_val = D1(z,Om,**kwargs)
     Delta_r = Delta if fixed_delta else Delta(r)
@@ -1340,7 +1352,7 @@ def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
         Delta_r,rval,Om,order=order,S1r=S1r,**kwargs
     )
     # EdS approximation of linear growth rates for each term:
-    all_f5 = [5*f1 for _ in all_D4]
+    all_f5 = [5*f1 for _ in all_D5]
     v_r += a*H*np.sum([f*D*S for f, D, S in zip(all_f5,all_D5,all_S5)],0)
     return v_r
 
