@@ -63,7 +63,7 @@ def simplify_trace_terms(terms):
 def expand_matrix_power(Psi_list, power=2, max_order=None):
     from itertools import product
     terms = []
-    indices = list(range(1, len(Psi_list) + 1))
+   indices = list(range(1, len(Psi_list) + 1))
     for idx_tuple in product(indices, repeat=power):
         eps_power = sum(idx_tuple)
         if max_order is not None and eps_power > max_order:
@@ -72,6 +72,25 @@ def expand_matrix_power(Psi_list, power=2, max_order=None):
         term = (epsilon ** eps_power) * Trace(sp.MatMul(*mats, evaluate=False))
         terms.append((eps_power, term))
     return terms
+
+def expand_matrix_power_general(matrix_order_map, power=2, max_order=None):
+    """
+    Generalized matrix power expansion.
+    - matrix_order_map: dict {MatrixSymbol: order in ε}
+    - power: number of matrices in product (e.g. 2 for Tr(AB))
+    - Returns: list of (ε-order, Trace(...))
+    """
+    from itertools import product
+    symbols = list(matrix_order_map.keys())
+    terms = []
+    for combo in product(symbols, repeat=power):
+        eps_order = sum(matrix_order_map[M] for M in combo)
+        if max_order is not None and eps_order > max_order:
+            continue
+        expr = Trace(sp.MatMul(*combo, evaluate=False))
+        terms.append((eps_order, epsilon**eps_order * expr))
+    return terms
+
 
 def simplify_matrix_powers(trace_expr):
     """Replace repeated products like A*A with A**2 inside Trace."""
@@ -126,6 +145,10 @@ for power in [2, 3]:
 def expand_trace_series(Psi_list, trace_power, max_order):
     """Returns list of (order, Trace(...)) for Tr(Psi^trace_power)"""
     raw_terms = expand_matrix_power(Psi_list, power=trace_power, max_order=max_order)
+    return simplify_trace_terms(raw_terms)
+
+def expand_trace_series_general(matrix_order_map, trace_power, max_order):
+    raw_terms = expand_matrix_power_general(matrix_order_map, trace_power, max_order)
     return simplify_trace_terms(raw_terms)
 
 def combine_trace_products(trace1, trace2, max_order):
@@ -489,51 +512,197 @@ display_result(result,split=True)
 import sympy as sp
 from collections import defaultdict
 
-# Setup
-epsilon = sp.symbols('epsilon')
-x, y, z = sp.symbols('x y z')
-coords = [x, y, z]
+#def trace_of_cof_times_B(A, B):
+#    return (1/2) * (Trace(A)**2 - Trace(A @ A)) * Trace(B) - Trace(A) * Trace(A @ B) + Trace(A @ A @ B)
+
+def trace_of_cof_times_B(A, B):
+    """
+    Compute Tr[cof(A) · B] using Cayley–Hamilton identity:
+    Tr[cof(A) · B] = ½(Tr(A)^2 - Tr(A²)) Tr(B) - Tr(A) Tr(A B) + Tr(A² B)
+    
+    A and B should be symbolic matrix expressions (not summed yet).
+    Returns: symbolic expression involving only Trace(Mul(...)) terms
+    """
+    A_tr = Trace(A)
+    A_sq = sp.MatMul(A, A, evaluate=False)
+    AB = sp.MatMul(A, B, evaluate=False)
+    A2B = sp.MatMul(A_sq, B, evaluate=False)
+    # Structure: don't square Trace(A), multiply them as separate Tr(A) * Tr(A)
+    A_tr_squared = sp.Mul(A_tr, A_tr, evaluate=False)
+    term1 = sp.Mul(1/2, sp.Add(A_tr_squared, sp.Mul(-1, Trace(A_sq)), evaluate=False), Trace(B), evaluate=False)
+    term2 = sp.Mul(-1, A_tr, Trace(AB), evaluate=False)
+    term3 = Trace(A2B)
+    return sp.Add(term1, term2, term3, evaluate=False)
+
+import sympy as sp
+from sympy import symbols, MatrixSymbol, Trace, MatMul, simplify, latex
+from collections import defaultdict
+from itertools import product
+import jupyprint as jp
+
+# --- Setup
+epsilon = symbols('epsilon')
 d = 3
-N = 5  # Maximum perturbation order
+N = 5  # Max order
 
-# Step 1: Define Psi^(n) matrices with function entries
-Psi_orders = []
-for n in range(1, N + 1):
-    Psi_n = sp.Matrix(d, d, lambda i, j: sp.Function(f"psi{n}_{i}{j}")(*coords))
-    Psi_orders.append(Psi_n)
+# Psi components
+Psi_n = [MatrixSymbol(f"Psi{n}", d, d) for n in range(1, N+1)]
+D2_Psi_n = [MatrixSymbol(f"D2_Psi{n}", d, d) for n in range(1, N+1)]  # Laplacian-like terms (symbolic)
 
-# Step 2: Construct full Psi gradient and F = I + grad Psi
-Psi_total = sum((epsilon**n * Psi_orders[n - 1] for n in range(1, N + 1)), start=sp.zeros(d, d))
-F = sp.eye(d) + Psi_total
+# Full symbolic fields
+Psi_full = sum(((epsilon**(n+1)) * Psi_n[n] for n in range(N)),start=sp.ZeroMatrix(3, 3),evaluate=False)
+D2_Psi_full = sum(((epsilon**(n+1)) * D2_Psi_n[n] for n in range(N)),start=sp.ZeroMatrix(3, 3),evaluate=False)
 
-# Step 3: Compute cofactor matrix: cof(F) = adj(F).T
-C = F.adjugate().T  # Note: adjugate is cof(F)^T
+# --- Define the trace identity:
+#def trace_of_cof_times_B(A, B):
+#    """Implements Tr[cof(A) · B] using Cayley–Hamilton / Newton identity"""
+#    A2 = MatMul(A, A, evaluate=False)
+#    AB = MatMul(A, B, evaluate=False)
+#    AAB = MatMul(A2, B, evaluate=False)
+#    return (1/2)*(Trace(A)**2 - Trace(A2))*Trace(B) - Trace(A)*Trace(AB) + Trace(AAB)
 
-# Step 4: Expand and collect by powers of epsilon
-def expand_cofactor_by_order(C, max_order=5):
-    collected = defaultdict(lambda: sp.zeros(d, d))
-    for i in range(d):
-        for j in range(d):
-            expanded = sp.expand(C[i, j])
-            grouped = sp.collect(expanded, epsilon, evaluate=False)
-            for key, val in grouped.items():
-                if key == 1:
-                    order = 0
-                elif isinstance(key, sp.Pow) and key.base == epsilon:
-                    order = int(key.exp)
-                elif key == epsilon:
-                    order = 1
-                else:
+
+
+from collections import defaultdict
+
+def expand_trace_expression(expr, matrix_order_map, max_order=5):
+    """Expands a symbolic trace expression in powers of epsilon using Psi = sum ε^n Psi⁽ⁿ⁾"""
+    trace_cache = {}
+    def expand_single_trace(trace_expr):
+        arg = trace_expr.args[0]
+        # If argument is a MatrixSymbol, treat as-is
+        if isinstance(arg, sp.MatrixSymbol):
+            order = matrix_order_map.get(arg, 0)
+            return {order: epsilon**order * trace_expr}
+        # If it's a MatMul or composite, recursively expand
+        elif isinstance(arg, sp.MatMul):
+            factors = arg.args
+            parts = [recursive_expand(f) for f in factors]
+            result = defaultdict(lambda: 0)
+            for combo in product(*[p.items() for p in parts]):
+                order = sum(o for o, _ in combo)
+                if order > max_order:
                     continue
+                mul = sp.MatMul(*[v for _, v in combo], evaluate=False)
+                result[order] += epsilon**order * Trace(mul)
+            return dict(result)
+        # If it's a sum or unknown expression, fallback (not ideal)
+        else:
+            return {0: trace_expr}
+    def recursive_expand(term):
+        if isinstance(term, Trace):
+            return expand_single_trace(term)
+        elif isinstance(term, sp.Number):
+            return {0: term}
+        elif isinstance(term, sp.Symbol):
+            return {0: term}
+        elif isinstance(term, sp.Add):
+            result = defaultdict(lambda: 0)
+            for arg in term.args:
+                for k, v in recursive_expand(arg).items():
+                    result[k] += v
+            return dict(result)
+        elif isinstance(term, sp.Mul):
+            parts = [recursive_expand(arg) for arg in term.args]
+            result = defaultdict(lambda: 0)
+            for combo in product(*[list(p.items()) for p in parts]):
+                order = sum(o for o, _ in combo)
                 if order <= max_order:
-                    collected[order][i, j] += val
-    return dict(sorted(collected.items()))
+                    value = sp.Mul(*[v for _, v in combo])
+                    result[order] += value
+            return dict(result)
+        elif isinstance(term, sp.Pow):
+            base, exp = term.args
+            if isinstance(base, Trace) and isinstance(exp, sp.Integer) and exp.is_positive:
+                repeated = sp.Mul.fromiter([base] * exp, evaluate=False)
+                return recursive_expand(repeated)
+            else:
+                return {0: term}
+        else:
+            return {0: term}
+    expr = sp.sympify(expr).expand()
+    additive_terms = expr.as_ordered_terms()
+    total = defaultdict(lambda: 0)
+    for term in additive_terms:
+        for k, v in recursive_expand(term).items():
+            total[k] += v
+    return {k: sp.simplify(v) for k, v in sorted(total.items()) if k <= max_order}
 
-cofactors_by_order = expand_cofactor_by_order(C, max_order=N)
+def expand_trace_additivity(expr):
+    """
+    Expand arguments inside Trace(...) using linearity and distributivity.
+    Ensures all Trace(...) wrap simple matrix products.
+    """
+    def expand_trace(trace_expr):
+        arg = trace_expr.args[0]
+        expanded_arg = sp.expand(arg, deep=True, multinomial=True)
+        if isinstance(expanded_arg, sp.Add):
+            return sp.Add(*[Trace(term) for term in expanded_arg.args])
+        else:
+            return Trace(expanded_arg)
+    if not hasattr(expr, 'args') or isinstance(expr, (sp.Number, sp.Symbol)):
+        return expr
+    if isinstance(expr, Trace):
+        return expand_trace(expr)
+    return expr.func(*[expand_trace_additivity(arg) for arg in expr.args])
 
-for order, matrix in cofactors_by_order.items():
-    print(f"\\text{{Cofactor matrix }} C^{{({order})}} ~ \\mathcal{{O}}(\\epsilon^{order}):\n" + sp.latex(matrix) + "\\\\")
+def extract_epsilon_order(expr):
+    """
+    Given a Mul like ε^n * A * ε^m * B, extract total ε-order and the symbolic product.
+    Returns: (epsilon_order, matrix_expr)
+    """
+    if not isinstance(expr, sp.MatMul):
+        return (0, expr)
+    eps_order = 0
+    non_eps_factors = []
+    for factor in expr.args:
+        if factor.has(epsilon):
+            coeff = factor.as_coeff_exponent(epsilon)
+            if coeff[0] == 1 and coeff[1] != 0:
+                eps_order += coeff[1]
+            else:
+                non_eps_factors.append(factor)
+        else:
+            non_eps_factors.append(factor)
+    return (int(eps_order), sp.MatMul(*non_eps_factors, evaluate=False))
 
+def factor_epsilon_in_traces(expr):
+    """
+    Replace Trace(epsilon^n * A * epsilon^m * B ...) with epsilon^k * Trace(A B ...)
+    """
+    if isinstance(expr, Trace):
+        arg = expr.args[0]
+        eps_order, matrix_expr = extract_epsilon_order(arg)
+        return epsilon**eps_order * Trace(matrix_expr)
+    if not hasattr(expr, 'args') or isinstance(expr, (sp.Number, sp.Symbol)):
+        return expr
+    return expr.func(*[factor_epsilon_in_traces(arg) for arg in expr.args])
+
+
+# Construct symbolic expression: Tr[cof(∇Ψ) · D2Ψ]
+cof_trace_expr = trace_of_cof_times_B(Psi_full, D2_Psi_full)
+additive_expanded = expand_trace_additivity(cof_trace_expr)
+fully_expanded = sp.expand(additive_expanded, deep=True, multinomial=True)
+factored = factor_epsilon_in_traces(fully_expanded)
+result = expand_trace_expression(factored, matrix_order_map, max_order=5)
+
+# Expand it
+#all_components = Psi_n + D2_Psi_n
+
+# Build matrix-order map
+matrix_order_map = {Psi_n[i]: i+1 for i in range(N)}
+matrix_order_map.update({D2_Psi_n[i]: i+1 for i in range(N)})
+
+# Use general version
+#expanded = expand_trace_expression(expr, matrix_order_map, max_order=N)
+
+
+
+expanded = expand_trace_expression(fully_expanded_expr, matrix_order_map, max_order=N)
+
+# Display each order
+for order, term in expanded.items():
+    print(f"\\mathcal{{O}}(\\epsilon^{order}):\n" + latex(term) + "\\\\")
 
 
 
