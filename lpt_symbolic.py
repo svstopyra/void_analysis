@@ -545,6 +545,13 @@ for order, term in expanded.items():
 # Patch: epsilon defined inside the function
 # Updated version of epsilon_expand that correctly tracks epsilon powers in full terms
 
+import sympy as sp
+from sympy import MatrixSymbol, Trace
+from collections import defaultdict
+from itertools import product
+from functools import reduce
+import operator
+
 def epsilon_expand_with_true_orders(expr, expand_symbols, max_order=5, start_orders=None):
     from sympy import MatrixSymbol, Symbol, expand, Trace
     from functools import reduce
@@ -606,7 +613,7 @@ def epsilon_expand_with_true_orders(expr, expand_symbols, max_order=5, start_ord
     return dict(sorted(grouped.items()))
 
 def extract_scalars_from_traces(expr, scalars):
-    """Pull scalar factors (like λ or ε) outside of traces where possible."""
+    """Pull scalar factors like ε or λ outside trace expressions."""
     if isinstance(expr, Trace):
         arg = expr.args[0]
         if isinstance(arg, sp.Mul):
@@ -625,6 +632,133 @@ def extract_scalars_from_traces(expr, scalars):
         return sp.Mul(*[extract_scalars_from_traces(arg, scalars) for arg in expr.args], evaluate=False)
     return expr
 
+def multinomial_trace_expand(symbol_orders, structure, max_order=5):
+    """
+    Expand Tr(A^n B^m C^k ...) given structure = ["A", "A", "B", "B", "C", "C", "C"]
+    and a dictionary of series: {"A": [A1, A2, ...], "B": [B1, ...]}
+    Returns a dict {order: expression} for each ε^order term.
+    """
+    epsilon = sp.Symbol("epsilon")  # ensure epsilon is always defined
+    grouped = defaultdict(lambda: 0)
+    # Define index ranges for each element of the trace structure
+    index_ranges = [range(1, len(symbol_orders[sym]) + 1) for sym in structure]
+    for idx_combo in product(*index_ranges):
+        eps_power = sum(idx_combo)
+        if eps_power > max_order:
+            continue
+        matrices = [symbol_orders[sym][idx - 1] for sym, idx in zip(structure, idx_combo)]
+        trace_term = Trace(sp.MatMul(*matrices, evaluate=False))
+        grouped[eps_power] += epsilon**eps_power * trace_term
+    return dict(sorted(grouped.items()))
+
+
+# Universal dispatcher to expand any expression in epsilon, handling traces, products, sums
+def epsilon_expand(expr, expand_symbols, max_order=5, start_orders=None):
+    epsilon = sp.Symbol("epsilon")
+    if start_orders is None:
+        start_orders = {s: 1 for s in expand_symbols}
+    # Step 1: Create matrix series for each symbol
+    symbol_orders = {}
+    for name in expand_symbols:
+        start = start_orders.get(name, 1)
+        matrices = [MatrixSymbol(f"{name}{i}", 3, 3) for i in range(start, max_order + 1)]
+        symbol_orders[name] = matrices
+    def expand_recursive(term):
+        # Case: single trace of a product (e.g., Tr(A*A*B))
+        if isinstance(term, Trace):
+            inner = term.args[0]
+            if isinstance(inner, sp.MatMul):
+                structure = []
+                for arg in inner.args:
+                    if isinstance(arg, MatrixSymbol):
+                        for base_name, series in symbol_orders.items():
+                            if arg.name.startswith(base_name):
+                                structure.append(base_name)
+                                break
+                if structure:
+                    return multinomial_trace_expand(symbol_orders, structure, max_order=max_order)
+            elif isinstance(inner, MatrixSymbol):
+                return multinomial_trace_expand(symbol_orders, [inner.name[0]], max_order=max_order)
+            elif isinstance(inner, sp.Pow):
+                base = inner.base
+                exp = inner.exp
+                if isinstance(base, MatrixSymbol) and isinstance(exp, int):
+                    return multinomial_trace_expand(symbol_orders, [base.name[0]] * exp, max_order=max_order)
+            return {0: term}
+        # Case: Add
+        elif isinstance(term, sp.Add):
+            result = defaultdict(lambda: 0)
+            for arg in term.args:
+                sub = expand_recursive(arg)
+                for k, v in sub.items():
+                    result[k] += v
+            return dict(result)
+        # Case: Mul
+        elif isinstance(term, sp.Mul):
+            parts = [expand_recursive(arg) for arg in term.args]
+            result = defaultdict(lambda: 0)
+            for combo in product(*[list(p.items()) for p in parts]):
+                order = sum(o for o, _ in combo)
+                if order <= max_order:
+                    value = sp.Mul(*[v for _, v in combo])
+                    result[order] += value
+            return dict(result)
+        # Case: scalar or unknown
+        return {0: term}
+    # Run expansion
+    expanded = expand_recursive(sp.sympify(expr))
+    # Final scalar cleanup
+    return {
+        k: extract_scalars_from_traces(sp.simplify(v), scalars=[epsilon])
+        for k, v in sorted(expanded.items())
+    }
+
+# ---------------- Test All Cases ----------------
+# Reconstruct matrix symbols
+A_series = [MatrixSymbol(f"A{i}", 3, 3) for i in range(1, 5)]
+B_series = [MatrixSymbol(f"B{i}", 3, 3) for i in range(1, 5)]
+C_series = [MatrixSymbol(f"C{i}", 3, 3) for i in range(1, 5)]
+
+# Setup base symbols
+A, B, C = MatrixSymbol("A", 3, 3), MatrixSymbol("B", 3, 3), MatrixSymbol("C", 3, 3)
+lam = sp.Symbol("λ")
+
+# Test expressions
+tests = {
+    "Case 1: Tr(AB)": Trace(A * B),
+    "Case 2: Tr(A^2)": Trace(A * A),
+    "Case 3: Tr(A^2) + Tr(AB)": Trace(A * A) + Trace(A * B),
+    "Case 4: Tr(A^2 B)": Trace(A * A * B),
+    "Case 5: Tr(A) Tr(B)": Trace(A) * Trace(B),
+    "Case 6: Tr(A^2) Tr(AB)": Trace(A * A) * Trace(A * B),
+    "Case 7: Tr(BA)": Trace(B * A),
+    "Case 8: Tr(ABA)": Trace(A * B * A),
+    "Case 9: Tr(A)^2": Trace(A)**2,
+    "Case 10: 3/2 Tr(AB) − 5 Tr(A^2)": (3/2) * Trace(A * B) - 5 * Trace(A * A),
+    "Case 11: Tr(A+B)": Trace(A + B),
+    "Case 12: λ Tr(AB)": lam * Trace(A * B),
+    "Case 13: Tr(A^2 B^2 C^3)": Trace(A * A * B * B * C * C * C)
+}
+
+# Run expansions and display
+test_outputs = {}
+for name, expr in tests.items():
+    expanded = epsilon_expand(expr, expand_symbols=["A", "B", "C"], max_order=5)
+    test_outputs[name] = expanded
+
+# Display all results in a single DataFrame
+from pandas import DataFrame
+rows = []
+for test_name, result in test_outputs.items():
+    for order, val in result.items():
+        rows.append((test_name, f"ε^{order}", val))
+
+
+
+
+
+
+
 # Define scalar and matrices
 lam = sp.Symbol("λ")
 A = MatrixSymbol("A", 3, 3)
@@ -640,7 +774,25 @@ intermediate_result = epsilon_expand_with_true_orders(expr, expand_symbols=["A",
 final_result = {order: extract_scalars_from_traces(val, scalars=[lam, sp.Symbol("epsilon")])
                 for order, val in intermediate_result.items()}
 
+# Declare matrix symbols
+A_series = [MatrixSymbol(f"A{i}", 3, 3) for i in range(1, 5)]
+B_series = [MatrixSymbol(f"B{i}", 3, 3) for i in range(1, 5)]
+C_series = [MatrixSymbol(f"C{i}", 3, 3) for i in range(1, 5)]
 
+symbol_orders = {"A": A_series, "B": B_series, "C": C_series}
+structure = ["A", "A", "B", "B", "C", "C", "C"]
+
+result = multinomial_trace_expand(symbol_orders, structure, max_order=9)
+
+# Optional: clean up epsilon in traces
+epsilon = sp.Symbol("epsilon")
+cleaned = {
+    order: extract_scalars_from_traces(val, scalars=[epsilon])
+    for order, val in result.items()
+}
+
+for order, expr in cleaned.items():
+    print(f"Order ε^{order}: {expr}")
 
 
 
