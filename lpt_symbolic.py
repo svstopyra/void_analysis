@@ -543,94 +543,75 @@ for order, term in expanded.items():
 # More cohesive pipeline:
 
 # Patch: epsilon defined inside the function
-def epsilon_expand(expr, expand_symbols, max_order=3, start_orders=None):
+# Updated version of epsilon_expand that correctly tracks epsilon powers in full terms
+
+def epsilon_expand_with_true_orders(expr, expand_symbols, max_order=5, start_orders=None):
+    from sympy import MatrixSymbol, Symbol, expand, Trace
     from functools import reduce
-    epsilon = sp.Symbol('epsilon')  # Now safely defined internally
+    from collections import defaultdict
+    epsilon = Symbol('epsilon')
     if start_orders is None:
-        start_orders = {}
-    # Step 1: Create symbolic expansions
+        start_orders = {s: 1 for s in expand_symbols}
+    # Step 1: Expand each matrix symbol into its series
     symbol_map = {}
-    matrix_order_map = {}
+    name_to_order = {}
     for name in expand_symbols:
         start = start_orders.get(name, 1)
-        mats = [MatrixSymbol(f"{name}{i}", 3, 3) for i in range(start, max_order + 1)]
-        matrix_order_map[name] = mats
-        terms = [epsilon**(i + start - 1) * mats[i] for i in range(len(mats))]
-        expansion = reduce(lambda x, y: x + y, terms)
+        mats = []
+        for i in range(start, max_order + 1):
+            mat = MatrixSymbol(f"{name}{i}", 3, 3)
+            mats.append(epsilon**i * mat)
+            name_to_order[mat] = i
+        expansion = reduce(lambda x, y: x + y, mats)
         symbol_map[name] = expansion
-    # Step 2: Substitute
     substituted_expr = expr
-    for name, expanded in symbol_map.items():
+    for name, expansion in symbol_map.items():
         base = MatrixSymbol(name, 3, 3)
-        substituted_expr = substituted_expr.subs(base, expanded)
-    # Step 3: Expand and linearize
-    expanded_expr = sp.expand(substituted_expr, deep=True, multinomial=True)
-    # Step 4: Distribute traces
-    def expand_trace_additivity(expr):
+        substituted_expr = substituted_expr.subs(base, expansion)
+    # Step 2: Expand the full expression symbolically
+    expanded_expr = expand(substituted_expr, deep=True, multinomial=True)
+    # Step 3: Expand traces over sums
+    def distribute_trace(expr):
         if isinstance(expr, Trace):
-            arg = expr.args[0]
-            expanded_arg = sp.expand(arg, deep=True, multinomial=True)
-            if isinstance(expanded_arg, sp.Add):
-                return sp.Add(*[Trace(term) for term in expanded_arg.args])
-            else:
-                return Trace(expanded_arg)
-        elif not hasattr(expr, 'args') or isinstance(expr, (sp.Number, sp.Symbol)):
-            return expr
-        return expr.func(*[expand_trace_additivity(arg) for arg in expr.args])
-    additive_expr = expand_trace_additivity(expanded_expr)
-    # Step 5: Factor epsilon powers from Traces
-    def extract_epsilon_order(expr):
-        if not isinstance(expr, sp.MatMul):
-            if expr == epsilon:
-                return (1, sp.S.One)
-            elif isinstance(expr, sp.Pow) and expr.base == epsilon:
-                return (int(expr.exp), sp.S.One)
-            return (0, expr)
-        eps_order = 0
-        mat_factors = []
-        for factor in expr.args:
-            if factor == epsilon:
-                eps_order += 1
-            elif isinstance(factor, sp.Pow) and factor.base == epsilon:
-                eps_order += int(factor.exp)
-            else:
-                mat_factors.append(factor)
-        return eps_order, sp.MatMul(*mat_factors, evaluate=False)
-    def factor_epsilon_in_traces(expr):
-        if isinstance(expr, Trace):
-            arg = expr.args[0]
-            eps_order, mat_expr = extract_epsilon_order(arg)
-            return epsilon**eps_order * Trace(mat_expr)
-        elif not hasattr(expr, 'args') or isinstance(expr, (sp.Number, sp.Symbol)):
-            return expr
-        return expr.func(*[factor_epsilon_in_traces(arg) for arg in expr.args])
-    factored_expr = factor_epsilon_in_traces(additive_expr)
-    # Step 6: Group by epsilon power
+            inner = expand(expr.args[0], deep=True, multinomial=True)
+            if isinstance(inner, sp.Add):
+                return sp.Add(*[Trace(term) for term in inner.args])
+            return Trace(inner)
+        elif isinstance(expr, sp.Add):
+            return sp.Add(*[distribute_trace(arg) for arg in expr.args])
+        elif isinstance(expr, sp.Mul):
+            return sp.Mul(*[distribute_trace(arg) for arg in expr.args], evaluate=False)
+        return expr
+    additive_expr = distribute_trace(expanded_expr)
+    terms = additive_expr.args if isinstance(additive_expr, sp.Add) else [additive_expr]
+    # Step 4: Classify terms by symbolic epsilon order from matrix labels
+    def compute_true_order(term):
+        if isinstance(term, Trace):
+            return compute_true_order(term.args[0])
+        elif isinstance(term, sp.Mul):
+            return sum(compute_true_order(arg) for arg in term.args)
+        elif isinstance(term, sp.Add):
+            return max(compute_true_order(arg) for arg in term.args)
+        elif isinstance(term, sp.Pow) and isinstance(term.base, sp.MatrixSymbol):
+            base_order = name_to_order.get(term.base, 0)
+            return base_order * int(term.exp)
+        elif isinstance(term, sp.MatrixSymbol):
+            return name_to_order.get(term, 0)
+        return 0
     grouped = defaultdict(lambda: 0)
-    for term in sp.expand(factored_expr, deep=True, multinomial=True).as_ordered_terms():
-        coeff, eps = term.as_coeff_exponent(epsilon)
-        if eps <= max_order:
-            grouped[int(eps)] += coeff
+    for term in terms:
+        order = compute_true_order(term)
+        if order <= max_order:
+            grouped[order] += term
     return dict(sorted(grouped.items()))
 
-# Test it again with Tr(AB)
 A = MatrixSymbol("A", 3, 3)
 B = MatrixSymbol("B", 3, 3)
-test_expr = Trace(A @ B)
+expr = Trace(A @ B)
 
-test_result = epsilon_expand(test_expr, expand_symbols=["A", "B"], max_order=3)
+result = epsilon_expand_with_true_orders(expr, expand_symbols=["A", "B"], max_order=4)
 
-df = pd.DataFrame.from_dict(test_result, orient='index', columns=["Expanded Expression"])
-tools.display_dataframe_to_user("Epsilon Expansion of Tr(AB)", df)
+df = pd.DataFrame.from_dict(test_result, orient='index', columns=["Corrected ε-order Expansion"])
+tools.display_dataframe_to_user("Corrected Epsilon Expansion of Tr(AB)", df)
 
-
-# Re-test with Tr(AB)
-A = MatrixSymbol("A", 3, 3)
-B = MatrixSymbol("B", 3, 3)
-test_expr = Trace(A @ B)
-
-test_result = epsilon_expand(test_expr, expand_symbols=["A", "B"], max_order=3)
-
-df = pd.DataFrame.from_dict(test_result, orient='index', columns=["Expanded Expression"])
-tools.display_dataframe_to_user("Epsilon Expansion of Tr(AB)", df)
 
