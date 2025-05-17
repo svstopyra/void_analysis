@@ -183,172 +183,6 @@ for order, expr in combined.items():
 
 from itertools import product
 
-def expand_trace_expression(expr, Psi_components, max_order=6):
-    """
-    Expand a symbolic expression involving Trace(Psi), Trace(Psi**n), etc.,
-    where Psi = sum εⁿ Psi⁽ⁿ⁾, and return a dict mapping ε^order to simplified terms.
-    
-    Parameters:
-        expr            -- symbolic expression using Trace(MatrixSymbol(...))
-        Psi_components  -- list of Psi^(n) MatrixSymbols: [Psi1, Psi2, ...]
-        max_order       -- maximum ε^n order to retain
-    
-    Returns:
-        dict {order: simplified sympy.Expr}
-    """
-    epsilon = sp.symbols('epsilon')
-    from collections import defaultdict
-    def is_trace_power(term):
-        return isinstance(term, Trace)
-    def expand_term(term):
-        """Expand a single Trace or product of Traces."""
-        if isinstance(term, Trace):
-            # Example: Tr(Psi**2)
-            arg = term.args[0]
-            if isinstance(arg, sp.MatPow):
-                power = arg.exp
-            elif isinstance(arg, sp.MatMul):
-                power = len(arg.args)
-            elif isinstance(arg, sp.MatrixSymbol):
-                power = 1
-            else:
-                raise ValueError(f"Unsupported trace argument: {arg}")
-            return expand_trace_series(Psi_components, power, max_order)
-        elif isinstance(term, sp.Mul):
-            # Example: Tr(Psi^2) * Tr(Psi^3)
-            trace_factors = [expand_term(f) for f in term.args if isinstance(f, Trace)]
-            non_trace_factors = [f for f in term.args if not isinstance(f, Trace)]
-            # Start combining trace expansions
-            if len(trace_factors) == 2:
-                result = combine_trace_products(trace_factors[0], trace_factors[1], max_order)
-            else:
-                raise NotImplementedError("Only supports products of two traces currently.")
-            # Multiply non-trace factors in after
-            if non_trace_factors:
-                for order in result:
-                    result[order] = sp.Mul(sp.Mul(*non_trace_factors), result[order])
-            return result
-        elif isinstance(term, sp.Add):
-            result = defaultdict(lambda: 0)
-            for sub in term.args:
-                for k, v in expand_term(sub).items():
-                    result[k] += v
-            return dict(result)
-        else:
-            # Constant (not a Trace or Trace product)
-            return {0: term}
-    # Fully expand expression into sum of additive terms
-    total = defaultdict(lambda: 0)
-    expanded_expr = sp.expand(expr)
-    # Recursively expand each term
-    expanded_result = expand_term(expanded_expr)
-    # Merge results up to max_order
-    for k, v in expanded_result.items():
-        if k <= max_order:
-            total[k] += v
-    # Final simplification (optional)
-    return {k: sp.simplify(v) for k, v in sorted(total.items())}
-
-def expand_trace_expression(expr, Psi_components, max_order=6):
-    from collections import defaultdict
-    epsilon = sp.symbols('epsilon')
-    def expand_term(term):
-        if isinstance(term, Trace):
-            arg = term.args[0]
-            if isinstance(arg, sp.MatPow):
-                power = arg.exp
-            elif isinstance(arg, sp.MatMul):
-                power = len(arg.args)
-            elif isinstance(arg, sp.MatrixSymbol):
-                power = 1
-            else:
-                raise ValueError(f"Unsupported trace argument: {arg}")
-            return expand_trace_series(Psi_components, power, max_order)
-        elif isinstance(term, sp.Mul):
-            trace_factors = [expand_term(f) for f in term.args if isinstance(f, Trace)]
-            non_trace_factors = [f for f in term.args if not isinstance(f, Trace)]
-            # Start combining trace expansions (pairwise only for now)
-            if len(trace_factors) == 2:
-                result = combine_trace_products(trace_factors[0], trace_factors[1], max_order)
-            elif len(trace_factors) == 1:
-                result = trace_factors[0]
-            else:
-                raise NotImplementedError("More than 2 trace factors not supported yet.")
-            if non_trace_factors:
-                for k in result:
-                    result[k] = sp.Mul(*non_trace_factors) * result[k]
-            return result
-        elif isinstance(term, sp.Add):
-            result = defaultdict(lambda: 0)
-            for arg in term.args:
-                sub = expand_term(arg)
-                for k, v in sub.items():
-                    result[k] += v
-            return dict(result)
-        elif isinstance(term, sp.Number):
-            return {0: term}
-        else:
-            return {0: term}
-    # Expand the input expression symbolically
-    expr = sp.sympify(expr).expand()
-    result = expand_term(expr)
-    # Final cleanup
-    return {k: sp.simplify(v) for k, v in sorted(result.items()) if k <= max_order}
-
-
-def expand_trace_expression(expr, Psi_components, max_order=6):
-    from collections import defaultdict
-    from itertools import product
-    epsilon = sp.symbols('epsilon')
-    # Cache trace expansions
-    trace_cache = {}
-    def expand_single_trace(trace_expr):
-        arg = trace_expr.args[0]
-        if isinstance(arg, sp.MatPow):
-            power = arg.exp
-        elif isinstance(arg, sp.MatMul):
-            power = len(arg.args)
-        elif isinstance(arg, sp.MatrixSymbol):
-            power = 1
-        else:
-            raise ValueError(f"Unsupported trace argument: {arg}")
-        key = ('Trace', power)
-        if key in trace_cache:
-            return trace_cache[key]
-        terms = expand_trace_series(Psi_components, power, max_order)
-        trace_cache[key] = terms
-        return terms
-    def recursive_expand(expr):
-        if isinstance(expr, Trace):
-            return expand_single_trace(expr)
-        elif isinstance(expr, sp.Number):
-            return {0: expr}
-        elif isinstance(expr, sp.Symbol):
-            return {0: expr}
-        elif isinstance(expr, sp.Add):
-            result = defaultdict(lambda: 0)
-            for arg in expr.args:
-                sub = recursive_expand(arg)
-                for k, v in sub.items():
-                    result[k] += v
-            return dict(result)
-        elif isinstance(expr, sp.Mul):
-            parts = [recursive_expand(arg) for arg in expr.args]
-            result = defaultdict(lambda: 0)
-            for combo in product(*[list(p.items()) for p in parts]):
-                total_order = sum(o for o, _ in combo)
-                if total_order <= max_order:
-                    value = sp.Mul(*[v for _, v in combo])
-                    result[total_order] += value
-            return dict(result)
-        else:
-            return {0: expr}
-    # Expand everything structurally
-    expr = sp.sympify(expr).expand()
-    result = recursive_expand(expr)
-    # Simplify each term
-    return {k: sp.simplify(v) for k, v in sorted(result.items()) if k <= max_order}
-
 
 def expand_trace_expression(expr, Psi_components, max_order=6):
     """
@@ -705,4 +539,98 @@ for order, term in expanded.items():
     print(f"\\mathcal{{O}}(\\epsilon^{order}):\n" + latex(term) + "\\\\")
 
 
+#-------------------------------------------------------------------------
+# More cohesive pipeline:
+
+# Patch: epsilon defined inside the function
+def epsilon_expand(expr, expand_symbols, max_order=3, start_orders=None):
+    from functools import reduce
+    epsilon = sp.Symbol('epsilon')  # Now safely defined internally
+    if start_orders is None:
+        start_orders = {}
+    # Step 1: Create symbolic expansions
+    symbol_map = {}
+    matrix_order_map = {}
+    for name in expand_symbols:
+        start = start_orders.get(name, 1)
+        mats = [MatrixSymbol(f"{name}{i}", 3, 3) for i in range(start, max_order + 1)]
+        matrix_order_map[name] = mats
+        terms = [epsilon**(i + start - 1) * mats[i] for i in range(len(mats))]
+        expansion = reduce(lambda x, y: x + y, terms)
+        symbol_map[name] = expansion
+    # Step 2: Substitute
+    substituted_expr = expr
+    for name, expanded in symbol_map.items():
+        base = MatrixSymbol(name, 3, 3)
+        substituted_expr = substituted_expr.subs(base, expanded)
+    # Step 3: Expand and linearize
+    expanded_expr = sp.expand(substituted_expr, deep=True, multinomial=True)
+    # Step 4: Distribute traces
+    def expand_trace_additivity(expr):
+        if isinstance(expr, Trace):
+            arg = expr.args[0]
+            expanded_arg = sp.expand(arg, deep=True, multinomial=True)
+            if isinstance(expanded_arg, sp.Add):
+                return sp.Add(*[Trace(term) for term in expanded_arg.args])
+            else:
+                return Trace(expanded_arg)
+        elif not hasattr(expr, 'args') or isinstance(expr, (sp.Number, sp.Symbol)):
+            return expr
+        return expr.func(*[expand_trace_additivity(arg) for arg in expr.args])
+    additive_expr = expand_trace_additivity(expanded_expr)
+    # Step 5: Factor epsilon powers from Traces
+    def extract_epsilon_order(expr):
+        if not isinstance(expr, sp.MatMul):
+            if expr == epsilon:
+                return (1, sp.S.One)
+            elif isinstance(expr, sp.Pow) and expr.base == epsilon:
+                return (int(expr.exp), sp.S.One)
+            return (0, expr)
+        eps_order = 0
+        mat_factors = []
+        for factor in expr.args:
+            if factor == epsilon:
+                eps_order += 1
+            elif isinstance(factor, sp.Pow) and factor.base == epsilon:
+                eps_order += int(factor.exp)
+            else:
+                mat_factors.append(factor)
+        return eps_order, sp.MatMul(*mat_factors, evaluate=False)
+    def factor_epsilon_in_traces(expr):
+        if isinstance(expr, Trace):
+            arg = expr.args[0]
+            eps_order, mat_expr = extract_epsilon_order(arg)
+            return epsilon**eps_order * Trace(mat_expr)
+        elif not hasattr(expr, 'args') or isinstance(expr, (sp.Number, sp.Symbol)):
+            return expr
+        return expr.func(*[factor_epsilon_in_traces(arg) for arg in expr.args])
+    factored_expr = factor_epsilon_in_traces(additive_expr)
+    # Step 6: Group by epsilon power
+    grouped = defaultdict(lambda: 0)
+    for term in sp.expand(factored_expr, deep=True, multinomial=True).as_ordered_terms():
+        coeff, eps = term.as_coeff_exponent(epsilon)
+        if eps <= max_order:
+            grouped[int(eps)] += coeff
+    return dict(sorted(grouped.items()))
+
+# Test it again with Tr(AB)
+A = MatrixSymbol("A", 3, 3)
+B = MatrixSymbol("B", 3, 3)
+test_expr = Trace(A @ B)
+
+test_result = epsilon_expand(test_expr, expand_symbols=["A", "B"], max_order=3)
+
+df = pd.DataFrame.from_dict(test_result, orient='index', columns=["Expanded Expression"])
+tools.display_dataframe_to_user("Epsilon Expansion of Tr(AB)", df)
+
+
+# Re-test with Tr(AB)
+A = MatrixSymbol("A", 3, 3)
+B = MatrixSymbol("B", 3, 3)
+test_expr = Trace(A @ B)
+
+test_result = epsilon_expand(test_expr, expand_symbols=["A", "B"], max_order=3)
+
+df = pd.DataFrame.from_dict(test_result, orient='index', columns=["Expanded Expression"])
+tools.display_dataframe_to_user("Epsilon Expansion of Tr(AB)", df)
 
