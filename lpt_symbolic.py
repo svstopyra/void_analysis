@@ -605,6 +605,44 @@ def epsilon_expand_with_true_orders(expr, expand_symbols, max_order=5, start_ord
             grouped[order] += term
     return dict(sorted(grouped.items()))
 
+def extract_scalars_from_traces(expr, scalars):
+    """Pull scalar factors (like λ or ε) outside of traces where possible."""
+    if isinstance(expr, Trace):
+        arg = expr.args[0]
+        if isinstance(arg, sp.Mul):
+            scalar_factors = []
+            matrix_factors = []
+            for factor in arg.args:
+                if any(factor.has(s) for s in scalars):
+                    scalar_factors.append(factor)
+                else:
+                    matrix_factors.append(factor)
+            return sp.Mul(*scalar_factors) * Trace(sp.Mul(*matrix_factors, evaluate=False))
+        return expr
+    elif isinstance(expr, sp.Add):
+        return sp.Add(*[extract_scalars_from_traces(arg, scalars) for arg in expr.args])
+    elif isinstance(expr, sp.Mul):
+        return sp.Mul(*[extract_scalars_from_traces(arg, scalars) for arg in expr.args], evaluate=False)
+    return expr
+
+# Define scalar and matrices
+lam = sp.Symbol("λ")
+A = MatrixSymbol("A", 3, 3)
+B = MatrixSymbol("B", 3, 3)
+
+# Test expression
+expr = Trace(lam * A * B)
+
+# Run the epsilon expansion with scalar extraction
+intermediate_result = epsilon_expand_with_true_orders(expr, expand_symbols=["A", "B"], max_order=4)
+
+# Clean up traces by extracting λ and epsilon if needed
+final_result = {order: extract_scalars_from_traces(val, scalars=[lam, sp.Symbol("epsilon")])
+                for order, val in intermediate_result.items()}
+
+
+
+
 A = MatrixSymbol("A", 3, 3)
 B = MatrixSymbol("B", 3, 3)
 expr = Trace(A @ B)
