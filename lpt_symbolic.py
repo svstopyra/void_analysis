@@ -843,4 +843,322 @@ for label, result in all_results.items():
         flat_rows.append((label, order, expr))
 
 
+#------------------------------------------------------------------------
+# Modular structure:
 
+# Step 1: Function to expand a power series like (εA₁ + ε²A₂ + ...)^n using multinomial theorem
+def expand_single_matrix_power(symbol, order_list, power, max_order):
+    from itertools import product
+    from math import factorial
+    epsilon = sp.Symbol("epsilon")
+    terms = defaultdict(lambda: 0)
+    n = power
+    k = len(order_list)
+    for alpha in product(range(n + 1), repeat=k):
+        if sum(alpha) != n:
+            continue
+        # epsilon power is weighted by index * alpha_i
+        eps_power = sum((i + 1) * a for i, a in enumerate(alpha))
+        if eps_power > max_order:
+            continue
+        # multinomial coefficient
+        coeff = factorial(n)
+        for a in alpha:
+            coeff //= factorial(a)
+        # construct matrix product term
+        mat_factors = []
+        for i, a in enumerate(alpha):
+            mat_factors.extend([MatrixSymbol(f"{symbol}{i + 1}", 3, 3)] * a)
+        term = coeff * Trace(sp.MatMul(*mat_factors, evaluate=False))
+        terms[eps_power] += term
+    return dict(terms)
+
+# Step 2: Process a single Trace(A^n B^m ...) using known power expansions
+def process_trace_product_structure(symbol_structure, symbol_orders, max_order):
+    from itertools import product
+    # Expand each block separately
+    power_blocks = defaultdict(int)
+    for sym in symbol_structure:
+        power_blocks[sym] += 1
+    expanded_blocks = {}
+    for sym, pow in power_blocks.items():
+        expanded_blocks[sym] = expand_single_matrix_power(sym, symbol_orders[sym], pow, max_order)
+    # Multiply out all terms from each symbol's expansion
+    result = defaultdict(lambda: 0)
+    block_items = [list(v.items()) for v in expanded_blocks.values()]
+    for combo in product(*block_items):
+        total_order = sum(c[0] for c in combo)
+        if total_order > max_order:
+            continue
+        product_term = sp.Mul(*[c[1] for c in combo], evaluate=False)
+        result[total_order] += product_term
+    return result
+
+def expand_matrix_symbol(symbol)
+
+def process_term(factor,**kwargs):
+    if isinstance(factor,sp.MatrixSymbol):
+        return expand_matrix_symbol(factor,**kwargs)
+    elif isinstance(factor,sp.MatPow):
+        base, exp = factor.args
+        return expand_matrix_power(base,exp,**kwargs)
+    elif isinstance(factor,sp.MatMul):
+        # Recursively process each term in the product:
+        all_exprs = [process_factor(arg,**kwargs) for arg in factor.args]
+        expr = all_exprs[0]
+        for k in range(1,len(all_exprs)):
+            expr = product_expansion(expr,all_exprs[k],**kwargs)
+        return expr
+    elif isinstance(factor,sp.Add):
+        # Recursively process each term in the sum:
+        all_exprs = [process_factor(arg,**kwargs) for arg in factor.args]
+        expr = all_exprs[0]
+        for k in range(1,len(all_exprs)):
+            expr = expr + all_exprs[k]
+        return expr
+    else:
+        # If not sure what to do with it, just return it unchanged:
+        return factor
+
+def process_matrix_product(trace_expression):
+    if not isinstance(trace_expression, sp.MatMul):
+        raise Exception("Expression is not a matrix product.")
+    # Get the individual products:
+    product_list = trace_expression.args
+    expansion_list = []
+    for arg in product_list:
+        if isinstance(arg,sp.MatrixSymbol):
+            # Return an expression here for the expansion of the symbol:
+        elif isinstance(arg,sp.MatPow):
+            base, exp = arg.args
+
+# Step 3: Recursively split Trace(A + B) to Trace(A) + Trace(B)
+def split_linear_trace(expr):
+    if isinstance(expr, Trace):
+        arg = expr.args[0]
+        if isinstance(arg, sp.Add):
+            return sum(split_linear_trace(Trace(term)) for term in arg.args)
+        return expr
+    elif isinstance(expr, sp.Add):
+        return sp.Add(*[split_linear_trace(arg) for arg in expr.args])
+    else:
+        return expr
+
+def detect_structure_from_trace_argument(arg, symbol_orders):
+    """
+    Detect the matrix structure (like ['A', 'A', 'B']) from a Trace argument.
+    Returns a list of symbol names like ['A', 'A', 'B'] or None if not matched.
+    """
+    structure = []
+    def extract_symbol_name(msymbol):
+        for sym in symbol_orders:
+            if msymbol.name.startswith(sym):
+                return sym
+        return None
+    if isinstance(arg, sp.MatMul):
+        for term in arg.args:
+            if isinstance(term, MatrixSymbol):
+                sym = extract_symbol_name(term)
+                if sym:
+                    structure.append(sym)
+    elif isinstance(arg, sp.MatPow):
+        base, exp = arg.args
+        if isinstance(base, MatrixSymbol):
+            sym = extract_symbol_name(base)
+            if sym:
+                structure.extend([sym] * exp)
+    elif isinstance(arg, MatrixSymbol):
+        sym = extract_symbol_name(arg)
+        if sym:
+            structure.append(sym)
+    return structure if structure else None
+
+# Patch into expand_trace_argument to use the new architecture
+def expand_trace_argument(expr, symbol_orders, max_order):
+    if isinstance(expr, Trace):
+        arg = expr.args[0]
+        # split Trace(A + B) -> Trace(A) + Trace(B)
+        linear = split_linear_trace(expr)
+        if isinstance(linear, sp.Add):
+            result = defaultdict(lambda: 0)
+            for subtrace in linear.args:
+                structure = detect_structure_from_trace_argument(subtrace.args[0], symbol_orders)
+                if structure:
+                    expanded = process_trace_product_structure(structure, symbol_orders, max_order)
+                    for k, v in expanded.items():
+                        result[k] += v
+                else:
+                    result[0] += subtrace
+            return dict(result)
+        else:
+            structure = detect_structure_from_trace_argument(linear.args[0], symbol_orders)
+            if structure:
+                return process_trace_product_structure(structure, symbol_orders, max_order)
+            return {0: linear}
+    return {0: expr}
+
+
+# Test expand_single_matrix_power for A^2
+test1 = expand_single_matrix_power("A", [1, 2, 3], 2, max_order=5)
+
+# Test process_trace_product_structure for Tr(A^2 B)
+test2 = process_trace_product_structure(["A", "A", "B"], {"A": [1, 2, 3], "B": [1, 2, 3]}, max_order=5)
+
+# Test split_linear_trace for Trace(A + B)
+A = MatrixSymbol("A", 3, 3)
+B = MatrixSymbol("B", 3, 3)
+test3 = split_linear_trace(Trace(A + B))
+
+# Convert dictionary outputs to rows for display
+rows1 = [(f"A^2", f"ε^{k}", v) for k, v in test1.items()]
+rows2 = [(f"A^2B", f"ε^{k}", v) for k, v in test2.items()]
+rows3 = [("Tr(A + B)", "", test3)]
+
+
+
+# Rerun test suite using final decomposed architecture
+final_outputs_refactored = {}
+for name, expr in tests.items():
+    expanded = epsilon_expand(expr, expand_symbols=["A", "B", "C"], max_order=5)
+    final_outputs_refactored[name] = {
+        k: safe_simplify(v, scalars=[epsilon]) for k, v in expanded.items()
+    }
+
+# Display cleaned expansion
+rows = []
+for test_name, result in final_outputs_refactored.items():
+    for order, val in result.items():
+        rows.append((test_name, f"ε^{order}", val))
+
+
+
+# Generate the two test cases for detect_structure_from_trace_argument
+A1, A2, A3 = [MatrixSymbol(f"A{i}", 3, 3) for i in range(1, 4)]
+A = MatrixSymbol("A", 3, 3)
+
+epsilon = sp.Symbol("epsilon")
+
+# Case 1: Trace of A^2
+case1_expr = Trace(A**2)
+case1_structure = detect_structure_from_trace_argument(case1_expr.args[0], {"A": [1, 2, 3]})
+
+# Case 2: Trace((ε A1 + ε² A2 + ε³ A3)^2)
+A_series = epsilon*A1 + epsilon**2*A2 + epsilon**3*A3
+case2_expr = Trace(A_series**2)
+case2_structure = detect_structure_from_trace_argument(case2_expr.args[0], {"A": [1, 2, 3]})
+
+(case1_expr, case1_structure), (case2_expr, case2_structure)
+
+#-------------------------------------------------------------------
+
+# Starting from scratch:
+
+def add_expressions(expr_list):
+    if len(expr_list) == 0:
+        raise Exception("Cannot combine an empty list of expressions!")
+    expr = expr_list[0]
+    if len(expr_list) == 1:
+        return expr
+    else:
+        for k in range(1,len(expr_list)):
+            expr = expr + expr_list[k]
+        return expr
+
+def multiply_expressions(expr_list):
+    if len(expr_list) == 0:
+        return 1
+    expr = expr_list[0]
+    if len(expr_list) == 1:
+        return expr
+    else:
+        for k in range(1,len(expr_list)):
+            expr = expr * expr_list[k]
+        return expr
+
+def ismatrix_symbol(symbol):
+    if isinstance(symbol,sp.MatrixSymbol):
+        return True
+    if isinstance(symbol,sp.MatMul):
+        return True
+    if isinstance(symbol,sp.MatPow):
+        return True
+    if isinstance(symbol,sp.Add):
+        args = symbol.args
+        for arg in args:
+            if ismatrix_symbol(symbol):
+                return True
+        return False
+    return False
+            
+
+def isscalar_symbol(symbol):
+    return not ismatrix_symbol(symbol)
+
+# Apply trace linarity:
+def split_trace(trace_expr):
+    if not isinstance(trace_expr,sp.Trace):
+        raise Exception("Not a trace term!")
+    arg = trace_expr.args[0]
+    if isinstance(arg,sp.Add):
+        all_exprs = arg.args
+        # Apply linearity, recursively processing the trace on each term:
+        traced_exprs = [Trace(expr) for expr in all_exprs]
+        return add_expressions(traced_exprs)
+    else:
+        return trace_expr
+
+def extract_scalars(trace_expr):
+    if not isinstance(trace_expr,sp.Trace):
+        raise Exception("Not a trace term!")
+    arg = trace_expr.args[0]
+    # Make sure we are a pure product:
+    if not isinstance(arg,sp.MatMul):
+        # Do nothing, to avoid causing problems:
+        return trace_expr
+    scalars = [x for x in arg.args if isscalar_symbol(x)]
+    not_scalars = [x for x in arg.args if not isscalar_symbol(x)]
+    scalars_prod = multiply_expressions(scalars)
+    matrix_prod = multiply_expressions(not_scalars)
+    return scalars_prod*Trace(matrix_prod)
+    
+
+def process_trace(trace_expr,extract_scalars=True):
+    if not isinstance(trace_expr,sp.Trace):
+        raise Exception("Not a trace term!")
+    arg = trace_expr.args
+    # Apply linearity:
+    if isinstance(arg,sp.Add):
+        all_exprs = arg.args
+        # Apply linearity, recursively processing the trace on each term:
+        traced_exprs = [process_trace(Trace(expr)) for expr in all_exprs]
+        return add_expressions(traced_exprs)
+    else:
+        processed_args = process_term(arg)
+        return split_trace(Trace(processed_args))
+
+
+def expand_matrix_symbol(symbols,symbol_orders,max_order):
+    
+
+def process_term(term,symbol_orders):
+    if isinstance(term,sp.Trace):
+        return process_trace(term)
+    if isinstance(term,sp.MatrixSymbol):
+        return expand_matrix_symbol(term,**kwargs)
+    elif isinstance(term,sp.MatPow):
+        base, exp = term.args
+        return expand_matrix_power(base,exp,**kwargs)
+    elif isinstance(term,sp.MatMul):
+        # Recursively process each term in the product:
+        all_exprs = [process_factor(arg,**kwargs) for arg in term.args]
+        expr = all_exprs[0]
+        for k in range(1,len(all_exprs)):
+            expr = product_expansion(expr,all_exprs[k],**kwargs)
+        return expr
+    elif isinstance(term,sp.Add):
+        # Recursively process each term in the sum:
+        all_exprs = [process_factor(arg,**kwargs) for arg in term.args]
+        return add_expressions(all_exprs)
+    else:
+        # If not sure what to do with it, just return it unchanged:
+        return term 
