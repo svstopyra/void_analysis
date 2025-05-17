@@ -643,6 +643,9 @@ final_result = {order: extract_scalars_from_traces(val, scalars=[lam, sp.Symbol(
 
 
 
+
+
+
 A = MatrixSymbol("A", 3, 3)
 B = MatrixSymbol("B", 3, 3)
 expr = Trace(A @ B)
@@ -651,5 +654,41 @@ result = epsilon_expand_with_true_orders(expr, expand_symbols=["A", "B"], max_or
 
 df = pd.DataFrame.from_dict(test_result, orient='index', columns=["Corrected ε-order Expansion"])
 tools.display_dataframe_to_user("Corrected Epsilon Expansion of Tr(AB)", df)
+
+
+# All test cases:
+
+# Re-run test suite
+lam = sp.Symbol("λ")
+A = MatrixSymbol("A", 3, 3)
+B = MatrixSymbol("B", 3, 3)
+
+test_cases = {
+    "Case 1: Tr(AB)": Trace(A * B),
+    "Case 2: Tr(A^2)": Trace(A * A),
+    "Case 3: Tr(A^2) + Tr(AB)": Trace(A * A) + Trace(A * B),
+    "Case 4: Tr(A^2 B)": Trace(A * A * B),
+    "Case 5: Tr(A) Tr(B)": Trace(A) * Trace(B),
+    "Case 6: Tr(A^2) Tr(AB)": Trace(A * A) * Trace(A * B),
+    "Case 7: Tr(BA)": Trace(B * A),
+    "Case 8: Tr(ABA)": Trace(A * B * A),
+    "Case 9: Tr(A)^2": Trace(A)**2,
+    "Case 10: 3/2 Tr(AB) - 5 Tr(A^2)": (3/2) * Trace(A * B) - 5 * Trace(A * A),
+    "Case 11: Tr(A + B)": Trace(A + B),
+    "Case 12: Tr(λ AB)": Trace(lam * A * B),
+}
+
+all_results = {}
+for label, expr in test_cases.items():
+    intermediate = epsilon_expand_with_true_orders(expr, expand_symbols=["A", "B"], max_order=4)
+    cleaned = {order: extract_scalars_from_traces(val, scalars=[lam, sp.Symbol("epsilon")])
+               for order, val in intermediate.items()}
+    all_results[label] = cleaned
+
+flat_rows = []
+for label, result in all_results.items():
+    for order, expr in result.items():
+        flat_rows.append((label, order, expr))
+
 
 
