@@ -1236,7 +1236,15 @@ def factor_variable_from_product(expr, variable, return_power=False):
                 return sp.Mul(var_factor,other,evaluate=False)
 
 def multiply_expression_lists(expr1,expr2):
-    return [x*y for x in expr1 for y in expr2]
+    if isinstance(expr1,sp.Add):
+        add_terms1 = expr1.args
+    else:
+        add_terms1 = expr1
+    if isinstance(expr2,sp.Add):
+        add_terms2 = expr2.args
+    else:
+        add_terms2 = expr2
+    return [x*y for x in add_terms1 for y in add_terms2]
 
 # Recursively decompose an addition into all the terms that are added:
 def expand_matrix_expression(expr):
@@ -1258,6 +1266,8 @@ def expand_matrix_expression(expr):
         expr_list.append(expr)
     if isinstance(expr,sp.MatPow):
         base, exp = expr.args
+        expanded_base = expand_matrix_expression(base)
+        multinomial
         
     return expr_list
         
