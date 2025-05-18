@@ -1175,12 +1175,13 @@ def get_power(factor,variable):
             return 1
         else:
             return 0
-    if isinstance(factor,sp.Pow):
+    if isinstance(factor,sp.Pow) or isinstance(factor,sp.MatPow):
         base, exp = factor.args
-        if base == variable:
-            return exp
+        base_power = get_power(base,variable)
+        if base_power is not None:
+            return base_power*exp
         else:
-            return 0
+            return None
     if isinstance(factor,sp.Mul):
         subfactors = factor.args
         all_powers = [get_power(sub,variable) for sub in subfactors]
@@ -1195,6 +1196,8 @@ def get_power(factor,variable):
             return first_power
         else:
             return None
+    else:
+        return 0
 
 def factor_variable_from_product(expr, variable, return_power=False):
     if isinstance(expr,sp.Mul):
@@ -1235,20 +1238,95 @@ def factor_variable_from_product(expr, variable, return_power=False):
             else:
                 return sp.Mul(var_factor,other,evaluate=False)
 
-def multiply_expression_lists(expr1,expr2):
-    if isinstance(expr1,sp.Add):
-        add_terms1 = expr1.args
-        if isinstance(expr2,sp.Add):
-            add_terms2 = expr2.args
-            return [x*y for x in add_terms1 for y in add_terms2]
+def get_lowest_extractable_power(expr,var):
+    power = get_power(expr,var)
+    if power is not None:
+        return power
+    else:
+        if isinstance(expr,sp.Add):
+            powers = [get_lowest_extractable_power(arg,var) for arg in expr.args]
+            return min(powers)
+        elif isinstance(expr,sp.Mul):
+            powers = [get_lowest_extractable_power(arg,var) for arg in expr.args]
+            return sum(powers)
+        elif isinstance(expr,sp.Pow) or isinstance(expr,sp.MatPow):
+            base, exp = expr.args
+            base_power = get_lowest_extractable_power(base,var)
+            return base_power*exp
         else:
-            return [x*expr2 for x in add_terms1]
-    elif isinstance(expr1,list):
-        if isinstance(expr2,sp.Add):
-            add_terms2 = expr2.args
-            return [expr1*y for y in add_terms2]
+            # If all else fails, assume we just cant extract any powers:
+            return 0
+
+def factor_out_variable(expr,variable):
+    if not isinstance(variable,sp.Symbol):
+        raise Exception("Invalid variable for extraction.")
+    # Returns the expression with all powers of variable
+    # out front, multiplying the rest of the expression, if this is possible.
+    if isinstance(expr,sp.Mul):
+        factors = expr.args
+        no_var = []
+        powers = []
+        for factor in factors:
+            if factor.has(variable):
+                factored = factor_out_variable(factor,variable)
+                power = get_lowest_extractable_power(factored,variable)
+                if power != 0:
+                    no_var.append(factored/variable**power)
+                else:
+                    no_var.append(factor)
+                powers.append(power)
+            else:
+                no_var.append(factor)
+        other = sp.Mul(*no_var,evaluate=False)
+        total_pow = sum(powers)
+        var_factor = variable**(total_pow)
+        return sp.Mul(var_factor,other,evaluate=False)
+    elif isinstance(expr,sp.Add):
+        # Check that factoring is actually possible:
+        power = get_lowest_extractable_power(expr,variable)
+        return sp.Add(*[factor_out_variable(arg,variable) for arg in expr.args])
+    elif isinstance(expr,sp.Pow) or isinstance(expr,sp.MatPow):
+        base, exp = expr.args
+        factored_base = factor_out_variable(base,variable)
+        power = get_lowest_extractable_power(factored_base,variable)
+        if power != 0:
+            new_base = factored_base / variable**power
         else:
-            return [expr1*expr2]
+            new_base = base
+        var_power = exp*power
+        return sp.Mul(variable**var_power,new_base**exp,evaluate=False)
+    else:
+        # If unsure, do nothing.
+        return expr
+
+
+def get_expression_list(expr):
+    """Convert an expression to a list of it's additive terms."""
+    if isinstance(expr,list):
+        return expr
+    if isinstance(expr,sp.Add):
+        return [arg for arg in expr.args]
+    else:
+        return [expr]
+
+def expand_product_pair_to_list(expr1,expr2):
+    """Manually expand a product of two expressions to a list of the terms 
+    in the expanded expression"""
+    expr1_list = get_expression_list(expr1)
+    expr2_list = get_expression_list(expr2)
+    return [sp.Mul(x,y,evaluate=False) for x in expr1_list for y in expr2_list]
+
+def expand_products_to_list(product_expression):
+    """Recursively expand a product of n variables"""
+    if not isinstance(product_expression,sp.Mul):
+        raise Exception("Argument is not a product.")
+    factors = product_expression.args
+    factor_lists = [expand_matrix_expression(factor) for factor in factors]
+    term_list = expand_product_pair_to_list(factor_lists[0],factor_lists[1])
+    for k in range(2,len(factor_lists)):
+        term_list = expand_product_pair_to_list(term_list,factor_lists[k])
+    return term_list
+            
 
 from math import factorial
 def get_multinomial_term(all_terms,alpha):
@@ -1262,72 +1340,62 @@ def get_multinomial_term(all_terms,alpha):
     coeff = factorial(n)
     for a in alpha:
         coeff //= factorial(a)
-    return mat_factors, coeff
+    mat = sp.Mul(*mat_factors,evaluate=False)
+    return mat, coeff
+
+def expand_power(expr):
+    base, exp = expr.args
+    expanded_base = expand_matrix_expression(base)
+    nterms = len(expanded_base)
+    indices = product(range(exp+1),repeat=nterms)
+    valid_indices = [x for x in indices if sum(x) == exp]
+    factors_and_coeffs = [
+        get_multinomial_term(expanded_base,alpha)
+        for alpha in valid_indices
+    ]
+    expansion_terms = [term[1]*term[0] for term in factors_and_coeffs]
+    return expansion_terms
+
 
 # Recursively decompose an addition into all the terms that are added:
 def expand_matrix_expression(expr):
-    expr_list = []
     if isinstance(expr,sp.Add):
+        expr_list = []
         for arg in expr.args:
-            expr_list = expr_list + expand_matrix_expression(arg)
+            expr_list += expand_matrix_expression(arg)
     elif isinstance(expr,sp.MatMul):
-        expansions = []
-        for arg in expr.args:
-            expansions += expand_matrix_expression(arg)
-        combined = multiply_expression_lists(expansions[0],expansions[1])
-        for k in range(2,len(expansions)):
-            combined = multiply_expression_lists(combined,expansions[k])
-        expr_list = expr_list + combined
+        expr_list = expand_products_to_list(expr)
     elif isinstance(expr,sp.Symbol) or isinstance(expr,sp.MatrixSymbol):
-        expr_list.append(expr)
+        expr_list = [expr]
     elif isinstance(expr,sp.MatPow):
-        base, exp = expr.args
-        expanded_base = expand_matrix_expression(base)
-        if isinstance(expanded_base,sp.Add):
-            nterms = len(expanded_base)
-            indices = product(range(exp+1),repeat=nterms)
-            valid_indices = [x for x in indices if sum(x) == exp]
-            factors_and_coeffs = [
-                get_multinomial_term(expanded_base,alpha)
-                for alpha in valid_indices
-            ]
-            expansion_terms = [term[1]*term[0] for term in factors_and_coeffs]
-            expr_list.append(expansion_terms)
-        else:
-            expr_list.append(expr)
+        expr_list = expand_power(expr)
     elif isinstance(expr,sp.Mul) or isinstance(expr,sp.Pow):
         # Scalars only, so just do expand:
         expanded = sp.expand(expr)
         if isinstance(expanded,sp.Add):
-            expr_list = expr_list + [arg for arg in expanded.args]
+            expr_list = [arg for arg in expanded.args]
         else:
             # No further expansions possible, so just add this term:
-            expr_list.append(expanded)
+            expr_list = [expanded]
     else:
-        expr_list.append(expr)
+        expr_list = [expr]
     return expr_list
 
 # Gather terms by their powers of some variable:
 def gather_terms(expr, variable):
-    if isinstance(expr,sp.Add):
-        all_terms = expr.args
-        all_powers = [get_power(arg,variable) for arg in all_terms]
-        pmin = min(all_powers)
-        pmax = max(all_powers)
-        power_list = range(pmin,pmax+1)
-        expr_lists = [[] for p in power_list]
-        for arg, power in zip(all_terms,all_powers):
-            ind = power - pmin
-            expr_lists[ind].append(arg/variable**power)
-        power_dictionary = {
-            p:sp.Add(*expr_list) 
-            for p, expr_list in zip(power_list,expr_lists)
-        }
-    else:
-        power = get_power(expr)
-        if power is None:
-            raise Exception("Unable to gather powers for this expression.")
-        power_dictionary = {power:expr/variable**power}
+    term_list = expand_matrix_expression(expr)
+    all_powers = [get_lowest_extractable_power(arg,variable) for arg in term_list]
+    pmin = min(all_powers)
+    pmax = max(all_powers)
+    power_list = range(pmin,pmax+1)
+    expr_lists = [[] for p in power_list]
+    for arg, power in zip(term_list,all_powers):
+        ind = power - pmin
+        expr_lists[ind].append(factor_out_variable(arg,variable)/variable**power)
+    power_dictionary = {
+        p:sp.Add(*expr_list) 
+        for p, expr_list in zip(power_list,expr_lists)
+    }
     return power_dictionary  
 
 def expand_matrix_power(base,exp,symbol_dictionaries):
