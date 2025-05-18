@@ -1238,13 +1238,31 @@ def factor_variable_from_product(expr, variable, return_power=False):
 def multiply_expression_lists(expr1,expr2):
     if isinstance(expr1,sp.Add):
         add_terms1 = expr1.args
-    else:
-        add_terms1 = expr1
-    if isinstance(expr2,sp.Add):
-        add_terms2 = expr2.args
-    else:
-        add_terms2 = expr2
-    return [x*y for x in add_terms1 for y in add_terms2]
+        if isinstance(expr2,sp.Add):
+            add_terms2 = expr2.args
+            return [x*y for x in add_terms1 for y in add_terms2]
+        else:
+            return [x*expr2 for x in add_terms1]
+    elif isinstance(expr1,list):
+        if isinstance(expr2,sp.Add):
+            add_terms2 = expr2.args
+            return [expr1*y for y in add_terms2]
+        else:
+            return [expr1*expr2]
+
+from math import factorial
+def get_multinomial_term(all_terms,alpha):
+    if len(all_terms) != len(alpha):
+        raise Exception("Invalid indices")
+    mat_factors = []
+    for i, a in enumerate(alpha):
+        mat_factors.extend([all_terms[i]] * a)
+    # Coefficient:
+    n = sum(alpha)
+    coeff = factorial(n)
+    for a in alpha:
+        coeff //= factorial(a)
+    return mat_factors, coeff
 
 # Recursively decompose an addition into all the terms that are added:
 def expand_matrix_expression(expr):
@@ -1252,26 +1270,42 @@ def expand_matrix_expression(expr):
     if isinstance(expr,sp.Add):
         for arg in expr.args:
             expr_list = expr_list + expand_matrix_expression(arg)
-    if isinstance(expr,sp.MatMul):
-        expansions = [expand_matrix_expression(arg) for arg in expr.args]
+    elif isinstance(expr,sp.MatMul):
+        expansions = []
+        for arg in expr.args:
+            expansions += expand_matrix_expression(arg)
         combined = multiply_expression_lists(expansions[0],expansions[1])
         for k in range(2,len(expansions)):
             combined = multiply_expression_lists(combined,expansions[k])
         expr_list = expr_list + combined
-    if isinstance(expr,sp.Mul):
-        # Scalars only, so just do expand:
-        expanded = sp.expand(expr)
-        expr_list = expr_list + [arg for arg in expanded.args]
-    if isinstance(expr,sp.Symbol) or isinstance(expt,sp.MatrixSymbol):
+    elif isinstance(expr,sp.Symbol) or isinstance(expr,sp.MatrixSymbol):
         expr_list.append(expr)
-    if isinstance(expr,sp.MatPow):
+    elif isinstance(expr,sp.MatPow):
         base, exp = expr.args
         expanded_base = expand_matrix_expression(base)
-        multinomial
-        
+        if isinstance(expanded_base,sp.Add):
+            nterms = len(expanded_base)
+            indices = product(range(exp+1),repeat=nterms)
+            valid_indices = [x for x in indices if sum(x) == exp]
+            factors_and_coeffs = [
+                get_multinomial_term(expanded_base,alpha)
+                for alpha in valid_indices
+            ]
+            expansion_terms = [term[1]*term[0] for term in factors_and_coeffs]
+            expr_list.append(expansion_terms)
+        else:
+            expr_list.append(expr)
+    elif isinstance(expr,sp.Mul) or isinstance(expr,sp.Pow):
+        # Scalars only, so just do expand:
+        expanded = sp.expand(expr)
+        if isinstance(expanded,sp.Add):
+            expr_list = expr_list + [arg for arg in expanded.args]
+        else:
+            # No further expansions possible, so just add this term:
+            expr_list.append(expanded)
+    else:
+        expr_list.append(expr)
     return expr_list
-        
-        
 
 # Gather terms by their powers of some variable:
 def gather_terms(expr, variable):
