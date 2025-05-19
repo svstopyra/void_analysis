@@ -1079,7 +1079,7 @@ def isscalar_symbol(symbol):
     return not ismatrix_symbol(symbol)
 
 # Apply trace linarity:
-def split_trace(trace_expr):
+def split_trace(trace_expr,extract_scalars=True):
     if not isinstance(trace_expr,sp.Trace):
         raise Exception("Not a trace term!")
     arg = trace_expr.args[0]
@@ -1087,9 +1087,14 @@ def split_trace(trace_expr):
         all_exprs = arg.args
         # Apply linearity, recursively processing the trace on each term:
         traced_exprs = [Trace(expr) for expr in all_exprs]
+        if extract_scalars:
+            traced_exprs = [extract_all_scalars(expr) for expr in traced_exprs]
         return add_expressions(traced_exprs)
     else:
-        return trace_expr
+        if extract_scalars:
+            return extract_all_scalars(trace_expr)
+        else:
+            return trace_expr
 
 def extract_scalars_from_traces(expr, scalars):
     """Pull scalar factors like ε or λ outside trace expressions."""
@@ -1111,63 +1116,246 @@ def extract_scalars_from_traces(expr, scalars):
         return sp.Mul(*[extract_scalars_from_traces(arg, scalars) for arg in expr.args], evaluate=False)
     return expr
 
+def classify_product_factors(arg):
+    if not isinstance(arg,sp.Mul):
+        raise Exception("Not a product")
+    numbers = []
+    scalars = []
+    matrices = []
+    for factor in arg.args:
+        if isinstance(factor,sp.Number):
+            numbers.append(factor)
+        elif isinstance(factor,sp.MatrixSymbol):
+            matrices.append(factor)
+        elif isinstance(factor,sp.Symbol) or isinstance(factor,sp.Trace):
+            scalars.append(factor)
+        elif isinstance(factor,sp.MatMul):
+            nums, scalr, mats = classify_product_factors(factor)
+            numbers += nums
+            scalars += scals
+            matrices += mats
+        elif isinstance(factor,sp.MatPow):
+            matrices.append(factor)
+        elif isinstance(factor,sp.Pow):
+            base, exp = factor.args
+            if isinstance(base,sp.Number):
+                numbers.append(factor)
+            else:
+                scalars.append(factor)
+        else:
+            matrices.append(factor)
+    return numbers, scalars, matrices
+
+def classify_power_factors(arg):
+    if not (isinstance(arg,sp.Pow) or isinstance(arg,sp.MatPow)):
+        raise Exception("Not a power")
+    base, exp = arg.args
+    numbers = []
+    scalars = []
+    matrices = []
+    if isinstance(base,sp.Mul):
+        nums, scals, mats = classify_product_factors(base)
+        numbers = [x**exp for x in nums]
+        scalars = [x**exp for x in scals]
+        matrices = [sp.Mul(*mats,evaluate=False)**exp]
+    elif isinstance(base,sp.MatrixSymbol):
+        matrices.append(arg)
+    elif isinstance(base,sp.Symbol) or isinstance(factor,sp.Trace):
+        scalars.append(arg)
+    elif isinstance(base,sp.Number):
+        numbers.append(arg)
+    else:
+        matrices.append(matrices)
+    return numbers, scalars, matrices
+
+def is_power_type(expr):
+    return (isinstance(expr,sp.Pow) or isinstance(expr,sp.MatPow))
+
+def is_symbol_type(expr):
+    return isinstance(expr,sp.Symbol) or isinstance(expr,sp.MatrixSymbol)
+
+def get_factors(expr):
+    is_power = is_power_type(expr)
+    is_symbol = is_symbol_type(expr)
+    is_number = isinstance(expr,sp.Number)
+    is_product = isinstance(expr,sp.Mul)
+    if not (is_product or is_power or is_symbol or is_number):
+        raise Exception("Not a valid product")
+    if isinstance(expr,sp.Mul):
+        factors = []
+        for arg in expr.args:
+            if is_symbol_type(arg):
+                # Only want raw symbols as products:
+                factors.append(arg)
+            else:
+                # In case one of the terms in the product is itself a 
+                # product, or a power:
+                factors.extend(get_factors(arg))
+    elif is_power:
+        base, exp = expr.args
+        factors = get_factors(base)*exp
+    elif is_symbol or is_number:
+        return [expr]
+    return factors
+
+def cyclical_shift(input_list,left=True):
+    if left:
+        input_list.append(input_list.pop(0))
+        return input_list
+    else:
+        input_list.insert(0,input_list.pop(-1))
+        return input_list
+
+def cyclically_equivalent(trace1,trace2):
+    """Return True if the given trace expressions are cyclically equivalent"""
+    if (not isinstance(trace1,sp.Trace) or (not isinstance(trace2,sp.Trace))):
+        raise Exception("Both arguments must be traces")
+    if trace1 == trace2:
+        # Trivial case
+        return True
+    arg1 = trace1.args[0]
+    arg2 = trace2.args[0]
+    factors1 = get_factors(arg1)
+    factors2 = get_factors(arg2)
+    n1 = len(factors1)
+    n2 = len(factors2)
+    if n1 != n2:
+        return False
+    for k in range(n1):
+    # Check all cyclical shifts:
+        if factors1 == factors2:
+            return True
+        factors2 = cyclical_shift(factors2)
+    return False
+
+def get_matching_trace(trace,trace_cache):
+    if not isinstance(trace,sp.Trace):
+        raise Exception("Not a trace")
+    for tr in trace_cache:
+        if cyclically_equivalent(trace,tr):
+            return tr
+    return None
+
+def find_all_traces(expr,trace_cache):
+    if isinstance(expr,sp.Trace):
+        trace_cache.append(expr)
+    for arg in expr.args:
+        trace_cache = find_all_traces(arg,trace_cache)
+    return trace_cache
+
+def gather_equivalent_traces(expr,simplify=True):
+    # Parse the expression and search for traces,
+    # replacing them with traces already found if they are cyclically
+    # equivalent
+    # We should usually always make the traces as simple as possible first:
+    if simplify:
+        expr = simplify_trace_expression(expr)
+    trace_cache = find_all_traces(expr,[])
+    unique_traces = []
+    trace_dictionary = {}
+    for tr in trace_cache:
+        match = get_matching_trace(tr,unique_traces)
+        if match is None:
+            unique_traces.append(tr)
+            trace_dictionary[tr] = tr
+        else:
+            trace_dictionary[tr] = match
+    # Now parse the expression and replace cyclically equivalent terms:
+    for tr in trace_cache:
+        expr = expr.subs(tr,trace_dictionary[tr])
+    return expr
+
+
+def simplify_trace_expression(expr):
+    # Apply linearity and extract scalars:
+    if isinstance(expr,sp.Add):
+        return sp.Add(*[simplify_trace_expression(arg) for arg in expr.args])
+    if isinstance(expr,sp.Mul):
+        factors = [arg for arg in expr.args]
+        simplified_factors = [simplify_trace_expression(arg) for arg in factors]
+        return sp.Mul(*simplified_factors,evaluate=False)
+    if isinstance(expr,sp.Pow) or isinstance(expr,sp.MatPow):
+        base, exp = expr.args
+        simplified_base = simplify_trace_expression(base)
+        return simplified_base**exp
+    if isinstance(expr,sp.Trace):
+        arg = expr.args[0]
+        # Fully expand the argument:
+        expanded_arg = expand_matrix_expression(expr.args[0])
+        factored_arg = [factor_out_all_scalars(arg) for arg in expanded_arg]
+        traces = [Trace(arg) for arg in factored_arg]
+        if len(expanded_arg) > 1:
+            simplified = [simplify_trace_expression(tr) for tr in traces]
+            return sp.Add(*[tr for tr in simplified])
+        else:
+            if isinstance(factored_arg[0],sp.Mul):
+                numbers, scalars, matrices = classify_product_factors(
+                    factored_arg[0]
+                )
+            elif (isinstance(factored_arg[0],sp.Pow) 
+                  or isinstance(factored_arg[0],sp.MatPow)):
+                numbers, scalars, matrices = classify_power_factors(
+                    factored_arg[0]
+                )
+            else:
+                numbers = []
+                scalars = []
+                matrices = [factored_arg[0]]
+            numprod = sp.Mul(*numbers,evaluate=False)
+            scalprod = sp.Mul(*scalars,evaluate=False)
+            matprod = sp.Mul(*matrices,evaluate=False)
+            return numprod*scalprod*Trace(matprod)
+    else:
+        return expr
+
+
 def extract_all_scalars(trace_expr):
     if not isinstance(trace_expr,sp.Trace):
         raise Exception("Not a trace term!")
     arg = trace_expr.args[0]
-    # Make sure we are a pure product:
-    if not isinstance(arg,sp.MatMul):
-        # Do nothing, to avoid causing problems:
-        return trace_expr
-    scalars = [x for x in arg.args if isscalar_symbol(x)]
-    not_scalars = [x for x in arg.args if not isscalar_symbol(x)]
-    scalars_prod = multiply_expressions(scalars)
-    matrix_prod = multiply_expressions(not_scalars)
-    return scalars_prod*Trace(matrix_prod)
-
-def get_order(expr,variable):
-    if isinstance(expr,sp.Trace):
-        return get_order(expr.args[0])
-    elif isinstance(expr,sp.Mul):
-        factors = expr.args
-        order = 0
-        for factor in factors:
-            if factor.has(variable):
-                if isinstance(factor,sp.Symbol)
-            else:
-                continue
+    factored = factor_out_all_scalars(arg)
+    all_scalars = get_scalar_variables(arg)
+    powers = [get_highest_extractable_power(arg, var) for var in all_scalars]
+    rescaled_arg = factored
+    for p, var in zip(powers, all_scalars):
+        rescaled_arg = matrix_divide_scalar(rescaled_arg,var**p,
+                                            factorise=False)
+    return sp.Mul(*[var**p for p, var in zip(powers, all_scalars)],
+                  evaluate=False)*Trace(rescaled_arg)
 
 def process_trace(trace_expr,symbol_dictionaries,extract_scalars=True):
     if not isinstance(trace_expr,sp.Trace):
         raise Exception("Not a trace term!")
-    arg = trace_expr.args
-    # Apply linearity:
-    if isinstance(arg,sp.Add):
-        all_exprs = arg.args
-        # Apply linearity, recursively processing the trace on each term:
-        traced_exprs = [
-            process_trace(
-                Trace(expr),symbol_dictionaries,extract_scalars=extract_scalars
-            ) for expr in all_exprs
-        ]
-        return add_expressions(traced_exprs)
-    else:
-        processed_args = process_term(arg,symbol_dictionaries)
-        return split_trace(Trace(processed_args))
+    arg = trace_expr.args[0]
+    processed_args = process_term(arg,symbol_dictionaries)
+    if extract_scalars:
+        processed_args = factor_out_all_scalars(processed_args)
+    return split_trace(Trace(processed_args),extract_scalars=extract_scalars)
 
 def expand_matrix_symbol(symbol,symbol_dictionaries):
-    name = symbol.name
-    epsilon = symbols('epsilon')
-    if name in symbol_dictionaries:
-        all_exprs = [
-                        sym*(epsilon**pow) for sym, pow in 
-                        zip(symbol_dictionaries[name]["matrices"],
-                            symbol_dictionaries[name]["orders"])
-        ]
-        return add_expressions(all_exprs)
+    if not isinstance(symbol,sp.Expr):
+        raise Exception("Not a sympy expression.")
+    if isinstance(symbol,sp.Symbol) or isinstance(symbol,sp.MatrixSymbol):
+        name = symbol.name
+        epsilon = symbols('epsilon')
+        if name in symbol_dictionaries:
+            all_exprs = [
+                            sym*(epsilon**pow) for sym, pow in 
+                            zip(symbol_dictionaries[name]["matrices"],
+                                symbol_dictionaries[name]["orders"])
+            ]
+            return add_expressions(all_exprs)
+        else:
+            # If no specified rule, safer to leave it as it is
+            return symbol
     else:
-        # If no specified rule, safer to leave it as it is
-        return symbol
+        # Assume we want to substitute all terms in the dictionary:
+        new_symbol = symbol
+        for sym in symbol_dictionaries:
+            symvar = symbol_dictionaries[sym]["symbol"]
+            substitution = expand_matrix_symbol(symvar,symbol_dictionaries)
+            new_symbol = new_symbol.subs(symvar,substitution)
+        return new_symbol
 
 def get_power(factor,variable):
     if isinstance(factor,sp.Symbol) or isinstance(factor,sp.MatrixSymbol):
@@ -1196,69 +1384,83 @@ def get_power(factor,variable):
             return first_power
         else:
             return None
+    if isinstance(factor,sp.Trace):
+        if isinstance(variable,sp.Trace):
+            if factor == variable:
+                return 1
+            else:
+                return 0
+        else:
+            return 0
     else:
         return 0
 
-def factor_variable_from_product(expr, variable, return_power=False):
-    if isinstance(expr,sp.Mul):
-        factors = expr.args
-        have_var = []
-        no_var = []
-        powers = []
-        for factor in factors:
-            if factor.has(variable):
-                power = get_power(factor,variable)
-                have_var.append(factor/(variable**power))
-                powers.append(power)
-            else:
-                no_var.append(factor)
-        prefactor = sp.Mul(*have_var,evaluate=False)
-        other = sp.Mul(*no_var,evaluate=False)
-        total_pow = sum(powers)
-        var_factor = variable**(total_pow)
-        # 
-        if prefactor != 1:
-            prod = sp.Mul(var_factor,prefactor,other,evaluate=False)
-        else:
-            prod = sp.Mul(var_factor,other,evaluate=False)
-        if return_power:
-            return prod, total_pow
-        else:
-            return prod
-    elif isinstance(expr,sp.Add):
-        # Check that factoring is actually possible:
-        power = get_power(expr,variable)
-        if power is None:
-            raise Exception("Unable to factor out variable.")
-        else:
-            var_factor = variable**power
-            other = expr/var_factor
-            if return_power:
-                return sp.Mul(var_factor,other,evaluate=False), power
-            else:
-                return sp.Mul(var_factor,other,evaluate=False)
 
-def get_lowest_extractable_power(expr,var):
+def get_highest_extractable_power(expr,var):
     power = get_power(expr,var)
     if power is not None:
         return power
     else:
         if isinstance(expr,sp.Add):
-            powers = [get_lowest_extractable_power(arg,var) for arg in expr.args]
+            powers = [get_highest_extractable_power(arg,var) for arg in expr.args]
             return min(powers)
         elif isinstance(expr,sp.Mul):
-            powers = [get_lowest_extractable_power(arg,var) for arg in expr.args]
+            powers = [get_highest_extractable_power(arg,var) for arg in expr.args]
             return sum(powers)
         elif isinstance(expr,sp.Pow) or isinstance(expr,sp.MatPow):
             base, exp = expr.args
-            base_power = get_lowest_extractable_power(base,var)
+            base_power = get_highest_extractable_power(base,var)
             return base_power*exp
         else:
             # If all else fails, assume we just cant extract any powers:
             return 0
 
+def get_scalar_variables(expr):
+    scalar_vars = []
+    if is_symbol_type(expr):
+        if isscalar_symbol(expr):
+            scalar_vars.append(expr)
+        return scalar_vars
+    for arg in expr.args:
+        if (isinstance(arg,sp.Symbol) or isinstance(arg,sp.Trace)):
+            if arg not in scalar_vars:
+                scalar_vars.append(arg)
+        elif isinstance(arg,sp.MatrixSymbol):
+            continue
+        else:
+            new_vars = get_scalar_variables(arg)
+            for var in new_vars:
+                if var not in scalar_vars:
+                    scalar_vars.append(var)
+    return scalar_vars
+
+def factor_out_all_scalars(expr):
+    if not isinstance(expr,sp.Expr):
+        raise Exception("Not a sympy expression.")
+    all_scalars = get_scalar_variables(expr)
+    new_expr = expr
+    for scalar in all_scalars:
+        new_expr = factor_out_variable(new_expr,scalar)
+    return new_expr
+
+def matrix_divide_scalar(expr,scalar,factorise=True):
+    # Simplify division of a matrix expression by a scalar, 
+    # cancelling anything which can be cancelled.
+    if not isinstance(expr,sp.Expr):
+        raise Exception("Not a sympy expression.")
+    if isinstance(expr,sp.Add):
+        all_divisions = [
+            matrix_divide_scalar(arg,scalar) for arg in expr.args
+        ]
+        return sp.Add(*all_divisions)
+    else:
+        if factorise:
+            return factor_out_all_scalars(expr)/scalar
+        else:
+            return expr/scalar
+
 def factor_out_variable(expr,variable):
-    if not isinstance(variable,sp.Symbol):
+    if not (isinstance(variable,sp.Symbol) or isinstance(variable,sp.Trace)):
         raise Exception("Invalid variable for extraction.")
     # Returns the expression with all powers of variable
     # out front, multiplying the rest of the expression, if this is possible.
@@ -1269,9 +1471,14 @@ def factor_out_variable(expr,variable):
         for factor in factors:
             if factor.has(variable):
                 factored = factor_out_variable(factor,variable)
-                power = get_lowest_extractable_power(factored,variable)
+                power = get_highest_extractable_power(factored,variable)
                 if power != 0:
-                    no_var.append(factored/variable**power)
+                    if isinstance(factored,sp.Add):
+                        no_var.append(
+                            matrix_divide_scalar(factored,variable**power)
+                        )
+                    else:
+                        no_var.append(factored/variable**power)
                 else:
                     no_var.append(factor)
                 powers.append(power)
@@ -1283,18 +1490,23 @@ def factor_out_variable(expr,variable):
         return sp.Mul(var_factor,other,evaluate=False)
     elif isinstance(expr,sp.Add):
         # Check that factoring is actually possible:
-        power = get_lowest_extractable_power(expr,variable)
+        power = get_highest_extractable_power(expr,variable)
         return sp.Add(*[factor_out_variable(arg,variable) for arg in expr.args])
     elif isinstance(expr,sp.Pow) or isinstance(expr,sp.MatPow):
         base, exp = expr.args
         factored_base = factor_out_variable(base,variable)
-        power = get_lowest_extractable_power(factored_base,variable)
+        power = get_highest_extractable_power(factored_base,variable)
         if power != 0:
-            new_base = factored_base / variable**power
+            if isinstance(factored_base,sp.Add):
+                new_base = matrix_divide_scalar(factored_base,variable**power)
+            else:
+                new_base = factored_base / variable**power
         else:
             new_base = base
         var_power = exp*power
         return sp.Mul(variable**var_power,new_base**exp,evaluate=False)
+    elif isinstance(expr,sp.Trace):
+        return extract_all_scalars(expr)
     else:
         # If unsure, do nothing.
         return expr
@@ -1343,7 +1555,7 @@ def get_multinomial_term(all_terms,alpha):
     mat = sp.Mul(*mat_factors,evaluate=False)
     return mat, coeff
 
-def expand_power(expr):
+def expand_power_multinomial(expr):
     base, exp = expr.args
     expanded_base = expand_matrix_expression(base)
     nterms = len(expanded_base)
@@ -1356,6 +1568,33 @@ def expand_power(expr):
     expansion_terms = [term[1]*term[0] for term in factors_and_coeffs]
     return expansion_terms
 
+def expand_power(expr):
+    # Expand a matrix power, taking account of non-commutativity:
+    base, exp = expr.args
+    expanded_base = expand_matrix_expression(base)
+    if exp == 0:
+        return sp.ZeroMatrix(expanded_base[0].shape[0],
+                             expanded_base[0].shape[1])
+    elif exp == 1:
+        return sp.Add(*expanded_base)
+    elif exp > 1:
+        expansion_terms = expand_product_pair_to_list(expanded_base,
+                                                      expanded_base)
+        for k in range(2,exp):
+            expansion_terms = expand_product_pair_to_list(expansion_terms,
+                                                          expanded_base)
+    return expansion_terms
+
+
+def expand_trace(expr):
+    if not isinstance(expr,sp.Trace):
+        raise Exception("Not a trace expression")
+    arg = expr.args[0]
+    expanded = expand_matrix_expression(arg)
+    return [split_trace(Trace(term)) for term in expanded]
+
+def has_traces(expr):
+    return any(isinstance(arg,sp.Trace) for arg in expr.args)
 
 # Recursively decompose an addition into all the terms that are added:
 def expand_matrix_expression(expr):
@@ -1363,12 +1602,16 @@ def expand_matrix_expression(expr):
         expr_list = []
         for arg in expr.args:
             expr_list += expand_matrix_expression(arg)
-    elif isinstance(expr,sp.MatMul):
+    elif (isinstance(expr,sp.MatMul) 
+            or (isinstance(expr,sp.Mul) and has_traces(expr))):
         expr_list = expand_products_to_list(expr)
     elif isinstance(expr,sp.Symbol) or isinstance(expr,sp.MatrixSymbol):
         expr_list = [expr]
-    elif isinstance(expr,sp.MatPow):
+    elif (isinstance(expr,sp.MatPow) 
+            or (isinstance(expr,sp.Pow) and has_traces(expr))):
         expr_list = expand_power(expr)
+    elif isinstance(expr,sp.Trace):
+        expr_list = expand_trace(expr)
     elif isinstance(expr,sp.Mul) or isinstance(expr,sp.Pow):
         # Scalars only, so just do expand:
         expanded = sp.expand(expr)
@@ -1384,7 +1627,7 @@ def expand_matrix_expression(expr):
 # Gather terms by their powers of some variable:
 def gather_terms(expr, variable):
     term_list = expand_matrix_expression(expr)
-    all_powers = [get_lowest_extractable_power(arg,variable) for arg in term_list]
+    all_powers = [get_highest_extractable_power(arg,variable) for arg in term_list]
     pmin = min(all_powers)
     pmax = max(all_powers)
     power_list = range(pmin,pmax+1)
@@ -1392,38 +1635,35 @@ def gather_terms(expr, variable):
     for arg, power in zip(term_list,all_powers):
         ind = power - pmin
         expr_lists[ind].append(factor_out_variable(arg,variable)/variable**power)
-    power_dictionary = {
-        p:sp.Add(*expr_list) 
-        for p, expr_list in zip(power_list,expr_lists)
-    }
-    return power_dictionary  
+    power_dictionary = defaultdict(int)
+    for p, expr_list in zip(power_list,expr_lists):
+        power_dictionary[p] = sp.Add(*expr_list)
+    return power_dictionary
 
-def expand_matrix_power(base,exp,symbol_dictionaries):
-    processed_base = process_term(base,symbol_dictionaries)
-    
-
-def process_term(term,symbol_dictionaries):
+def process_term(term,symbol_dictionaries,extract_scalars=True,max_order=None):
+    epsilon = sp.Symbol("epsilon")
     if isinstance(term,sp.Trace):
-        return process_trace(term,symbol_dictionaries)
-    if isinstance(term,sp.MatrixSymbol):
-        return expand_matrix_symbol(term,symbol_dictionaries)
-    elif isinstance(term,sp.MatPow):
-        base, exp = term.args
-        return expand_matrix_power(base,exp,**kwargs)
-    elif isinstance(term,sp.MatMul):
-        # Recursively process each term in the product:
-        all_exprs = [process_factor(arg,**kwargs) for arg in term.args]
-        expr = all_exprs[0]
-        for k in range(1,len(all_exprs)):
-            expr = product_expansion(expr,all_exprs[k],**kwargs)
-        return expr
-    elif isinstance(term,sp.Add):
-        # Recursively process each term in the sum:
-        all_exprs = [process_factor(arg,**kwargs) for arg in term.args]
-        return add_expressions(all_exprs)
+        new_term = process_trace(
+            term,symbol_dictionaries,extract_scalars=extract_scalars
+        )
     else:
-        # If not sure what to do with it, just return it unchanged:
-        return term
+        expanded = expand_matrix_symbol(term,symbol_dictionaries)
+        if extract_scalars:
+            new_term = factor_out_all_scalars(
+                sp.Add(*expand_matrix_expression(expanded))
+            )
+        else:
+            new_term = sp.Add(*expand_matrix_expression(expanded))
+    if max_order is not None:
+        order_range = range(0,max_order+1)
+        all_orders = gather_terms(new_term,epsilon)
+        new_dict = defaultdict(int)
+        for p in order_range:
+            if all_orders[p] != 0: 
+                new_dict[p] = all_orders[p]
+        new_term = sp.Add(*[epsilon**p*new_dict[p] for p in order_range])
+    return new_term
+
 
 def get_order_symbols(name,max_order,min_order = 1):
     start = min_order
@@ -1441,3 +1681,61 @@ for name in expand_symbol_names:
     orders, matrices = get_order_symbols(name,max_order,symbol_dictionaries[name]["min_order"])
     symbol_dictionaries[name]["orders"] = orders
     symbol_dictionaries[name]["matrices"] = matrices
+
+
+#-------------------------------------------------------------------------------
+# Symbolic LPT
+
+# Gradient of the Displacement field:
+# Variables:
+DPsi = MatrixSymbol("DPsi",3,3) # gradient of the full displacement field
+DtDPsi = MatrixSymbol("DtDPsi",3,3)#  - Time derivative term
+G = sp.Symbols("G") # Newton's constant
+Gfactor = 4*sp.pi*G # Prefactor to RHS
+epsilon = sp.Symbol("epsilon") # LPT Perturbation parameter (dummy variable)
+
+
+max_order = 5
+min_order = 1
+expand_symbol_names = ["DPsi","DtDPsi"]
+symbol_dictionaries = {name:{} for name in expand_symbol_names}
+for name in expand_symbol_names:
+    symbol_dictionaries[name]["min_order"] = min_order
+    symbol_dictionaries[name]["symbol"] = MatrixSymbol(name,3,3)
+    orders, matrices = get_order_symbols(name,max_order,symbol_dictionaries[name]["min_order"])
+    symbol_dictionaries[name]["orders"] = orders
+    symbol_dictionaries[name]["matrices"] = matrices
+
+LDPsi = sp.Rational(1,2)*(Trace(DPsi)**2 - Trace(DPsi**2))
+detDPsi = sp.Rational(1,6)*(Trace(DPsi)**3 - 3*Trace(DPsi)*Trace(DPsi**2)
+                             + 2*Trace(DPsi**3))
+
+# RHS of the Evolution equation:
+RHS = Gfactor*(Trace(DPsi) + LDPsi + detDPsi)
+RHS_expanded = gather_terms(
+    simplify_trace_expression(
+    process_term(RHS,symbol_dictionaries,max_order=max_order)
+    ),epsilon
+)
+
+# LHS of the Evolution Equation:
+I = sp.matrices.expressions.Identity(3)# Identity matrix
+C = (DPsi**2 - Trace(DPsi)*DPsi + 
+    sp.Rational(1,2)*(Trace(DPsi)**2 - Trace(DPsi**2))*I)
+LHS = Trace((I + Trace(DPsi)*I - DPsi + C)*DtDPsi)
+LHS_expanded = gather_terms(
+    simplify_trace_expression(
+    process_term(LHS,symbol_dictionaries,max_order=max_order)
+    ),epsilon
+)
+
+# Solutions of each order:
+DtDPsi1, DtDPsi2, DtDPsi3, DtDPsi4, DtDPsi5 = symbol_dictionaries["DtDPsi"]["matrices"]
+DPsi1, DPsi2, DPsi3, DPsi4, DPsi5 = symbol_dictionaries["DPsi"]["matrices"]
+lpt_1 = (LHS_expanded[1] - RHS_expanded[1])
+lpt_2 = simplify_trace_expression(
+    (LHS_expanded[2] - RHS_expanded[2]).subs(DtDPsi1,Gfactor*DPsi1)
+)
+
+
+
