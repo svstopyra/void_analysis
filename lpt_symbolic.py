@@ -1134,6 +1134,9 @@ def classify_product_factors(arg):
             numbers += nums
             scalars += scals
             matrices += mats
+        elif isinstance(factor,sp.Mul):
+            # Must all be scalars, if not MatMul:
+            scalars.append(factor)
         elif isinstance(factor,sp.MatPow):
             matrices.append(factor)
         elif isinstance(factor,sp.Pow):
@@ -1732,10 +1735,39 @@ LHS_expanded = gather_terms(
 # Solutions of each order:
 DtDPsi1, DtDPsi2, DtDPsi3, DtDPsi4, DtDPsi5 = symbol_dictionaries["DtDPsi"]["matrices"]
 DPsi1, DPsi2, DPsi3, DPsi4, DPsi5 = symbol_dictionaries["DPsi"]["matrices"]
-lpt_1 = (LHS_expanded[1] - RHS_expanded[1])
-lpt_2 = simplify_trace_expression(
+
+# 1st Order:
+lpt_1 = sp.simplify((LHS_expanded[1] - RHS_expanded[1]))
+RHS_1 = lpt_1 - Trace(DtDPsi1) + Gfactor*Trace(DPsi1)
+
+# 2nd OrdeR:
+lpt_2 = sp.simplify(simplify_trace_expression(
     (LHS_expanded[2] - RHS_expanded[2]).subs(DtDPsi1,Gfactor*DPsi1)
-)
+))
+RHS_2 = lpt_2 - Trace(DtDPsi2) + Gfactor*Trace(DPsi2)
+
+# 3rd Order:
+D2 = sp.Symbol("D2")
+D1 = sp.Symbol("D1")
+lpt_3 = sp.simplify(simplify_trace_expression(
+    ((LHS_expanded[3] - RHS_expanded[3]).subs(DtDPsi1,Gfactor*DPsi1)
+    ).subs(Trace(DtDPsi2),2*(D2/D1**2)*RHS_2)
+))
+RHS_3 = lpt_3 - Trace(DtDPsi3) + Gfactor*Trace(DPsi3)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
