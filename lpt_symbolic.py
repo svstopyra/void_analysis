@@ -2055,6 +2055,54 @@ C5vals = {D5:sp.simplify(Dt5/Gfactor).subs(C4vals)/denom5
 
 # Should be possible to do this symbolically using the C5vals dictionary!
 
+# Radial variables:
+q = sp.Symbol("q")
+r = sp.Symbol("r")
+
+# Solutions:
+# 1st Order:
+S1ar = sp.Symbol("S1ar")
+S1r = [S1ar]
+Psi1_r = sp.Add(*[D*S for D, S in zip(D1vals,S1r)])
+# 2nd Order:
+S2ar = S1ar**2/q
+S2r = [S2ar]
+Psi2_r = sp.Add(*[D*S for D, S in zip(D2vals,S2r)])
+# 3rd Order:
+S3ar = S1ar**3/(3*q**2)
+S3br = S1ar*S2ar/q
+S3r = [S3ar, S3br]
+Psi3_r = sp.Add(*[D*S for D, S in zip(D3vals,S3r)])
+# 4th Order:
+S4ar = S1ar*S3ar/q
+S4br = S1ar*S3br/q
+S4cr = S2ar**2/q
+S4dr = S1ar**2*S2ar/q**2
+S4r = [S4ar,S4br,S4cr,S4dr]
+Psi4_r = sp.Add(*[D*S for D, S in zip(D4vals,S4r)])
+# 5th Order:
+S5ar = S1ar*S4ar/q
+S5br = S1ar*S4br/q
+S5cr = S1ar*S4cr/q
+S5dr = S1ar*S4dr/q
+S5er = S2ar*S3ar/q
+S5fr = S2ar*S3br/q
+S5gr = S1ar**2*S3ar/q**2
+S5hr = S1ar**2*S3br/q**2
+S5ir = S2ar**2*S1ar/q**2
+S5r = [S5ar,S5br,S5cr,S5dr,S5er,S5fr,S5gr,S5hr,S5ir]
+Psi5_r = sp.Add(*[D*S for D, S in zip(D5vals,S5r)])
+
+
+
+# q expansion:
+# r = q + Psi_r
+# q = r - Psi_r
+# 1/q = (1/r)*(1/(1 - Psi_r/r))
+Psi_r_vals = [Psi1_r,Psi2_r,Psi3_r,Psi4_r,Psi5_r]
+Psi_r = sp.Add(*[psi*epsilon**n for psi, n in zip(Psi_r_vals,range(1,6))])
+u = Psi_r/r
+
 
 
 
