@@ -1138,7 +1138,16 @@ def classify_product_factors(arg):
             # Must all be scalars, if not MatMul:
             scalars.append(factor)
         elif isinstance(factor,sp.MatPow):
-            matrices.append(factor)
+            base, exp = factor.args
+            if isinstance(base,sp.MatrixSymbol):
+                matrices.append(factor)
+            elif isinstance(base,sp.Mul):
+                nums, scals, mats = classify_product_factors(base)
+                numbers += [x**exp for x in nums]
+                scalars += [x**exp for x in scals]
+                matrices += [x**exp for x in mats]
+            else:
+                matrices.append(factor)
         elif isinstance(factor,sp.Pow):
             base, exp = factor.args
             if isinstance(base,sp.Number):
@@ -1340,7 +1349,7 @@ def expand_matrix_symbol(symbol,symbol_dictionaries):
         raise Exception("Not a sympy expression.")
     if isinstance(symbol,sp.Symbol) or isinstance(symbol,sp.MatrixSymbol):
         name = symbol.name
-        epsilon = symbols('epsilon')
+        epsilon = sp.Symbol('epsilon')
         if name in symbol_dictionaries:
             all_exprs = [
                             sym*(epsilon**pow) for sym, pow in 
@@ -1667,6 +1676,83 @@ def process_term(term,symbol_dictionaries,extract_scalars=True,max_order=None):
         new_term = sp.Add(*[epsilon**p*new_dict[p] for p in order_range])
     return new_term
 
+def replace_with_L(expr,M,N=None,L=None,gather=True):
+    if L is None:
+        L = sp.Symbol("detM")
+    if N is None:
+        N = M
+        TrN = TrM
+    # Replace Traces:
+    expr2 = expr.subs({Trace(M*N):-2*L + Trace(M)*Trace(N)})
+    expr2 = sp.expand(sp.simplify(expr2))
+    if gather:
+        return gather_equivalent_traces(expr2)
+    else:
+        return expr2
+
+def get_L_coefficient(expr,M,N=None):
+    """
+    Replace Factors of (Tr(M)Tr(N) - Tr(M*N))/2 with L
+    """
+    L = sp.Symbol("L")
+    expr = replace_with_L(expr,M,N=N,L=L)
+    coeffs = sp.expand(expr2).as_coefficients_dict(L)
+    return coeffs[L]
+
+def replace_with_det(expr,M,detM=None):
+    if detM is None:
+        detM = sp.Symbol("detM")
+    expr2 = expr.subs({Trace(M**3):3*detM + 
+                       sp.Rational(3,2)*Trace(M)*Trace(M**2)
+                        - sp.Rational(1,2)*Trace(M)**3})
+    expr2 = sp.expand(sp.simplify(expr2))
+    if gather:
+        return gather_equivalent_traces(expr2)
+    else:
+        return expr2
+
+def get_det_coefficient(expr,M):
+    """Replace Tr(M^3) with a determinant, using:
+    
+    det(M) = (1/6) Tr(M)^3 - (1/2)Tr(M)Tr(M^2) + Tr(M^3)/3
+    
+    """
+    detM = sp.Symbol("detM")
+    expr2 = replace_with_det(expr,M,detM=detM)
+    coeffs = expr2.as_coefficients_dict(detM)
+    return coeffs[detM]
+
+def replace_with_CAB(expr,A,B,TrCAB=None,gather=True):
+    if TrCAB is None:
+        TrCAB = sp.Symbol("TrCAB")
+    replace_val = (TrCAB + Trace(A)*Trace(A*B)
+                   - sp.Rational(1,2)*Trace(B)*(Trace(A)**2 - Trace(A**2)))
+    expr2 = expr.subs({Trace(A**2*B):replace_val,Trace(A*B*A):replace_val,
+                       Trace(B*A**2):replace_val})
+    expr2 = sp.expand(sp.simplify(expr2))
+    if gather:
+        return gather_equivalent_traces(expr2)
+    else:
+        return expr2
+
+def get_CAB_coefficient(expr,A,B):
+    """
+    Replace Tr(A^2B) with an expression involved the cofactor matrix, using:
+    Tr(C(A)^TB) = (1/2)Tr(A)^2Tr(B) - (1/2)Tr(A^2)Tr(B) - Tr(A)Tr(AB) + Tr(A^2B)
+    """
+    TrCAB = sp.Symbol("TrCAB")
+    expr2 = replace_with_CAB(expr,A,B,TrCAB = TrCAB)
+    coeffs = expr2.as_coefficients_dict(TrCAB)
+    return coeffs[TrCAB]
+
+def LTrace(M,N=None):
+    if N is None:
+        N = M
+    return (Trace(M)*Trace(N) - Trace(M*N))/2
+
+def CAB_value(A,B):
+    return (Trace(A**2*B) - Trace(A)*Trace(A*B)
+            + sp.Rational(1,2)*Trace(B)*(Trace(A)**2 - Trace(A**2)))
 
 def get_order_symbols(name,max_order,min_order = 1):
     start = min_order
@@ -1694,7 +1780,8 @@ for name in expand_symbol_names:
 DPsi = MatrixSymbol("DPsi",3,3) # gradient of the full displacement field
 DtDPsi = MatrixSymbol("DtDPsi",3,3)#  - Time derivative term
 G = sp.Symbols("G") # Newton's constant
-Gfactor = 4*sp.pi*G # Prefactor to RHS
+rhobar = sp.Symbols("rhobar") # Average density
+Gfactor = 4*sp.pi*G*rhobar # Prefactor to RHS
 epsilon = sp.Symbol("epsilon") # LPT Perturbation parameter (dummy variable)
 
 
@@ -1716,7 +1803,7 @@ detDPsi = sp.Rational(1,6)*(Trace(DPsi)**3 - 3*Trace(DPsi)*Trace(DPsi**2)
 # RHS of the Evolution equation:
 RHS = Gfactor*(Trace(DPsi) + LDPsi + detDPsi)
 RHS_expanded = gather_terms(
-    simplify_trace_expression(
+    gather_equivalent_traces(
     process_term(RHS,symbol_dictionaries,max_order=max_order)
     ),epsilon
 )
@@ -1727,7 +1814,7 @@ C = (DPsi**2 - Trace(DPsi)*DPsi +
     sp.Rational(1,2)*(Trace(DPsi)**2 - Trace(DPsi**2))*I)
 LHS = Trace((I + Trace(DPsi)*I - DPsi + C)*DtDPsi)
 LHS_expanded = gather_terms(
-    simplify_trace_expression(
+    gather_equivalent_traces(
     process_term(LHS,symbol_dictionaries,max_order=max_order)
     ),epsilon
 )
@@ -1735,28 +1822,238 @@ LHS_expanded = gather_terms(
 # Solutions of each order:
 DtDPsi1, DtDPsi2, DtDPsi3, DtDPsi4, DtDPsi5 = symbol_dictionaries["DtDPsi"]["matrices"]
 DPsi1, DPsi2, DPsi3, DPsi4, DPsi5 = symbol_dictionaries["DPsi"]["matrices"]
+Psi1, Psi2, Psi3, Psi4, Psi5 = [MatrixSymbol(f"Psi{i}", 3, 3) for i in orders]
 
 # 1st Order:
-lpt_1 = sp.simplify((LHS_expanded[1] - RHS_expanded[1]))
-RHS_1 = lpt_1 - Trace(DtDPsi1) + Gfactor*Trace(DPsi1)
+lpt_1 = sp.simplify((RHS_expanded[1] - LHS_expanded[1]))
+RHS_1 = lpt_1 + Trace(DtDPsi1) - Gfactor*Trace(DPsi1)
+
+alphabet = "abcdefghijklmnopqrstuvwxyz"
+
+# First order solution:
+D1vals = [sp.Symbol(f"D1{alphabet[i]}") for i in range(0,1)]
+DS1vals = [sp.MatrixSymbol(f"DS1{alphabet[i]}",3,3) for i in range(0,1)]
+DtD1vals = [Gfactor*D1vals[0]]
+DPsi1_sol = sp.Add(*[D*S for D, S in zip(D1vals,DS1vals)])
+DtPsi1_rule = sp.Add(*[DtD*S for DtD, S in zip(DtD1vals,DS1vals)])
+D1a, = D1vals
+DS1a, = DS1vals
+Dt1_rhs = [DtD1 - Gfactor*D1 for DtD1, D1 in zip(DtD1vals,D1vals)]
+C1vals = {D1a:1}
+
+sub_rules1 = {DtDPsi1:DtPsi1_rule,DPsi1:DPsi1_sol}
 
 # 2nd OrdeR:
 lpt_2 = sp.simplify(simplify_trace_expression(
-    (LHS_expanded[2] - RHS_expanded[2]).subs(DtDPsi1,Gfactor*DPsi1)
+    (RHS_expanded[2] - LHS_expanded[2]).subs(sub_rules1)
 ))
-RHS_2 = lpt_2 - Trace(DtDPsi2) + Gfactor*Trace(DPsi2)
+RHS_2 = sp.expand(
+    gather_equivalent_traces(
+        lpt_2 + Trace(DtDPsi2) - Gfactor*Trace(DPsi2)
+    )
+)
+
+# Perform substitutions:
+RHS_2_1 = replace_with_L(RHS_2,DS1a,DS1a,L=sp.Symbol("L_DS1a_DS1a"))
+L_DS1a_DS1a = sp.Symbol("L_DS1a_DS1a")
+
+# Second order solution:
+D2vals = [sp.Symbol(f"D2{alphabet[i]}") for i in range(0,1)]
+DS2vals = [sp.MatrixSymbol(f"DS2{alphabet[i]}",3,3) for i in range(0,1)]
+D2a, = D2vals
+DS2a, = DS2vals
+DPsi2_sol = sp.Add(*[D*S for D, S in zip(D2vals,DS2vals)])
+DS2_rule = [LTrace(DS1a)]
+DtD2vals = [RHS_2_1.as_coefficients_dict(L_DS1a_DS1a)[L_DS1a_DS1a]
+            + Gfactor*D2a]
+DtPsi2_rule = sp.Add(*[DtD*S for DtD, S in zip(DtD2vals,DS2vals)])
+Dt2_rhs = [DtD2 - Gfactor*D2 for DtD2, D2 in zip(DtD2vals,D2vals)]
+
+
+sub_rules2 = {key:sub_rules1[key] for key in sub_rules1}
+sub_rules2[DtDPsi2] = DtPsi2_rule
+sub_rules2[DPsi2] = DPsi2_sol
+# Coefficients for the D2 solutions in EdS:
+denom_n = lambda n: (sp.Rational(2,3)*n + 1)*(n - 1)
+denom2 = denom_n(2)
+C2vals = {D2:sp.simplify(Dt2/Gfactor).subs(C1vals)/denom2
+          for D2, Dt2 in zip(D2vals,Dt2_rhs)} | C1vals
 
 # 3rd Order:
-D2 = sp.Symbol("D2")
-D1 = sp.Symbol("D1")
-lpt_3 = sp.simplify(simplify_trace_expression(
-    ((LHS_expanded[3] - RHS_expanded[3]).subs(DtDPsi1,Gfactor*DPsi1)
-    ).subs(Trace(DtDPsi2),2*(D2/D1**2)*RHS_2)
-))
-RHS_3 = lpt_3 - Trace(DtDPsi3) + Gfactor*Trace(DPsi3)
+lpt_3 = sp.simplify(
+    simplify_trace_expression(
+        (RHS_expanded[3] - LHS_expanded[3]).subs(sub_rules2)
+    )
+)
+RHS_3 = sp.expand(
+    gather_equivalent_traces(lpt_3 + Trace(DtDPsi3) - Gfactor*Trace(DPsi3))
+)
+
+# Perform substitutions:
+RHS_3_1 = replace_with_L(RHS_3,DS1a,DS2a,L=sp.Symbol("L_DS1a_DS2a"))
+RHS_3_2 = replace_with_det(RHS_3_1,DS1a,detM=sp.Symbol("det_DS1a"))
+L_DS1a_DS2a = sp.Symbol("L_DS1a_DS2a")
+det_DS1a = sp.Symbol("det_DS1a")
+
+
+# 3rd order solution:
+D3vals = [sp.Symbol(f"D3{alphabet[i]}") for i in range(0,2)]
+DS3vals = [sp.MatrixSymbol(f"DS3{alphabet[i]}",3,3) for i in range(0,2)]
+D3a, D3b = D3vals
+DS3a, DS3b = DS3vals
+DPsi3_sol = sp.Add(*[D*S for D, S in zip(D3vals,DS3vals)])
+DS3_rule = [sp.det(DS1a),LTrace(DS1a,DS2a)]
+DtD3vals = [RHS_3_2.as_coefficients_dict(det_DS1a)[det_DS1a] + Gfactor*D3a,
+            RHS_3_2.as_coefficients_dict(L_DS1a_DS2a)[L_DS1a_DS2a]
+             + Gfactor*D3b]
+DtPsi3_rule = sp.Add(*[DtD*S for DtD, S in zip(DtD3vals,DS3vals)])
+Dt3_rhs = [DtD3 - Gfactor*D3 for DtD3, D3 in zip(DtD3vals,D3vals)]
+
+sub_rules3 = {key:sub_rules2[key] for key in sub_rules2}
+sub_rules3[DtDPsi3] = DtPsi3_rule
+sub_rules3[DPsi3] = DPsi3_sol
+
+# Coefficients for the D3 solutions in EdS:
+denom3 = denom_n(3)
+C3vals = {D3:sp.simplify(Dt3/Gfactor).subs(C2vals)/denom3
+          for D3, Dt3 in zip(D3vals,Dt3_rhs)} | C2vals
+
+# 4th Order:
+lpt_4 = sp.simplify(
+    simplify_trace_expression(
+        (RHS_expanded[4] - LHS_expanded[4]).subs(sub_rules3)
+    )
+)
+RHS_4 = sp.expand(
+    gather_equivalent_traces(lpt_4 + Trace(DtDPsi4) - Gfactor*Trace(DPsi4))
+)
+
+# Perform some expected simplifications:
+RHS_4_1 = replace_with_CAB(RHS_4,DS1a,DS2a,TrCAB=sp.Symbol("TrCAB_DS1a_DS2a"))
+RHS_4_2 = replace_with_L(RHS_4_1,DS2a,DS2a,L=sp.Symbol("L_DS2a_DS2a"))
+RHS_4_3 = replace_with_L(RHS_4_2,DS1a,DS3a,L=sp.Symbol("L_DS1a_DS3a"))
+RHS_4_4 = replace_with_L(RHS_4_3,DS1a,DS3b,L=sp.Symbol("L_DS1a_DS3b"))
+L_DS1a_DS3a =sp.Symbol("L_DS1a_DS3a")
+L_DS1a_DS3b =sp.Symbol("L_DS1a_DS3b")
+L_DS2a_DS2a =sp.Symbol("L_DS2a_DS2a")
+TrCAB_DS1a_DS2a = sp.Symbol("TrCAB_DS1a_DS2a")
+
+
+# 4th order solution:
+D4vals = [sp.Symbol(f"D4{alphabet[i]}") for i in range(0,4)]
+DS4vals = [sp.MatrixSymbol(f"DS4{alphabet[i]}",3,3) for i in range(0,4)]
+D4a, D4b, D4c, D4d = D4vals
+DS4a, DS4b, DS4c, DS4d = DS4vals
+DPsi4_sol = sp.Add(*[D*S for D, S in zip(D4vals,DS4vals)])
+DS4_rule = [LTrace(DS1a,DS3a),LTrace(DS1a,DS3b),
+            LTrace(DS2a,DS2a),CAB_value(DS1a,DS2a)]
+DtD4vals = [RHS_4_4.as_coefficients_dict(L_DS1a_DS3a)[L_DS1a_DS3a]
+             + Gfactor*D4a,
+            RHS_4_4.as_coefficients_dict(L_DS1a_DS3b)[L_DS1a_DS3b]
+             + Gfactor*D4b,
+            RHS_4_4.as_coefficients_dict(L_DS2a_DS2a)[L_DS2a_DS2a]
+             + Gfactor*D4c,
+            RHS_4_4.as_coefficients_dict(TrCAB_DS1a_DS2a)[TrCAB_DS1a_DS2a]
+             + Gfactor*D4d]
+DtPsi4_rule = sp.Add(*[DtD*S for DtD, S in zip(DtD4vals,DS4vals)])
+Dt4_rhs = [DtD4 - Gfactor*D4 for DtD4, D4 in zip(DtD4vals,D4vals)]
+
+sub_rules4 = {key:sub_rules3[key] for key in sub_rules3}
+sub_rules4[DtDPsi4] = DtPsi4_rule
+sub_rules4[DPsi4] = DPsi4_sol
+
+
+# Coefficients for the D4 solutions in EdS:
+denom4 = denom_n(4)
+C4vals = {D4:sp.simplify(Dt4/Gfactor).subs(C3vals)/denom4
+          for D4, Dt4 in zip(D4vals,Dt4_rhs)} | C3vals
 
 
 
+
+# 5th Order:
+lpt_5 = sp.simplify(
+    simplify_trace_expression(
+        (RHS_expanded[5] - LHS_expanded[5]).subs(sub_rules4)
+    )
+)
+RHS_5 = sp.expand(
+    gather_equivalent_traces(lpt_5 + Trace(DtDPsi5) - Gfactor*Trace(DPsi5))
+)
+
+
+
+
+# Perform some expected simplifications:
+RHS_5_1 = replace_with_CAB(RHS_5,DS1a,DS3a,TrCAB=sp.Symbol("TrCAB_DS1a_DS3a"))
+RHS_5_2 = replace_with_CAB(RHS_5_1,DS1a,DS3b,TrCAB=sp.Symbol("TrCAB_DS1a_DS3b"))
+RHS_5_3 = replace_with_L(RHS_5_2,DS1a,DS4a,L=sp.Symbol("L_DS1a_DS4a"))
+RHS_5_4 = replace_with_L(RHS_5_3,DS1a,DS4b,L=sp.Symbol("L_DS1a_DS4b"))
+RHS_5_5 = replace_with_L(RHS_5_4,DS1a,DS4c,L=sp.Symbol("L_DS1a_DS4c"))
+RHS_5_6 = replace_with_L(RHS_5_5,DS1a,DS4d,L=sp.Symbol("L_DS1a_DS4d"))
+RHS_5_7 = replace_with_L(RHS_5_6,DS2a,DS3a,L=sp.Symbol("L_DS2a_DS3a"))
+RHS_5_8 = replace_with_L(RHS_5_7,DS2a,DS3b,L=sp.Symbol("L_DS2a_DS3b"))
+RHS_5_9 = replace_with_CAB(RHS_5_8,DS2a,DS1a,TrCAB=sp.Symbol("TrCAB_DS2a_DS1a"))
+
+TrCAB_DS1a_DS3a = sp.Symbol("TrCAB_DS1a_DS3a")
+TrCAB_DS1a_DS3b = sp.Symbol("TrCAB_DS1a_DS3b")
+L_DS1a_DS4a = sp.Symbol("L_DS1a_DS4a")
+L_DS1a_DS4b = sp.Symbol("L_DS1a_DS4b")
+L_DS1a_DS4c = sp.Symbol("L_DS1a_DS4c")
+L_DS1a_DS4d = sp.Symbol("L_DS1a_DS4d")
+L_DS2a_DS3a = sp.Symbol("L_DS2a_DS3a")
+L_DS2a_DS3b = sp.Symbol("L_DS2a_DS3b")
+TrCAB_DS2a_DS1a = sp.Symbol("TrCAB_DS2a_DS1a")
+
+# 5th order solution:
+D5vals = [sp.Symbol(f"D5{alphabet[i]}") for i in range(0,9)]
+DS5vals = [sp.MatrixSymbol(f"DS5{alphabet[i]}",3,3) for i in range(0,9)]
+D5a, D5b, D5c, D5d, D5e, D5f, D5g, D5h, D5i = D5vals
+DS5a, DS5b, DS5c, DS5d, DS5e, DS5f, DS5g, DS5h, DS5i = DS5vals
+DPsi5_sol = sp.Add(*[D*S for D, S in zip(D5vals,DS5vals)])
+DS5_rule = [LTrace(DS1a,DS4a),LTrace(DS1a,DS4b),
+            LTrace(DS1a,DS4c),LTrace(DS1a,DS4d),
+            LTrace(DS2a,DS3a),LTrace(DS2a,DS3b),
+            CAB_value(DS1a,DS3a),CAB_value(DS1a,DS3b),
+            CAB_value(DS2a,DS1a)]
+DtD5vals = [RHS_5_9.as_coefficients_dict(L_DS1a_DS4a)[L_DS1a_DS4a]
+             + Gfactor*D5a,
+            RHS_5_9.as_coefficients_dict(L_DS1a_DS4b)[L_DS1a_DS4b]
+             + Gfactor*D5b,
+            RHS_5_9.as_coefficients_dict(L_DS1a_DS4c)[L_DS1a_DS4c]
+             + Gfactor*D5c,
+            RHS_5_9.as_coefficients_dict(L_DS1a_DS4d)[L_DS1a_DS4d]
+             + Gfactor*D5d,
+            RHS_5_9.as_coefficients_dict(L_DS2a_DS3a)[L_DS2a_DS3a]
+             + Gfactor*D5e,
+            RHS_5_9.as_coefficients_dict(L_DS2a_DS3b)[L_DS2a_DS3b]
+             + Gfactor*D5f,
+            RHS_5_9.as_coefficients_dict(TrCAB_DS1a_DS3a)[TrCAB_DS1a_DS3a]
+             + Gfactor*D5g,
+            RHS_5_9.as_coefficients_dict(TrCAB_DS1a_DS3b)[TrCAB_DS1a_DS3b]
+             + Gfactor*D5h,
+            RHS_5_9.as_coefficients_dict(TrCAB_DS2a_DS1a)[TrCAB_DS2a_DS1a]
+             + Gfactor*D5i]
+DtPsi5_rule = sp.Add(*[DtD*S for DtD, S in zip(DtD5vals,DS5vals)])
+Dt5_rhs = [DtD5 - Gfactor*D5 for DtD5, D5 in zip(DtD5vals,D5vals)]
+
+sub_rules5 = {key:sub_rules4[key] for key in sub_rules4}
+sub_rules5[DtDPsi5] = DtPsi5_rule
+sub_rules5[DPsi5] = DPsi5_sol
+
+
+# Coefficients for the D4 solutions in EdS:
+denom5 = denom_n(5)
+C5vals = {D5:sp.simplify(Dt5/Gfactor).subs(C4vals)/denom5
+          for D5, Dt5 in zip(D5vals,Dt5_rhs)} | C4vals
+
+#-------------------------------------------------------------------------------
+# Initial Conditions Polynomial
+
+# Need to get the Spherical symmetry solutions to everything, and then 
+# correct 1/q to the right order, perturbing to obtain the relevant polynomial.
+
+# Should be possible to do this symbolically using the C5vals dictionary!
 
 
 
