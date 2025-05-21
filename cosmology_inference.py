@@ -532,7 +532,7 @@ def get_D_coefficients(Om,order=1,n2 = -1/143,n3a = -4/275,
         C4a0 = 2*Gfactor*C10*(2*C10**3 - C3a0)/d_factor4
         C4b0 = 2*Gfactor*C10*(2*C10*D20 - 2*C10**3 - C3b0)/d_factor4
         C4c0 = Gfactor*(2*C10**2*C20 - C20**2)/d_factor4
-        C4d0 = Gfactor*C10**4/d_factor4
+        C4d0 = Gfactor*(C10**4 - 2*C10**2*C20)/d_factor4
         # Get coefficients:
         D4a0 = C4a0*D10**4*(Om**n4a)
         D4b0 = C4b0*D10**4*(Om**n4b)

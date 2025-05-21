@@ -2063,35 +2063,35 @@ r = sp.Symbol("r")
 # 1st Order:
 S1ar = sp.Symbol("S1ar")
 S1r = [S1ar]
-Psi1_r = sp.Add(*[D*S for D, S in zip(D1vals,S1r)])
+Psi1_q = sp.Add(*[D*S for D, S in zip(D1vals,S1r)])
 # 2nd Order:
-S2ar = S1ar**2/q
-S2r = [S2ar]
-Psi2_r = sp.Add(*[D*S for D, S in zip(D2vals,S2r)])
+S2aq = S1ar**2/q
+S2q = [S2aq]
+Psi2_q = sp.Add(*[D*S for D, S in zip(D2vals,S2q)])
 # 3rd Order:
-S3ar = S1ar**3/(3*q**2)
-S3br = S1ar*S2ar/q
-S3r = [S3ar, S3br]
-Psi3_r = sp.Add(*[D*S for D, S in zip(D3vals,S3r)])
+S3aq = S1ar**3/(3*q**2)
+S3bq = S1ar*S2aq/q
+S3q = [S3aq, S3bq]
+Psi3_q = sp.Add(*[D*S for D, S in zip(D3vals,S3q)])
 # 4th Order:
-S4ar = S1ar*S3ar/q
-S4br = S1ar*S3br/q
-S4cr = S2ar**2/q
-S4dr = S1ar**2*S2ar/q**2
-S4r = [S4ar,S4br,S4cr,S4dr]
-Psi4_r = sp.Add(*[D*S for D, S in zip(D4vals,S4r)])
+S4aq = S1ar*S3aq/q
+S4bq = S1ar*S3bq/q
+S4cq = S2aq**2/q
+S4dq = S1ar**2*S2aq/q**2
+S4q = [S4aq,S4bq,S4cq,S4dq]
+Psi4_q = sp.Add(*[D*S for D, S in zip(D4vals,S4q)])
 # 5th Order:
-S5ar = S1ar*S4ar/q
-S5br = S1ar*S4br/q
-S5cr = S1ar*S4cr/q
-S5dr = S1ar*S4dr/q
-S5er = S2ar*S3ar/q
-S5fr = S2ar*S3br/q
-S5gr = S1ar**2*S3ar/q**2
-S5hr = S1ar**2*S3br/q**2
-S5ir = S2ar**2*S1ar/q**2
-S5r = [S5ar,S5br,S5cr,S5dr,S5er,S5fr,S5gr,S5hr,S5ir]
-Psi5_r = sp.Add(*[D*S for D, S in zip(D5vals,S5r)])
+S5aq = S1ar*S4aq/q
+S5bq = S1ar*S4bq/q
+S5cq = S1ar*S4cq/q
+S5dq = S1ar*S4dq/q
+S5eq = S2aq*S3aq/q
+S5fq = S2aq*S3bq/q
+S5gq = S1ar**2*S3aq/q**2
+S5hq = S1ar**2*S3bq/q**2
+S5iq = S2aq**2*S1ar/q**2
+S5q = [S5aq,S5bq,S5cq,S5dq,S5eq,S5fq,S5gq,S5hq,S5iq]
+Psi5_q = sp.Add(*[D*S for D, S in zip(D5vals,S5q)])
 
 
 
@@ -2099,15 +2099,140 @@ Psi5_r = sp.Add(*[D*S for D, S in zip(D5vals,S5r)])
 # r = q + Psi_r
 # q = r - Psi_r
 # 1/q = (1/r)*(1/(1 - Psi_r/r))
+Psi_q_vals = [Psi1_q,Psi2_q,Psi3_q,Psi4_q,Psi5_q]
+Psi_q = sp.Add(*[psi*epsilon**n for psi, n in zip(Psi_q_vals,range(1,6))])
+
+q_rec = ((1/r)*sp.series(1/(1-Psi_q/r),epsilon,n=6))
+q_val = r*sp.series(1-Psi_q/r,epsilon,n=6)
+
+ncount = 0
+# Repeatedly substitute expression into itself so that q never appears:
+while (q_rec.has(q) or q_val.has(q)) and ncount < 10:
+    q_rec = sp.series(q_rec.subs(q,q_val),epsilon,n=6)
+    q_val = sp.series(q_val.subs(q,q_val),epsilon,n=6)
+    ncount += 1
+
+q_rec_dict = q_rec.as_coefficients_dict(epsilon)
+qrec_rule = sp.Add(*[q_rec_dict[epsilon**n] for n in range(0,6)])
+
+q2_rec = sp.series(q_rec**2,epsilon,n=6)
+q2_rec_dict = q2_rec.as_coefficients_dict(epsilon)
+
+
+q3_rec = sp.series(q_rec**3,epsilon,n=6)
+q3_rec_dict = q3_rec.as_coefficients_dict(epsilon)
+
+q4_rec = sp.series(q_rec**4,epsilon,n=6)
+q4_rec_dict = q4_rec.as_coefficients_dict(epsilon)
+
+def strip_epsilon(expr):
+    epsilon = sp.Symbol("epsilon")
+    if isinstance(expr,sp.Add):
+        return sp.Add(*[term for term in expr.subs(epsilon,1).args 
+                        if not isinstance(term,sp.Order)])
+    else:
+        return expr.subs(epsilon,1)
+
+def get_r_only_term(S,n,q_val,nmax=6,with_epsilon=False):
+    epsilon = sp.Symbol("epsilon")
+    expansion = sp.series((S*epsilon**n).subs(q,q_val),epsilon,n=nmax)
+    if with_epsilon:
+        return expansion
+    else:
+        return strip_epsilon(expansion)
+
+
+# Now give terms that only have r-dependence, not q:
+# 2nd order:
+S2ar = sp.expand(get_r_only_term(S2aq,2,q_val,with_epsilon=True))
+S2r = [S2ar]
+# 3rd order:
+S3ar, S3br = [sp.expand(get_r_only_term(S3,3,q_val,with_epsilon=True)) 
+              for S3 in S3q]
+S3r = [S3ar, S3br]
+# 4th order:
+S4ar, S4br, S4cr, S4dr = [
+    sp.expand(get_r_only_term(S4,4,q_val,with_epsilon=True)) for S4 in S4q]
+S4r = [S4ar, S4br, S4cr, S4dr]
+# 5th order:
+S5ar, S5br, S5cr, S5dr, S5er, S5fr, S5gr, S5hr, S5ir = [
+    sp.expand(get_r_only_term(S5,5,q_val,with_epsilon=True)) for S5 in S5q]
+S5r = [S5ar, S5br, S5cr, S5dr, S5er, S5fr, S5gr, S5hr, S5ir]
+# Derivation of the ICs polynomial:
+Psi_r = sp.Symbol("Psi_r")
+Psi1_r = sp.expand(sp.Add(*[D*S for D, S in zip(D1vals,S1r)]))*epsilon
+Psi2_r = sp.expand(sp.Add(*[D*S for D, S in zip(D2vals,S2r)]))
+Psi3_r = sp.expand(sp.Add(*[D*S for D, S in zip(D3vals,S3r)]))
+Psi4_r = sp.expand(sp.Add(*[D*S for D, S in zip(D4vals,S4r)]))
+Psi5_r = sp.expand(sp.Add(*[D*S for D, S in zip(D5vals,S5r)]))
 Psi_r_vals = [Psi1_r,Psi2_r,Psi3_r,Psi4_r,Psi5_r]
-Psi_r = sp.Add(*[psi*epsilon**n for psi, n in zip(Psi_r_vals,range(1,6))])
-u = Psi_r/r
+Psi_r_rule = sp.expand(sp.Add(*[psi for psi in Psi_r_vals]))
+Psi_r_dict = Psi_r_rule.as_coefficients_dict(epsilon)
+Psi_r_expr = sp.Add(*[Psi_r_dict[epsilon**n]*epsilon**n for n in range(0,6)])
+Delta_f = -3*Psi_r_expr/r + 3*(Psi_r_expr/r)**2 - (Psi_r_expr/r)**3
+Delta_f_dict = sp.expand(Delta_f).as_coefficients_dict(epsilon)
+
+A1, A2, A3, A4, A5 = [sp.expand(Delta_f_dict[epsilon**n]*(r/S1ar)**n)
+                      for n in range(1,6)]
+
+B1, B2, B3, B4, B5 = [sp.expand(psi*q**(n-1)/(S1ar**n)) 
+                      for psi, n in zip(Psi_q_vals,range(1,6))]
 
 
+Bn = [B1, B2, B3, B4, B5]
+Bn_val = [Bi.subs(C5vals) for Bi in Bn]
+Bn_num = [float(Bi) for Bi in Bn_val]
+B1n, B2n, B3n, B4n, B5n = Bn_num
+
+An = [A1, A2, A3, A4, A5]
+An_val = [Ai.subs(C5vals) for Ai in An]
+An_num = [float(Ai) for Ai in An_val]
+
+A1n, A2n, A3n, A4n, A5n = An_num
+p5 = lambda u: A5n*u**5 + A4n*u**4 + A3n*u**3 + A2n*u**2 + A1n*u
+p4 = lambda u: A4n*u**4 + A3n*u**3 + A2n*u**2 + A1n*u
+p3 = lambda u: A3n*u**3 + A2n*u**2 + A1n*u
+p2 = lambda u: A2n*u**2 + A1n*u
+p1 = lambda u: A1n*u
+
+pb1 = lambda u: B1n*u
+pb2 = lambda u: pb1(u) + B2n*u**2
+pb3 = lambda u: pb2(u) + B3n*u**3
+pb4 = lambda u: pb3(u) + B4n*u**4
+pb5 = lambda u: pb4(u) + B5n*u**5
 
 
+p2min = p2(-A1n/(2*A2n))
+pb2min = pb2(-B1n/(2*B2n))
 
+import matplotlib.pylab as plt
+import numpy as np
+import seaborn as sns
+seabornColormap = sns.color_palette("colorblind",as_cmap=True)
 
+#plt.clf()
+textwidth=7.1014
+uvals = np.linspace(-1,1,1000)
+fig, ax = plt.subplots(figsize = (0.45*textwidth,0.45*textwidth))
+plt.plot(uvals,pb1(uvals),color=seabornColormap[1],linestyle="-",label="$p_1(u)$")
+plt.plot(uvals,pb2(uvals),color=seabornColormap[2],linestyle="--",label="$p_2(u)$")
+plt.plot(uvals,pb3(uvals),color=seabornColormap[3],linestyle="-",label="$p_3(u)$")
+plt.plot(uvals,pb4(uvals),color=seabornColormap[4],linestyle="--",label="$p_4(u)$")
+plt.plot(uvals,pb5(uvals),color=seabornColormap[6],linestyle="-",label="$p_5(u)$")
+#plt.plot(uvals,p_exact(uvals),color=seabornColormap[7],linestyle=":",label="$Exact, \\Psi_r/r$")
+plt.axhline(-1.0,color="grey",linestyle=":")
+plt.axhline(p2min,color="grey",linestyle="-.",
+            label="$\\Delta_f = $" + ("%.2g" % p2min))
+plt.axhline(0.0,color="grey",linestyle=":")
+plt.xlabel("$u = S_{1r}/q$")
+plt.ylabel("$p_n(u), \\psi_r/q = (1 + \\Delta_f)^{-1/3} - 1$")
+plt.ylim([-1.1,1.1])
+plt.xlim([-1,1])
+plt.legend(frameon=False,loc="upper left")
+#plt.tight_layout()
+plt.subplots_adjust(left=0.25,bottom=0.15,right=0.95,top=0.95)
+#plt.savefig(figuresFolder + "pn_plot_all.pdf")
+plt.show()
 
 
 
