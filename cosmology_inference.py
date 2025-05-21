@@ -1056,7 +1056,7 @@ def get_S2r(Delta_r,rval,Om,n2 = -1/143,n3a = -4/275,n3b = -269/17875,order=2,
                       n3b = n3b,correct_ics=correct_ics,
                       perturbative_ics = perturbative_ics,**kwargs)
     S2r = ratio_where_finite(S1r**2,rval,undefined_value=0.0)
-    if perturbative_ics
+    if perturbative_ics:
         if order >= 3:
             S2r = S2r + D10*ratio_where_finite(S1r**3,rval**2,
                                                undefined_value=0.0)
