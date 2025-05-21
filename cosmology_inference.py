@@ -757,7 +757,6 @@ def get_initial_condition_non_perturbative(Delta,order=1,Om=0.3,n2 = -1/143,
         ulow = -1.0
         # Split between scalar and array cases:
         if np.isscalar(Delta):
-                return 0.0 # Solution is trivial if Delta is exactly zero
             if Delta < delta_min4:
                 if use_linear_on_fail:
                     return RHS/D10
