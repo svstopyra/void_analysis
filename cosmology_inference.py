@@ -497,7 +497,7 @@ def get_profile_derivative(r,Delta,order,delta=None,deltap = None,deltapp=None,
 def get_D_coefficients(Om,order=1,n2 = -1/143,n3a = -4/275,
                        n3b = -269/17875,n4a = 0.0,n4b=0.0,n4c = 0.0,n4d = 0.0,
                        n5a=0.0,n5b=0.0,n5c=0.0,n5d=0.0,n5e=0.0,n5f=0.0,
-                       return_all = False,**kwargs):
+                       n5g=0.0,n5h=0.0,n5i=0.0,return_all = False,**kwargs):
     if order not in [1,2,3,4,5]:
         raise Exception("Perturbation order invalid or not implemented.")
     if order >= 1:
@@ -546,14 +546,17 @@ def get_D_coefficients(Om,order=1,n2 = -1/143,n3a = -4/275,
     if order >= 5:
         d_factor5 = deriv_factor(5*power1)
         # Work out exact fractional pre-factors, using EdS special case:
-        C5a0 = -2*Gfactor*C10*(4*C10**4 - 4*C10*C3a0 + C4a0)/d_factor5
+        C5a0 = -2*Gfactor*C10*(4*C10**4 - 2*C10*C3a0 + C4a0)/d_factor5
         C5b0 = -2*Gfactor*C10*(4*C10**2*C20 - 4*C10**4 - 2*C10*C3b0
                                 + C4b0)/d_factor5
         C5c0 = -2*Gfactor*C10*(2*C10**2*C20 - C20**2 + C4c0)/d_factor5
-        C5d0 = -2*Gfactor*C10*(C10**4 + C4d0)/d_factor5
+        C5d0 = -2*Gfactor*C10*(C10**4 - 2*C10**2*C20 + C4d0)/d_factor5
         C5e0 = 2*Gfactor*(2*C10**3*C20 - C3a0*C20 + C3a0*C10**2)/d_factor5
         C5f0 = 2*Gfactor*(2*C10*C20**2 - 2*C10**3*C20 - C3b0*C20 
                           + C3b0*C10**2)/d_factor5
+        C5g0 = 2*Gfactor*(C10**5 - C10**2*C3a0)/d_factor5
+        C5h0 = 2*Gfactor*( - C10**5 + C10**3*C20 - C10**2*C3b0)
+        C5i0 = 2*Gfactor*(C10**3*C20 - C10*C20**2)
         # Get coefficients:
         D5a0 = C5a0*D10**5*(Om**n5a)
         D5b0 = C5b0*D10**5*(Om**n5b)
@@ -561,12 +564,15 @@ def get_D_coefficients(Om,order=1,n2 = -1/143,n3a = -4/275,
         D5d0 = C5d0*D10**5*(Om**n5d)
         D5e0 = C5e0*D10**5*(Om**n5e)
         D5f0 = C5f0*D10**5*(Om**n5f)
+        D5g0 = C5g0*D10**5*(Om**n5g)
+        D5h0 = C5h0*D10**5*(Om**n5h)
+        D5i0 = C5i0*D10**5*(Om**n5i)
         if order == 5:
             if return_all:
                 return [D10, D20, D3a0, D3b0, D4a0, D4b0, D4c0, D4d0, D5a0, 
-                        D5b0, D5c0, D5d0, D5e0, D5f0]
+                        D5b0, D5c0, D5d0, D5e0, D5f0, D5g0, D5h0, D5i0]
             else:
-                return [D5a0, D5b0, D5c0, D5d0, D5e0, D5f0]
+                return [D5a0, D5b0, D5c0, D5d0, D5e0, D5f0, D5g0, D5h0, D5i0]
 
 def get_ic_polynomial_coefficients(order,Om=0.3,n2 = -1/143,n3a = -4/275,
                           n3b = -269/17875,**kwargs):
@@ -596,14 +602,217 @@ def get_ic_polynomial_coefficients(order,Om=0.3,n2 = -1/143,n3a = -4/275,
         if order == 4:
             return A1, A2, A3, A4
     if order >= 5:
-        [D5a0, D5b0, D5c0, D5d0, D5e0, D5f0] = coeffs[8:14]
+        [D5a0, D5b0, D5c0, D5d0, D5e0, D5f0, D5g0, D5h0, D5i0] = coeffs[8:17]
         A5 = (-D20*(D3a0 + 3*D3b0) - D10*(D4a0 + 3*D4b0 + 3*D4c0 + 3*D4d0)
-           - (D5a0 + 3*D5b0 + 3*D5c0 + 3*D5d0 + D5e0 + 3*D5f0))/D10
+           - (D5a0 + 3*D5b0 + 3*D5c0 + 3*D5d0 + D5e0 + 3*D5f0
+              + D5g0 + 3*D5h0 + 3*D5i0))/D10
         if order == 5:
             return A1, A2, A3, A4, A5
 
+def get_nonperturbative_polynomial_coefficients(
+        order,Om=0.3,n2 = -1/143,n3a = -4/275,n3b = -269/17875,**kwargs):
+    if order not in [1,2,3,4,5]:
+        raise Exception("Perturbation order invalid or not implemented.")
+    coeffs = get_D_coefficients(
+        Om,order=order,n2 = n2,n3a = n3a,n3b = n3b,return_all = True,**kwargs
+    )
+    if order >= 1:
+        D10 = coeffs[0]
+        B1 = D10
+        if order == 1:
+            return B1
+    if order >= 2:
+        D20 = coeffs[1]
+        B2 = D20
+        if order == 2:
+            return B1, B2
+    if order >=3:
+        [D3a0, D3b0] = coeffs[2:4]
+        B3 = D3a0/3 + D3b0
+        if order == 3:
+            return B1, B2, B3
+    if order >=4:
+        [D4a0, D4b0, D4c0, D4d0] = coeffs[4:8]
+        B4 = (D4a0/3 + D4b0 + D4c0 + D4d0)
+        if order == 4:
+            return B1, B2, B3, B4
+    if order >= 5:
+        [D5a0, D5b0, D5c0, D5d0, D5e0, D5f0, D5g0, D5h0, D5i0] = coeffs[8:17]
+        B5 = (D5a0/3 + D5b0 + D5c0 + D5d0 + D5e0/3 + D5f0
+               + D5g0/3 + D5h0 + D5i0)
+        if order == 5:
+            return B1, B2, B3, B4, B5
+
+def get_initial_condition_non_perturbative(Delta,order=1,Om=0.3,n2 = -1/143,
+                                           n3a = -4/275,n3b = -269/17875,
+                                           use_linear_on_fail=False,**kwargs):
+    """
+    Solve the equation for the LPT initial conditions. Using a non-perturbative
+    expression for Psi_r/q that avoids having to expand and approximate r/q.
+    Effectively resums this series to avoid convergence issues.
+    
+    Parameters:
+        Delta (float or array): Densities at which to solve for the initial
+                                condition.
+        order (int): Perturbation order to find the solution for
+        Om (float): Matter density parameter
+        n2 (float): Exponent for the second roder growth function
+        n3a (float): Exponent for the first 3rd-order growth function.
+        n3b (float): Exponent for the second 3rd order growth function.
+        use_linear_on_fail (bool): If True, defaults to the linear solution
+                                   when we fail to find a solution for 2LPT.
+                                   Otherwise, generates warnings and produces
+                                   nan values as the solution.
+    Returns:
+        float or array: Solution for S_1r/r at this value of Delta
+    """
+    if order not in [1,2,3,4,5]:
+        raise Exception("Perturbation order invalid or not implemented.")
+    RHS = 1.0/np.cbrt(1.0 + Delta) - 1.0
+    if order == 1:
+        # Linear solution, known analytically:
+        D10 = D1(0,Om,**kwargs)
+        return RHS/D10
+    if order == 2:
+        # Quadratic solution. This is known analytically, but has the potential
+        # to be non-existant. In which case, we shouldn't return an imaginary
+        # number, but instead report this to the user, since it indicates
+        # that we have gone beyond the bounds where 2LPT is applicable:
+        B1, B2 = get_nonperturbative_polynomial_coefficients(
+            order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,**kwargs
+        )
+        B0 = -RHS
+        discriminant = B1**2 - 4*B2*B0
+        # Split between vector and scalar cases:
+        if np.isscalar(Delta):
+            if discriminant < 0:
+                if use_linear_on_fail:
+                    return RHS/D10
+                else:
+                    print("2LPT solution for initial conditions " + 
+                          "does not exist.")
+                    return np.nan
+            else:
+                # Two solutions exist. In general, only the negative solution
+                # will actually be consistent with 3LPT, so we should pick that 
+                # one:
+                return (-B1 - np.sqrt(discriminant))/(2*B2)
+        else:
+            have_no_solution = (discriminant < 0)
+            solution = np.zeros(Delta.shape)
+            if use_linear_on_fail:
+                solution[have_no_solution] = RHS[have_no_solution]/D10
+            else:
+                if np.any(have_no_solution):
+                    print("Warning: no 2LPT solution for some values of " + 
+                          "input. Returning nan for these values.")
+                solution[have_no_solution] = np.nan
+            have_solution = np.logical_not(have_no_solution)
+            solution[have_solution] = (
+                -B1 - np.sqrt(discriminant[have_solution])
+            )/(2*B2)
+            return solution
+    if order == 3:
+        # Cubic solution. For even vaguely sensible parameters, 
+        # there is always a unique solution. We can use the linear solution as 
+        # an initial guess and then solve numerically:
+        # Compute coefficient of the polynomial:
+        B1, B2, B3 = get_nonperturbative_polynomial_coefficients(
+            order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,**kwargs
+        )
+        B0 = -RHS
+        f = lambda u: B3*u**3 + B2*u**2 + B1*u
+        # Figure out the correct bounds for the problem:
+        RHS_max = np.max(RHS)
+        uupp = RHS_max/D10
+        ulow = -1.0
+        count = 0
+        while f(uupp) < RHS_max:
+            uupp *= 10
+            count += 1
+            if count > 10:
+                raise Exception("Failing to find valid boundary for solver.")
+        # Solve numerically:
+        if np.isscalar(Delta):
+            solution = scipy.optimize.brentq(lambda u: f(u) + B0,ulow,uupp)[0]
+        else:
+            solution = np.array(
+                [scipy.optimize.brentq(lambda u: f(u) + C,ulow,uupp)[0]
+                for C in B0]
+            )
+        return solution
+    if order == 4:
+        B0 = -RHS
+        B1, B2, B3, B4 = get_nonperturbative_polynomial_coefficients(
+            order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,**kwargs
+        )
+        f = lambda u: B4*u**4 + B3*u**3 + B2*u**2 + B1*u
+        # Check we aren't below the minimum possible density for 4LPT:
+        p4p = lambda u: 4*B4*u**3 + 3*AB*u**2 + 2*AB*u + B1
+        turning_point = scipy.optimize.fsolve(p4p,0.5)[0]
+        Psir_q_min4 = f(turning_point)
+        delta_min4 = 1.0/(1.0 + Psir_q_min4)**3 - 1.0
+        # Figure out the correct bounds for the problem:
+        uupp = turning_point
+        ulow = -1.0
+        # Split between scalar and array cases:
+        if np.isscalar(Delta):
+                return 0.0 # Solution is trivial if Delta is exactly zero
+            if Delta < delta_min4:
+                if use_linear_on_fail:
+                    return RHS/D10
+                else:
+                    print("4LPT solution for initial conditions " + 
+                          "does not exist.")
+                    return np.nan
+            else:
+                return scipy.optimize.brentq(lambda u: f(u) + B0,ulow,uupp)
+        else:
+            have_no_solution = (Delta < delta_min4)
+            solution = np.zeros(Delta.shape)
+            if use_linear_on_fail:
+                solution[have_no_solution] = RHS[have_no_solution]/D10
+            else:
+                if np.any(have_no_solution):
+                    print("Warning: no 4LPT solution for some values of " + 
+                          "input. Returning nan for these values.")
+                solution[have_no_solution] = np.nan
+            have_solution = np.logical_not(have_no_solution) & (Delta != 0.0)
+            # Solution:
+            solution[have_solution] = np.array(
+                [scipy.optimize.brentq(lambda u: f(u) + C,ulow,uupp)
+                for C in B0[have_solution]]
+            )
+            return solution
+    if order == 5:
+        B0 = -RHS
+        B1, B2, B3, B4, B5 = get_nonperturbative_polynomial_coefficients(
+            order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,**kwargs
+        )
+        f = lambda u: B5*u**5 + B4*u**4 + B3*u**3 + B2*u**2 + B1*u
+        # Figure out the correct bounds for the problem:
+        RHS_max = np.max(RHS)
+        uupp = RHS_max/D10
+        ulow = -1.0
+        count = 0
+        while f(uupp) < RHS_max:
+            uupp *= 10
+            count += 1
+            if count > 10:
+                raise Exception("Failing to find valid boundary for solver.")
+        # Solve:
+        if np.isscalar(Delta):
+            solution = scipy.optimize.brentq(lambda u: f(u) + B0,ulow,uupp)
+        else:
+            solution = np.array(
+                [scipy.optimize.brentq(lambda u: f(u) + C,ulow,uupp)
+                for C in A0]
+            )
+        return solution
+
 def get_initial_condition(Delta,order=1,Om=0.3,n2 = -1/143,n3a = -4/275,
-                          n3b = -269/17875,use_linear_on_fail=False,**kwargs):
+                          n3b = -269/17875,use_linear_on_fail=False,
+                          **kwargs):
     """
     Solve the equation for the LPT initial conditions. At first and 2nd order
     this can be done analytically, but at 3rd order a cubic must be solved, 
@@ -805,32 +1014,22 @@ def get_S1r(Delta_r,rval,Om,order=1,n2 = -1/143,n3a = -4/275,n3b = -269/17875,
     """
     D10 = D1(0,Om,**kwargs)
     if correct_ics:
+        # Solve for the initial conditions, possibly numerically:
         if perturbative_ics:
-            # Apply relevant correction terms up to specified order:
-            D20 = -(3/7)*(Om**n2)*D10**2
-            D3a0 = -(1/3)*(Om**n3a)*D10**3
-            D3b0 = +(10/21)*(Om**n3b)*D10**3
-            if order >= 1:
-                S1r = -rval*Delta_r/(3*D10)
-            if order >= 2:
-                S1r = S1r + rval*(D10**2 - D20)*Delta_r**2/(9*D10**3)
-            if order >= 3:
-                S1r = S1r + (rval/(27*D10**3))*(
-                                   2*D20 - 8*D10**2/3 - 2*D20**2/D10**2
-                                   + D3a0/(3*D10) + 2*D3b0/D10)*Delta_r**3
-            if order >=4:
-                raise Exception("Corrections of order " + str(order) + 
-                                " not yet implemented.")
+            S1r = rval*get_initial_condition(
+                Delta_r,order=order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,**kwargs
+            )
         else:
-            # Solve for the initial conditions, possibly numerically:
-            S1r = rval*get_initial_condition(Delta_r,order=order,Om=Om,n2 = n2,
-                                             n3a = n3a,n3b = n3b,**kwargs)
+            S1r = rval*get_initial_condition_non_perturbative(
+                Delta_r,order=order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,**kwargs
+            )
     else:
         S1r = -rval*Delta_r/(3*D10)
     return S1r
 
 def get_S2r(Delta_r,rval,Om,n2 = -1/143,n3a = -4/275,n3b = -269/17875,order=2,
-            correct_ics=True,perturbative_ics = False,S1r=None,**kwargs):
+            perturbative_ics = False,S1r=None,
+            **kwargs):
     """
     Compute the spatial part of the second order Lagrangian perturbation, by 
     matching to the provided final density field.
@@ -845,45 +1044,36 @@ def get_S2r(Delta_r,rval,Om,n2 = -1/143,n3a = -4/275,n3b = -269/17875,order=2,
         n2 (float): Exponent for the second roder growth function
         n3a (float): Exponent for the first 3rd-order growth function.
         n3b (float): Exponent for the second 3rd order growth function.
-        correct_ics (bool): If True, apply perturbative corrections to the 
-                            initial conditions. If False, same correction at all
-                            orders.
+        perturbative_ics (bool): If True, apply perturbative corrections to 
+                                estimate ICs. If False (default) use the 
+                                resummed r/q expansion to avoid this, 
+                                giving a non-perturbative result for r/q
     Returns:
         float or array: Value of S_{2r}
     """
-    if correct_ics:
-        D10 = D1(0,Om,**kwargs)
-        if perturbative_ics:
-            # Estimate the initial conditions perturbatively:
-            D20 = -(3/7)*(Om**n2)*D10**2
-            if order >= 2:
-                S2r = rval*Delta_r**2/(9*D10**2)
-            if order >= 3:
-                S2r = S2r - rval*(3*D10**2 - 2*D20)*Delta_r**3/(27*D10**4)
-        else:
-            # Solve for initial conditions (numerically if 3rd order):
-            if S1r is None:
-                S1r = get_S1r(Delta_r,rval,Om,order=order,n2 = n2,n3a = n3a,
-                              n3b = n3b,correct_ics=correct_ics,
-                              perturbative_ics = perturbative_ics,**kwargs)
-            S2r = ratio_where_finite(S1r**2,rval,undefined_value=0.0)
-            if order >= 3:
-                S2r = S2r + D10*ratio_where_finite(S1r**3,rval**2,
-                                                   undefined_value=0.0)
-            if order >= 4:
-                D20 = get_D_coefficients(Om,order=2,return_all = False,**kwargs)[0]
-                S2r += (D20 + D10**2)*ratio_where_finite(S1r**4,rval**3,
-                                                   undefined_value=0.0)
-            if order >= 5:
-                [D3a0, D3b0] = get_D_coefficients(Om,order=3,return_all = False,**kwargs)
-                S2r += (3*D10*D20 + D3a0/3 + D3b0 + D10**3)*ratio_where_finite(
-                    S1r**5,rval**4,undefined_value=0.0
-                )
-    else:
-        S2r = (rval/9)*Delta_r**2
+    # Solve for initial conditions (numerically if 3rd order):
+    if S1r is None:
+        S1r = get_S1r(Delta_r,rval,Om,order=order,n2 = n2,n3a = n3a,
+                      n3b = n3b,correct_ics=correct_ics,
+                      perturbative_ics = perturbative_ics,**kwargs)
+    S2r = ratio_where_finite(S1r**2,rval,undefined_value=0.0)
+    if perturbative_ics
+        if order >= 3:
+            S2r = S2r + D10*ratio_where_finite(S1r**3,rval**2,
+                                               undefined_value=0.0)
+        if order >= 4:
+            D20 = get_D_coefficients(Om,order=2,return_all = False,**kwargs)[0]
+            S2r += (D20 + D10**2)*ratio_where_finite(S1r**4,rval**3,
+                                               undefined_value=0.0)
+        if order >= 5:
+            [D3a0, D3b0] = get_D_coefficients(Om,order=3,return_all = False,
+                                              **kwargs)
+            S2r += (3*D10*D20 + D3a0/3 + D3b0 + D10**3)*ratio_where_finite(
+                S1r**5,rval**4,undefined_value=0.0
+            )
     return S2r
 
-def get_S3r(Delta_r,rval,Om,order=3,correct_ics=True,perturbative_ics = False,
+def get_S3r(Delta_r,rval,Om,order=3,perturbative_ics = False,
             S1r = None,apply_higher_order_corrections=True,**kwargs):
     """
     Compute the spatial part of the third order Lagrangian perturbation, by 
@@ -896,7 +1086,6 @@ def get_S3r(Delta_r,rval,Om,order=3,correct_ics=True,perturbative_ics = False,
         order (int): Order of Lagrangian perturbation theory being used. Note 
                      that the correction can be different at different orders 
                      due to corrections to the initial conditions.
-        correct_ics(bool): Default True. If True, apply IC correction.
         S1r (float or array): Precomputed value of S1r (otherwise, this is
                               computed from scratch)
         perturbative_ics (bool): If True, use a perturbative expansion 
@@ -911,13 +1100,13 @@ def get_S3r(Delta_r,rval,Om,order=3,correct_ics=True,perturbative_ics = False,
         S3br (float or array): Value of S_{3br}
     """
     D10 = D1(0,Om,**kwargs)
-    if correct_ics and not perturbative_ics:
-        if S1r is None:
-            S1r = get_S1r(Delta_r,rval,Om,order=order,n2 = n2,n3a = n3a,
-                          n3b = n3b,correct_ics=True,
-                          perturbative_ics = False,**kwargs)
-        S3ar = ratio_where_finite(S1r**3,3*rval**2,undefined_value=0.0)
-        S3br = ratio_where_finite(S1r**3,rval**2,undefined_value=0.0)
+    if S1r is None:
+        S1r = get_S1r(Delta_r,rval,Om,order=order,n2 = n2,n3a = n3a,
+                      n3b = n3b,correct_ics=True,
+                      perturbative_ics = False,**kwargs)
+    S3ar = ratio_where_finite(S1r**3,3*rval**2,undefined_value=0.0)
+    S3br = ratio_where_finite(S1r**3,rval**2,undefined_value=0.0)
+    if perturbative_ics:
         if order >= 4:
             S3ar += 2*D10*ratio_where_finite(S1r**4,3*rval**3)
             S3br += 2*D10*ratio_where_finite(S1r**4,rval**3)
@@ -925,12 +1114,9 @@ def get_S3r(Delta_r,rval,Om,order=3,correct_ics=True,perturbative_ics = False,
             D20 = get_D_coefficients(Om,order=2,return_all = False,**kwargs)[0]
             S3ar += (2*D20 + 3*D10**2)*ratio_where_finite(S1r**5,3*rval**4)
             S3br += (2*D20 + 3*D10**2)*ratio_where_finite(S1r**5,rval**4)
-    else:
-        S3ar = -(rval/(81*D10**3))*Delta_r**3
-        S3br = - (rval/(27*D10**3))*Delta_r**3
     return S3ar, S3br
 
-def get_S4r(Delta_r,rval,Om,order=4,correct_ics=True,perturbative_ics = False,
+def get_S4r(Delta_r,rval,Om,order=4,perturbative_ics = False,
             S1r = None,**kwargs):
     """
     Compute the spatial part of the fourth order Lagrangian perturbation, by 
@@ -943,7 +1129,6 @@ def get_S4r(Delta_r,rval,Om,order=4,correct_ics=True,perturbative_ics = False,
         order (int): Order of Lagrangian perturbation theory being used. Note 
                      that the correction can be different at different orders 
                      due to corrections to the initial conditions.
-        correct_ics(bool): Default True. If True, apply IC correction.
         S1r (float or array): Precomputed value of S1r (otherwise, this is
                               computed from scratch)
         perturbative_ics (bool): If True, use a perturbative expansion 
@@ -959,28 +1144,23 @@ def get_S4r(Delta_r,rval,Om,order=4,correct_ics=True,perturbative_ics = False,
         S4dr (float or array): Value of S_{4dr}
     """
     D10 = D1(0,Om,**kwargs)
-    if correct_ics and not perturbative_ics:
-        if S1r is None:
-            S1r = get_S1r(Delta_r,rval,Om,order=order,n2 = n2,n3a = n3a,
-                          n3b = n3b,correct_ics=True,
-                          perturbative_ics = False,**kwargs)
-        S4ar = ratio_where_finite(S1r**4,3*rval**3,undefined_value=0.0)
-        S4br = ratio_where_finite(S1r**4,rval**3,undefined_value=0.0)
-        S4cr = ratio_where_finite(S1r**4,rval**3,undefined_value=0.0)
-        S4dr = ratio_where_finite(S1r**4,rval**3,undefined_value=0.0)
+    if S1r is None:
+        S1r = get_S1r(Delta_r,rval,Om,order=order,n2 = n2,n3a = n3a,
+                      n3b = n3b,correct_ics=True,
+                      perturbative_ics = False,**kwargs)
+    S4ar = ratio_where_finite(S1r**4,3*rval**3,undefined_value=0.0)
+    S4br = ratio_where_finite(S1r**4,rval**3,undefined_value=0.0)
+    S4cr = ratio_where_finite(S1r**4,rval**3,undefined_value=0.0)
+    S4dr = ratio_where_finite(S1r**4,rval**3,undefined_value=0.0)
+    if perturbative_ics:
         if order >= 5:
             S4ar += D10*ratio_where_finite(S1r**5,rval**4)
             S4br += 3*D10*ratio_where_finite(S1r**5,rval**4)
             S4cr += 3*D10*ratio_where_finite(S1r**5,rval**4)
             S4dr += 3*D10*ratio_where_finite(S1r**5,rval**4)
-    else:
-        S4ar = (rval/(243*D10**4))*Delta_r**4
-        S4br = (rval/(81*D10**4))*Delta_r**4
-        S4cr = (rval/(81*D10**4))*Delta_r**4
-        S4dr = (rval/(81*D10**4))*Delta_r**4
     return S4ar, S4br, S4cr, S4dr
 
-def get_S5r(Delta_r,rval,Om,order=5,correct_ics=True,perturbative_ics = False,
+def get_S5r(Delta_r,rval,Om,order=5,perturbative_ics = False,
             S1r = None,**kwargs):
     """
     Compute the spatial part of the fifth order Lagrangian perturbation, by 
@@ -997,7 +1177,6 @@ def get_S5r(Delta_r,rval,Om,order=5,correct_ics=True,perturbative_ics = False,
         order (int): Order of Lagrangian perturbation theory being used. Note 
                      that the correction can be different at different orders 
                      due to corrections to the initial conditions.
-        correct_ics(bool): Default True. If True, apply IC correction.
         S1r (float or array): Precomputed value of S1r (otherwise, this is
                               computed from scratch)
         perturbative_ics (bool): If True, use a perturbative expansion 
@@ -1015,25 +1194,20 @@ def get_S5r(Delta_r,rval,Om,order=5,correct_ics=True,perturbative_ics = False,
         S5fr (float or array): Value of S_{5fr}
     """
     D10 = D1(0,Om,**kwargs)
-    if correct_ics and not perturbative_ics:
-        if S1r is None:
-            S1r = get_S1r(Delta_r,rval,Om,order=order,n2 = n2,n3a = n3a,
-                          n3b = n3b,correct_ics=True,
-                          perturbative_ics = False,**kwargs)
-        S5ar = ratio_where_finite(S1r**5,3*rval**4,undefined_value=0.0)
-        S5br = ratio_where_finite(S1r**5,rval**4,undefined_value=0.0)
-        S5cr = ratio_where_finite(S1r**5,rval**4,undefined_value=0.0)
-        S5dr = ratio_where_finite(S1r**5,rval**4,undefined_value=0.0)
-        S5er = ratio_where_finite(S1r**5,3*rval**4,undefined_value=0.0)
-        S5fr = ratio_where_finite(S1r**5,rval**4,undefined_value=0.0)
-    else:
-        S5ar = -(rval/(729*D10**5))*Delta_r**5
-        S5br = -(rval/(243*D10**5))*Delta_r**5
-        S5cr = -(rval/(243*D10**5))*Delta_r**5
-        S5dr = -(rval/(243*D10**5))*Delta_r**5
-        S5er = -(rval/(729*D10**5))*Delta_r**5
-        S5fr = -(rval/(243*D10**5))*Delta_r**5
-    return S5ar, S5br, S5cr, S5dr, S5er, S5fr
+    if S1r is None:
+        S1r = get_S1r(Delta_r,rval,Om,order=order,n2 = n2,n3a = n3a,
+                      n3b = n3b,correct_ics=True,
+                      perturbative_ics = False,**kwargs)
+    S5ar = ratio_where_finite(S1r**5,3*rval**4,undefined_value=0.0)
+    S5br = ratio_where_finite(S1r**5,rval**4,undefined_value=0.0)
+    S5cr = ratio_where_finite(S1r**5,rval**4,undefined_value=0.0)
+    S5dr = ratio_where_finite(S1r**5,rval**4,undefined_value=0.0)
+    S5er = ratio_where_finite(S1r**5,3*rval**4,undefined_value=0.0)
+    S5fr = ratio_where_finite(S1r**5,rval**4,undefined_value=0.0)
+    S5gr = ratio_where_finite(S1r**5,3*rval**4,undefined_value=0.0)
+    S5hr = ratio_where_finite(S1r**5,rval**4,undefined_value=0.0)
+    S5fir = ratio_where_finite(S1r**5,rval**4,undefined_value=0.0)
+    return S5ar, S5br, S5cr, S5dr, S5er, S5fr, S5gr, S5hr, S5ir
 
 def get_psi_n_r(Delta_r,rval,n,z=0,Om=0.3,order=None,n2 = -1/143,
                 n3a = -4/275,n3b = -269/17875,S1r=None,**kwargs):
@@ -1131,7 +1305,8 @@ def get_delta_lpt(Delta_r,z=0,Om=0.3,order=1,return_all=False,**kwargs):
         Psi_r_rat = spherical_lpt_displacement(1.0,Delta_r,order=order,
                                                fixed_delta=True,Om=Om,**kwargs)
         # Exact spherical result for the density field
-        return (-3*Psi_r_rat + 3*Psi_r_rat**2 - Psi_r_rat**3)
+        #return (-3*Psi_r_rat + 3*Psi_r_rat**2 - Psi_r_rat**3)
+        return 1.0/(1.0 + Psi_r_rat)**3 - 1.0
     else:
         # Displacement field corrections/r at each order:
         S1r = get_S1r(Delta_r,1.0,Om,order=order,**kwargs) # Precompute 
@@ -1188,12 +1363,48 @@ def get_delta_lpt(Delta_r,z=0,Om=0.3,order=1,return_all=False,**kwargs):
                    -3*Psi_r1*Psi_r2_un**2 - 3*Psi_r1**2*Psi_r3_un)
         return Delta_1, Delta_2, Delta_3, Delta_4, Delta_5
 
+def process_radius(r,Psi_q,radial_quant = None,radial_fraction=True,
+                   eulerian_radius=True):
+    """Return the Value of Psi_r, either as a fraction of the radius
+    or on it's own, in the correct co-ordinates (Lagrangian vs Eulerian)
+    
+    Parameters:
+        r (float or array): Radius at which to evaluate Psi_r
+        Psi_q (float or array): Displacement field as a fraction of Lagangian 
+                                radial co-ordinate, q
+        radial_quant (float, array, or None): Quantity as a fraction of
+                               Lagrangian co-ordinate that we want to return.
+                               If not supplied, we assume that this quantity
+                               if just Psi_q
+        radial_fracion (bool): If true, return the dimensionless radial
+                               fraction Psi_r/r otherwise return Psi_r alone
+                               which has dimensions of length.
+        eulerian_radius (bool): If true, the radius is assumed to be in 
+                                Eulerian co-ordinates. Otherwise we assume
+                                it is in Lagrangian co-ordinates.
+        
+    Returns:
+        (float or array): Psi_r/r or Psi_r, same size as r
+    """
+    if radial_quant is None:
+        radial_quant = Psi_q
+    if radial_fraction:
+        if eulerian_radius:
+            return radial_quant/(1.0 + Psi_q) # Conversion to Eulerian co-ordinates.
+        else:
+            return radial_quant
+    else:
+        if eulerian_radius:
+            return r*radial_quant/(1.0 + Psi_q)
+        else:
+            return r*radial_quant
+
 def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
                                n2 = -1/143,nf1 = 5/9,
                                nf2 = 6/11,n3a = -4/275,n3b = -269/17875,
                                nf3a = 13/24,nf3b = 13/24,fixed_delta = False,
-                               radial_fraction = False,correct_ics = True,
-                               **kwargs):
+                               radial_fraction = False,
+                               eulerian_radius=True,**kwargs):
     """
     Compute the radial component of the displacement field, in Lagrangian 
     perturbation theory, assuming spherical symmetry for the density field.
@@ -1214,56 +1425,59 @@ def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
         radial_fraction (bool): If True, compute Psi_r/r, rather than Psi_r 
         fixed_delta (bool): If True, Delta is assumed to be a pre-computed
                             array, rather than a function.
-        correct_ics (bool): If True, perturbative update the initial conditions
-                            (used when Delta is the final density)
+        eulerian_radius (bool): If True, radius is assumed to be in Eulerian
+                                space. Otherwise (Default) it is assumed to be
+                                in Lagrangian co-ordinates.
 
     Returns:
         float or array: Radial component of the displacement field.
     """
     if order not in [1,2,3,4,5]:
         raise Exception("Perturbation order invalid or not implemented.")
-    if radial_fraction:
-        rval = 1.0
-    else:
-        rval = r
     Delta_r = Delta if fixed_delta else Delta(r)
-    # 1st order estimate of Psi_r:
-    S1r = get_S1r(Delta_r,rval,Om,order=order,correct_ics=correct_ics,**kwargs)
-    Psi_r1 = get_psi_n_r(Delta_r,rval,1,order=order,n2=n2,n3a=n3a,n3b=n3b,
+    # 1st order estimate of Psi_q:
+    S1r = get_S1r(Delta_r,1.0,Om,order=order,correct_ics=correct_ics,**kwargs)
+    Psi_q1 = get_psi_n_r(Delta_r,1.0,1,order=order,n2=n2,n3a=n3a,n3b=n3b,
                          Om=Om,z=z,correct_ics=correct_ics,S1r=S1r,**kwargs)
-    Psi_r = Psi_r1
+    Psi_q = Psi_q1
     if order == 1:
-        return Psi_r
-    # 2nd order estimate of Psi_r:
-    Psi_r2 = get_psi_n_r(Delta_r,rval,2,order=order,n2=n2,n3a=n3a,n3b=n3b,
+        return process_radius(r,Psi_q,radial_fraction=radial_fraction,
+                              eulerian_radius=eulerian_radius)
+    # 2nd order estimate of Psi_q:
+    Psi_q2 = get_psi_n_r(Delta_r,1.0,2,order=order,n2=n2,n3a=n3a,n3b=n3b,
                          Om=Om,z=z,correct_ics=correct_ics,S1r=S1r,**kwargs)
-    Psi_r += Psi_r2
+    Psi_q += Psi_q2
     if order == 2:
-        return Psi_r
-    # 3rd order estimate of Psi_r:
-    Psi_r3 = get_psi_n_r(Delta_r,rval,3,order=order,n2=n2,n3a=n3a,n3b=n3b,
+        return process_radius(r,Psi_q,radial_fraction=radial_fraction,
+                              eulerian_radius=eulerian_radius)
+    # 3rd order estimate of Psi_q:
+    Psi_q3 = get_psi_n_r(Delta_r,1.0,3,order=order,n2=n2,n3a=n3a,n3b=n3b,
                          Om=Om,z=z,correct_ics=correct_ics,S1r=S1r,**kwargs)
-    Psi_r += Psi_r3
+    Psi_q += Psi_q3
     if order == 3:
-        return Psi_r
-    # 4th order estimate of Psi_r:
-    Psi_r4 = get_psi_n_r(Delta_r,rval,4,order=order,n2=n2,n3a=n3a,n3b=n3b,
+        return process_radius(r,Psi_q,radial_fraction=radial_fraction,
+                              eulerian_radius=eulerian_radius)
+    # 4th order estimate of Psi_q:
+    Psi_q4 = get_psi_n_r(Delta_r,1.0,4,order=order,n2=n2,n3a=n3a,n3b=n3b,
                          Om=Om,z=z,correct_ics=correct_ics,S1r=S1r,**kwargs)
-    Psi_r += Psi_r4
+    Psi_q += Psi_q4
     if order == 4:
-        return Psi_r
-    # 5th order estimate of Psi_r:
-    Psi_r5 = get_psi_n_r(Delta_r,rval,5,order=order,n2=n2,n3a=n3a,n3b=n3b,
+        return process_radius(r,Psi_q,radial_fraction=radial_fraction,
+                              eulerian_radius=eulerian_radius)
+    # 5th order estimate of Psi_q:
+    Psi_q5 = get_psi_n_r(Delta_r,1.0,5,order=order,n2=n2,n3a=n3a,n3b=n3b,
                          Om=Om,z=z,correct_ics=correct_ics,S1r=S1r,**kwargs)
-    Psi_r += Psi_r5
-    return Psi_r
+    Psi_q += Psi_q5
+    return process_radius(r,Psi_q,radial_fraction=radial_fraction,
+                          eulerian_radius=eulerian_radius)
 
 def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
                                n2 = -1/143,nf1 = 5/9,
                                nf2 = 6/11,n3a = -4/275,n3b = -269/17875,
                                nf3a = 13/24,nf3b = 13/24,h=1.0,
                                radial_fraction = False,fixed_delta = True,
-                               correct_ics = True,**kwargs):
+                               correct_ics = True,eulerian_radius=True,
+                               **kwargs):
     """
     Compute the radial component of the velocity field, in Lagrangian 
     perturbation theory, assuming spherical symmetry for the density field.
@@ -1296,65 +1510,78 @@ def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
     """
     if order not in [1,2,3,4,5]:
         raise Exception("Perturbation order invalid or not implemented.")
+    # Get displacement field relative to Lagrangian radius 
+    # (needed to compute correct Eulerian radii):
+    Psi_q = spherical_lpt_displacement(
+        1.0,Delta,order=order,z=z,Om=Om,n2 = n2,nf1 = nf1,nf2 = nf2,n3a = n3a,
+        n3b = n3b,nf3a = nf3a,nf3b = nf3b,fixed_delta = fixed_delta,
+        radial_fraction = True,eulerian_radius=False,**kwargs)
+    # Setup needed variables:
     D1_val = D1(z,Om,**kwargs)
     Delta_r = Delta if fixed_delta else Delta(r)
     a = 1/(1+z)
     H = Hz(z,Om,h=h,**kwargs)
     Omz = Omega_z(z,Om,**kwargs)
-    if radial_fraction:
-        rval = 1.0/h # Divide by h, so that velocity is always km/s
-    else:
-        rval = r
     # 1st order estimate of v_r:
     f1 = Omz**nf1
-    S1r = get_S1r(Delta_r,rval,Om,order=order,n2=n2,n3a=n3a,n3b=n3b,
+    S1r = get_S1r(Delta_r,1.0,Om,order=order,n2=n2,n3a=n3a,n3b=n3b,
                   correct_ics=correct_ics,**kwargs)
     v_r = a*H*f1*D1_val*S1r
     if order == 1:
-        return v_r
+        return process_radius(r,Psi_q,radial_quant=v_r,
+                              radial_fraction=radial_fraction,
+                              eulerian_radius=eulerian_radius)
     # 2nd order estimate of v_r:
     D2_val = get_D_coefficients(
         Om,order=2,return_all = False,**kwargs
     )[0]
     f2_val = 2*(Omz**nf2)
-    S2r = get_S2r(Delta_r,rval,Om,order=order,n2=n2,n3a=n3a,n3b=n3b,
+    S2r = get_S2r(Delta_r,1.0,Om,order=order,n2=n2,n3a=n3a,n3b=n3b,
                   correct_ics=correct_ics,S1r = S1r,**kwargs)
     v_r = v_r + a*H*f2_val*D2_val*S2r
     if order == 2:
-        return v_r
+        return process_radius(r,Psi_q,radial_quant=v_r,
+                              radial_fraction=radial_fraction,
+                              eulerian_radius=eulerian_radius)
     # 3rd order estimate of v_r:
     f3a = 3*(Omz**nf3a)
     f3b = 3*(Omz**nf3b)
     D3a_val, D3b_val = get_D_coefficients(
         Om,order=3,return_all = False,**kwargs
     )
-    S3ar, S3br = get_S3r(Delta_r,rval,Om,order=order,S1r=S1r,**kwargs)
+    S3ar, S3br = get_S3r(Delta_r,1.0,Om,order=order,S1r=S1r,**kwargs)
     v_r = (v_r + a*H*f3a*D3a_val*S3ar + a*H*f3b*D3b_val*S3br)
     if order == 3:
-        return v_r
+        return process_radius(r,Psi_q,radial_quant=v_r,
+                              radial_fraction=radial_fraction,
+                              eulerian_radius=eulerian_radius)
     # 4th order estimate of v_r:
     all_D4 = get_D_coefficients(
         Om,order=4,return_all = False,**kwargs
     )
     all_S4 = get_S4r(
-        Delta_r,rval,Om,order=order,S1r=S1r,**kwargs
+        Delta_r,1.0,Om,order=order,S1r=S1r,**kwargs
     )
     # EdS approximation of linear growth rates for each term:
     all_f4 = [4*f1 for _ in all_D4]
     v_r += a*H*np.sum([f*D*S for f, D, S in zip(all_f4,all_D4,all_S4)],0)
     if order == 4:
-        return v_r
+        return process_radius(r,Psi_q,radial_quant=v_r,
+                              radial_fraction=radial_fraction,
+                              eulerian_radius=eulerian_radius)
     # 5th order estimate of v_r:
     all_D5 = get_D_coefficients(
         Om,order=5,return_all = False,**kwargs
     )
     all_S5 = get_S5r(
-        Delta_r,rval,Om,order=order,S1r=S1r,**kwargs
+        Delta_r,1.0,Om,order=order,S1r=S1r,**kwargs
     )
     # EdS approximation of linear growth rates for each term:
     all_f5 = [5*f1 for _ in all_D5]
     v_r += a*H*np.sum([f*D*S for f, D, S in zip(all_f5,all_D5,all_S5)],0)
-    return v_r
+    return process_radius(r,Psi_q,radial_quant=v_r,
+                          radial_fraction=radial_fraction,
+                          eulerian_radius=eulerian_radius)
 
 def Hz(z, Om, h=None, Ol=None, Ok=0, Or=0, **kwargs):
     """
