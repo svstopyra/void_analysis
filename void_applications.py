@@ -896,6 +896,12 @@ all_vr_and_Delta_profiles = get_all_ur_profiles(
 )
 all_vr_profiles = all_vr_and_Delta_profiles[0]
 
+vr_mean = np.mean(all_vr_profiles,0)
+vr_error = np.std(all_vr_profiles,0)/np.sqrt(all_Delta_profiles.shape[0])
+vr_mean_samples = get_weighted_samples(all_vr_profiles,axis=0)
+vr_range = np.percentile(vr_mean_samples,[16,84],axis=1)
+
+
 
 
 
@@ -903,12 +909,6 @@ ur_mean = np.mean(all_ur_profiles,0)
 ur_error = np.std(all_ur_profiles,0)/np.sqrt(all_Delta_profiles.shape[0])
 ur_mean_samples = get_weighted_samples(all_ur_profiles,axis=0)
 ur_range = np.percentile(ur_mean_samples,[16,84],axis=1)
-
-vr_mean = np.mean(all_vr_profiles,0)
-vr_error = np.std(all_vr_profiles,0)/np.sqrt(all_Delta_profiles.shape[0])
-vr_mean_samples = get_weighted_samples(all_vr_profiles,axis=0)
-vr_range = np.percentile(vr_mean_samples,[16,84],axis=1)
-
 
 Delta_mean = np.mean(all_Delta_profiles,0)
 Delta_std = np.std(all_Delta_profiles,0)
@@ -924,6 +924,7 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
                            **kwargs):
     if ax is None:
         fig, ax = plt.subplots()
+    print(kwargs)
     #pre_factor = -f_lcdm(z_void,Om_fid)*Hz(z_void,Om_fid)/(3*(1 + z_void))
     #u_pred_2lpt = pre_factor*(Delta - (3/7)*(f_lcdm(z_void,Om_fid)/(1+z_void))*Delta**2)
     #f2 = 2*f_lcdm(z_void,Om_fid,gamma=(4.0/7.0))
@@ -931,15 +932,15 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
     #D2_factor = (1.0/7.0)*f_lcdm(z_void,Om_fid,gamma=-1.0/143.0)
     radial_fraction = (not velocity)
     Delta_val = Delta_r if Delta_r is not None else Delta
-    Psir_ratio_1 = spherical_lpt_displacement(1.0,Delta_val,z=z_void,Om=Om,
+    Psir_ratio_1 = spherical_lpt_displacement(1.0,Delta_val,z=z_void,Om=Om_fid,
                                             fixed_delta=True,order=1)
-    Psir_ratio_2 = spherical_lpt_displacement(1.0,Delta_val,z=z_void,Om=Om,
+    Psir_ratio_2 = spherical_lpt_displacement(1.0,Delta_val,z=z_void,Om=Om_fid,
                                             fixed_delta=True,order=2)
-    Psir_ratio_3 = spherical_lpt_displacement(1.0,Delta_val,z=z_void,Om=Om,
+    Psir_ratio_3 = spherical_lpt_displacement(1.0,Delta_val,z=z_void,Om=Om_fid,
                                             fixed_delta=True,order=3)
-    Psir_ratio_4 = spherical_lpt_displacement(1.0,Delta_val,z=z_void,Om=Om,
+    Psir_ratio_4 = spherical_lpt_displacement(1.0,Delta_val,z=z_void,Om=Om_fid,
                                             fixed_delta=True,order=4)
-    Psir_ratio_5 = spherical_lpt_displacement(1.0,Delta_val,z=z_void,Om=Om,
+    Psir_ratio_5 = spherical_lpt_displacement(1.0,Delta_val,z=z_void,Om=Om_fid,
                                             fixed_delta=True,order=5)
     # 2LPT is a special case:
     kwargs2 = dict(kwargs)
@@ -1066,7 +1067,7 @@ plot_velocity_profiles(rbin_centres,u_mean,Delta_mean,
                        filename = figuresFolder + "u_profiles_average.pdf",
                        ur_range=np.vstack([u_mean-u_error,u_mean + u_error]),
                        ylabel="$u_r [\\mathrm{kms}^{-1}]$",velocity=True,
-                       Delta_r = None,normalised=True,correct_ics=True,
+                       Delta_r = None,normalised=True,
                        fixed_delta=True,perturbative_ics=False,
                        use_linear_on_fail=False,treat_2lpt_separately=False,
                        show_error_estimates=True)
@@ -1076,10 +1077,10 @@ plt.show()
 plt.clf()
 plot_velocity_profiles(rbin_centres,ur_mean,Delta_mean,
                        filename = figuresFolder + "ur_profiles_average.pdf",
-                       ur_range=ur_range,normalised=True,correct_ics=True,
+                       ur_range=ur_range,normalised=True,
                        fixed_delta=True,perturbative_ics=False,
                        use_linear_on_fail=False,treat_2lpt_separately=False,
-                       show_error_estimates=True)
+                       show_error_estimates=True,eulerian_radius=True)
 plt.show()
 
 
