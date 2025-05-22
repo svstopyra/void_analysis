@@ -680,7 +680,7 @@ def get_taylor_polynomial_coefficients(
         if order == 5:
             return B1, B2, B3, B4, B5
 
-def find_suitable_solver_bounds(f,RHS,D10,taylor_expand=True,iter_max = 10
+def find_suitable_solver_bounds(f,RHS,D10,taylor_expand=True,iter_max = 10,
                                 uupp = None):
     RHS_max = np.max(RHS)
     if taylor_expand:
