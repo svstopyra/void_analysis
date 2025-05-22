@@ -643,9 +643,76 @@ def get_nonperturbative_polynomial_coefficients(
         if order == 5:
             return B1, B2, B3, B4, B5
 
+def get_taylor_polynomial_coefficients(
+        order,Om=0.3,n2 = -1/143,n3a = -4/275,n3b = -269/17875,**kwargs):
+    if order not in [1,2,3,4,5]:
+        raise Exception("Perturbation order invalid or not implemented.")
+    coeffs = get_D_coefficients(
+        Om,order=order,n2 = n2,n3a = n3a,n3b = n3b,return_all = True,**kwargs
+    )
+    if order >= 1:
+        D10 = coeffs[0]
+        B1 = -3*D10
+        if order == 1:
+            return B1
+    if order >= 2:
+        D20 = coeffs[1]
+        B2 = 6*D10**2 - 3*D20
+        if order == 2:
+            return B1, B2
+    if order >=3:
+        [D3a0, D3b0] = coeffs[2:4]
+        B3 = -10*D10**3 + 12*D10*D20 - D3a0 - 3*D3b0
+        if order == 3:
+            return B1, B2, B3
+    if order >=4:
+        [D4a0, D4b0, D4c0, D4d0] = coeffs[4:8]
+        B4 = (15*D10**4 - 30*D10**2*D20 + 4*D10*D30 + 12*D10*D3b0 + 6*D20**2
+               - D4a0 - 3*D4b0 - 3*D4c0 - 3*D4d0)
+        if order == 4:
+            return B1, B2, B3, B4
+    if order >= 5:
+        [D5a0, D5b0, D5c0, D5d0, D5e0, D5f0, D5g0, D5h0, D5i0] = coeffs[8:17]
+        B5 = (-21*D10**5 + 60*D10**3*D20 - 10*D10**2*D3a0 - 30*D10**2*D3b0 
+               - 30*D10*D20**2 + 4*D10*D4a0 + 12*D10*D4b0 + 12*D10*D4c0
+               + 12*D10*D4d0 + 4*D20*D3a0 + 12*D20*D3b0 - D5a0 - 3*D5b0
+               - 3*D5c0 - 3*D5d0 - D5e0 - 3*D5f0 - D5g0 - 3*D5h0 - 3*D5i0)
+        if order == 5:
+            return B1, B2, B3, B4, B5
+
+def find_suitable_solver_bounds(f,RHS,D10,taylor_expand=True,iter_max = 10
+                                uupp = None):
+    RHS_max = np.max(RHS)
+    if taylor_expand:
+        if uupp is None:
+            uupp = 1.0
+        if RHS_max <= 0:
+            ulow = 0.0
+        else:
+            ulow = -RHS_max/(3*D10)
+            count = 0
+            while f(ulow) < RHS_max:
+                    ulow *= 10
+                count += 1
+                if count > iter_max:
+                    raise Exception("Failing to find valid boundary for " + 
+                                    "solver.")
+    else:
+        ulow = -1.0
+        if uupp is None:
+            uupp = RHS_max/D10
+            count = 0
+            while f(uupp) < RHS_max:
+                uupp *= 10
+                count += 1
+                if count > iter_max:
+                    raise Exception("Failing to find valid boundary for solver.")
+    return ulow, uupp
+
 def get_initial_condition_non_perturbative(Delta,order=1,Om=0.3,n2 = -1/143,
                                            n3a = -4/275,n3b = -269/17875,
-                                           use_linear_on_fail=False,**kwargs):
+                                           use_linear_on_fail=False,
+                                           taylor_expand = True,**kwargs):
     """
     Solve the equation for the LPT initial conditions. Using a non-perturbative
     expression for Psi_r/q that avoids having to expand and approximate r/q.
@@ -663,31 +730,49 @@ def get_initial_condition_non_perturbative(Delta,order=1,Om=0.3,n2 = -1/143,
                                    when we fail to find a solution for 2LPT.
                                    Otherwise, generates warnings and produces
                                    nan values as the solution.
+        taylor_expand (bool): If True (default), uses a Taylor-expanded form
+                              of the relationship between density and 
+                              Psi_r/q, avoiding inconsistency problems.
     Returns:
         float or array: Solution for S_1r/r at this value of Delta
     """
     if order not in [1,2,3,4,5]:
         raise Exception("Perturbation order invalid or not implemented.")
-    RHS = 1.0/np.cbrt(1.0 + Delta) - 1.0
+    if taylor_expand:
+        RHS = Delta # We re-arranged so that the RHS is Delta_f in the 
+        # Taylor expanded version, as this turns out to be easier.
+    else:
+        RHS = 1.0/np.cbrt(1.0 + Delta) - 1.0
     D10 = D1(0,Om,**kwargs)
     if order == 1:
         # Linear solution, known analytically:
-        return RHS/D10
+        if taylor_expand:
+            return -RHS/(3*D10)
+        else:
+            return RHS/D10
     if order == 2:
         # Quadratic solution. This is known analytically, but has the potential
         # to be non-existant. In which case, we shouldn't return an imaginary
         # number, but instead report this to the user, since it indicates
         # that we have gone beyond the bounds where 2LPT is applicable:
-        B1, B2 = get_nonperturbative_polynomial_coefficients(
-            order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,**kwargs
-        )
+        if taylor_expand:
+            B1, B2 = get_taylor_polynomial_coefficients(
+                order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,**kwargs
+            )
+        else:
+            B1, B2 = get_nonperturbative_polynomial_coefficients(
+                order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,**kwargs
+            )
         B0 = -RHS
         discriminant = B1**2 - 4*B2*B0
         # Split between vector and scalar cases:
         if np.isscalar(Delta):
             if discriminant < 0:
                 if use_linear_on_fail:
-                    return RHS/D10
+                    if taylor_expand:
+                        return -RHS/(3*D10)
+                    else:
+                        return RHS/D10
                 else:
                     print("2LPT solution for initial conditions " + 
                           "does not exist.")
@@ -701,7 +786,10 @@ def get_initial_condition_non_perturbative(Delta,order=1,Om=0.3,n2 = -1/143,
             have_no_solution = (discriminant < 0)
             solution = np.zeros(Delta.shape)
             if use_linear_on_fail:
-                solution[have_no_solution] = RHS[have_no_solution]/D10
+                if taylor_expand:
+                    solution[have_no_solution] = -RHS[have_no_solution]/(3*D10)
+                else:
+                    solution[have_no_solution] = RHS[have_no_solution]/D10
             else:
                 if np.any(have_no_solution):
                     print("Warning: no 2LPT solution for some values of " + 
@@ -717,21 +805,20 @@ def get_initial_condition_non_perturbative(Delta,order=1,Om=0.3,n2 = -1/143,
         # there is always a unique solution. We can use the linear solution as 
         # an initial guess and then solve numerically:
         # Compute coefficient of the polynomial:
-        B1, B2, B3 = get_nonperturbative_polynomial_coefficients(
-            order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,**kwargs
-        )
+        if taylor_expand:
+            B1, B2, B3 = get_taylor_polynomial_coefficients(
+                order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,**kwargs
+            )
+        else:
+            B1, B2, B3 = get_nonperturbative_polynomial_coefficients(
+                order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,**kwargs
+            )
         B0 = -RHS
         f = lambda u: B3*u**3 + B2*u**2 + B1*u
         # Figure out the correct bounds for the problem:
-        RHS_max = np.max(RHS)
-        uupp = RHS_max/D10
-        ulow = -1.0
-        count = 0
-        while f(uupp) < RHS_max:
-            uupp *= 10
-            count += 1
-            if count > 10:
-                raise Exception("Failing to find valid boundary for solver.")
+        ulow, uupp = find_suitable_solver_bounds(
+            f,RHS,D10,taylor_expand=taylor_expand
+        )
         # Solve numerically:
         if np.isscalar(Delta):
             solution = scipy.optimize.brentq(lambda u: f(u) + B0,ulow,uupp)
@@ -743,18 +830,31 @@ def get_initial_condition_non_perturbative(Delta,order=1,Om=0.3,n2 = -1/143,
         return solution
     if order == 4:
         B0 = -RHS
-        B1, B2, B3, B4 = get_nonperturbative_polynomial_coefficients(
-            order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,**kwargs
-        )
+        if taylor_expand:
+            B1, B2, B3, B4 = get_taylor_polynomial_coefficients(
+                order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,**kwargs
+            )
+        else:
+            B1, B2, B3, B4 = get_nonperturbative_polynomial_coefficients(
+                order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,**kwargs
+            )
         f = lambda u: B4*u**4 + B3*u**3 + B2*u**2 + B1*u
         # Check we aren't below the minimum possible density for 4LPT:
         p4p = lambda u: 4*B4*u**3 + 3*B3*u**2 + 2*B2*u + B1
         turning_point = scipy.optimize.fsolve(p4p,0.5)[0]
-        Psir_q_min4 = f(turning_point)
-        delta_min4 = 1.0/(1.0 + Psir_q_min4)**3 - 1.0
-        # Figure out the correct bounds for the problem:
-        uupp = turning_point
-        ulow = -1.0
+        fturn = f(turning_point)
+        if taylor_expand:
+            # Polynomial gives Delta_f directly:
+            delta_min4 = fturn
+        else:
+            # Polynomial gives Psi_r/q at turning point, so compute Delta_f:
+            delta_min4 = 1.0/(1.0 + fturn)**3 - 1.0
+        # Figure out the correct bounds for the problem, 
+        # overriding the automatic choice with the turning point of the 
+        # polynomial, since we don't want to go beyond that:
+        ulow, uupp = find_suitable_solver_bounds(
+            f,RHS,D10,taylor_expand=taylor_expand,uupp = turning_point
+        )
         # Split between scalar and array cases:
         if np.isscalar(Delta):
             if Delta < delta_min4:
@@ -785,20 +885,19 @@ def get_initial_condition_non_perturbative(Delta,order=1,Om=0.3,n2 = -1/143,
             return solution
     if order == 5:
         B0 = -RHS
-        B1, B2, B3, B4, B5 = get_nonperturbative_polynomial_coefficients(
-            order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,**kwargs
-        )
+        if taylor_expand:
+            B1, B2, B3, B4, B5 = get_taylor_polynomial_coefficients(
+                order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,**kwargs
+            )
+        else:
+            B1, B2, B3, B4, B5 = get_nonperturbative_polynomial_coefficients(
+                order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,**kwargs
+            )
         f = lambda u: B5*u**5 + B4*u**4 + B3*u**3 + B2*u**2 + B1*u
         # Figure out the correct bounds for the problem:
-        RHS_max = np.max(RHS)
-        uupp = RHS_max/D10
-        ulow = -1.0
-        count = 0
-        while f(uupp) < RHS_max:
-            uupp *= 10
-            count += 1
-            if count > 10:
-                raise Exception("Failing to find valid boundary for solver.")
+        ulow, uupp = find_suitable_solver_bounds(
+            f,RHS,D10,taylor_expand=taylor_expand
+        )
         # Solve:
         if np.isscalar(Delta):
             solution = scipy.optimize.brentq(lambda u: f(u) + B0,ulow,uupp)
@@ -987,7 +1086,7 @@ def get_initial_condition(Delta,order=1,Om=0.3,n2 = -1/143,n3a = -4/275,
         return solution
 
 def get_S1r(Delta_r,rval,Om,order=1,n2 = -1/143,n3a = -4/275,n3b = -269/17875,
-            perturbative_ics = False,**kwargs):
+            perturbative_ics = False,taylor_expand=True,**kwargs):
     """
     Compute the spatial part of the first order Lagrangian perturbation, by 
     matching to the provided final density field.
@@ -1002,9 +1101,14 @@ def get_S1r(Delta_r,rval,Om,order=1,n2 = -1/143,n3a = -4/275,n3b = -269/17875,
         n2 (float): Exponent for the second roder growth function
         n3a (float): Exponent for the first 3rd-order growth function.
         n3b (float): Exponent for the second 3rd order growth function.
-        perturbative_ics (bool): If True, attempt to find the ics perturbatively.
-                                 If False (default), solve for them, possibly
-                                 numerically.
+        perturbative_ics (bool): If True, attempt to correct for the q/r
+                              ratio with perturbative corrections to the
+                              solutions at each order.
+        taylor_expand (bool): If True (default), use a Taylor expanded
+                              approximation of the relationship between Delta_f
+                              and Psi_r/q, to avoid inconsistency issues
+                              with the order of LPT expansion. Otherwise, use
+                              the non-perturbative relationship.
     Returns:
         float or array: Value of S_{1r}
     """
@@ -1016,12 +1120,13 @@ def get_S1r(Delta_r,rval,Om,order=1,n2 = -1/143,n3a = -4/275,n3b = -269/17875,
         )
     else:
         S1r = rval*get_initial_condition_non_perturbative(
-            Delta_r,order=order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,**kwargs
+            Delta_r,order=order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,
+            taylor_expand=taylor_expand,**kwargs
         )
     return S1r
 
 def get_S2r(Delta_r,rval,Om,n2 = -1/143,n3a = -4/275,n3b = -269/17875,order=2,
-            perturbative_ics = False,S1r=None,
+            perturbative_ics = False,S1r=None,taylor_expand=True,
             **kwargs):
     """
     Compute the spatial part of the second order Lagrangian perturbation, by 
@@ -1037,17 +1142,22 @@ def get_S2r(Delta_r,rval,Om,n2 = -1/143,n3a = -4/275,n3b = -269/17875,order=2,
         n2 (float): Exponent for the second roder growth function
         n3a (float): Exponent for the first 3rd-order growth function.
         n3b (float): Exponent for the second 3rd order growth function.
-        perturbative_ics (bool): If True, apply perturbative corrections to 
-                                estimate ICs. If False (default) use the 
-                                resummed r/q expansion to avoid this, 
-                                giving a non-perturbative result for r/q
+        perturbative_ics (bool): If True, attempt to correct for the q/r
+                              ratio with perturbative corrections to the
+                              solutions at each order.
+        taylor_expand (bool): If True (default), use a Taylor expanded
+                              approximation of the relationship between Delta_f
+                              and Psi_r/q, to avoid inconsistency issues
+                              with the order of LPT expansion. Otherwise, use
+                              the non-perturbative relationship.
     Returns:
         float or array: Value of S_{2r}
     """
     # Solve for initial conditions (numerically if 3rd order):
     if S1r is None:
         S1r = get_S1r(Delta_r,rval,Om,order=order,n2 = n2,n3a = n3a,
-                      n3b = n3b,perturbative_ics = perturbative_ics,**kwargs)
+                      n3b = n3b,perturbative_ics = perturbative_ics,
+                      taylor_expand=taylor_expand,**kwargs)
     S2r = ratio_where_finite(S1r**2,rval,undefined_value=0.0)
     if perturbative_ics:
         if order >= 3:
@@ -1066,7 +1176,7 @@ def get_S2r(Delta_r,rval,Om,n2 = -1/143,n3a = -4/275,n3b = -269/17875,order=2,
     return S2r
 
 def get_S3r(Delta_r,rval,Om,order=3,perturbative_ics = False,
-            S1r = None,apply_higher_order_corrections=True,**kwargs):
+            S1r = None,taylor_expand=True,**kwargs):
     """
     Compute the spatial part of the third order Lagrangian perturbation, by 
     matching to the provided final density field.
@@ -1080,12 +1190,14 @@ def get_S3r(Delta_r,rval,Om,order=3,perturbative_ics = False,
                      due to corrections to the initial conditions.
         S1r (float or array): Precomputed value of S1r (otherwise, this is
                               computed from scratch)
-        perturbative_ics (bool): If True, use a perturbative expansion 
-                                 to estimate ICs. Otherwise compute them
-                                 numerically (default).
-        apply_higher_order_corrections (bool): If true (default), apply higher 
-                                               order corrections arising from 
-                                               the difference between r and q.
+        perturbative_ics (bool): If True, attempt to correct for the q/r
+                              ratio with perturbative corrections to the
+                              solutions at each order.
+        taylor_expand (bool): If True (default), use a Taylor expanded
+                              approximation of the relationship between Delta_f
+                              and Psi_r/q, to avoid inconsistency issues
+                              with the order of LPT expansion. Otherwise, use
+                              the non-perturbative relationship.
                                                
     Returns:
         S3ar (float or array): Value of S_{3ar}
@@ -1094,7 +1206,8 @@ def get_S3r(Delta_r,rval,Om,order=3,perturbative_ics = False,
     D10 = D1(0,Om,**kwargs)
     if S1r is None:
         S1r = get_S1r(Delta_r,rval,Om,order=order,n2 = n2,n3a = n3a,
-                      n3b = n3b,perturbative_ics = False,**kwargs)
+                      n3b = n3b,perturbative_ics = False,
+                      taylor_expand=taylor_expand,**kwargs)
     S3ar = ratio_where_finite(S1r**3,3*rval**2,undefined_value=0.0)
     S3br = ratio_where_finite(S1r**3,rval**2,undefined_value=0.0)
     if perturbative_ics:
@@ -1107,7 +1220,7 @@ def get_S3r(Delta_r,rval,Om,order=3,perturbative_ics = False,
             S3br += (2*D20 + 3*D10**2)*ratio_where_finite(S1r**5,rval**4)
     return S3ar, S3br
 
-def get_S4r(Delta_r,rval,Om,order=4,perturbative_ics = False,
+def get_S4r(Delta_r,rval,Om,order=4,perturbative_ics = False,taylor_expand=True,
             S1r = None,**kwargs):
     """
     Compute the spatial part of the fourth order Lagrangian perturbation, by 
@@ -1122,12 +1235,14 @@ def get_S4r(Delta_r,rval,Om,order=4,perturbative_ics = False,
                      due to corrections to the initial conditions.
         S1r (float or array): Precomputed value of S1r (otherwise, this is
                               computed from scratch)
-        perturbative_ics (bool): If True, use a perturbative expansion 
-                                 to estimate ICs. Otherwise compute them
-                                 numerically (default).
-        apply_higher_order_corrections (bool): If true (default), apply higher 
-                                               order corrections arising from 
-                                               the difference between r and q.
+        perturbative_ics (bool): If True, attempt to correct for the q/r
+                              ratio with perturbative corrections to the
+                              solutions at each order.
+        taylor_expand (bool): If True (default), use a Taylor expanded
+                              approximation of the relationship between Delta_f
+                              and Psi_r/q, to avoid inconsistency issues
+                              with the order of LPT expansion. Otherwise, use
+                              the non-perturbative relationship.
     Returns:
         S4ar (float or array): Value of S_{4ar}
         S4br (float or array): Value of S_{4br}
@@ -1137,7 +1252,8 @@ def get_S4r(Delta_r,rval,Om,order=4,perturbative_ics = False,
     D10 = D1(0,Om,**kwargs)
     if S1r is None:
         S1r = get_S1r(Delta_r,rval,Om,order=order,n2 = n2,n3a = n3a,
-                      n3b = n3b,perturbative_ics = False,**kwargs)
+                      n3b = n3b,perturbative_ics = False,
+                      taylor_expand=taylor_expand,**kwargs)
     S4ar = ratio_where_finite(S1r**4,3*rval**3,undefined_value=0.0)
     S4br = ratio_where_finite(S1r**4,rval**3,undefined_value=0.0)
     S4cr = ratio_where_finite(S1r**4,rval**3,undefined_value=0.0)
@@ -1151,7 +1267,7 @@ def get_S4r(Delta_r,rval,Om,order=4,perturbative_ics = False,
     return S4ar, S4br, S4cr, S4dr
 
 def get_S5r(Delta_r,rval,Om,order=5,perturbative_ics = False,
-            S1r = None,**kwargs):
+            taylor_expand=True,S1r = None,**kwargs):
     """
     Compute the spatial part of the fifth order Lagrangian perturbation, by 
     matching to the provided final density field.
@@ -1169,12 +1285,14 @@ def get_S5r(Delta_r,rval,Om,order=5,perturbative_ics = False,
                      due to corrections to the initial conditions.
         S1r (float or array): Precomputed value of S1r (otherwise, this is
                               computed from scratch)
-        perturbative_ics (bool): If True, use a perturbative expansion 
-                                 to estimate ICs. Otherwise compute them
-                                 numerically (default).
-        apply_higher_order_corrections (bool): If true (default), apply higher 
-                                               order corrections arising from 
-                                               the difference between r and q.
+        perturbative_ics (bool): If True, attempt to correct for the q/r
+                              ratio with perturbative corrections to the
+                              solutions at each order.
+        taylor_expand (bool): If True (default), use a Taylor expanded
+                              approximation of the relationship between Delta_f
+                              and Psi_r/q, to avoid inconsistency issues
+                              with the order of LPT expansion. Otherwise, use
+                              the non-perturbative relationship.
     Returns:
         S54ar (float or array): Value of S_{5ar}
         S5br (float or array): Value of S_{5br}
@@ -1186,7 +1304,8 @@ def get_S5r(Delta_r,rval,Om,order=5,perturbative_ics = False,
     D10 = D1(0,Om,**kwargs)
     if S1r is None:
         S1r = get_S1r(Delta_r,rval,Om,order=order,n2 = n2,n3a = n3a,
-                      n3b = n3b,perturbative_ics = False,**kwargs)
+                      n3b = n3b,perturbative_ics = False,
+                      taylor_expand=taylor_expand,**kwargs)
     S5ar = ratio_where_finite(S1r**5,3*rval**4,undefined_value=0.0)
     S5br = ratio_where_finite(S1r**5,rval**4,undefined_value=0.0)
     S5cr = ratio_where_finite(S1r**5,rval**4,undefined_value=0.0)
@@ -1199,7 +1318,8 @@ def get_S5r(Delta_r,rval,Om,order=5,perturbative_ics = False,
     return S5ar, S5br, S5cr, S5dr, S5er, S5fr, S5gr, S5hr, S5ir
 
 def get_psi_n_r(Delta_r,rval,n,z=0,Om=0.3,order=None,n2 = -1/143,
-                n3a = -4/275,n3b = -269/17875,S1r=None,**kwargs):
+                n3a = -4/275,n3b = -269/17875,S1r=None,
+                **kwargs):
     """
     Compute the nth order correction to the displacement field.
     
@@ -1392,7 +1512,7 @@ def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
                                n2 = -1/143,nf1 = 5/9,
                                nf2 = 6/11,n3a = -4/275,n3b = -269/17875,
                                nf3a = 13/24,nf3b = 13/24,fixed_delta = False,
-                               radial_fraction = False,
+                               radial_fraction = False,S1r = None,
                                eulerian_radius=True,**kwargs):
     """
     Compute the radial component of the displacement field, in Lagrangian 
@@ -1425,7 +1545,8 @@ def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
         raise Exception("Perturbation order invalid or not implemented.")
     Delta_r = Delta if fixed_delta else Delta(r)
     # 1st order estimate of Psi_q:
-    S1r = get_S1r(Delta_r,1.0,Om,order=order,**kwargs)
+    if S1r is None:
+        S1r = get_S1r(Delta_r,1.0,Om,order=order,**kwargs)
     Psi_q1 = get_psi_n_r(Delta_r,1.0,1,order=order,n2=n2,n3a=n3a,n3b=n3b,
                          Om=Om,z=z,S1r=S1r,**kwargs)
     Psi_q = Psi_q1
@@ -1500,12 +1621,14 @@ def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
            "eulerian_radius":eulerian_radius})
     if order not in [1,2,3,4,5]:
         raise Exception("Perturbation order invalid or not implemented.")
+    # Get first order correction, from the initial conditions:
+    S1r = get_S1r(Delta_r,1.0,Om,order=order,n2=n2,n3a=n3a,n3b=n3b,**kwargs)
     # Get displacement field relative to Lagrangian radius 
     # (needed to compute correct Eulerian radii):
     Psi_q = spherical_lpt_displacement(
         1.0,Delta,order=order,z=z,Om=Om,n2 = n2,nf1 = nf1,nf2 = nf2,n3a = n3a,
         n3b = n3b,nf3a = nf3a,nf3b = nf3b,fixed_delta = fixed_delta,
-        radial_fraction = True,eulerian_radius=False,**kwargs)
+        radial_fraction = True,eulerian_radius=False,S1r=S1r,**kwargs)
     # Setup needed variables:
     D1_val = D1(z,Om,**kwargs)
     Delta_r = Delta if fixed_delta else Delta(r)
@@ -1514,7 +1637,6 @@ def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
     Omz = Omega_z(z,Om,**kwargs)
     # 1st order estimate of v_r:
     f1 = Omz**nf1
-    S1r = get_S1r(Delta_r,1.0,Om,order=order,n2=n2,n3a=n3a,n3b=n3b,**kwargs)
     v_r = a*H*f1*D1_val*S1r
     if order == 1:
         return process_radius(r,Psi_q,radial_quant=v_r,
