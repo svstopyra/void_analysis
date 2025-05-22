@@ -1699,7 +1699,7 @@ def get_L_coefficient(expr,M,N=None):
     coeffs = sp.expand(expr2).as_coefficients_dict(L)
     return coeffs[L]
 
-def replace_with_det(expr,M,detM=None):
+def replace_with_det(expr,M,detM=None,gather=True):
     if detM is None:
         detM = sp.Symbol("detM")
     expr2 = expr.subs({Trace(M**3):3*detM + 
@@ -1779,8 +1779,8 @@ for name in expand_symbol_names:
 # Variables:
 DPsi = MatrixSymbol("DPsi",3,3) # gradient of the full displacement field
 DtDPsi = MatrixSymbol("DtDPsi",3,3)#  - Time derivative term
-G = sp.Symbols("G") # Newton's constant
-rhobar = sp.Symbols("rhobar") # Average density
+G = sp.Symbol("G") # Newton's constant
+rhobar = sp.Symbol("rhobar") # Average density
 Gfactor = 4*sp.pi*G*rhobar # Prefactor to RHS
 epsilon = sp.Symbol("epsilon") # LPT Perturbation parameter (dummy variable)
 
@@ -2178,6 +2178,20 @@ A1, A2, A3, A4, A5 = [sp.expand(Delta_f_dict[epsilon**n]*(r/S1ar)**n)
 B1, B2, B3, B4, B5 = [sp.expand(psi*q**(n-1)/(S1ar**n)) 
                       for psi, n in zip(Psi_q_vals,range(1,6))]
 
+# Taylor expanded version of the full-density field:
+x = sp.Symbol("x")
+Delta_fq = 1/(1 + x)**3 - 1
+Delta_fq_expanded = sp.series(Delta_fq,x,n=6)
+Delta_fq_eps = sp.series(Delta_fq.subs(x,Psi_q/q),epsilon,n=6)
+Delta_fq_dict = Delta_fq_eps.as_coefficients_dict(epsilon)
+
+E1, E2, E3, E4, E5 = [sp.expand(Delta_fq_dict[epsilon**n]*q**n/S1ar**n)
+                      for n in range(1,6)]
+
+En = [E1, E2, E3, E4, E5]
+En_val = [Ei.subs(C5vals) for Ei in En]
+En_num = [float(Ei) for Ei in En_val]
+
 
 Bn = [B1, B2, B3, B4, B5]
 Bn_val = [Bi.subs(C5vals) for Bi in Bn]
@@ -2201,9 +2215,15 @@ pb3 = lambda u: pb2(u) + B3n*u**3
 pb4 = lambda u: pb3(u) + B4n*u**4
 pb5 = lambda u: pb4(u) + B5n*u**5
 
+pe1 = lambda u: En_num[0]*u
+pe2 = lambda u: En_num[1]*u**2 + pe1(u)
+pe3 = lambda u: En_num[2]*u**3 + pe2(u)
+pe4 = lambda u: En_num[3]*u**4 + pe3(u)
+pe5 = lambda u: En_num[4]*u**5 + pe4(u)
 
 p2min = p2(-A1n/(2*A2n))
 pb2min = pb2(-B1n/(2*B2n))
+pe2min = pe2(-En_num[0]/(2*En_num[1]))
 
 import matplotlib.pylab as plt
 import numpy as np
@@ -2214,18 +2234,19 @@ seabornColormap = sns.color_palette("colorblind",as_cmap=True)
 textwidth=7.1014
 uvals = np.linspace(-1,1,1000)
 fig, ax = plt.subplots(figsize = (0.45*textwidth,0.45*textwidth))
-plt.plot(uvals,pb1(uvals),color=seabornColormap[1],linestyle="-",label="$p_1(u)$")
-plt.plot(uvals,pb2(uvals),color=seabornColormap[2],linestyle="--",label="$p_2(u)$")
-plt.plot(uvals,pb3(uvals),color=seabornColormap[3],linestyle="-",label="$p_3(u)$")
-plt.plot(uvals,pb4(uvals),color=seabornColormap[4],linestyle="--",label="$p_4(u)$")
-plt.plot(uvals,pb5(uvals),color=seabornColormap[6],linestyle="-",label="$p_5(u)$")
+plt.plot(uvals,pe1(uvals),color=seabornColormap[1],linestyle="-",label="$p_1(u)$")
+plt.plot(uvals,pe2(uvals),color=seabornColormap[2],linestyle="--",label="$p_2(u)$")
+plt.plot(uvals,pe3(uvals),color=seabornColormap[3],linestyle="-",label="$p_3(u)$")
+plt.plot(uvals,pe4(uvals),color=seabornColormap[4],linestyle="--",label="$p_4(u)$")
+plt.plot(uvals,pe5(uvals),color=seabornColormap[7],linestyle="-",label="$p_5(u)$")
 #plt.plot(uvals,p_exact(uvals),color=seabornColormap[7],linestyle=":",label="$Exact, \\Psi_r/r$")
 plt.axhline(-1.0,color="grey",linestyle=":")
-plt.axhline(p2min,color="grey",linestyle="-.",
+plt.axhline(pe2min,color="grey",linestyle="-.",
             label="$\\Delta_f = $" + ("%.2g" % p2min))
 plt.axhline(0.0,color="grey",linestyle=":")
 plt.xlabel("$u = S_{1r}/q$")
-plt.ylabel("$p_n(u), \\psi_r/q = (1 + \\Delta_f)^{-1/3} - 1$")
+#plt.ylabel("$p_n(u), \\psi_r/q = (1 + \\Delta_f)^{-1/3} - 1$")
+plt.ylabel("$p_n(u), \\Delta_f(r)$")
 plt.ylim([-1.1,1.1])
 plt.xlim([-1,1])
 plt.legend(frameon=False,loc="upper left")
