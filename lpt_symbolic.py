@@ -2255,6 +2255,24 @@ plt.subplots_adjust(left=0.25,bottom=0.15,right=0.95,top=0.95)
 #plt.savefig(figuresFolder + "pn_plot_all.pdf")
 plt.show()
 
+# Perturbative expression for Psi_r/r as a function of Psi_r/q:
+Psi_r_q1, Psi_r_q2, Psi_r_q3, Psi_r_q4, Psi_r_q5 = [
+    sp.Symbol(f"Psi_r_q{n}") for n in range(1,6)
+]
+v_r_q1, v_r_q2, v_r_q3, v_r_q4, v_r_q5 = [
+    sp.Symbol(f"v_r_q{n}") for n in range(1,6)
+]
+Psi_r_q_list = [Psi_r_q1,Psi_r_q2,Psi_r_q3,Psi_r_q4,Psi_r_q5]
+v_r_q_list = [v_r_q1,v_r_q2,v_r_q3,v_r_q4,v_r_q5]
+Psi_r_q = sp.Add(*[Psi_r_q_list[n]*epsilon**(n+1) for n in range(0,5)])
+v_r_q = sp.Add(*[v_r_q_list[n]*epsilon**(n+1) for n in range(0,5)])
+
+Psi_r_r = sp.expand(sp.series(Psi_r_q/(1 + Psi_r_q),epsilon,n=6))
+Psi_r_r_dict = Psi_r_r.as_coefficients_dict(epsilon)
+
+v_r_r = sp.expand(sp.series(v_r_q/(1 + Psi_r_q),epsilon,n=6))
+v_r_r_dict = v_r_r.as_coefficients_dict(epsilon)
+
 
 
 

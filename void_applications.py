@@ -1080,7 +1080,8 @@ plot_velocity_profiles(rbin_centres,ur_mean,Delta_mean,
                        ur_range=ur_range,normalised=True,
                        fixed_delta=True,perturbative_ics=False,
                        use_linear_on_fail=False,treat_2lpt_separately=False,
-                       show_error_estimates=True,eulerian_radius=True)
+                       show_error_estimates=True,eulerian_radius=True,
+                       taylor_expand=True)
 plt.show()
 
 
