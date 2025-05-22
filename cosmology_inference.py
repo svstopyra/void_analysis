@@ -692,7 +692,7 @@ def find_suitable_solver_bounds(f,RHS,D10,taylor_expand=True,iter_max = 10,
             ulow = -RHS_max/(3*D10)
             count = 0
             while f(ulow) < RHS_max:
-                    ulow *= 10
+                ulow *= 10
                 count += 1
                 if count > iter_max:
                     raise Exception("Failing to find valid boundary for " + 
