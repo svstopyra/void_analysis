@@ -1086,7 +1086,8 @@ def get_initial_condition(Delta,order=1,Om=0.3,n2 = -1/143,n3a = -4/275,
         return solution
 
 def get_S1r(Delta_r,rval,Om,order=1,n2 = -1/143,n3a = -4/275,n3b = -269/17875,
-            perturbative_ics = False,taylor_expand=True,**kwargs):
+            perturbative_ics = False,taylor_expand=True,
+            force_linear_ics = False,**kwargs):
     """
     Compute the spatial part of the first order Lagrangian perturbation, by 
     matching to the provided final density field.
@@ -1119,10 +1120,16 @@ def get_S1r(Delta_r,rval,Om,order=1,n2 = -1/143,n3a = -4/275,n3b = -269/17875,
             Delta_r,order=order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,**kwargs
         )
     else:
-        S1r = rval*get_initial_condition_non_perturbative(
-            Delta_r,order=order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,
-            taylor_expand=taylor_expand,**kwargs
-        )
+        if force_linear_ics:
+            S1r = rval*get_initial_condition_non_perturbative(
+                Delta_r,order=1,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,
+                taylor_expand=taylor_expand,**kwargs
+            )
+        else:
+            S1r = rval*get_initial_condition_non_perturbative(
+                Delta_r,order=order,Om=Om,n2 = n2,n3a = n3a,n3b = n3b,
+                taylor_expand=taylor_expand,**kwargs
+            )
     return S1r
 
 def get_S2r(Delta_r,rval,Om,n2 = -1/143,n3a = -4/275,n3b = -269/17875,order=2,
@@ -1498,48 +1505,76 @@ def get_delta_lpt(Delta_r,z=0,Om=0.3,order=1,return_all=False,**kwargs):
                    -3*Psi_r1*Psi_r2_un**2 - 3*Psi_r1**2*Psi_r3_un)
         return Delta_1, Delta_2, Delta_3, Delta_4, Delta_5
 
-def get_eulerian_ratio_from_lagrangian_ratio(quant_list_q,Psi_q_list,order):
+def get_eulerian_ratio_from_lagrangian_ratio(quant_list_q,Psi_q_list,order,
+                                             expand_denom_only=False):
     if order not in [1,2,3,4,5]:
         raise Exception("Perturbation order invalid or not implemented.")
     if order >= 1:
         v_r_q1 = quant_list_q[0]
-        v_r_r = v_r_q1
+        if expand_denom_only:
+            qor = 1
+            v_r_q = v_r_q1
+            v_r_r = qor*v_r_q
+        else:
+            v_r_r = zeros(v_r_q1.shape)
+            v_r_r += v_r_q1
         if order == 1:
             return v_r_r
     if order >=2:
         Psi_r_q1 = Psi_q_list[0]
         v_r_q2 = quant_list_q[1]
-        v_r_r += -Psi_r_q1*v_r_q1 + v_r_q2
+        if expand_denom_only:
+            qor += - Psi_r_q1
+            v_r_q += v_r_q2
+            v_r_r = qor*v_r_q
+        else:
+            v_r_r += -Psi_r_q1*v_r_q1 + v_r_q2
         if order == 2:
             return v_r_r
     if order >=3:
         Psi_r_q2 = Psi_q_list[1]
         v_r_q3 = quant_list_q[2]
-        v_r_r += (Psi_r_q1**2*v_r_q1 - Psi_r_q1*v_r_q2 - Psi_r_q2*v_r_q1
-                     + v_r_q3)
+        if expand_denom_only:
+            qor += Psi_r_q1**2 - Psi_r_q2
+            v_r_q += v_r_q3
+            v_r_r = qor*v_r_q
+        else:
+            v_r_r += (Psi_r_q1**2*v_r_q1 - Psi_r_q1*v_r_q2 - Psi_r_q2*v_r_q1
+                         + v_r_q3)
         if order == 3:
             return v_r_r
     if order >=4:
         Psi_r_q3 = Psi_q_list[2]
         v_r_q4 = quant_list_q[3]
-        v_r_r += (-Psi_r_q1**3*v_r_q1 + Psi_r_q1**2*v_r_q2
-                    + 2*Psi_r_q1*Psi_r_q2*v_r_q1 - Psi_r_q1*v_r_q3
-                    - Psi_r_q2*v_r_q2 - Psi_r_q3*v_r_q1 + v_r_q4)
+        if expand_denom_only:
+            qor += 2*Psi_r_q1*Psi_r_q2 - Psi_r_q3 - Psi_r_q1**3
+            v_r_q += v_r_q4
+            v_r_r = qor*v_r_q
+        else:
+            v_r_r += (-Psi_r_q1**3*v_r_q1 + Psi_r_q1**2*v_r_q2
+                        + 2*Psi_r_q1*Psi_r_q2*v_r_q1 - Psi_r_q1*v_r_q3
+                        - Psi_r_q2*v_r_q2 - Psi_r_q3*v_r_q1 + v_r_q4)
         if order == 4:
             return v_r_r
     if order >= 5:
         Psi_r_q4 = Psi_q_list[3]
         v_r_q5 = quant_list_q[4]
-        v_r_r += (Psi_r_q1**4*v_r_q1 - Psi_r_q1**3*v_r_q2
-                  - 3*Psi_r_q1**2*Psi_r_q2*v_r_q1 + Psi_r_q1**2*v_r_q3
-                  + 2*Psi_r_q1*Psi_r_q2*v_r_q2 + 2*Psi_r_q1*Psi_r_q3*v_r_q1
-                  - Psi_r_q1*v_r_q4 + Psi_r_q2**2*v_r_q1 - Psi_r_q2*v_r_q3
-                  - Psi_r_q3*v_r_q2 - Psi_r_q4*v_r_q1 + v_r_q5)
+        if expand_denom_only:
+            qor += (Psi_r_q1**4 - 3*Psi_r_q1**2*Psi_r_q2 + Psi_r_q2**2 
+                    + 2*Psi_r_q1*Psi_r_q3 - Psi_r_q4)
+            v_r_q += v_r_q5
+            v_r_r = qor*v_r_q
+        else:
+            v_r_r += (Psi_r_q1**4*v_r_q1 - Psi_r_q1**3*v_r_q2
+                      - 3*Psi_r_q1**2*Psi_r_q2*v_r_q1 + Psi_r_q1**2*v_r_q3
+                      + 2*Psi_r_q1*Psi_r_q2*v_r_q2 + 2*Psi_r_q1*Psi_r_q3*v_r_q1
+                      - Psi_r_q1*v_r_q4 + Psi_r_q2**2*v_r_q1 - Psi_r_q2*v_r_q3
+                      - Psi_r_q3*v_r_q2 - Psi_r_q4*v_r_q1 + v_r_q5)
     return v_r_r
 
 def process_radius(r,Psi_q,quant_q = None,radial_fraction=True,
                    eulerian_radius=True,taylor_expand=True,
-                   order=None):
+                   order=None,expand_denom_only=False):
     """Return the Value of Psi_r, either as a fraction of the radius
     or on it's own, in the correct co-ordinates (Lagrangian vs Eulerian)
     
@@ -1563,6 +1598,14 @@ def process_radius(r,Psi_q,quant_q = None,radial_fraction=True,
     """
     if quant_q is None:
         quant_q = Psi_q
+    if isinstance(quant_q,list):
+        quant_q_sum = np.sum(quant_q,0)
+    else:
+        quant_q_sum = quant_q
+    if isinstance(Psi_q,list):
+        Psi_q_sum = np.sum(Psi_q,0)
+    else:
+        Psi_q_sum = Psi_q
     if eulerian_radius:
         if taylor_expand:
             if (not isinstance(Psi_q,list)) or (not isinstance(quant_q,list)):
@@ -1573,10 +1616,13 @@ def process_radius(r,Psi_q,quant_q = None,radial_fraction=True,
                 raise Exception("Variable 'order' required for perturbative"
                                  + "calculation.")
             radial_ratio = get_eulerian_ratio_from_lagrangian_ratio(
-                quant_list_q,Psi_q_list,order
+                quant_q,Psi_q,order,expand_denom_only
             )
         else:
-            radial_ratio = quant_q/(1.0 + Psi_q)
+            if isinstance(quant_q,list):
+                radial_ratio = [q/(1.0 + Psi_q_sum) for q in quant_q]
+            else:
+                radial_ratio = quant_q/(1.0 + Psi_q_sum)
     if radial_fraction:
         if eulerian_radius:
             return radial_ratio # Conversion to Eulerian co-ordinates.
@@ -1584,16 +1630,23 @@ def process_radius(r,Psi_q,quant_q = None,radial_fraction=True,
             return quant_q
     else:
         if eulerian_radius:
-            return r*radial_ratio
+            if isinstance(radial_ratio,list):
+                return [r*val for val in radial_ratio]
+            else:
+                return r*radial_ratio
         else:
-            return r*quant_q
+            if isinstance(quant_q,list):
+                return [r*val for val in quant_q]
+            else:
+                return r*quant_q
 
 def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
                                n2 = -1/143,nf1 = 5/9,
                                nf2 = 6/11,n3a = -4/275,n3b = -269/17875,
                                nf3a = 13/24,nf3b = 13/24,fixed_delta = False,
                                radial_fraction = False,S1r = None,
-                               eulerian_radius=True,**kwargs):
+                               eulerian_radius=True,expand_denom_only=False,
+                               taylor_expand=True,return_all=False,**kwargs):
     """
     Compute the radial component of the displacement field, in Lagrangian 
     perturbation theory, assuming spherical symmetry for the density field.
@@ -1624,60 +1677,74 @@ def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
     if order not in [1,2,3,4,5]:
         raise Exception("Perturbation order invalid or not implemented.")
     Delta_r = Delta if fixed_delta else Delta(r)
+    split = (taylor_expand and eulerian_radius) or return_all
     # 1st order estimate of Psi_q:
     if S1r is None:
-        S1r = get_S1r(Delta_r,1.0,Om,order=order,**kwargs)
+        S1r = get_S1r(Delta_r,1.0,Om,order=order,taylor_expand=taylor_expand,
+                      **kwargs)
     Psi_q1 = get_psi_n_r(Delta_r,1.0,1,order=order,n2=n2,n3a=n3a,n3b=n3b,
-                         Om=Om,z=z,S1r=S1r,**kwargs)
-    Psi_q = Psi_q1
+                         Om=Om,z=z,S1r=S1r,taylor_expand=taylor_expand,
+                         **kwargs)
+    Psi_q = np.zeros(Psi_q1.shape)
+    Psi_q += Psi_q1
     if order == 1:
-        Psi_arg = [Psi_q1] if taylor_expand else Psi_q
+        Psi_arg = [Psi_q1] if split else Psi_q
         return process_radius(r,Psi_arg,radial_fraction=radial_fraction,
                               eulerian_radius=eulerian_radius,
-                              order=order,taylor_expand=taylor_expand)
+                              order=order,taylor_expand=taylor_expand,
+                              expand_denom_only=expand_denom_only)
     # 2nd order estimate of Psi_q:
     Psi_q2 = get_psi_n_r(Delta_r,1.0,2,order=order,n2=n2,n3a=n3a,n3b=n3b,
-                         Om=Om,z=z,S1r=S1r,**kwargs)
+                         Om=Om,z=z,S1r=S1r,taylor_expand=taylor_expand,
+                         **kwargs)
     Psi_q += Psi_q2
     if order == 2:
-        Psi_arg = [Psi_q1,Psi_q2] if taylor_expand else Psi_q
+        Psi_arg = [Psi_q1,Psi_q2] if split else Psi_q
         return process_radius(r,Psi_arg,radial_fraction=radial_fraction,
                               eulerian_radius=eulerian_radius,order=order,
-                              taylor_expand=taylor_expand)
+                              taylor_expand=taylor_expand,
+                              expand_denom_only=expand_denom_only)
     # 3rd order estimate of Psi_q:
     Psi_q3 = get_psi_n_r(Delta_r,1.0,3,order=order,n2=n2,n3a=n3a,n3b=n3b,
-                         Om=Om,z=z,S1r=S1r,**kwargs)
+                         Om=Om,z=z,S1r=S1r,taylor_expand=taylor_expand,
+                         **kwargs)
     Psi_q += Psi_q3
     if order == 3:
-        Psi_arg = [Psi_q1,Psi_q2,Psi_q3] if taylor_expand else Psi_q
+        Psi_arg = [Psi_q1,Psi_q2,Psi_q3] if split else Psi_q
         return process_radius(r,Psi_arg,radial_fraction=radial_fraction,
                               eulerian_radius=eulerian_radius,order=order,
-                              taylor_expand=taylor_expand)
+                              taylor_expand=taylor_expand,
+                              expand_denom_only=expand_denom_only)
     # 4th order estimate of Psi_q:
     Psi_q4 = get_psi_n_r(Delta_r,1.0,4,order=order,n2=n2,n3a=n3a,n3b=n3b,
-                         Om=Om,z=z,S1r=S1r,**kwargs)
+                         Om=Om,z=z,S1r=S1r,taylor_expand=taylor_expand,
+                         **kwargs)
     Psi_q += Psi_q4
     if order == 4:
-        Psi_arg = [Psi_q1,Psi_q2,Psi_q3,Psi_q4] if taylor_expand else Psi_q
+        Psi_arg = [Psi_q1,Psi_q2,Psi_q3,Psi_q4] if split else Psi_q
         return process_radius(r,Psi_arg,radial_fraction=radial_fraction,
                               eulerian_radius=eulerian_radius,order=order,
-                              taylor_expand=taylor_expand)
+                              taylor_expand=taylor_expand,
+                              expand_denom_only=expand_denom_only)
     # 5th order estimate of Psi_q:
     Psi_q5 = get_psi_n_r(Delta_r,1.0,5,order=order,n2=n2,n3a=n3a,n3b=n3b,
-                         Om=Om,z=z,S1r=S1r,**kwargs)
+                         Om=Om,z=z,S1r=S1r,taylor_expand=taylor_expand,
+                         **kwargs)
     Psi_q += Psi_q5
-    Psi_arg = [Psi_q1,Psi_q2,Psi_q3,Psi_q4,Psi_q5] if taylor_expand else Psi_q
+    Psi_arg = [Psi_q1,Psi_q2,Psi_q3,Psi_q4,Psi_q5] if split else Psi_q
     return process_radius(r,Psi_arg,radial_fraction=radial_fraction,
                           eulerian_radius=eulerian_radius,order=order,
-                          taylor_expand=taylor_expand)
+                          taylor_expand=taylor_expand,
+                          expand_denom_only=expand_denom_only)
 
 def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
                                n2 = -1/143,nf1 = 5/9,
                                nf2 = 6/11,n3a = -4/275,n3b = -269/17875,
                                nf3a = 13/24,nf3b = 13/24,h=1.0,
                                radial_fraction = False,fixed_delta = True,
-                               eulerian_radius=True,
-                               **kwargs):
+                               eulerian_radius=True,taylor_expand=True,
+                               expand_denom_only=False,
+                               return_all=False,**kwargs):
     """
     Compute the radial component of the velocity field, in Lagrangian 
     perturbation theory, assuming spherical symmetry for the density field.
@@ -1708,102 +1775,113 @@ def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
     """
     print(kwargs)
     print({"radial_fraction":radial_fraction,"fixed_delta":fixed_delta,
-           "eulerian_radius":eulerian_radius})
+           "eulerian_radius":eulerian_radius,"taylor_expand":taylor_expand})
     if order not in [1,2,3,4,5]:
         raise Exception("Perturbation order invalid or not implemented.")
     # Setup needed variables:
     D1_val = D1(z,Om,**kwargs)
     Delta_r = Delta if fixed_delta else Delta(r)
+    split = (taylor_expand and eulerian_radius) or return_all
     a = 1/(1+z)
     H = Hz(z,Om,h=h,**kwargs)
     Omz = Omega_z(z,Om,**kwargs)
     # Get first order correction, from the initial conditions:
-    S1r = get_S1r(Delta_r,1.0,Om,order=order,n2=n2,n3a=n3a,n3b=n3b,**kwargs)
+    S1r = get_S1r(Delta_r,1.0,Om,order=order,n2=n2,n3a=n3a,n3b=n3b,
+                  taylor_expand=taylor_expand,**kwargs)
     # Get displacement field relative to Lagrangian radius 
     # (needed to compute correct Eulerian radii):
-    if taylor_expand:
+    if taylor_expand and eulerian_radius:
         Psi_q = get_psi_n_r(Delta_r,1.0,order,order=order,n2=n2,n3a=n3a,n3b=n3b,
-                         Om=Om,z=z,S1r=S1r,return_all=True,**kwargs)
+                         Om=Om,z=z,S1r=S1r,return_all=True,
+                         taylor_expand=taylor_expand,**kwargs)
     else:
         Psi_q = spherical_lpt_displacement(
             1.0,Delta,order=order,z=z,Om=Om,n2 = n2,nf1 = nf1,nf2 = nf2,
             n3a = n3a,n3b = n3b,nf3a = nf3a,nf3b = nf3b,
             fixed_delta = fixed_delta,radial_fraction = True,
-            eulerian_radius=False,S1r=S1r,**kwargs
+            eulerian_radius=False,S1r=S1r,taylor_expand=taylor_expand,
+            **kwargs
         )
     # 1st order estimate of v_r:
     f1 = Omz**nf1
     v_r1 = a*H*f1*D1_val*S1r
-    v_r = v_r1
+    v_r = np.zeros(v_r1.shape)
+    v_r += v_r1
     if order == 1:
-        vr_arg = [v_r1] if taylor_expand else v_r
-        return process_radius(r,Psi_q,radial_quant=vr_arg,
+        vr_arg = [v_r1] if split else v_r
+        return process_radius(r,Psi_q,quant_q=vr_arg,
                               radial_fraction=radial_fraction,
                               eulerian_radius=eulerian_radius,order=order,
-                              taylor_expand=taylor_expand)
+                              taylor_expand=taylor_expand,
+                              expand_denom_only=expand_denom_only)
     # 2nd order estimate of v_r:
     D2_val = get_D_coefficients(
         Om,order=2,return_all = False,**kwargs
     )[0]
     f2_val = 2*(Omz**nf2)
     S2r = get_S2r(Delta_r,1.0,Om,order=order,n2=n2,n3a=n3a,n3b=n3b,
-                  S1r = S1r,**kwargs)
+                  S1r = S1r,taylor_expand=taylor_expand,**kwargs)
     v_r2 = a*H*f2_val*D2_val*S2r
     v_r += v_r2
     if order == 2:
-        vr_arg = [v_r1,v_r2] if taylor_expand else v_r
-        return process_radius(r,Psi_q,radial_quant=vr_arg,
+        vr_arg = [v_r1,v_r2] if split else v_r
+        return process_radius(r,Psi_q,quant_q=vr_arg,
                               radial_fraction=radial_fraction,
                               eulerian_radius=eulerian_radius,order=order,
-                              taylor_expand=taylor_expand)
+                              taylor_expand=taylor_expand,
+                              expand_denom_only=expand_denom_only)
     # 3rd order estimate of v_r:
     f3a = 3*(Omz**nf3a)
     f3b = 3*(Omz**nf3b)
     D3a_val, D3b_val = get_D_coefficients(
         Om,order=3,return_all = False,**kwargs
     )
-    S3ar, S3br = get_S3r(Delta_r,1.0,Om,order=order,S1r=S1r,**kwargs)
+    S3ar, S3br = get_S3r(Delta_r,1.0,Om,order=order,S1r=S1r,
+                         taylor_expand=taylor_expand,**kwargs)
     v_r3 = a*H*f3a*D3a_val*S3ar + a*H*f3b*D3b_val*S3br
     v_r += v_r3
     if order == 3:
-        vr_arg = [v_r1,v_r2,v_r3] if taylor_expand else v_r
-        return process_radius(r,Psi_q,radial_quant=vr_arg,
+        vr_arg = [v_r1,v_r2,v_r3] if split else v_r
+        return process_radius(r,Psi_q,quant_q=vr_arg,
                               radial_fraction=radial_fraction,
                               eulerian_radius=eulerian_radius,order=order,
-                              taylor_expand=taylor_expand)
+                              taylor_expand=taylor_expand,
+                              expand_denom_only=expand_denom_only)
     # 4th order estimate of v_r:
     all_D4 = get_D_coefficients(
         Om,order=4,return_all = False,**kwargs
     )
     all_S4 = get_S4r(
-        Delta_r,1.0,Om,order=order,S1r=S1r,**kwargs
+        Delta_r,1.0,Om,order=order,S1r=S1r,taylor_expand=taylor_expand,**kwargs
     )
     # EdS approximation of linear growth rates for each term:
     all_f4 = [4*f1 for _ in all_D4]
     v_r4 = a*H*np.sum([f*D*S for f, D, S in zip(all_f4,all_D4,all_S4)],0)
     v_r += v_r4
     if order == 4:
-        vr_arg = [v_r1,v_r2,v_r3,v_r4] if taylor_expand else v_r
-        return process_radius(r,Psi_q,radial_quant=vr_arg,
+        vr_arg = [v_r1,v_r2,v_r3,v_r4] if split else v_r
+        return process_radius(r,Psi_q,quant_q=vr_arg,
                               radial_fraction=radial_fraction,
                               eulerian_radius=eulerian_radius,order=order,
-                              taylor_expand=taylor_expand)
+                              taylor_expand=taylor_expand,
+                              expand_denom_only=expand_denom_only)
     # 5th order estimate of v_r:
     all_D5 = get_D_coefficients(
         Om,order=5,return_all = False,**kwargs
     )
     all_S5 = get_S5r(
-        Delta_r,1.0,Om,order=order,S1r=S1r,**kwargs
+        Delta_r,1.0,Om,order=order,S1r=S1r,taylor_expand=taylor_expand,**kwargs
     )
     # EdS approximation of linear growth rates for each term:
     all_f5 = [5*f1 for _ in all_D5]
     v_r5 = a*H*np.sum([f*D*S for f, D, S in zip(all_f5,all_D5,all_S5)],0)
     v_r += v_r5
-    vr_arg = [v_r1,v_r2,v_r3,v_r4,v_r5] if taylor_expand else v_r
-    return process_radius(r,Psi_q,radial_quant=vr_arg,
+    vr_arg = [v_r1,v_r2,v_r3,v_r4,v_r5] if split else v_r
+    return process_radius(r,Psi_q,quant_q=vr_arg,
                               radial_fraction=radial_fraction,
                               eulerian_radius=eulerian_radius,order=order,
-                              taylor_expand=taylor_expand)
+                              taylor_expand=taylor_expand,
+                              expand_denom_only=expand_denom_only)
 
 def Hz(z, Om, h=None, Ol=None, Ok=0, Or=0, **kwargs):
     """

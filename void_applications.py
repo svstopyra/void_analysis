@@ -921,7 +921,7 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
                            ylabel="$u_r/r [h\\mathrm{kms}^{-1}\\mathrm{Mpc}^{-1}]$",
                            xlabel="$r/r_{\\mathrm{eff}}$",velocity=False,
                            treat_2lpt_separately=True,show_error_estimates=False,
-                           **kwargs):
+                           ylim=[0,20],**kwargs):
     if ax is None:
         fig, ax = plt.subplots()
     print(kwargs)
@@ -1057,7 +1057,7 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     #plt.yscale("log")
-    ax.set_ylim([0,20])
+    ax.set_ylim(ylim)
     plt.legend(frameon=False)
     if filename is not None:
         plt.savefig(filename)
@@ -1081,7 +1081,8 @@ plot_velocity_profiles(rbin_centres,ur_mean,Delta_mean,
                        fixed_delta=True,perturbative_ics=False,
                        use_linear_on_fail=False,treat_2lpt_separately=False,
                        show_error_estimates=True,eulerian_radius=True,
-                       taylor_expand=True)
+                       taylor_expand=False,force_linear_ics=False,
+                       expand_denom_only=False,ylim=[0,60])
 plt.show()
 
 
@@ -1118,6 +1119,21 @@ Psir_ratio_3 = spherical_lpt_displacement(1.0,Delta_mean,z=0,Om=0.3111,
                                         perturbative_ics=False,
                                         use_linear_on_fail=False,
                                         correct_ics=True)
+
+Psir_ratio_5 = spherical_lpt_displacement(1.0,Delta_mean,z=0,Om=0.3111,
+                                        fixed_delta=True,order=5,
+                                        perturbative_ics=False,
+                                        use_linear_on_fail=False,
+                                        eulerian_radius=False,
+                                        taylor_expand=False,return_all=True,
+                                        radial_fraction=True)
+vr_ratio_5 = spherical_lpt_velocity(1.0,Delta_mean,z=0,Om=0.3111,
+                                        fixed_delta=True,order=5,
+                                        perturbative_ics=False,
+                                        use_linear_on_fail=False,
+                                        eulerian_radius=True,
+                                        taylor_expand=False,
+                                        return_all=True,radial_fraction=True)
 
 plt.clf()
 plt.plot(rbin_centres,Delta_mean,color=seabornColormap[0],linestyle="-",
@@ -1247,6 +1263,80 @@ plt.xlabel("$r_{\\parallel}$")
 plt.ylabel("$u_{\\parallel}$")
 plt.legend(frameon=False)
 plt.savefig(figuresFolder + "linear_velocity_test.pdf")
+plt.show()
+
+
+#-------------------------------------------------------------------------------
+# ARBITRARY VELOCITY MODEL
+
+N = 5
+u = 1 - np.cbrt(1 + Delta_mean)
+z = 0
+u_filter = range(2,len(u))
+def semi_empirical_model(u,z,Om,alphas,h=1,nf1 = 5/9,**kwargs):
+    a = 1/(1+z)
+    H = Hz(z,Om,h=h,**kwargs)
+    Omz = Omega_z(z,Om,**kwargs)
+    f1 = Omz**nf1
+    N = len(alphas) + 1
+    sum_term = np.sum([alphas[n-2]*u**n for n in range(2,N+1)],0)
+    return a*H*(f1*u + sum_term)
+
+alphas_guess = np.ones(len(range(2,N+1)))
+
+alphas_guesses = [np.ones(len(range(2,N+1))) for N in range(2,10)]
+
+sols = [
+    scipy.optimize.least_squares(
+        lambda alphas: semi_empirical_model(
+            u[u_filter],z,Om,alphas
+        ) - ur_mean[u_filter],alphas_guess
+    )
+    for alphas_guess in alphas_guesses
+]
+
+alphas_list = [sol.x for sol in sols]
+
+# Test plot:
+relative = True
+plt.clf()
+fig, ax = plt.subplots()
+if relative:
+    sim_low = (ur_range[0][u_filter] - ur_mean[u_filter])*100/ur_mean[u_filter]
+    sim_high = (ur_range[1][u_filter] - ur_mean[u_filter])*100/ur_mean[u_filter]
+else:
+    sim_low = ur_range[0]
+    sim_high = ur_range[1]
+
+ax.fill_between(
+    rbin_centres[u_filter],sim_low,sim_high,
+    color=seabornColormap[0],label="$Simulation, 68\\% interval$",alpha=0.5
+)
+for k in range(len(alphas_list)):
+    model_val = semi_empirical_model(
+        u[u_filter],z,Om,
+        alphas_list[k]
+    )
+    if relative:
+        model_plot = (model_val - ur_mean[u_filter])*100/ur_mean[u_filter]
+    else:
+        model_plot = model_val
+    ax.plot(
+        rbin_centres[u_filter],model_plot,
+        color=seabornColormap[k],linestyle=':',
+        label="Empirical Model, $N = " + ("%.2g" % (k+2)) + "$"
+    )
+
+plt.xlabel('$r/r_{\\mathrm{eff}}$')
+if relative:
+    plt.ylabel('Percentage Error')
+else:
+    plt.ylabel('$v_r/r [h\\mathrm{kms}^{-1}\\mathrm{Mpc}^{-1}]$')
+
+ax.set_ylim([-5,5])
+
+plt.legend(frameon=False,ncol=2)
+plt.savefig(figuresFolder + "velocity_model.pdf")
 plt.show()
 
 
@@ -2555,6 +2645,7 @@ plt.legend(frameon=False,loc="upper center")
 plt.tight_layout()
 plt.savefig(figuresFolder + "profile_fit_test_diff.pdf")
 plt.show()
+
 
 
 
