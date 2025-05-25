@@ -2101,6 +2101,7 @@ Psi5_q = sp.Add(*[D*S for D, S in zip(D5vals,S5q)])
 # 1/q = (1/r)*(1/(1 - Psi_r/r))
 Psi_q_vals = [Psi1_q,Psi2_q,Psi3_q,Psi4_q,Psi5_q]
 Psi_q = sp.Add(*[psi*epsilon**n for psi, n in zip(Psi_q_vals,range(1,6))])
+Psi_q_sym = sp.Add(*[sp.Symbol(f"Psi_q{n}")*epsilon**n for n in range(1,6)])
 
 q_rec = ((1/r)*sp.series(1/(1-Psi_q/r),epsilon,n=6))
 q_val = r*sp.series(1-Psi_q/r,epsilon,n=6)
@@ -2183,7 +2184,9 @@ x = sp.Symbol("x")
 Delta_fq = 1/(1 + x)**3 - 1
 Delta_fq_expanded = sp.series(Delta_fq,x,n=6)
 Delta_fq_eps = sp.series(Delta_fq.subs(x,Psi_q/q),epsilon,n=6)
+Delta_fq_eps_symbolic = sp.series(Delta_fq.subs(x,Psi_q_sym),epsilon,n=6)
 Delta_fq_dict = Delta_fq_eps.as_coefficients_dict(epsilon)
+Delta_fq_symbolic_dict = Delta_fq_eps_symbolic.as_coefficients_dict(epsilon)
 
 E1, E2, E3, E4, E5 = [sp.expand(Delta_fq_dict[epsilon**n]*q**n/S1ar**n)
                       for n in range(1,6)]
@@ -2223,7 +2226,11 @@ pe5 = lambda u: En_num[4]*u**5 + pe4(u)
 
 p2min = p2(-A1n/(2*A2n))
 pb2min = pb2(-B1n/(2*B2n))
+Delta_minb2 = 1/(1 + pb2min)**3 - 1
 pe2min = pe2(-En_num[0]/(2*En_num[1]))
+
+def Delta_func(x):
+    return 1/(1 + x)**3 - 1
 
 import matplotlib.pylab as plt
 import numpy as np
@@ -2232,24 +2239,30 @@ seabornColormap = sns.color_palette("colorblind",as_cmap=True)
 
 #plt.clf()
 textwidth=7.1014
-uvals = np.linspace(-1,1,1000)
-fig, ax = plt.subplots(figsize = (0.45*textwidth,0.45*textwidth))
-plt.plot(uvals,pe1(uvals),color=seabornColormap[1],linestyle="-",label="$p_1(u)$")
-plt.plot(uvals,pe2(uvals),color=seabornColormap[2],linestyle="--",label="$p_2(u)$")
-plt.plot(uvals,pe3(uvals),color=seabornColormap[3],linestyle="-",label="$p_3(u)$")
-plt.plot(uvals,pe4(uvals),color=seabornColormap[4],linestyle="--",label="$p_4(u)$")
-plt.plot(uvals,pe5(uvals),color=seabornColormap[7],linestyle="-",label="$p_5(u)$")
+uvals = np.linspace(-0.5,1.5,1000)
+fig, ax = plt.subplots(figsize = (0.55*textwidth,0.45*textwidth))
+plt.plot(uvals,Delta_func(pb1(uvals)),color=seabornColormap[1],linestyle="-",
+         label="$p_1(u)$")
+plt.plot(uvals,Delta_func(pb2(uvals)),color=seabornColormap[2],linestyle="--",
+         label="$p_2(u)$")
+plt.plot(uvals,Delta_func(pb3(uvals)),
+        color=seabornColormap[3],linestyle="-",label="$p_3(u)$")
+plt.plot(uvals,Delta_func(pb4(uvals)),color=seabornColormap[4],linestyle="--",
+        label="$p_4(u)$")
+plt.plot(uvals,Delta_func(pb5(uvals)),color=seabornColormap[8],linestyle="-",
+    label="$p_5(u)$")
 #plt.plot(uvals,p_exact(uvals),color=seabornColormap[7],linestyle=":",label="$Exact, \\Psi_r/r$")
 plt.axhline(-1.0,color="grey",linestyle=":")
-plt.axhline(pe2min,color="grey",linestyle="-.",
-            label="$\\Delta_f = $" + ("%.2g" % p2min))
+plt.axhline(Delta_minb2,color="grey",linestyle="-.",
+            label="$\\Delta_f = $" + ("%.2g" % Delta_minb2))
+plt.axhline(-0.86,color="grey",linestyle="--",label="$\\Delta_f=-0.86$")
 plt.axhline(0.0,color="grey",linestyle=":")
 plt.xlabel("$u = S_{1r}/q$")
 #plt.ylabel("$p_n(u), \\psi_r/q = (1 + \\Delta_f)^{-1/3} - 1$")
 plt.ylabel("$p_n(u), \\Delta_f(r)$")
-plt.ylim([-1.1,1.1])
-plt.xlim([-1,1])
-plt.legend(frameon=False,loc="upper left")
+plt.ylim([-1.1,0])
+plt.xlim([-0.5,1.5])
+plt.legend(frameon=False,loc="upper right",ncols=2)
 #plt.tight_layout()
 plt.subplots_adjust(left=0.25,bottom=0.15,right=0.95,top=0.95)
 #plt.savefig(figuresFolder + "pn_plot_all.pdf")

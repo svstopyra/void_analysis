@@ -1516,7 +1516,7 @@ def get_eulerian_ratio_from_lagrangian_ratio(quant_list_q,Psi_q_list,order,
             v_r_q = v_r_q1
             v_r_r = qor*v_r_q
         else:
-            v_r_r = zeros(v_r_q1.shape)
+            v_r_r = np.zeros(v_r_q1.shape)
             v_r_r += v_r_q1
         if order == 1:
             return v_r_r
@@ -1646,7 +1646,8 @@ def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
                                nf3a = 13/24,nf3b = 13/24,fixed_delta = False,
                                radial_fraction = False,S1r = None,
                                eulerian_radius=True,expand_denom_only=False,
-                               taylor_expand=True,return_all=False,**kwargs):
+                               taylor_expand=True,return_all=False,
+                               expand_euler_ratio=False,**kwargs):
     """
     Compute the radial component of the displacement field, in Lagrangian 
     perturbation theory, assuming spherical symmetry for the density field.
@@ -1691,7 +1692,7 @@ def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
         Psi_arg = [Psi_q1] if split else Psi_q
         return process_radius(r,Psi_arg,radial_fraction=radial_fraction,
                               eulerian_radius=eulerian_radius,
-                              order=order,taylor_expand=taylor_expand,
+                              order=order,taylor_expand=expand_euler_ratio,
                               expand_denom_only=expand_denom_only)
     # 2nd order estimate of Psi_q:
     Psi_q2 = get_psi_n_r(Delta_r,1.0,2,order=order,n2=n2,n3a=n3a,n3b=n3b,
@@ -1702,7 +1703,7 @@ def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
         Psi_arg = [Psi_q1,Psi_q2] if split else Psi_q
         return process_radius(r,Psi_arg,radial_fraction=radial_fraction,
                               eulerian_radius=eulerian_radius,order=order,
-                              taylor_expand=taylor_expand,
+                              taylor_expand=expand_euler_ratio,
                               expand_denom_only=expand_denom_only)
     # 3rd order estimate of Psi_q:
     Psi_q3 = get_psi_n_r(Delta_r,1.0,3,order=order,n2=n2,n3a=n3a,n3b=n3b,
@@ -1713,7 +1714,7 @@ def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
         Psi_arg = [Psi_q1,Psi_q2,Psi_q3] if split else Psi_q
         return process_radius(r,Psi_arg,radial_fraction=radial_fraction,
                               eulerian_radius=eulerian_radius,order=order,
-                              taylor_expand=taylor_expand,
+                              taylor_expand=expand_euler_ratio,
                               expand_denom_only=expand_denom_only)
     # 4th order estimate of Psi_q:
     Psi_q4 = get_psi_n_r(Delta_r,1.0,4,order=order,n2=n2,n3a=n3a,n3b=n3b,
@@ -1724,7 +1725,7 @@ def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
         Psi_arg = [Psi_q1,Psi_q2,Psi_q3,Psi_q4] if split else Psi_q
         return process_radius(r,Psi_arg,radial_fraction=radial_fraction,
                               eulerian_radius=eulerian_radius,order=order,
-                              taylor_expand=taylor_expand,
+                              taylor_expand=expand_euler_ratio,
                               expand_denom_only=expand_denom_only)
     # 5th order estimate of Psi_q:
     Psi_q5 = get_psi_n_r(Delta_r,1.0,5,order=order,n2=n2,n3a=n3a,n3b=n3b,
@@ -1734,7 +1735,7 @@ def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
     Psi_arg = [Psi_q1,Psi_q2,Psi_q3,Psi_q4,Psi_q5] if split else Psi_q
     return process_radius(r,Psi_arg,radial_fraction=radial_fraction,
                           eulerian_radius=eulerian_radius,order=order,
-                          taylor_expand=taylor_expand,
+                          taylor_expand=expand_euler_ratio,
                           expand_denom_only=expand_denom_only)
 
 def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
@@ -1743,7 +1744,7 @@ def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
                                nf3a = 13/24,nf3b = 13/24,h=1.0,
                                radial_fraction = False,fixed_delta = True,
                                eulerian_radius=True,taylor_expand=True,
-                               expand_denom_only=False,
+                               expand_denom_only=False,expand_euler_ratio=False,
                                return_all=False,**kwargs):
     """
     Compute the radial component of the velocity field, in Lagrangian 
@@ -1812,7 +1813,7 @@ def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
         return process_radius(r,Psi_q,quant_q=vr_arg,
                               radial_fraction=radial_fraction,
                               eulerian_radius=eulerian_radius,order=order,
-                              taylor_expand=taylor_expand,
+                              taylor_expand=expand_euler_ratio,
                               expand_denom_only=expand_denom_only)
     # 2nd order estimate of v_r:
     D2_val = get_D_coefficients(
@@ -1828,7 +1829,7 @@ def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
         return process_radius(r,Psi_q,quant_q=vr_arg,
                               radial_fraction=radial_fraction,
                               eulerian_radius=eulerian_radius,order=order,
-                              taylor_expand=taylor_expand,
+                              taylor_expand=expand_euler_ratio,
                               expand_denom_only=expand_denom_only)
     # 3rd order estimate of v_r:
     f3a = 3*(Omz**nf3a)
@@ -1845,7 +1846,7 @@ def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
         return process_radius(r,Psi_q,quant_q=vr_arg,
                               radial_fraction=radial_fraction,
                               eulerian_radius=eulerian_radius,order=order,
-                              taylor_expand=taylor_expand,
+                              taylor_expand=expand_euler_ratio,
                               expand_denom_only=expand_denom_only)
     # 4th order estimate of v_r:
     all_D4 = get_D_coefficients(
@@ -1863,7 +1864,7 @@ def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
         return process_radius(r,Psi_q,quant_q=vr_arg,
                               radial_fraction=radial_fraction,
                               eulerian_radius=eulerian_radius,order=order,
-                              taylor_expand=taylor_expand,
+                              taylor_expand=expand_euler_ratio,
                               expand_denom_only=expand_denom_only)
     # 5th order estimate of v_r:
     all_D5 = get_D_coefficients(
@@ -1880,7 +1881,7 @@ def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
     return process_radius(r,Psi_q,quant_q=vr_arg,
                               radial_fraction=radial_fraction,
                               eulerian_radius=eulerian_radius,order=order,
-                              taylor_expand=taylor_expand,
+                              taylor_expand=expand_euler_ratio,
                               expand_denom_only=expand_denom_only)
 
 def Hz(z, Om, h=None, Ol=None, Ok=0, Or=0, **kwargs):

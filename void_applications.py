@@ -921,7 +921,7 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
                            ylabel="$u_r/r [h\\mathrm{kms}^{-1}\\mathrm{Mpc}^{-1}]$",
                            xlabel="$r/r_{\\mathrm{eff}}$",velocity=False,
                            treat_2lpt_separately=True,show_error_estimates=False,
-                           ylim=[0,20],**kwargs):
+                           ylim=[0,20],difference_plot=False,**kwargs):
     if ax is None:
         fig, ax = plt.subplots()
     print(kwargs)
@@ -988,14 +988,32 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
                                              Om=Om_fid,
                                              radial_fraction=radial_fraction,
                                              **kwargs)
+    if difference_plot:
+        u_pred_1lpt -= ur
+        u_pred_2lpt -= ur
+        u_pred_3lpt -= ur
+        u_pred_4lpt -= ur
+        u_pred_5lpt -= ur
+        u_pred_1lpt /= ur
+        u_pred_2lpt /= ur
+        u_pred_3lpt /= ur
+        u_pred_4lpt /= ur
+        u_pred_5lpt /= ur
+        if ur_range is not None:
+            ur_upper = (ur_range[1] - ur)/ur
+            ur_lower = (ur_range[0] - ur)/ur
+    elif ur_range is not None:
+        ur_upper = ur_range[1]
+        ur_lower = ur_range[0]
     if ur_ratio:
         if ur_range is not None:
-            ax.fill_between(rbin_centres,ur_range[0],ur_range[1],
+            ax.fill_between(rbin_centres,ur_lower,ur_upper,
                      color=seabornColormap[0],label="$Simulation, 68\\% interval$",alpha=0.5,
             )
-        ax.plot(rbin_centres,ur,
-                 color=seabornColormap[0],label="$Simulation$",alpha=0.5,
-        )
+        if not difference_plot:
+            ax.plot(rbin_centres,ur,
+                     color=seabornColormap[0],label="$Simulation$",alpha=0.5,
+            )
         ax.plot(rbin_centres,u_pred_1lpt,linestyle=":",
                  label="Linear Model (1LPT)",color=seabornColormap[1],
         )
@@ -1009,7 +1027,7 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
                  label="4LPT Model",color=seabornColormap[4],
         )
         ax.plot(rbin_centres,u_pred_5lpt,linestyle=":",
-                 label="5LPT Model",color=seabornColormap[6],
+                 label="5LPT Model",color=seabornColormap[8],
         )
     else:
         if ur_range is not None:
@@ -1032,7 +1050,7 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
                  label="4LPT Model",color=seabornColormap[4],
         )
         ax.plot(rbin_centres,u_pred_3lpt*rbin_centres,linestyle=":",
-                 label="5LPT Model",color=seabornColormap[6],
+                 label="5LPT Model",color=seabornColormap[8],
         )
     if show_error_estimates:
         if ur_ratio:
@@ -1053,7 +1071,7 @@ def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
                         color=seabornColormap[4],label="Expected 5LPT corrections")
         ax.fill_between(rbin_centres,u_pred_5lpt*(1 - Psir_ratio_5**5)*factor,
                         u_pred_5lpt*(1 + Psir_ratio_5**5)*factor,alpha=0.5,
-                        color=seabornColormap[6],label="Expected 6LPT corrections")
+                        color=seabornColormap[8],label="Expected 6LPT corrections")
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     #plt.yscale("log")
@@ -1081,9 +1099,25 @@ plot_velocity_profiles(rbin_centres,ur_mean,Delta_mean,
                        fixed_delta=True,perturbative_ics=False,
                        use_linear_on_fail=False,treat_2lpt_separately=False,
                        show_error_estimates=True,eulerian_radius=True,
-                       taylor_expand=False,force_linear_ics=False,
-                       expand_denom_only=False,ylim=[0,60])
+                       taylor_expand=True,force_linear_ics=False,
+                       expand_denom_only=False,ylim=[0,20])
 plt.show()
+
+
+plt.clf()
+plot_velocity_profiles(rbin_centres,ur_mean,Delta_mean,
+                       filename = figuresFolder + "ur_difference_plot.pdf",
+                       ur_range=ur_range,normalised=True,
+                       fixed_delta=True,perturbative_ics=False,
+                       use_linear_on_fail=False,treat_2lpt_separately=False,
+                       show_error_estimates=False,eulerian_radius=True,
+                       taylor_expand=False,force_linear_ics=False,
+                       expand_denom_only=False,ylim=[-0.3,0.3],
+                       difference_plot=True,
+                       ylabel="Fractional Difference in $v_{r}/r$")
+plt.show()
+
+
 
 
 # Density comparison:
@@ -1134,6 +1168,94 @@ vr_ratio_5 = spherical_lpt_velocity(1.0,Delta_mean,z=0,Om=0.3111,
                                         eulerian_radius=True,
                                         taylor_expand=False,
                                         return_all=True,radial_fraction=True)
+
+ratios = np.cumsum(Psir_ratio_5,0)/np.sum(Psir_ratio_5,0)
+
+plt.clf()
+fig, ax = plt.subplots(figsize=(0.45*textwidth,0.45*textwidth))
+plt.plot(
+    rbin_centres,Psir_ratio_5[1]/Psir_ratio_5[2],color=seabornColormap[2],
+    label="2nd/3rd (displacement)",linestyle='--'
+)
+plt.plot(
+    rbin_centres,Psir_ratio_5[3]/Psir_ratio_5[4],color=seabornColormap[4],
+    label="4th/5th (displacement)",linestyle='--'
+)
+plt.plot(
+    rbin_centres,vr_ratio_5[1]/vr_ratio_5[2],color=seabornColormap[2],
+    label="2nd/3rd (velocity)",linestyle=':'
+)
+plt.plot(
+    rbin_centres,vr_ratio_5[3]/vr_ratio_5[4],color=seabornColormap[4],
+    label="4th/5th (velocity)",linestyle=':'
+)
+plt.legend(frameon=False,loc="lower right")
+plt.xlabel("$r/r_{\\mathrm{eff}}$")
+plt.ylabel("Ratio compared to next order term.")
+plt.ylim([-5,0])
+plt.tight_layout()
+plt.savefig(figuresFolder + "convergence_plot.pdf")
+plt.show()
+
+Psi_true = 1/(np.cbrt(1 + Delta_mean)) - 1
+
+plt.clf()
+color_list = [seabornColormap[1],seabornColormap[2],seabornColormap[3],
+            seabornColormap[4],seabornColormap[8]]
+label_list = [f"n={n}" for n in range(1,6)]
+for k in range(0,5):
+    plt.plot(
+        rbin_centres, Psir_ratio_5[k]/Psi_true,
+        color=color_list[k],linestyle="-",
+        label = label_list[k]
+    )
+
+plt.xlabel("$r/r_{\\mathrm{eff}}$")
+plt.ylabel("$\\Psi^{(n)}/\\Psi_{\\mathrm{exact}}$")
+plt.axhline(1.0,color="grey",linestyle=':')
+plt.legend(frameon=False)
+plt.tight_layout()
+plt.savefig(figuresFolder + "psi_true_plot.pdf")
+plt.show()
+
+
+def Delta_f_taylor_test(Psi_list):
+    order = len(Psi_list)
+    if order not in [1,2,3,4,5]:
+        raise Exception("Order invalid or not implemented.")
+    Delta_f = np.zeros(Psi_list[0].shape)
+    Psi_q1 = Psi_list[0]
+    Delta_f += -3*Psi_q1
+    if order == 1:
+        return Delta_f
+    Psi_q2 = Psi_list[1]
+    Delta_f += 6*Psi_q1**2 - 3*Psi_q2
+    if order == 2:
+        return Delta_f
+    Psi_q3 = Psi_list[2]
+    Delta_f += -10*Psi_q1**3 + 12*Psi_q1*Psi_q2 - 3*Psi_q3
+    if order == 3:
+        return Delta_f
+    Psi_q4 = Psi_list[3]
+    Delta_f += (15*Psi_q1**4 - 30*Psi_q1**2*Psi_q2 + 12*Psi_q1*Psi_q3
+                + 6*Psi_q2**2 - 3*Psi_q4)
+    if order == 4:
+        return Delta_f
+    Psi_q5 = Psi_list[4]
+    Delta_f += (-21*Psi_q1**5 + 60*Psi_q1**3*Psi_q2 - 10*Psi_q1**2*Psi_q3
+                - 20*Psi_q1*Psi_q2**2 + 12*Psi_q1*Psi_q4
+                - 10*Psi_q1*(2*Psi_q1*Psi_q3 + Psi_q2**2) + 12*Psi_q2*Psi_q3
+                 - 3*Psi_q5)
+    return Delta_f
+
+def delta_taylor_test(x,n):
+    if np.isscalar(x):
+        sum_val = 0.0
+    else:
+        sum_val = np.zeros(x.shape)
+    for k in range(1,n+1):
+        sum_val += (-1)**k*(k+2)*(k+1)*x**k/2
+    return sum_val
 
 plt.clf()
 plt.plot(rbin_centres,Delta_mean,color=seabornColormap[0],linestyle="-",
