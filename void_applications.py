@@ -907,12 +907,18 @@ vr_range = np.percentile(vr_mean_samples,[16,84],axis=1)
 
 ur_mean = np.mean(all_ur_profiles,0)
 ur_error = np.std(all_ur_profiles,0)/np.sqrt(all_Delta_profiles.shape[0])
-ur_mean_samples = get_weighted_samples(all_ur_profiles,axis=0)
+ur_mean_samples = tools.loadOrRecompute(
+    data_folder + "ur_samples.p",get_weighted_samples,all_ur_profiles,axis=0,
+    _recomputeData = False
+}
 ur_range = np.percentile(ur_mean_samples,[16,84],axis=1)
 
 Delta_mean = np.mean(all_Delta_profiles,0)
 Delta_std = np.std(all_Delta_profiles,0)
-Delta_mean_samples = get_weighted_samples(all_Delta_profiles,axis=0)
+Delta_mean_samples = tools.loadOrRecompute(
+    data_folder + "Delta_mean_samples.p",get_weighted_samples,
+    all_Delta_profiles,axis=0,_recomputeData=False
+)
 Delta_range = np.percentile(Delta_mean_samples,[16,84],axis=1)
 
 
@@ -1461,9 +1467,77 @@ plt.legend(frameon=False,ncol=2)
 plt.savefig(figuresFolder + "velocity_model.pdf")
 plt.show()
 
+#-------------------------------------------------------------------------------
+# SPHERICAL OVERDENSITY MODEL
 
+def Delta_theta(theta):
+    if np.isscalar(theta):
+        if theta < 1e-10:
+            return 1 - 3*theta**2/20
+        else:
+            return 9*(np.sinh(theta) - theta)**2/(2*(np.cosh(theta) - 1)**3)
+    else:
+        small = (theta < 1e-10)
+        not_small = np.logical_not(small)
+        retval = np.zeros(theta.shape)
+        retval[small] = 1 - 3*theta[small]**2/20
+        retval[not_small] = (9*(np.sinh(theta[not_small]) - theta[not_small])**2
+                               /(2*(np.cosh(theta[not_small]) - 1)**3))
+        return retval
 
+def V_theta(theta):
+    if np.isscalar(theta):
+        if theta < 1e-10:
+            return theta**2/20
+        else:
+            return 3*(np.sinh(theta)*(np.sinh(theta) - theta)/(2*(np.cosh(theta) - 1)**2)) - 1
+    else:
+        small = (theta < 1e-10)
+        not_small = np.logical_not(small)
+        retval = np.zeros(theta.shape)
+        retval[small] = theta[small]**2/20
+        retval[not_small] = (3*(np.sinh(theta[not_small])*(np.sinh(theta[not_small])
+                            - theta[not_small])/(2*(np.cosh(theta[not_small]) - 1)**2)) - 1)
+        return retval
 
+# Inversion:
+
+def get_upper_bound(Delta,count_max=10):
+    f = lambda x: Delta_theta(x) - Delta - 1
+    theta_max = -np.log(2*(1 + Delta)/9) # Asymtotic guess at solution
+    count = 0
+    while f(theta_max) > 0 and count < count_max:
+        theta_max *= 10
+        count += 1
+    if count >= count_max:
+        raise Exception("Unable to find upper bound on solution.")
+    else:
+        return theta_max
+
+def invert_Delta_theta_scalar(Delta,theta_min=0,theta_max = None,count_max=10):
+    if Delta == -1:
+        return np.inf
+    f = lambda x: Delta_theta(x) - Delta - 1
+    if theta_max is None:
+        theta_max = get_upper_bound(Delta,count_max=count_max)
+    return scipy.optimize.brentq(f,theta_min,theta_max)
+
+def theta_of_Delta(Delta,count_max = 10):
+    theta_min = 0
+    theta_max = 10
+    # Get bound:
+    scalar = np.isscalar(Delta)
+    Delta_min = Delta if scalar else np.min(Delta)
+    theta_max = get_upper_bound(Delta_min,count_max=count_max)
+    if scalar:
+        return invert_Delta_theta_scalar(Delta,theta_max=theta_max,count_max=count_max)
+    else:
+        return np.array(
+            [
+                invert_Delta_theta_scalar(x,theta_max=theta_max,count_max=count_max)
+                for x in Delta
+            ]
+        )
 #-------------------------------------------------------------------------------
 # TEST PLOTS FOR REAL SPACE FIELD
 
