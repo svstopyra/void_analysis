@@ -910,7 +910,7 @@ ur_error = np.std(all_ur_profiles,0)/np.sqrt(all_Delta_profiles.shape[0])
 ur_mean_samples = tools.loadOrRecompute(
     data_folder + "ur_samples.p",get_weighted_samples,all_ur_profiles,axis=0,
     _recomputeData = False
-}
+)
 ur_range = np.percentile(ur_mean_samples,[16,84],axis=1)
 
 Delta_mean = np.mean(all_Delta_profiles,0)
@@ -1401,6 +1401,7 @@ N = 5
 u = 1 - np.cbrt(1 + Delta_mean)
 z = 0
 u_filter = range(2,len(u))
+Om = 0.3111
 def semi_empirical_model(u,z,Om,alphas,h=1,nf1 = 5/9,**kwargs):
     a = 1/(1+z)
     H = Hz(z,Om,h=h,**kwargs)
@@ -1408,7 +1409,7 @@ def semi_empirical_model(u,z,Om,alphas,h=1,nf1 = 5/9,**kwargs):
     f1 = Omz**nf1
     N = len(alphas) + 1
     sum_term = np.sum([alphas[n-2]*u**n for n in range(2,N+1)],0)
-    return a*H*(f1*u + sum_term)
+    return a*H*f1*(u + sum_term)
 
 alphas_guess = np.ones(len(range(2,N+1)))
 
@@ -1466,6 +1467,33 @@ ax.set_ylim([-5,5])
 plt.legend(frameon=False,ncol=2)
 plt.savefig(figuresFolder + "velocity_model.pdf")
 plt.show()
+
+alpha_vec = [
+    np.array([alphas[n] for alphas in alphas_list if len(alphas) > n]) 
+    for n in range(len(alphas_list))
+]
+
+# Plot of alphas:
+plt.clf()
+for n, alpha in enumerate(alpha_vec):
+    plt.plot(
+        range(2 + n,len(alpha_vec)+2),alpha,color=seabornColormap[n],
+        marker='x',linestyle="--",label = f"$\\alpha_{n+2}$"
+    )
+
+plt.xlabel('$N$')
+plt.ylabel('$\\alpha_n$')
+#plt.yscale('log')
+plt.ylim([-10,10])
+plt.axhline(0.0,linestyle=":",color='k')
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "alphas_plot.pdf")
+plt.show()
+
+
+# What would these be in LPT?
+
+
 
 #-------------------------------------------------------------------------------
 # SPHERICAL OVERDENSITY MODEL
