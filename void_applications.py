@@ -1691,6 +1691,10 @@ params_lcdm = get_profile_parameters_fixed(ri_lcdm,field_lcdm_1d_uncon-1,
 params_borg = get_profile_parameters_fixed(ri_borg,field_borg_1d-1,
                                            field_borg_1d_sigma)
 
+ri_upper = lcdm_snaps["radius_bins"][0][1:]
+
+Delta_lcdm = (3/ri_upper**3)*np.cumsum(ri_upper**2*(field_lcdm_1d_uncon - 1)*0.1)
+
 
 plt.clf()
 rrange_lcdm = np.linspace(0,10,1000)
@@ -1744,15 +1748,26 @@ Om_fid = 0.3111
 eps_initial_guess = np.array([1.0,f_lcdm(z,Om_fid)])
 theta_initial_guess = np.array([0.3,f_lcdm(z,0.3)])
 
+vel_param_guess = alphas_list[1]
+vel_param_ranges = [[-np.inf,np.inf] for _ in vel_param_guess]
+N_vel = len(vel_param_guess)
+
 profile_params = get_profile_parameters_fixed(ri_lcdm, field_lcdm_1d_uncon-1.0, 
                                               field_lcdm_1d_sigma_uncon)
 
 
 initial_guess_eps = np.hstack([eps_initial_guess,profile_params])
 initial_guess_theta = np.hstack([theta_initial_guess,profile_params])
+if N_vel > 0:
+    initial_guess_eps = np.hstack([initial_guess_eps,vel_param_guess])
+    initial_guess_theta = np.hstack([initial_guess_theta,vel_param_guess])
 
 theta_ranges=om_ranges + f_ranges + profile_param_ranges
 theta_ranges_epsilon = eps_ranges + f_ranges + profile_param_ranges
+if N_vel > 0:
+    theta_ranges += vel_param_ranges
+    theta_ranges_epsilon += vel_param_ranges
+
 
 Umap, good_eig = get_nonsingular_subspace(
         rho_cov_lcdm, lambda_reg=1e-27,
@@ -1777,7 +1792,28 @@ kwargs = {'cholesky':True,'tabulate_inverse':True,
           'sample_epsilon':True,'theta_ranges':theta_ranges_epsilon,
           'singular':False,'Umap':Umap,'good_eig':good_eig,'F_inv':F_inv,
           'log_density':False,'infer_profile_args':True,
-          'linearise_jacobian':False}
+          'linearise_jacobian':False,
+          'vel_model':void_los_velocity_ratio_semi_analytic,
+          'dvel_dlogr_model':void_los_velocity_ratio_derivative_semi_analytic,
+          'N_vel':N_vel,'data_filter':None,'normalised':False,'ntab':10,
+          'Om_fid':0.3,'N_prof':6}
+names = ['data_filter','cholesky','normalised','tabulate_inverse',
+         'ntab','sample_epsilon','Om_fid','singular','Umap','good_eig',
+         'F_inv','log_density','infer_profile_args','N_prof','N_vel']
+
+kwargs_left = {key:kwargs[key] for key in kwargs if key not in names}
+
+
+# For rapid testing:
+theta = initial_guess_eps
+data_field, scoords, inv_cov, z, Delta, delta, rho_real = args
+[cholesky, tabulate_inverse, sample_epsilon, theta_ranges, singular, Umap, 
+ good_eig, F_inv, log_density, infer_profile_args, linearise_jacobian,
+ vel_model, dvel_dlogr_model, N_vel,data_filter,
+ normalised,ntab,Om_fid,N_prof] = [kwargs[key] for key in kwargs]
+
+
+
 
 # Wrapper allowing us to pass arbitrary arguments that won't be sampled over:
 def posterior_wrapper(theta,additional_args,*args,**kwargs):
@@ -1880,15 +1916,15 @@ eps_centres = plot.binCentres(eps_range)
 
 
 
-log_like_ap_joint = np.zeros((40,40))
+#log_like_ap_joint = np.zeros((40,40))
 log_like_ap_sep = np.zeros((40,40))
-params_joint = mle_estimate.x[2:]
-params_sep = profile_params
+#params_joint = mle_estimate.x[2:]
+params_sep = np.hstack([profile_params,vel_param_guess])
 for i in tools.progressbar(range(0,len(eps_centres))):
     for j in range(0,len(f_range_centres)):
-        theta_joint = np.array([eps_range[i],f_range_centres[j],*params_joint])
+        #theta_joint = np.array([eps_range[i],f_range_centres[j],*params_joint])
         theta_sep = np.array([eps_range[i],f_range_centres[j],*params_sep])
-        log_like_ap_joint[i,j] = log_likelihood_aptest(theta_joint,*args,**kwargs)
+        #log_like_ap_joint[i,j] = log_likelihood_aptest(theta_joint,*args,**kwargs)
         log_like_ap_sep[i,j] = log_likelihood_aptest(theta_sep,*args,**kwargs)
         #log_like_ap[i,j] = log_probability_aptest(theta,*args,**kwargs)
 
@@ -1933,7 +1969,7 @@ plot_likelihood_distribution(log_like_ap_joint,eps_range,f_range,
                              mle = mle_estimate.x)
 plot_likelihood_distribution(log_like_ap_sep,eps_range,f_range,
                              filename = figuresFolder + "likelihood_sep.pdf",
-                             mle = mle_estimate.x)
+                             mle = None)
 
 plt.clf()
 plt.plot(f_range_centres,log_like_ap[20,:])

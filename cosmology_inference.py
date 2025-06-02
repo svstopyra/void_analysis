@@ -2181,7 +2181,7 @@ def to_z_space(r_par, r_perp, z, Om, Delta=None, u_par=None, f1=None,
 def iterative_zspace_inverse_scalar(s_par, s_perp, f1, Delta, N_max = 5, 
                                     atol=1e-5, rtol=1e-5,
                                     vel_model = void_los_velocity_ratio_1lpt,
-                                    vel_params = None):
+                                    vel_params = None,**kwargs):
     """
     Numerically invert the redshift-space LOS coordinate to estimate
     the real-space coordinate (r_par), assuming the linear-theory model.
@@ -2602,7 +2602,7 @@ def log_likelihood_aptest_old(theta,data_field,scoords,inv_cov,
         return -0.5*np.matmul(np.matmul(delta_rho,inv_cov),delta_rho.T)
 
 
-def get_tabulated_inverse(s_par,s_perp,ntab,vel_model,Delta_func,f1,**kwargs):
+def get_tabulated_inverse(s_par,s_perp,ntab,Delta_func,f1,**kwargs):
     """
     Construct an interpolated function that inverts the mapping between real space
     and redshift space.
@@ -2626,6 +2626,7 @@ def get_tabulated_inverse(s_par,s_perp,ntab,vel_model,Delta_func,f1,**kwargs):
     spar_vals = np.linspace(np.min(s_par),np.max(s_par),ntab)
     rperp_vals = np.linspace(np.min(s_perp),np.max(s_perp),ntab)
     rpar_vals = np.zeros((ntab,ntab))
+    vel_model = kwargs['vel_model'] if 'vel_model' in kwargs else void_los_velocity_ratio_1lpt
     for i in range(0,ntab):
         for j in range(0,ntab):
             F = (lambda rpar: rpar + rpar*vel_model(
@@ -2654,8 +2655,6 @@ def log_likelihood_aptest(theta, data_field, scoords, inv_cov, z,
                                    F_inv=None,
                                    log_density=False,
                                    infer_profile_args=False,
-                                   vel_model = void_los_velocity_ratio_1lpt,
-                                   dvel_dlogr_model = void_los_velocity_ratio_derivative_1lpt,
                                    N_prof = 6,
                                    N_vel = 0,
                                    **kwargs):
@@ -2691,14 +2690,6 @@ def log_likelihood_aptest(theta, data_field, scoords, inv_cov, z,
         F_inv (callable or None): Precomputed inverse mapping
         log_density (bool): If True, use log(ρ) in likelihood
         infer_profile_args (bool): If True, extract profile params from θ
-        vel_model (function): function which returns the dimensionless 
-                            velocity ratio, (1+z)*v/(H(z)*r) at radius r. Should
-                            have r, Delta, and f1 as parameters, but additional
-                            parameters may be required depending on the model,
-                            passed via kwargs.
-        dvel_dlogr_model (function): Derivative of the dimensionless velocity ratio 
-                                     model with respect to log(r). Ie, should 
-                                     return d( v*(1+z)/(r*H(z)) )/dlog(r)
         N_prof (int): Number of density profile parameters
         N_vel (int): Number of velocity profile parameters
 
@@ -2736,7 +2727,7 @@ def log_likelihood_aptest(theta, data_field, scoords, inv_cov, z,
         rho_func = rho_real
     # Generate a tabulated inverse mapping if needed
     if F_inv is None:
-        F_inv = get_tabulated_inverse(s_par_new,s_perp_new,ntab,vel_model,Delta_func,f1,**kwargs)
+        F_inv = get_tabulated_inverse(s_par_new,s_perp_new,ntab,Delta_func,f1,**kwargs)
     # Evaluate the model at each (s_par, s_perp) coordinate. Setting apply_geometry
     # to False, because they were already applied above.
     model_field = z_space_profile(
