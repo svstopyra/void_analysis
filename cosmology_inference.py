@@ -1932,11 +1932,98 @@ def ap_parameter(z, Om, Om_fid, h=0.7, h_fid=0.7, **kwargs):
     Da_fid = np.fmax(cosmo_fid.angular_diameter_distance(z).value,1e-16)
     return (Hz * Da) / (Hz_fid * Da_fid)
 
-
-def void_los_velocity(z, Delta, r_par, r_perp, Om, f=None, **kwargs):
+def void_los_velocity_ratio_1lpt(r,Delta,f1,**kwargs):
     """
     Compute the line-of-sight (LOS) peculiar velocity at a position 
-    relative to a void center, based on linear theory.
+    relative to a void center, and divided by H(z)/(1+z), based on linear theory
+
+    Parameters:
+        r (float or array): Radius at which to compute the velocity
+        Delta (function): Cumulative density contrast profile Δ(r)
+        f1 (float): Linear growth rate
+
+    Returns:
+        float or array: LOS velocity in km/s
+    """
+    return -(f1 / 3.0) * Delta(r)
+
+def void_los_velocity_ratio_derivative_1lpt(r,Delta,delta,f1,**kwargs):
+    """
+    Compute the derivative of the los velocity with respect to log(r),
+    divided by H(z)/(1+z), using the linear 1LPT model. 
+    
+    Parameters:
+        r (float or array): Radius at which to compute the velocity
+        Delta (function): Cumulative density profile Δ(r)
+        delta (function): Local density contrast δ(r)
+        f1 (float or None): Growth rate
+
+    Returns:
+        float: Derivative of velocity w.r.t. r_par
+    """
+    return f1*(Delta(r) - delta(r))
+
+def void_los_velocity_ratio_semi_analytic(r,Delta,f1,params=None,
+                                          exact_displacement=True,**kwargs):
+    """
+    Compute the line-of-sight (LOS) peculiar velocity at a position 
+    relative to a void center, and divided by H(z)/(1+z),
+    using a semi-analytic velocity model.
+
+    Parameters:
+        r (float or array): Radius at which to compute the velocity
+        Delta (function): Cumulative density contrast profile Δ(r)
+        f1 (float): Linear growth rate
+        alphas (array): Coefficients of the quadratic and higher terms in the displacement
+                        field. Assumed to be in order from n = 2 to n = N
+        exact_displacement (bool): If True (default), use an exact expression for the 
+                                   displacement field. Otherwise, approximate it using the
+                                   1 LPT expression.
+        params (list or None): Parameters for the model:
+
+    Returns:
+        float or array: LOS velocity in km/s
+    """
+    # Displacement field over r:
+    Psi_r = 1 - np.cbrt(1 + Delta(r)) if exact_displacement else -Delta(r)/3
+    # Extra terms:
+    alphas = [] if params is None else params
+    N = len(alphas) + 1
+    sum_term = np.sum([alphas[n-2]*Psi_r**n for n in range(2,N+1)],0)
+    return f1*(Psi_r + sum_term)
+
+def void_los_velocity_ratio_derivative_semi_analytic(r,Delta,delta,f1,params=None,
+                                                     exact_displacement=True,**kwargs):
+    """
+    Compute the derivative of the los velocity with respect to r_par,
+    multiplied by H(z)/(1+z), using a semi-analytic velocity model.
+    
+    Parameters:
+        Delta (function): Cumulative density profile Δ(r)
+        delta (function): Local density contrast δ(r)
+        r_par (float): LOS distance
+        r_perp (float): Transverse distance
+        f1 (float or None): Growth rate
+        params (list or None): Parameters for the model.
+
+    Returns:
+        float: Derivative of velocity w.r.t. r_par
+    """
+    Psi_r = 1 - np.cbrt(1 + Delta(r)) if exact_displacement else -Delta(r)/3
+    dPsi_r_dlogr = ((Delta(r) - delta(r))/(np.cbrt(1 + Delta(r))**2) 
+                    if exact_displacement else (Delta(r) - delta(r)))
+    # Parameter extraction:
+    alphas = [] if params is None else params
+    N = len(alphas) + 1
+    sum_term = np.sum([n*alphas[n-2]*Psi_r**(n-1) for n in range(2,N+1)],0)
+    return f1*(1.0 + sum_term)*dPsi_r_dlogr
+
+def void_los_velocity(z, Delta, r_par, r_perp, Om, f=None,
+                      vel_model = void_los_velocity_ratio_1lpt,
+                      vel_params=None,**kwargs):
+    """
+    Compute the line-of-sight (LOS) peculiar velocity at a position 
+    relative to a void center, based on a given model.
 
     Parameters:
         z (float): Redshift
@@ -1944,20 +2031,30 @@ def void_los_velocity(z, Delta, r_par, r_perp, Om, f=None, **kwargs):
         r_par (float or array): LOS distance from void center
         r_perp (float or array): Transverse distance from void center
         Om (float): Matter density
-        f (float or None): Growth rate. If None, computed via f_lcdm()
+        f1 (float or None): Growth rate. If None, computed via f_lcdm()
+        vel_model (function): function which returns the dimensionless 
+                            velocity ratio, (1+z)*v/(H(z)*r) at radius r. Should
+                            have r, Delta, and f1 as parameters, but additional
+                            parameters may be required depending on the model,
+                            passed via kwargs.
+        vel_params (array or None): Additional parameter for the velocity model
 
     Returns:
         float or array: LOS velocity in km/s
     """
-    if f is None:
-        f = f_lcdm(z, Om, **kwargs)
-    hz = Hz(z, Om, **kwargs)
+    if f1 is None:
+        f1 = f_lcdm(z, Om, **kwargs)
+    # Cosmology dependent pre-factor:
+    a = 1/(1+z)
+    hz = Hz(z,Om,h=h,**kwargs)
+    # Radius:
     r = np.sqrt(r_par**2 + r_perp**2)
-    Dr = Delta(r)
-    return -(f / 3.0) * (hz / (1.0 + z)) * Dr * r_par
+    return a*hz*vel_model(r, Delta, f1, params=vel_params,**kwargs) * r_par
 
-
-def get_dudr_hz_o1pz(Delta, delta, r_par, r_perp, f, reg_factor = 1e-12):
+def get_dudr_hz_o1pz(Delta, delta, r_par, r_perp, f1, 
+                     vel_model = void_los_velocity_ratio_1lpt,
+                     dvel_dlogr_model = void_los_velocity_ratio_derivative_1lpt,
+                     vel_params=None,**kwargs):
     """
     Compute the derivative of the los velocity with respect to r_par,
     multiplied by H(z)/(1+z). The advantage of this is that it is free from
@@ -1970,17 +2067,26 @@ def get_dudr_hz_o1pz(Delta, delta, r_par, r_perp, f, reg_factor = 1e-12):
         r_par (float): LOS distance
         r_perp (float): Transverse distance
         f (float or None): Growth rate
-
+        vel_model (function): Velocity ratio model, (same as in void_los_velocity)
+        dvel_dlogr_model (function): Derivative of the dimensionless velocity ratio 
+                                     model with respect to log(r). Ie, should 
+                                     return d( v*(1+z)/(r*H(z)) )/dlog(r)
+        vel_params (array or None): Additional parameter for the velocity model
+        
     Returns:
         float: Derivative of velocity w.r.t. r_par
     """
     r = np.sqrt(r_par**2 + r_perp**2)
-    Dr = Delta(r)
-    dr = delta(r)
-    return -(f / 3.0) * Dr - f * (r_par / (r + reg_factor))**2 * (dr - Dr)
+    # Get the dimensionless velocity ratio, v*(1+z)/(r*H(z))
+    vr_or = vel_model(r, Delta, f1, params = vel_params,**kwargs)
+    # Get the logarithmic r derivative of the dimensionless velocity ratio,
+    # d( v*(1+z)/(r*H(z)) )/dlog(r):
+    dvr_or_dlogr = dvel_dlogr_model(r,Delta,delta,f1,params=vel_params,**kwargs)
+    r_par_or = ratio_where_finite(r_par,r,undefined_value = 0.0)
+    return vr_or + dvr_or_dlogr * (r_par_or)**2
 
-def void_los_velocity_derivative(z, Delta, delta, r_par, r_perp, Om, f=None, 
-                                 reg_factor = 1e-12, **kwargs):
+def void_los_velocity_derivative(z, Delta, delta, r_par, r_perp, Om, f1=None, 
+                                 reg_factor = 1e-12, vel_params=None,**kwargs):
     """
     Compute the derivative of the LOS velocity with respect to r_par.
 
@@ -1995,46 +2101,51 @@ def void_los_velocity_derivative(z, Delta, delta, r_par, r_perp, Om, f=None,
         r_par (float): LOS distance
         r_perp (float): Transverse distance
         Om (float): Matter density
-        f (float or None): Growth rate (Lambda-CDM value assumed if not provided)
-
+        f1 (float or None): Growth rate (Lambda-CDM value assumed if not provided)
+        vel_params (array or None): Additional parameter for the velocity model
+        
     Returns:
         float: Derivative of velocity w.r.t. r_par
     """
     hz = Hz(z, Om, **kwargs)
-    if f is None:
-        f = f_lcdm(z, Om, **kwargs)
-    return (hz / (1.0 + z))*get_dudr_hz_o1pz(Delta,delta,r_par,r_perp,f,
-                                             reg_factor=reg_factor)
+    if f1 is None:
+        f1 = f_lcdm(z, Om, **kwargs)
+    return (hz / (1.0 + z))*get_dudr_hz_o1pz(Delta,delta,r_par,r_perp,f1,
+                                             vel_params=vel_params)
 
 
-def z_space_jacobian(Delta, delta, r_par, r_perp, f=None, z = 0, Om=0.3,
-                     Om_fid=0.3111,linearise_jacobian=True, **kwargs):
+def z_space_jacobian(Delta, delta, r_par, r_perp, f1=None, z = 0, Om=0.3,
+                     linearise_jacobian=False, vel_params=None,**kwargs):
     """
     Compute the Jacobian for the transformation from real to redshift space.
 
     Parameters:
-        z (float): Redshift
+        
         Delta (function): Cumulative density profile
         delta (function): Local density profile
         r_par (float): LOS distance
         r_perp (float): Transverse distance
+        f1 (float or None): Linear growth rate. If None, computed using Lambda-CDM.
+        z (float): Redshift
         Om (float): Matter density
         linearise_jacobian (bool): If True, return 1st-order approximation
+        vel_params (array or None): Additional parameter for the velocity model
 
     Returns:
         float: Jacobian of the transformation
     """
-    if f is None:
-        f = f_lcdm(z, Om, **kwargs)
-    dudr_hz_o1pz = get_dudr_hz_o1pz(Delta,delta,r_par,r_perp,f,
-                                    reg_factor=reg_factor)
+    if f1 is None:
+        f1 = f_lcdm(z, Om, **kwargs)
+    dudr_hz_o1pz = get_dudr_hz_o1pz(Delta,delta,r_par,r_perp,f1,vel_params=vel_params,
+                                    **kwargs)
     if linearise_jacobian:
         return 1.0 - dudr_hz_o1pz
     else:
         return 1.0 / (1.0 + dudr_hz_o1pz)
 
 
-def to_z_space(r_par, r_perp, z, Om, Delta=None, u_par=None, f=None, **kwargs):
+def to_z_space(r_par, r_perp, z, Om, Delta=None, u_par=None, f1=None, 
+               vel_model = void_los_velocity_ratio_1lpt,**kwargs):
     """
     Transform real-space LOS coordinates to redshift space.
 
@@ -2048,25 +2159,29 @@ def to_z_space(r_par, r_perp, z, Om, Delta=None, u_par=None, f=None, **kwargs):
         z (float): Redshift
         Om (float): Matter density
         Delta (function): Cumulative density profile Δ(r)
-        u_par (float or array): LOS velocity (optional)
-        f (float or None): Growth rate (Lambda-CDM value assumed if not provided)
+        u_par (float or array): LOS dimensionless velocity ratio (optional)
+                                ie, (1+z)*v/(H(z)*r)
+        f1 (float or None): Growth rate (Lambda-CDM value assumed if not provided)
+        vel_model (function): function which returns the dimensionless 
+                            velocity ratio, (1+z)*v/(H(z)*r) at radius r. Should
+                            have r, Delta, and f1 as parameters, but additional
+                            parameters may be required depending on the model,
+                            passed via kwargs.
 
     Returns:
         list: [s_par, s_perp] — redshift-space coordinates
     """
     if u_par is None:
-        r = np.sqrt(r_par**2 + r_perp**2)
-        if f is None:
-            f = f_lcdm(z, Om, **kwargs)
-        s_par = (1.0 - (f / 3.0) * Delta(r)) * r_par
-    else:
-        hz = Hz(z, Om, **kwargs)
-        s_par = r_par + (1.0 + z) * u_par / hz
+        u_par = vel_model(r, Delta, f1, **kwargs) * r_par
+    s_par = r_par + u_par
     s_perp = r_perp
     return [s_par, s_perp]
 
 
-def iterative_zspace_inverse_scalar(s_par, s_perp, f, Delta, N_max = 5, atol=1e-5, rtol=1e-5):
+def iterative_zspace_inverse_scalar(s_par, s_perp, f1, Delta, N_max = 5, 
+                                    atol=1e-5, rtol=1e-5,
+                                    vel_model = void_los_velocity_ratio_1lpt,
+                                    vel_params = None):
     """
     Numerically invert the redshift-space LOS coordinate to estimate
     the real-space coordinate (r_par), assuming the linear-theory model.
@@ -2079,7 +2194,13 @@ def iterative_zspace_inverse_scalar(s_par, s_perp, f, Delta, N_max = 5, atol=1e-
         N_max (int): Maximum number of iterations
         atol (float): Absolute tolerance for convergence
         rtol (float): Relative tolerance for convergence
-
+        vel_model (function): function which returns the dimensionless 
+                            velocity ratio, (1+z)*v/(H(z)*r) at radius r. Should
+                            have r, Delta, and f1 as parameters, but additional
+                            parameters may be required depending on the model,
+                            passed via kwargs.
+        
+    
     Returns:
         float: Estimated r_par
     """
@@ -2087,25 +2208,27 @@ def iterative_zspace_inverse_scalar(s_par, s_perp, f, Delta, N_max = 5, atol=1e-
     r_perp = s_perp
     for _ in range(N_max):
         r = np.sqrt(r_par_guess**2 + r_perp**2)
-        r_par_new = s_par / (1.0 - (f / 3.0) * Delta(r))
+        r_par_new = s_par / (1.0 + vel_model(r,Delta,f1,params=vel_params,**kwargs))
         if np.abs(r_par_new - r_par_guess) < atol or \
            np.abs(r_par_new / r_par_guess - 1.0) < rtol:
             break
         r_par_guess = r_par_new
     return r_par_guess
 
-def iterative_zspace_inverse(s_par, s_perp, f, Delta, N_max=5, atol=1e-5, rtol=1e-5):
+def iterative_zspace_inverse(s_par, s_perp, f, Delta, N_max=5, atol=1e-5, 
+                             rtol=1e-5,vel_params=None,**kwargs):
     """
     Array-compatible wrapper for iterative_zspace_inverse_scalar.
 
     Parameters:
         s_par (float or np.ndarray): LOS redshift-space coordinate(s)
         s_perp (float or np.ndarray): Perpendicular coordinate(s)
-        f (float): Linear growth rate
+        f1 (float): Linear growth rate
         Delta (function): Cumulative density profile
         N_max (int): Max iterations
         atol (float): Absolute convergence tolerance
         rtol (float): Relative convergence tolerance
+        vel_params (array or None): Additional parameter for the velocity model
 
     Returns:
         np.ndarray or float: Estimated real-space LOS coordinate(s)
@@ -2116,18 +2239,20 @@ def iterative_zspace_inverse(s_par, s_perp, f, Delta, N_max=5, atol=1e-5, rtol=1
         raise ValueError("s_par and s_perp must have the same shape")
     # Scalar input case
     if s_par.ndim == 0:
-        return iterative_zspace_inverse_scalar(s_par, s_perp, f, Delta,
-                                               N_max=N_max, atol=atol, rtol=rtol)
+        return iterative_zspace_inverse_scalar(s_par, s_perp, f1, Delta,
+                                               N_max=N_max, atol=atol, rtol=rtol,
+                                               vel_params=vel_params,**kwargs)
     # Vectorized case (apply element-wise)
     return np.array([
-        iterative_zspace_inverse_scalar(sp, sp_perp, f, Delta,
-                                        N_max=N_max, atol=atol, rtol=rtol)
+        iterative_zspace_inverse_scalar(sp, sp_perp, f1, Delta,
+                                        N_max=N_max, atol=atol, rtol=rtol,
+                                        vel_params=vel_params,**kwargs)
         for sp, sp_perp in zip(s_par.flat, s_perp.flat)]
     ).reshape(s_par.shape)
 
 
-def to_real_space(s_par, s_perp, Delta=None, u_par=None, f=None,z=0, Om=0.3, 
-                  N_max=5, atol=1e-5, rtol=1e-5, F_inv=None, **kwargs):
+def to_real_space(s_par, s_perp, Delta=None, u_par=None, f1=None,z=0, Om=0.3, 
+                  N_max=5, atol=1e-5, rtol=1e-5, F_inv=None, vel_params=None, **kwargs):
     """
     Convert redshift-space coordinates (s_par, s_perp) back into real-space 
     coordinates (r_par, r_perp), assuming either:
@@ -2145,35 +2270,41 @@ def to_real_space(s_par, s_perp, Delta=None, u_par=None, f=None,z=0, Om=0.3,
         Om (float): Matter density
         Om_fid (float or None): Fiducial matter density (unused here but may be passed downstream)
         Delta (function): Cumulative density contrast profile Δ(r), required for linear inversion
-        u_par (float or array or None): LOS peculiar velocity (if supplied, used directly)
-        f (float or None): Growth rate; computed via f_lcdm if not supplied
+        u_par (float or array or None): LOS dimensionless peculiar velocity ratio
+                                        (if supplied, used directly). Ie, 
+                                        (1+z)*v/(H(z)*r). Usually, this isn't
+                                        known, so leave as None to compute it using the
+                                        model.
+        f1 (float or None): Growth rate; computed via f_lcdm if not supplied
         N_max (int): Max number of iterations for manual inversion
         atol (float): Absolute tolerance for iterative convergence
         rtol (float): Relative tolerance for iterative convergence
         F_inv (callable or None): Tabulated inverse mapping function
+        vel_params (array or None): Additional parameter for the velocity model
 
     Returns:
         list: [r_par, r_perp] — real-space coordinates
     """
     r_perp = s_perp  # Perpendicular component is unaffected
     if u_par is None:
-        # Use linear velocity relation:
-        if f is None:
-            f = f_lcdm(z, Om, **kwargs)
+        # Use velocity model:
+        if f1 is None:
+            f1 = f_lcdm(z, Om, **kwargs)
         if F_inv is None:
             # Manual inversion via iterative method:
             if Delta is None:
                 raise ValueError("Delta profile must be supplied for linear inversion.")
             # Use helper to handle the iterative logic
-            r_par = iterative_zspace_inverse(s_par, s_perp, f, Delta, N_max,
-                                             atol = atol, rtol = rtol)
+            r_par = iterative_zspace_inverse(s_par, s_perp, f1, Delta, N_max,
+                                             atol = atol, rtol = rtol,
+                                             vel_params=vel_params,**kwargs)
         else:
             # Use tabulated inverse function
-            r_par = F_inv(s_perp, s_par, f * np.ones(np.shape(s_perp)))
+            r_par = F_inv(s_perp, s_par, f1 * np.ones(np.shape(s_perp)))
     else:
         # Use directly supplied LOS peculiar velocity
         hz = Hz(z, Om, **kwargs)
-        r_par = s_par - (1.0 + z) * u_par / hz
+        r_par = s_par - u_par
     return [r_par, r_perp]
 
 def ratio_where_finite(x,y,undefined_value = 0.0):
@@ -2292,8 +2423,9 @@ def geometry_correction(s_par, s_perp, epsilon, **kwargs):
     return s_par_new, s_perp_new
 
 
-def z_space_profile(s_par, s_perp, rho_real, Delta, delta, f=None,z=0, Om=0.3,
-                    Om_fid=0.3111, epsilon=None, apply_geometry=False, **kwargs):
+def z_space_profile(s_par, s_perp, rho_real, Delta, delta, f1=None,z=0, Om=0.3,
+                    Om_fid=0.3111, epsilon=None, apply_geometry=False, 
+                    vel_params=None,**kwargs):
     """
     Compute the redshift-space density profile ρ(s_par, s_perp) based on
     a real-space density profile and a model of redshift-space distortions.
@@ -2316,6 +2448,7 @@ def z_space_profile(s_par, s_perp, rho_real, Delta, delta, f=None,z=0, Om=0.3,
         epsilon (float or None): Alcock-Paczynski distortion parameter ε.
                                  If None and apply_geometry is True, it is computed.
         apply_geometry (bool): Whether to apply the AP correction
+        vel_params (array or None): Additional parameter for the velocity model
 
     Returns:
         float: Redshift-space density ρ(s_par, s_perp)
@@ -2329,11 +2462,11 @@ def z_space_profile(s_par, s_perp, rho_real, Delta, delta, f=None,z=0, Om=0.3,
         s_par_new = s_par
         s_perp_new = s_perp
     # Step 2: Convert redshift-space coords back to real-space coords
-    r_par, r_perp = to_real_space(s_par_new, s_perp_new, f=f, z=z, Om=Om, 
-                                  Delta=Delta, **kwargs)
+    r_par, r_perp = to_real_space(s_par_new, s_perp_new, f1=f1, z=z, Om=Om, 
+                                  Delta=Delta,vel_params=vel_params, **kwargs)
     # Step 3: Compute the Jacobian of the transformation (∂r/∂s)
-    jacobian = z_space_jacobian(Delta, delta, r_par, r_perp, Om=Om,z=z,f=f,
-                                **kwargs)
+    jacobian = z_space_jacobian(Delta, delta, r_par, r_perp, Om=Om,z=z,f1=f1,
+                                vel_params=vel_params,**kwargs)
     # Step 4: Evaluate the real-space profile at the recovered radius
     r = np.sqrt(r_par**2 + r_perp**2)
     return rho_real(r) * jacobian
@@ -2372,7 +2505,7 @@ def compute_singular_log_likelihood(x,Umap,good_eig):
 
 
 # Likelihood function:
-def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
+def log_likelihood_aptest_old(theta,data_field,scoords,inv_cov,
                           z,Delta,delta,rho_real,data_filter=None,
                           cholesky=False,normalised=False,tabulate_inverse=True,
                           ntab = 10,sample_epsilon=False,Om_fid=None,
@@ -2468,7 +2601,45 @@ def log_likelihood_aptest(theta,data_field,scoords,inv_cov,
     else:
         return -0.5*np.matmul(np.matmul(delta_rho,inv_cov),delta_rho.T)
 
-def log_likelihood_aptest_revised(theta, data_field, scoords, inv_cov, z,
+
+def get_tabulated_inverse(s_par,s_perp,ntab,vel_model,Delta_func,f1,**kwargs):
+    """
+    Construct an interpolated function that inverts the mapping between real space
+    and redshift space.
+    
+    Parameters:
+        s_par (array): Redshift space co-ordinates parallel to LOS
+        s_perp (array): Redshift space co-ordinates perpendicular to LOS
+        ntab (int): Number of grid points for the interpolation grid.
+        vel_model (function): function which returns the dimensionless 
+                            velocity ratio, (1+z)*v/(H(z)*r) at radius r. Should
+                            have r, Delta, and f1 as parameters, but additional
+                            parameters may be required depending on the model,
+                            passed via kwargs.
+        Delta_func (function) function that returns the cumulative density contrast
+                              at radius r.
+        f1 (float): Linear growth rate.
+        
+    Returns:
+        Inverse function
+    """
+    spar_vals = np.linspace(np.min(s_par),np.max(s_par),ntab)
+    rperp_vals = np.linspace(np.min(s_perp),np.max(s_perp),ntab)
+    rpar_vals = np.zeros((ntab,ntab))
+    for i in range(0,ntab):
+        for j in range(0,ntab):
+            F = (lambda rpar: rpar + rpar*vel_model(
+                        np.sqrt(rpar**2 + rperp_vals[j]**2),Delta_func,f1,**kwargs
+                    ) - spar_vals[j]
+                )
+            rpar_vals[i,j] = scipy.optimize.fsolve(F,spar_vals[j])
+    F_inv = lambda x, y, z: scipy.interpolate.interpn(
+                                (rperp_vals,spar_vals),rpar_vals,
+                                np.vstack((x,y)).T,method='cubic'
+                            )
+    return F_inv
+
+def log_likelihood_aptest(theta, data_field, scoords, inv_cov, z,
                                    Delta, delta, rho_real,
                                    data_filter=None,
                                    cholesky=False,
@@ -2483,6 +2654,10 @@ def log_likelihood_aptest_revised(theta, data_field, scoords, inv_cov, z,
                                    F_inv=None,
                                    log_density=False,
                                    infer_profile_args=False,
+                                   vel_model = void_los_velocity_ratio_1lpt,
+                                   dvel_dlogr_model = void_los_velocity_ratio_derivative_1lpt,
+                                   N_prof = 6,
+                                   N_vel = 0,
                                    **kwargs):
     """
     Compute the log-likelihood for a cosmological + void profile model 
@@ -2516,6 +2691,16 @@ def log_likelihood_aptest_revised(theta, data_field, scoords, inv_cov, z,
         F_inv (callable or None): Precomputed inverse mapping
         log_density (bool): If True, use log(ρ) in likelihood
         infer_profile_args (bool): If True, extract profile params from θ
+        vel_model (function): function which returns the dimensionless 
+                            velocity ratio, (1+z)*v/(H(z)*r) at radius r. Should
+                            have r, Delta, and f1 as parameters, but additional
+                            parameters may be required depending on the model,
+                            passed via kwargs.
+        dvel_dlogr_model (function): Derivative of the dimensionless velocity ratio 
+                                     model with respect to log(r). Ie, should 
+                                     return d( v*(1+z)/(r*H(z)) )/dlog(r)
+        N_prof (int): Number of density profile parameters
+        N_vel (int): Number of velocity profile parameters
 
     Returns:
         float: Log-likelihood value
@@ -2529,13 +2714,17 @@ def log_likelihood_aptest_revised(theta, data_field, scoords, inv_cov, z,
     s_par, s_perp = scoords[:, 0], scoords[:, 1]
     # Unpack parameter vector
     if sample_epsilon:
-        epsilon, f = theta[0], theta[1]
-        profile_params = theta[2:]
+        epsilon, f1 = theta[0], theta[1]
         Om = Om_fid
     else:
-        Om, f = theta[0], theta[1]
-        profile_params = theta[2:]
+        Om, f1 = theta[0], theta[1]
         epsilon = ap_parameter(z, Om, Om_fid, **kwargs)
+    profile_params = theta[2:(2 + N_prof)]
+    vel_params = None if N_vel == 0 else theta[(2 + N_prof):(2 + N_prof + N_vel)]
+    # Apply geometric correction to account for miss-specified cosmology. NB, this
+    # means that we SHOULDN'T apply geometry corrections below, because they
+    # have already been applied here!
+    s_par_new, s_perp_new = geometry_correction(s_par,s_perp,epsilon)
     # Construct profile functions
     if infer_profile_args:
         Delta_func = lambda r: Delta(r, *profile_params)
@@ -2546,17 +2735,15 @@ def log_likelihood_aptest_revised(theta, data_field, scoords, inv_cov, z,
         delta_func = delta
         rho_func = rho_real
     # Generate a tabulated inverse mapping if needed
-    if F_inv is None and tabulate_inverse:
-        F_inv = tools.inverse_los_map(z, Om, Delta_func, f, ntab=ntab, **kwargs)
-    # Evaluate the model at each (s_par, s_perp) coordinate
-    model_field = np.array([
-        z_space_profile(sp, st, rho_func, Delta_func, delta_func,f=f,
-                        z=z, Om=Om, epsilon=epsilon,
-                        apply_geometry=sample_epsilon,
-                        F_inv=F_inv,
-                        **kwargs)
-        for sp, st in zip(s_par, s_perp)
-    ])
+    if F_inv is None:
+        F_inv = get_tabulated_inverse(s_par_new,s_perp_new,ntab,vel_model,Delta_func,f1,**kwargs)
+    # Evaluate the model at each (s_par, s_perp) coordinate. Setting apply_geometry
+    # to False, because they were already applied above.
+    model_field = z_space_profile(
+        s_par_new, s_perp_new, rho_func, Delta_func, delta_func,f1=f1,
+        z=z, Om=Om, epsilon=epsilon,apply_geometry=False,F_inv=F_inv,
+        vel_params=vel_params,**kwargs
+    )
     if log_density:
         model_field = np.log(model_field)
     # Project into reduced space if using singular-mode filtering
@@ -2565,7 +2752,7 @@ def log_likelihood_aptest_revised(theta, data_field, scoords, inv_cov, z,
         model_field = Umap @ model_field
         inv_cov = np.diag(1.0 / good_eig)
     # Compute residual
-    delta_vec = data_field - model_field
+    delta_vec = 1.0 - model_field/data_field if normalised else data_field - model_field
     if cholesky:
         alpha = scipy.linalg.solve_triangular(inv_cov, delta_vec, lower=True)
         return -0.5 * np.dot(alpha, alpha)
@@ -4222,10 +4409,15 @@ def run_inference(data_field, theta_ranges_list, theta_initial, filename,
     return tau, sampler
 
 
+def get_finite_range(range_list):
+    return [x if np.isfinite(x) else np.sign(x) for x in range_list]
+    
+
 def run_inference_pipeline(field, cov, mean, sperp_bins, spar_bins,
                            ri, delta_i, sigma_delta_i,
                            log_field=False,
                            infer_profile_args=True,
+                           infer_velocity_args = True,
                            tabulate_inverse=True,
                            cholesky=True,
                            sample_epsilon=True,
@@ -4235,6 +4427,7 @@ def run_inference_pipeline(field, cov, mean, sperp_bins, spar_bins,
                            lambda_ref=1e-27,
                            profile_param_ranges=[[0, np.inf], [0, np.inf], [0, np.inf],
                                                  [-1, 0], [-1, 1], [0, 2]],
+                           vel_profile_param_ranges = [],
                            om_ranges=[[0.1, 0.5]],
                            eps_ranges=[[0.9, 1.1]],
                            f_ranges=[[0, 1]],
@@ -4250,7 +4443,9 @@ def run_inference_pipeline(field, cov, mean, sperp_bins, spar_bins,
                            redo_chain=False,
                            backup_start=True,
                            delta_profile=profile_modified_hamaus,
-                           Delta_profile=integrated_profile_modified_hamaus):
+                           Delta_profile=integrated_profile_modified_hamaus,
+                           vel_model = void_los_velocity_ratio_1lpt,
+                           dvel_dlogr_model = void_los_velocity_ratio_derivative_1lpt):
     """
     Full inference pipeline to constrain cosmological parameters from
     stacked void density fields in redshift space.
@@ -4270,6 +4465,7 @@ def run_inference_pipeline(field, cov, mean, sperp_bins, spar_bins,
         ri, delta_i, sigma_delta_i (arrays): Real-space profile and uncertainties
         log_field (bool): If True, use log-density field
         infer_profile_args (bool): If True, sample profile parameters
+        infer_velocity_args (bool): If True, sample velocity profile parameters
         tabulate_inverse (bool): If True, precompute redshift-space inverse mapping
         cholesky (bool): If True, use Cholesky factor of covariance
         sample_epsilon (bool): If True, sample epsilon and f instead of Om and f
@@ -4328,15 +4524,19 @@ def run_inference_pipeline(field, cov, mean, sperp_bins, spar_bins,
     # --- Step 5: Parameter bounds and initial guess
     if sample_epsilon:
         initial_guess_MG = np.array([1.0, f_lcdm(z, Om_fid)])
-        theta_ranges = eps_ranges + f_ranges + profile_param_ranges
+        theta_ranges = eps_ranges + f_ranges + profile_param_ranges + vel_profile_param_ranges
     else:
         initial_guess_MG = np.array([Om_fid, f_lcdm(z, Om_fid)])
-        theta_ranges = om_ranges + f_ranges + profile_param_ranges
+        theta_ranges = om_ranges + f_ranges + profile_param_ranges + vel_profile_param_ranges
+    initial_guess = initial_guess_MG
     if infer_profile_args:
         profile_params = get_profile_parameters_fixed(ri, delta_i, sigma_delta_i)
-        initial_guess = np.hstack([initial_guess_MG, profile_params])
-    else:
-        initial_guess = initial_guess_MG
+        initial_guess = np.hstack([initial_guess, profile_params])
+    if infer_velocity_args:
+        if vel_params_guess is None:
+            regular_ranges = [get_finite_range(ran) for ran in vel_profile_param_ranges]
+            vel_params_guess = np.array([np.mean(x) for x in regular_ranges])
+        initial_guess = np.hstack([initial_guess, vel_params_guess])
     # --- Step 6: Filter singular modes
     Umap, good_eig = get_nonsingular_subspace(
         cov, lambda_reg=lambda_ref,
@@ -4362,7 +4562,9 @@ def run_inference_pipeline(field, cov, mean, sperp_bins, spar_bins,
         'good_eig': good_eig,
         'F_inv': F_inv,
         'log_density': log_field,
-        'infer_profile_args':infer_profile_args
+        'infer_profile_args':infer_profile_args,
+        'vel_model':vel_model,
+        'dvel_dlogr_model':dvel_dlogr_model
     }
     # --- Step 8: Run MCMC
     tau, sampler = run_inference(
