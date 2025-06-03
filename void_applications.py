@@ -481,106 +481,10 @@ field_lcdm_1d_uncon, field_lcdm_1d_sigma_uncon = \
 
 #-------------------------------------------------------------------------------
 # VELOCITY DISTRIBUTION TEST
-box_centre = np.array([boxsize/2]*3)
-vel_and_vols = [tools.loadOrRecompute(
-                    data_folder + "velocity_data.p",
-                    stacking.getRadialVelocityAverages,
-                    snapedit.wrap(box_centre - centres[filt,:],boxsize),
-                    radii[filt],snap,rbins,nThreads=-1,tree=None,
-                    vorVolumes=cell_vols,_recomputeData = False)
-                    for centres, radii, snap, cell_vols, filt, i in 
-                    zip(lcdm_snaps["void_centres"],lcdm_snaps["void_radii"],
-                        lcdm_snaps["snaps"],lcdm_snaps["cell_volumes"],
-                        voids_used_lcdm_unconstrained, 
-                        tools.progressbar(range(lcdm_snaps.N)))]
-
-all_velocities = np.vstack([prof[0] for prof in vel_and_vols])
-v_prof = np.average(all_velocities,axis=0)
-
-def get_unit_vector(v):
-    """
-    Compute a normalised unit vector parallel to v
-        
-    Parameters:
-        v (array): vector to normalise.
-        
-    Returns
-        array: same shape as v, normalised
-    """
-    return v/np.sqrt(np.sum(v**2))
-
-
-def comoving_distance_to_redshift(dist,cosmo=None):
-    if cosmo is None:
-        cosmo = astropy.cosmology.LambdaCDM(70,0.3,0.7)
-    return astropy.cosmology.z_at_value(cosmo.comoving_distance,
-        dist*astropy.units.Mpc
-    ).value
-
-def get_los_velocities_for_void(void_centre,void_radius,snap,rbins,cell_vols=None,
-                                tree=None,observer=None,n_threads=-1):
-    """
-    Compute the component of the velocity of tracers relative to a void
-    centre, along the line of sight to the centre of the void.
-    
-    Parameters:
-        void_centre (array, 3 components): Centre of the void
-        void_radius (float): Radius of the void
-        snap (pynbody.snapshot): Simulation snapshot
-        rbins: Radius bins 
-        cell_vols (array): Array of Voronoi volume weights for each tracer.
-                           Assumes equal weight if not supplied.
-        tree (cKD Tree): KD Tree for snapshot. Generated if not supplied.
-        observer (array): Position of observer in the simulation.
-                          Assumed to be the centre of the box if not supplied.
-        n_threads (int): Number of threads to use for KD tree search. Default
-                         -1 (all threads)
-    
-    Returns:
-        r_par (array): Parallel components of the displacement from void centre
-        u_par (array): Parallel components of velocity relative to void centre
-        u: Velocity relative to void centre
-        disp: Displacement from void centre
-    """
-    boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
-    if observer is None:
-        # assume observer is in the box centre:
-        observer = np.array([boxsize/2]*3)
-    los_vector = get_unit_vector(
-        snapedit.unwrap(void_centre - observer,boxsize)
-    )
-    if tree is None:
-        tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
-    indices_list = np.array(tree.query_ball_point(void_centre,\
-            rbins[-1]*void_radius,workers=n_threads),dtype=np.int64)
-    disp = snapedit.unwrap(snap['pos'][indices_list,:] - void_centre,boxsize)
-    r = np.array(np.sqrt(np.sum(disp**2,1)))
-    velocities_v = snap['vel'][indices_list,:]
-    if cell_vols is None:
-        cell_vols = np.ones(len(snap))
-    weights = cell_vols[indices_list]
-    v_centre = np.average(velocities_v,axis=0,weights=weights)
-    u = velocities_v - v_centre
-    u_par = u @ los_vector
-    r_par = disp @ los_vector
-    return r_par, u_par, disp, u
-
-def get_weighted_samples(data,weights=None,n_boot = 10000,axis=None):
-    n_data = len(data)
-    if weights is None:
-        weights = np.ones(n_data)
-    bootstrap_samples = np.random.choice(n_data,size=(n_data,n_boot))
-    bootstrap_averages = np.array([np.average(
-        data[bootstrap_samples[:,k]],
-        axis=axis,weights=weights[bootstrap_samples[:,k]]) 
-        for k in tools.progressbar(range(0,n_boot))]).T
-    return bootstrap_averages
-
-def weighted_boostrap_error(data,weights,n_boot = 10000,axis=None):
-    bootstrap_averages = get_weighted_samples(data,weights,n_boot=n_boot,
-                                              axis=axis)
-    return np.std(bootstrap_averages)
-
+from void_analysis.tools import get_weighted_samples, weighted_boostrap_error
+from void_analysis.tools import get_unit_vector
+from void_analysis.cosmology import comoving_distance_to_redshift
+from void_analysis.cosmology_inference import get_los_velocities_for_void
 
 # Test plot:
 filt = voids_used_lcdm_unconstrained[0]
@@ -610,11 +514,6 @@ ur_profile = np.array([
     for ind in indices
 ])
 
-#ur_profile_error = np.array([
-#    weighted_boostrap_error(ur_norm[ind],cell_vols[indices_list][ind])
-#    for ind in indices
-#])
-
 ur_profile_error = ur_profile = np.array([
     np.sqrt(
         stacking.weightedVariance(ur_norm[ind],cell_vols[indices_list][ind]) *
@@ -622,226 +521,16 @@ ur_profile_error = ur_profile = np.array([
     for ind in indices
 ])
 
-# Profile test:
-z_void = 0
-Om_fid = 0.3111
-pre_factor = -f_lcdm(z_void,Om_fid)*Hz(z_void,Om_fid)/(3*(1 + z_void))
-rbin_centres = plot.binCentres(rbins)
-r_range = np.linspace(0,3,101)
-plt.clf()
-plt.errorbar(rbin_centres, ur_profile,yerr=ur_profile_error,label="$u_r/r$",
-         linestyle="-",color=seabornColormap[0])
-plt.plot(rbin_centres, pre_factor*Delta_r,label="$-fH(z)\\Delta(r)/(3(1+z))$",
-         linestyle=":",color=seabornColormap[0])
-plt.xlabel("$r/r_{\\mathrm{eff}} [\\mathrm{Mpc}h^{-1}]$")
-plt.ylabel("$u_r/r [h\\mathrm{km}\\mathrm{s}^{-1}\\mathrm{Mpc}]$")
-plt.legend()
-plt.savefig(figuresFolder + "ur_profile_plot.pdf")
-plt.show()
+from void_analysis.cosmology_inference import plot_all_Deltaf, plot_all_pn
+from void_analysis.cosmology_inference import plot_pn_inverses, plot_inverse_r
 
-
-# Plot of the Initial conditions polynomial:
-Om = 0.3111
-D10 = D1(0,Om,normalised=True)
-D2z = lambda Om: -(3/7)*D10**2*Om**(-1/143)
-D3az = lambda Om: -(1/3)*D10**3*Om**(-4/275)
-D3bz = lambda Om: (10/21)*D10**3*Om**(-269/17857)
-A3z = lambda Om: 3*D10*D2z(Om) - D3az(Om) - 3*D3bz(Om) - D10**3
-A2z = lambda Om: 3*(D10**2 - D2z(Om))
-A1z = -3*D10
-p3 = lambda u: A3z(Om)*u**3 + A2z(Om)*u**2 + A1z*u
-p2 = lambda u: A2z(Om)*u**2 + A1z*u
-p1 = lambda u: A1z*u
-
-
-# EdS values:
-A1eds = -3*D10
-A2eds = 30*D10**2/7
-A3eds = -71*D10**3/21
-A4eds = 2272*D10**4/1617
-#A5eds = -16635*D10**5/7007
-A5eds = -3*(D5aeds/3 + D5beds + D5ceds + D5deds + D5eeds/3 + D5feds) - 3*D2eds*(D3aeds/3 + D3beds) - 3*D1eds*(D4aeds/3 + D4beds + D4ceds + D4deds)
-p5 = lambda u: A5eds*u**5 + A4eds*u**4 + A3eds*u**3 + A2eds*u**2 + A1eds*u
-p4 = lambda u: A4eds*u**4 + A3eds*u**3 + A2eds*u**2 + A1eds*u
-p3 = lambda u: A3eds*u**3 + A2eds*u**2 + A1eds*u
-p2 = lambda u: A2eds*u**2 + A1eds*u
-p1 = lambda u: A1eds*u
-p_exact = lambda u: -3*u + 3*u**2 - u**3
-p4p = lambda u: 4*A4eds*u**3 + 3*A3eds*u**2 + 2*A2eds*u + A1eds
-turning_point = scipy.optimize.fsolve(p4p,0.5)[0]
-delta_min4 = p4(turning_point)
-
-# Work out all the coefficients using fractions package, to avoid errors:
-from fractions import Fraction
-D1eds = Fraction(1,1)
-Gfactor = Fraction(2,3)
-power1 = Fraction(2,3)
-def deriv_factor(p):
-    return p**2 + p/3 - Fraction(2,3)
-
-D2eds = -Gfactor*D1eds**2/deriv_factor(2*power1)
-D3aeds = -2*Gfactor*(D1eds**3)/deriv_factor(3*power1)
-D3beds = -2*Gfactor*(D1eds**3*(D2eds/D1eds**2 - 1))/deriv_factor(3*power1)
-D4aeds = 2*Gfactor*D1eds*(2*D1eds**3 - D3aeds)/deriv_factor(4*power1)
-D4beds = 2*Gfactor*D1eds*(2*D1eds*D2eds - 2*D1eds**3 - D3beds)/deriv_factor(4*power1)
-D4ceds = Gfactor*(2*D1eds**2*D2eds - D2eds**2)/deriv_factor(4*power1)
-D4deds = Gfactor*D1eds**4/deriv_factor(4*power1)
-D5aeds = -2*Gfactor*D1eds*(4*D1eds**4 - 4*D1eds*D3aeds + D4aeds)/deriv_factor(5*power1)
-D5beds = -2*Gfactor*D1eds*(4*D1eds**2*D2eds - 4*D1eds**4 - 2*D1eds*D3beds + D4beds)/deriv_factor(5*power1)
-D5ceds = -2*Gfactor*D1eds*(2*D1eds**2*D2eds - D2eds**2 + D4ceds)/deriv_factor(5*power1)
-D5deds = -2*Gfactor*D1eds*(D1eds**4 + D4deds)/deriv_factor(5*power1)
-D5eeds = 2*Gfactor*(2*D1eds**3*D2eds - D3aeds*D2eds + D3aeds*D1eds**2)/deriv_factor(5*power1)
-D5feds = 2*Gfactor*(2*D1eds*D2eds**2 - 2*D1eds**3*D2eds - D3beds*D2eds + D3beds*D1eds**2)/deriv_factor(5*power1)
-
-# Values of psi:
-psir1 = lambda u: D1eds*u
-psir2 = lambda u: D1eds*u + D2eds*u**2
-psir3 = lambda u: psir2(u) + (D3aeds/3 + D3beds)*u**3
-psir4 = lambda u: psir3(u) + (D4aeds/3 + D4beds + D4ceds + D4deds)*u**4
-psir5 = lambda u: psir4(u) + (D5aeds/3 + D5beds + D5ceds + D5deds + D5eeds/3 + D5feds)*u**5
-Delta_f_func = lambda u :-3*u + 3*u**2 - u**3
-
-uvals = np.linspace(-1,1,1000)
-plt.clf()
-fig, ax = plt.subplots()
-plt.plot(uvals,Delta_f_func(psir1(uvals)),color=seabornColormap[1],linestyle="-",label="1LPT")
-plt.plot(uvals,Delta_f_func(psir2(uvals)),color=seabornColormap[2],linestyle="--",label="2LPT")
-plt.plot(uvals,Delta_f_func(psir3(uvals)),color=seabornColormap[3],linestyle="-",label="3LPT")
-plt.plot(uvals,Delta_f_func(psir4(uvals)),color=seabornColormap[4],linestyle="--",label="4LPT")
-plt.plot(uvals,Delta_f_func(psir5(uvals)),color=seabornColormap[5],linestyle="-",label="5LPT")
-plt.xlabel("$u = S_{1r}/r$")
-plt.ylabel("$\Delta_f$")
-plt.ylim([-1.1,1.1])
-plt.xlim([-1,1])
-plt.legend(frameon=False,loc="upper right")
-#plt.tight_layout()
-plt.subplots_adjust(left=0.25,bottom=0.15,right=0.95,top=0.95)
-plt.savefig(figuresFolder + "Deltaf_plot_all.pdf")
-plt.show()
-
-
-# Minimum value of p2:
-p2min = p2(-A1z/(2*A2z(Om)))
-
-plt.clf()
-uvals = np.linspace(-1,1,1000)
-fig, ax = plt.subplots(figsize = (0.45*textwidth,0.45*textwidth))
-plt.plot(uvals,p1(uvals),color=seabornColormap[1],linestyle="-",label="$p_1(u)$")
-plt.plot(uvals,p2(uvals),color=seabornColormap[2],linestyle="--",label="$p_2(u)$")
-plt.plot(uvals,p3(uvals),color=seabornColormap[3],linestyle="-",label="$p_3(u)$")
-plt.plot(uvals,p4(uvals),color=seabornColormap[4],linestyle="--",label="$p_4(u)$")
-plt.plot(uvals,p5(uvals),color=seabornColormap[6],linestyle="-",label="$p_5(u)$")
-#plt.plot(uvals,p_exact(uvals),color=seabornColormap[7],linestyle=":",label="$Exact, \\Psi_r/r$")
-plt.axhline(-1.0,color="grey",linestyle=":")
-plt.axhline(p2min,color="grey",linestyle="-.",
-            label="$\\Delta_f = $" + ("%.2g" % p2min))
-plt.axhline(0.0,color="grey",linestyle=":")
-plt.xlabel("$u = S_{1r}/r$")
-plt.ylabel("$p_n(u), \Delta_f$")
-plt.ylim([-1.1,1.1])
-plt.xlim([-1,1])
-plt.legend(frameon=False,loc="upper left")
-#plt.tight_layout()
-plt.subplots_adjust(left=0.25,bottom=0.15,right=0.95,top=0.95)
-plt.savefig(figuresFolder + "pn_plot_all.pdf")
-plt.show()
-
-# Plot of the inverses:
-Delta_xrange = np.linspace(-1,0.0,1000)
-p1inv = get_initial_condition(Delta_xrange,order=1,Om=0.3111)
-p2inv = get_initial_condition(Delta_xrange,order=2,Om=0.3111)
-p3inv = get_initial_condition(Delta_xrange,order=3,Om=0.3111)
-
-plt.clf()
-plt.plot(Delta_xrange,p1inv,color=seabornColormap[1],linestyle=":",label="1LPT")
-plt.plot(Delta_xrange,p2inv,color=seabornColormap[2],linestyle=":",label="2LPT")
-plt.plot(Delta_xrange,p3inv,color=seabornColormap[3],linestyle=":",label="3LPT")
-plt.ylim([0,1])
-plt.xlim([-1,0])
-plt.xlabel('$\\Delta_f$')
-plt.ylabel('$u = S_{1r}/r$')
-plt.legend(frameon=False)
-plt.savefig(figuresFolder + "pn_inverse_plot.pdf")
-plt.show()
-
-# Plot of S1r:
-plt.clf()
-p1inv_r = get_initial_condition(Delta_mean,order=1,Om=0.3111)
-p2inv_r = get_initial_condition(Delta_mean,order=2,Om=0.3111)
-p3inv_r = get_initial_condition(Delta_mean,order=3,Om=0.3111)
-plt.plot(rbin_centres,p1inv_r,color=seabornColormap[1],linestyle=":",label="1LPT")
-plt.plot(rbin_centres,p2inv_r,color=seabornColormap[2],linestyle=":",label="2LPT")
-plt.plot(rbin_centres,p3inv_r,color=seabornColormap[3],linestyle=":",label="3LPT")
-plt.ylim([0,1])
-plt.xlim([0,3])
-plt.xlabel('$r/r_{\\mathrm{eff}}$')
-plt.ylabel('$u = S_{1r}/r$')
-plt.legend(frameon=False)
-plt.savefig(figuresFolder + "pn_inverse_r_plot.pdf")
-plt.show()
-
-
-
-
-
-
-
+plot_all_Deltaf(savename=figuresFolder + "Deltaf_plot_all.pdf")
+plot_all_pn(savename=figuresFolder + "pn_plot_all.pdf")
+plot_pn_inverses(savename=figuresFolder + "pn_inverse_plot.pdf")
 
 
 # Average over multiple voids:
 from void_analysis.cosmology_inference import spherical_lpt_velocity
-
-def get_ur_profile_for_void(void_centre,void_radius,rbins,snap,tree=None,
-                            cell_vols=None,relative_velocity=True):
-    boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
-    nbar = len(snap)/boxsize**3
-    # KD Tree:
-    if tree is None:
-        tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
-    # Get particles around the void:
-    indices_list = np.array(tree.query_ball_point(void_centre,\
-            rbins[-1]*void_radius,workers=n_threads),dtype=np.int64)
-    # Displacement from void centre:
-    disp = snapedit.unwrap(snap['pos'][indices_list,:] - void_centre,boxsize)
-    r = np.array(np.sqrt(np.sum(disp**2,1)))
-    # Velocities of void centre:
-    velocities_v = snap['vel'][indices_list,:]
-    if cell_vols is None:
-        cell_vols = np.ones(len(snap))
-    weights = cell_vols[indices_list]
-    v_centre = np.average(velocities_v,axis=0,weights=weights)
-    # Velocity relative to void centre:
-    u = velocities_v - v_centre if relative_velocity else velocities_v
-    # Ratio between radial velocity and radius:
-    ur_norm = np.sum(np.array(u * disp),1)/r**2
-    [indices, counts] = plot.binValues(r,rbins*void_radius)
-    Delta_r = np.cumsum(counts)/(4*np.pi*nbar*rbins[1:]**3*void_radius**3/3)-1.0
-    # Profile as a function of r:
-    ur_profile = np.array([
-        np.average(
-            ur_norm[ind],weights=cell_vols[indices_list][ind]
-        ) if len(ind) > 0 else 0.0
-        for ind in indices
-    ])
-    return ur_profile, Delta_r
-
-def get_all_ur_profiles(centres, radii,rbins,snap,tree=None,cell_vols=None,
-                        relative_velocity=True):
-    if tree is None:
-        tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
-    profiles = [
-        get_ur_profile_for_void(void_centre,void_radius,rbins,snap,
-                                tree=tree,cell_vols=cell_vols,
-                                relative_velocity=True
-        )
-        for void_centre, void_radius, i in zip(
-            centres,radii,tools.progressbar(range(len(centres)))
-        )
-    ]
-    ur_profiles = np.vstack([prof[0] for prof in profiles])
-    Delta_r_profiles = np.vstack([prof[1] for prof in profiles])
-    return ur_profiles,Delta_r_profiles
-
 #trees = [scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize) 
 #    for snap in lcdm_snaps["snaps"]
 #]
@@ -874,35 +563,13 @@ all_void_radii = np.hstack(
 )
 
 # Velocities:
+rbin_centres = plot.binCentres(rbins)
 rbins_physical = np.outer(all_void_radii,rbin_centres)
 all_u_profiles = all_ur_profiles*rbins_physical
 u_mean = np.mean(all_u_profiles,0)
 u_error = np.std(all_u_profiles,0)/np.sqrt(all_u_profiles.shape[0])
 Delta_r_profiles = all_Delta_profiles*rbins_physical
 Delta_r_mean = np.mean(Delta_r_profiles,0)
-
-# Temp fix (use 1 simulation only):
-all_ur_and_Delta_profiles = get_all_ur_profiles(
-    snapedit.wrap(box_centre - centres[filt,:],boxsize),
-    radii[filt],rbins,snap,tree=tree,cell_vols=cell_vols,
-)
-all_ur_profiles = all_ur_and_Delta_profiles[0]
-all_Delta_profiles = all_ur_and_Delta_profiles[1]
-
-all_vr_and_Delta_profiles = get_all_ur_profiles(
-    snapedit.wrap(box_centre - centres[filt,:],boxsize),
-    radii[filt],rbins,snap,tree=tree,cell_vols=cell_vols,
-    relative_velocity=False
-)
-all_vr_profiles = all_vr_and_Delta_profiles[0]
-
-vr_mean = np.mean(all_vr_profiles,0)
-vr_error = np.std(all_vr_profiles,0)/np.sqrt(all_Delta_profiles.shape[0])
-vr_mean_samples = get_weighted_samples(all_vr_profiles,axis=0)
-vr_range = np.percentile(vr_mean_samples,[16,84],axis=1)
-
-
-
 
 
 ur_mean = np.mean(all_ur_profiles,0)
@@ -921,170 +588,8 @@ Delta_mean_samples = tools.loadOrRecompute(
 )
 Delta_range = np.percentile(Delta_mean_samples,[16,84],axis=1)
 
-
-def plot_velocity_profiles(rbin_centres,ur,Delta,ax=None,z_void=0,Om_fid=0.3111,
-                           filename=None,ur_range=None,ur_ratio=True,Delta_r=None,
-                           ylabel="$u_r/r [h\\mathrm{kms}^{-1}\\mathrm{Mpc}^{-1}]$",
-                           xlabel="$r/r_{\\mathrm{eff}}$",velocity=False,
-                           treat_2lpt_separately=True,show_error_estimates=False,
-                           ylim=[0,20],difference_plot=False,**kwargs):
-    if ax is None:
-        fig, ax = plt.subplots()
-    print(kwargs)
-    #pre_factor = -f_lcdm(z_void,Om_fid)*Hz(z_void,Om_fid)/(3*(1 + z_void))
-    #u_pred_2lpt = pre_factor*(Delta - (3/7)*(f_lcdm(z_void,Om_fid)/(1+z_void))*Delta**2)
-    #f2 = 2*f_lcdm(z_void,Om_fid,gamma=(4.0/7.0))
-    #f1 = f_lcdm(z_void,Om_fid)
-    #D2_factor = (1.0/7.0)*f_lcdm(z_void,Om_fid,gamma=-1.0/143.0)
-    radial_fraction = (not velocity)
-    Delta_val = Delta_r if Delta_r is not None else Delta
-    Psir_ratio_1 = spherical_lpt_displacement(1.0,Delta_val,z=z_void,Om=Om_fid,
-                                            fixed_delta=True,order=1)
-    Psir_ratio_2 = spherical_lpt_displacement(1.0,Delta_val,z=z_void,Om=Om_fid,
-                                            fixed_delta=True,order=2)
-    Psir_ratio_3 = spherical_lpt_displacement(1.0,Delta_val,z=z_void,Om=Om_fid,
-                                            fixed_delta=True,order=3)
-    Psir_ratio_4 = spherical_lpt_displacement(1.0,Delta_val,z=z_void,Om=Om_fid,
-                                            fixed_delta=True,order=4)
-    Psir_ratio_5 = spherical_lpt_displacement(1.0,Delta_val,z=z_void,Om=Om_fid,
-                                            fixed_delta=True,order=5)
-    # 2LPT is a special case:
-    kwargs2 = dict(kwargs)
-    if treat_2lpt_separately:
-        kwargs2['correct_ics'] = False
-    if Delta_r is not None:
-        u_pred_5lpt = spherical_lpt_velocity(rbin_centres,Delta_r,order=5,
-                                             Om=Om_fid,
-                                             radial_fraction=radial_fraction,
-                                             **kwargs)
-        u_pred_4lpt = spherical_lpt_velocity(rbin_centres,Delta_r,order=4,
-                                             Om=Om_fid,
-                                             radial_fraction=radial_fraction,
-                                             **kwargs)
-        u_pred_3lpt = spherical_lpt_velocity(rbin_centres,Delta_r,order=3,
-                                             Om=Om_fid,
-                                             radial_fraction=radial_fraction,
-                                             **kwargs)
-        u_pred_2lpt = spherical_lpt_velocity(rbin_centres,Delta_r,order=2,
-                                             Om=Om_fid,
-                                             radial_fraction=radial_fraction,
-                                             **kwargs2)
-        u_pred_1lpt = spherical_lpt_velocity(rbin_centres,Delta_r,order=1,
-                                             Om=Om_fid,
-                                             radial_fraction=radial_fraction,
-                                             **kwargs)
-    else:
-        u_pred_5lpt = spherical_lpt_velocity(rbin_centres,Delta,order=5,
-                                             Om=Om_fid,
-                                             radial_fraction=radial_fraction,
-                                             **kwargs)
-        u_pred_4lpt = spherical_lpt_velocity(rbin_centres,Delta,order=4,
-                                             Om=Om_fid,
-                                             radial_fraction=radial_fraction,
-                                             **kwargs)
-        u_pred_3lpt = spherical_lpt_velocity(rbin_centres,Delta,order=3,
-                                             Om=Om_fid,
-                                             radial_fraction=radial_fraction,
-                                             **kwargs)
-        u_pred_2lpt = spherical_lpt_velocity(rbin_centres,Delta,order=2,
-                                             Om=Om_fid,
-                                             radial_fraction=radial_fraction,
-                                             **kwargs2)
-        u_pred_1lpt = spherical_lpt_velocity(rbin_centres,Delta,order=1,
-                                             Om=Om_fid,
-                                             radial_fraction=radial_fraction,
-                                             **kwargs)
-    if difference_plot:
-        u_pred_1lpt -= ur
-        u_pred_2lpt -= ur
-        u_pred_3lpt -= ur
-        u_pred_4lpt -= ur
-        u_pred_5lpt -= ur
-        u_pred_1lpt /= ur
-        u_pred_2lpt /= ur
-        u_pred_3lpt /= ur
-        u_pred_4lpt /= ur
-        u_pred_5lpt /= ur
-        if ur_range is not None:
-            ur_upper = (ur_range[1] - ur)/ur
-            ur_lower = (ur_range[0] - ur)/ur
-    elif ur_range is not None:
-        ur_upper = ur_range[1]
-        ur_lower = ur_range[0]
-    if ur_ratio:
-        if ur_range is not None:
-            ax.fill_between(rbin_centres,ur_lower,ur_upper,
-                     color=seabornColormap[0],label="$Simulation, 68\\% interval$",alpha=0.5,
-            )
-        if not difference_plot:
-            ax.plot(rbin_centres,ur,
-                     color=seabornColormap[0],label="$Simulation$",alpha=0.5,
-            )
-        ax.plot(rbin_centres,u_pred_1lpt,linestyle=":",
-                 label="Linear Model (1LPT)",color=seabornColormap[1],
-        )
-        ax.plot(rbin_centres,u_pred_2lpt,linestyle=":",
-                 label="2LPT Model",color=seabornColormap[2],
-        )
-        ax.plot(rbin_centres,u_pred_3lpt,linestyle=":",
-                 label="3LPT Model",color=seabornColormap[3],
-        )
-        ax.plot(rbin_centres,u_pred_4lpt,linestyle=":",
-                 label="4LPT Model",color=seabornColormap[4],
-        )
-        ax.plot(rbin_centres,u_pred_5lpt,linestyle=":",
-                 label="5LPT Model",color=seabornColormap[8],
-        )
-    else:
-        if ur_range is not None:
-            ax.fill_between(rbin_centres,ur_range[0]*rbin_centres,ur_range[1]*rbin_centres,
-                     color=seabornColormap[0],label="$Simulation, 68\\% interval$",alpha=0.5,
-            )
-        ax.plot(rbin_centres,ur*rbin_centres,
-                 color=seabornColormap[0],label="$Simulation$",alpha=0.5,
-        )
-        ax.plot(rbin_centres,u_pred_1lpt*rbin_centres,linestyle=":",
-                 label="Linear Model (1LPT)",color=seabornColormap[1],
-        )
-        ax.plot(rbin_centres,u_pred_2lpt*rbin_centres,linestyle=":",
-                 label="2LPT Model",color=seabornColormap[2],
-        )
-        ax.plot(rbin_centres,u_pred_3lpt*rbin_centres,linestyle=":",
-                 label="3LPT Model",color=seabornColormap[3],
-        )
-        ax.plot(rbin_centres,u_pred_3lpt*rbin_centres,linestyle=":",
-                 label="4LPT Model",color=seabornColormap[4],
-        )
-        ax.plot(rbin_centres,u_pred_3lpt*rbin_centres,linestyle=":",
-                 label="5LPT Model",color=seabornColormap[8],
-        )
-    if show_error_estimates:
-        if ur_ratio:
-            factor = 1
-        else:
-            factor = rbin_centres
-        ax.fill_between(rbin_centres,u_pred_1lpt*(1 - Psir_ratio_1)*factor,
-                        u_pred_1lpt*(1 + Psir_ratio_1)*factor,alpha=0.5,
-                        color=seabornColormap[1],label="Expected 2LPT corrections")
-        ax.fill_between(rbin_centres,u_pred_2lpt*(1 - Psir_ratio_2**2)*factor,
-                        u_pred_2lpt*(1 + Psir_ratio_2**2)*factor,alpha=0.5,
-                        color=seabornColormap[2],label="Expected 3LPT corrections")
-        ax.fill_between(rbin_centres,u_pred_3lpt*(1 - Psir_ratio_3**3)*factor,
-                        u_pred_3lpt*(1 + Psir_ratio_3**3)*factor,alpha=0.5,
-                        color=seabornColormap[3],label="Expected 4LPT corrections")
-        ax.fill_between(rbin_centres,u_pred_4lpt*(1 - Psir_ratio_4**4)*factor,
-                        u_pred_4lpt*(1 + Psir_ratio_4**4)*factor,alpha=0.5,
-                        color=seabornColormap[4],label="Expected 5LPT corrections")
-        ax.fill_between(rbin_centres,u_pred_5lpt*(1 - Psir_ratio_5**5)*factor,
-                        u_pred_5lpt*(1 + Psir_ratio_5**5)*factor,alpha=0.5,
-                        color=seabornColormap[8],label="Expected 6LPT corrections")
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    #plt.yscale("log")
-    ax.set_ylim(ylim)
-    plt.legend(frameon=False)
-    if filename is not None:
-        plt.savefig(filename)
+plot_inverse_r(rbin_centres,Delta_mean,
+               savename=figuresFolder + "pn_inverse_r_plot.pdf")
 
 plt.clf()
 plot_velocity_profiles(rbin_centres,u_mean,Delta_mean,
@@ -1123,508 +628,45 @@ plot_velocity_profiles(rbin_centres,ur_mean,Delta_mean,
                        ylabel="Fractional Difference in $v_{r}/r$")
 plt.show()
 
-
-
-
-# Density comparison:
-perturbative_consistency = False
-if perturbative_consistency:
-    Delta_1lpt = get_delta_lpt(Delta_mean,Om=0.3111,order=1,perturbative_ics=False,
-                               use_linear_on_fail=False,correct_ics=True,return_all=True)
-    Delta_2lpt = np.sum(get_delta_lpt(Delta_mean,Om=0.3111,order=2,perturbative_ics=False,
-                               use_linear_on_fail=False,correct_ics=True,return_all=True),0)
-    Delta_3lpt = np.sum(get_delta_lpt(Delta_mean,Om=0.3111,order=3,perturbative_ics=False,
-                               use_linear_on_fail=False,correct_ics=True,return_all=True),0)
-else:
-    Delta_1lpt = get_delta_lpt(Delta_mean,Om=0.3111,order=1,perturbative_ics=False,
-                               use_linear_on_fail=False,correct_ics=True)
-    Delta_2lpt = get_delta_lpt(Delta_mean,Om=0.3111,order=2,perturbative_ics=False,
-                               use_linear_on_fail=False,correct_ics=True)
-    Delta_3lpt = get_delta_lpt(Delta_mean,Om=0.3111,order=3,perturbative_ics=False,
-                               use_linear_on_fail=False,correct_ics=True)
-
-
-Psir_ratio_1 = spherical_lpt_displacement(1.0,Delta_mean,z=0,Om=0.3111,
-                                        fixed_delta=True,order=1,
-                                        perturbative_ics=False,
-                                        use_linear_on_fail=False,
-                                        correct_ics=True)
-Psir_ratio_2 = spherical_lpt_displacement(1.0,Delta_mean,z=0,Om=0.3111,
-                                        fixed_delta=True,order=2,
-                                        perturbative_ics=False,
-                                        use_linear_on_fail=False,
-                                        correct_ics=True)
-Psir_ratio_3 = spherical_lpt_displacement(1.0,Delta_mean,z=0,Om=0.3111,
-                                        fixed_delta=True,order=3,
-                                        perturbative_ics=False,
-                                        use_linear_on_fail=False,
-                                        correct_ics=True)
-
-Psir_ratio_5 = spherical_lpt_displacement(1.0,Delta_mean,z=0,Om=0.3111,
-                                        fixed_delta=True,order=5,
-                                        perturbative_ics=False,
-                                        use_linear_on_fail=False,
-                                        eulerian_radius=False,
-                                        taylor_expand=False,return_all=True,
-                                        radial_fraction=True)
-vr_ratio_5 = spherical_lpt_velocity(1.0,Delta_mean,z=0,Om=0.3111,
-                                        fixed_delta=True,order=5,
-                                        perturbative_ics=False,
-                                        use_linear_on_fail=False,
-                                        eulerian_radius=True,
-                                        taylor_expand=False,
-                                        return_all=True,radial_fraction=True)
-
-ratios = np.cumsum(Psir_ratio_5,0)/np.sum(Psir_ratio_5,0)
-
-plt.clf()
-fig, ax = plt.subplots(figsize=(0.45*textwidth,0.45*textwidth))
-plt.plot(
-    rbin_centres,Psir_ratio_5[1]/Psir_ratio_5[2],color=seabornColormap[2],
-    label="2nd/3rd (displacement)",linestyle='--'
-)
-plt.plot(
-    rbin_centres,Psir_ratio_5[3]/Psir_ratio_5[4],color=seabornColormap[4],
-    label="4th/5th (displacement)",linestyle='--'
-)
-plt.plot(
-    rbin_centres,vr_ratio_5[1]/vr_ratio_5[2],color=seabornColormap[2],
-    label="2nd/3rd (velocity)",linestyle=':'
-)
-plt.plot(
-    rbin_centres,vr_ratio_5[3]/vr_ratio_5[4],color=seabornColormap[4],
-    label="4th/5th (velocity)",linestyle=':'
-)
-plt.legend(frameon=False,loc="lower right")
-plt.xlabel("$r/r_{\\mathrm{eff}}$")
-plt.ylabel("Ratio compared to next order term.")
-plt.ylim([-5,0])
-plt.tight_layout()
-plt.savefig(figuresFolder + "convergence_plot.pdf")
-plt.show()
-
-Psi_true = 1/(np.cbrt(1 + Delta_mean)) - 1
-
-plt.clf()
-color_list = [seabornColormap[1],seabornColormap[2],seabornColormap[3],
-            seabornColormap[4],seabornColormap[8]]
-label_list = [f"n={n}" for n in range(1,6)]
-for k in range(0,5):
-    plt.plot(
-        rbin_centres, Psir_ratio_5[k]/Psi_true,
-        color=color_list[k],linestyle="-",
-        label = label_list[k]
-    )
-
-plt.xlabel("$r/r_{\\mathrm{eff}}$")
-plt.ylabel("$\\Psi^{(n)}/\\Psi_{\\mathrm{exact}}$")
-plt.axhline(1.0,color="grey",linestyle=':')
-plt.legend(frameon=False)
-plt.tight_layout()
-plt.savefig(figuresFolder + "psi_true_plot.pdf")
-plt.show()
-
-
-def Delta_f_taylor_test(Psi_list):
-    order = len(Psi_list)
-    if order not in [1,2,3,4,5]:
-        raise Exception("Order invalid or not implemented.")
-    Delta_f = np.zeros(Psi_list[0].shape)
-    Psi_q1 = Psi_list[0]
-    Delta_f += -3*Psi_q1
-    if order == 1:
-        return Delta_f
-    Psi_q2 = Psi_list[1]
-    Delta_f += 6*Psi_q1**2 - 3*Psi_q2
-    if order == 2:
-        return Delta_f
-    Psi_q3 = Psi_list[2]
-    Delta_f += -10*Psi_q1**3 + 12*Psi_q1*Psi_q2 - 3*Psi_q3
-    if order == 3:
-        return Delta_f
-    Psi_q4 = Psi_list[3]
-    Delta_f += (15*Psi_q1**4 - 30*Psi_q1**2*Psi_q2 + 12*Psi_q1*Psi_q3
-                + 6*Psi_q2**2 - 3*Psi_q4)
-    if order == 4:
-        return Delta_f
-    Psi_q5 = Psi_list[4]
-    Delta_f += (-21*Psi_q1**5 + 60*Psi_q1**3*Psi_q2 - 10*Psi_q1**2*Psi_q3
-                - 20*Psi_q1*Psi_q2**2 + 12*Psi_q1*Psi_q4
-                - 10*Psi_q1*(2*Psi_q1*Psi_q3 + Psi_q2**2) + 12*Psi_q2*Psi_q3
-                 - 3*Psi_q5)
-    return Delta_f
-
-def delta_taylor_test(x,n):
-    if np.isscalar(x):
-        sum_val = 0.0
-    else:
-        sum_val = np.zeros(x.shape)
-    for k in range(1,n+1):
-        sum_val += (-1)**k*(k+2)*(k+1)*x**k/2
-    return sum_val
-
-plt.clf()
-plt.plot(rbin_centres,Delta_mean,color=seabornColormap[0],linestyle="-",
-         label="Simulation")
-plt.plot(rbin_centres,Delta_1lpt,color=seabornColormap[1],linestyle=":",
-         label="1LPT")
-plt.plot(rbin_centres,Delta_2lpt,color=seabornColormap[2],linestyle=":",
-         label="2LPT")
-plt.plot(rbin_centres,Delta_3lpt,color=seabornColormap[3],linestyle=":",
-         label="3LPT")
-plt.fill_between(rbin_centres,Delta_1lpt*(1 - Psir_ratio_1),
-                 Delta_1lpt*(1 + Psir_ratio_1),alpha=0.5,
-                 color=seabornColormap[1])
-plt.fill_between(rbin_centres,Delta_2lpt*(1 - Psir_ratio_2**2),
-                 Delta_2lpt*(1 + Psir_ratio_2**2),alpha=0.5,
-                 color=seabornColormap[2])
-plt.fill_between(rbin_centres,Delta_3lpt*(1 - Psir_ratio_3**3),
-                 Delta_3lpt*(1 + Psir_ratio_3**3),alpha=0.5,
-                 color=seabornColormap[3])
-plt.xlabel("$r/r_{\\mathrm{eff}}$")
-plt.ylabel("$\\Delta_f(r)$")
-plt.legend(frameon=False)
-plt.savefig(figuresFolder + "Delta_lpt_test.pdf")
-plt.show()
-
-# Plot showing the expected error from 4th order corrections:
-Psir_ratio_1 = spherical_lpt_displacement(1.0,Delta_mean,z=0,Om=0.3111,
-                                        fixed_delta=True,order=1)
-Psir_ratio_2 = spherical_lpt_displacement(1.0,Delta_mean,z=0,Om=0.3111,
-                                        fixed_delta=True,order=2)
-Psir_ratio_3 = spherical_lpt_displacement(1.0,Delta_mean,z=0,Om=0.3111,
-                                        fixed_delta=True,order=3)
-
-D10 = 1.0
-n2 = -1/143
-D20 = D2_val = -(3/7)*(Om**n2)*D10**2
-Delta_min = -3/(4*(1 - D20))
-
-plt.clf()
-plt.title("Expected relative error from next order correction")
-plt.plot(rbin_centres,Psir_ratio_1,label="1LPT",color=seabornColormap[1])
-plt.plot(rbin_centres,Psir_ratio_2**2,label="2LPT",color=seabornColormap[2])
-plt.plot(rbin_centres,Psir_ratio_3**3,label="3LPT",color=seabornColormap[3])
-plt.plot(rbin_centres,-Delta_mean,label="$-\\Delta(r)$",color="k",
-         linestyle='--')
-plt.axhline(-Delta_min,linestyle=":",color="grey",label="2LPT density threshold")
-plt.xlabel('$r/r_{\\mathrm{eff}}$')
-plt.ylabel('Relative error')
-plt.yscale('log')
-plt.legend(frameon=False)
-plt.savefig(figuresFolder + "lpt_error_plot.pdf")
-plt.show()
-
-
-
-
-plt.clf()
-plot_velocity_profiles(rbin_centres,vr_mean,Delta_mean,
-                       filename = figuresFolder + "vr_profiles_average.pdf",
-                       ur_range=ur_range)
-plt.show()
-
-
-
-# By radius bin:
-plt.clf()
-radius_bins = [10,12.5,15,17.5,20]
-n_bins = len(radius_bins) - 1
-nrows = 2
-ncols = 2
-fig, ax = plt.subplots(nrows,ncols,figsize=(textwidth,0.7*textwidth))
-for i in range(nrows):
-    for j in range(ncols):
-        k = i*ncols + j
-        radius_filter = (all_void_radii >= radius_bins[k]) & \
-            (all_void_radii < radius_bins[k+1])
-        ur_mean_samples = get_weighted_samples(all_ur_profiles[radius_filter,:],
-                                               axis=0,n_boot=1000)
-        ur_range = np.percentile(ur_mean_samples,[16,84],axis=1)
-        axij = ax[i,j]
-        plot_velocity_profiles(
-            rbin_centres,np.mean(all_ur_profiles[radius_filter,:],0),
-            np.mean(all_Delta_profiles[radius_filter,:],0),ax=axij,
-            ur_range=ur_range
-        )
-        axij.set_title(
-            "$" + ("%.3g" % radius_bins[k]) + 
-            " < r/(\\mathrm{Mpc}h^{-1}) < " + ("%.3g" % radius_bins[k+1]) + "$")
-        if j > 0:
-            axij.yaxis.label.set_visible(False)
-            axij.yaxis.set_major_formatter(NullFormatter())
-            axij.yaxis.set_minor_formatter(NullFormatter())
-        if i < nrows - 1:
-            axij.xaxis.label.set_visible(False)
-            axij.xaxis.set_major_formatter(NullFormatter())
-            axij.xaxis.set_minor_formatter(NullFormatter())
-
-plt.subplots_adjust(wspace=0.0,hspace=0.0)
-plt.savefig(figuresFolder + "ur_profiles_by_radius.pdf")
-plt.show()
-
-
-
-void_dist = np.sqrt(
-    np.sum(snapedit.unwrap(void_centre - box_centre,boxsize)**2)
-)
-
-z_void = comoving_distance_to_redshift(void_dist,cosmo=cosmo)
-Om_fid = 0.3111
-
-
-
-plt.clf()
-bin_select = [5,10,15,20,25]
-for i in range(len(bin_select)):
-    plt.scatter(r_par[indices[bin_select[i]]],u_par[indices[bin_select[i]]],
-        label=("$" + "%.2g" % (rbins[bin_select[i]] * void_radius) + 
-        "\\,\\mathrm{Mpc}h^{-1}$"),
-        color=seabornColormap[np.mod(i,len(seabornColormap))])
-    r_range = np.linspace(np.min(r_par[indices[bin_select[i]]]),
-                          np.max(r_par[indices[bin_select[i]]]),101)
-    plt.plot(r_range,pre_factor*Delta_r[bin_select[i]]*r_range,linestyle='--',
-             color = seabornColormap[np.mod(i,len(seabornColormap))]
-    )
-
-plt.xlabel("$r_{\\parallel}$")
-plt.ylabel("$u_{\\parallel}$")
-plt.legend(frameon=False)
-plt.savefig(figuresFolder + "linear_velocity_test.pdf")
-plt.show()
+plot_psi_true(Delta_mean,savename=figuresFolder + "psi_true_plot.pdf")
 
 
 #-------------------------------------------------------------------------------
-# ARBITRARY VELOCITY MODEL
+# SEMI-ANALYTIC VELOCITY MODEL
 
 N = 5
 u = 1 - np.cbrt(1 + Delta_mean)
 z = 0
 u_filter = range(2,len(u))
 Om = 0.3111
-def semi_empirical_model(u,z,Om,alphas,h=1,nf1 = 5/9,**kwargs):
-    a = 1/(1+z)
-    H = Hz(z,Om,h=h,**kwargs)
-    Omz = Omega_z(z,Om,**kwargs)
-    f1 = Omz**nf1
-    N = len(alphas) + 1
-    sum_term = np.sum([alphas[n-2]*u**n for n in range(2,N+1)],0)
-    return a*H*f1*(u + sum_term)
-
-alphas_guess = np.ones(len(range(2,N+1)))
 
 alphas_guesses = [np.ones(len(range(2,N+1))) for N in range(2,10)]
-
 sols = [
     scipy.optimize.least_squares(
-        lambda alphas: semi_empirical_model(
-            u[u_filter],z,Om,alphas
+        lambda alphas: semi_analytic_model(
+            u[u_filter],alphas,z=z,Om=Om,
         ) - ur_mean[u_filter],alphas_guess
     )
     for alphas_guess in alphas_guesses
 ]
-
 alphas_list = [sol.x for sol in sols]
 
 # Test plot:
-relative = True
-plt.clf()
-fig, ax = plt.subplots()
-if relative:
-    sim_low = (ur_range[0][u_filter] - ur_mean[u_filter])*100/ur_mean[u_filter]
-    sim_high = (ur_range[1][u_filter] - ur_mean[u_filter])*100/ur_mean[u_filter]
-else:
-    sim_low = ur_range[0]
-    sim_high = ur_range[1]
-
-ax.fill_between(
-    rbin_centres[u_filter],sim_low,sim_high,
-    color=seabornColormap[0],label="$Simulation, 68\\% interval$",alpha=0.5
+plot_velocity_model(
+    ur_range,ur_mean,alphas_list,u_filter = u_filter,
+    savename=figuresFolder + "velocity_model.pdf"
 )
-for k in range(len(alphas_list)):
-    model_val = semi_empirical_model(
-        u[u_filter],z,Om,
-        alphas_list[k]
-    )
-    if relative:
-        model_plot = (model_val - ur_mean[u_filter])*100/ur_mean[u_filter]
-    else:
-        model_plot = model_val
-    ax.plot(
-        rbin_centres[u_filter],model_plot,
-        color=seabornColormap[k],linestyle=':',
-        label="Empirical Model, $N = " + ("%.2g" % (k+2)) + "$"
-    )
 
-plt.xlabel('$r/r_{\\mathrm{eff}}$')
-if relative:
-    plt.ylabel('Percentage Error')
-else:
-    plt.ylabel('$v_r/r [h\\mathrm{kms}^{-1}\\mathrm{Mpc}^{-1}]$')
-
-ax.set_ylim([-5,5])
-
-plt.legend(frameon=False,ncol=2)
-plt.savefig(figuresFolder + "velocity_model.pdf")
-plt.show()
 
 alpha_vec = [
     np.array([alphas[n] for alphas in alphas_list if len(alphas) > n]) 
     for n in range(len(alphas_list))
 ]
 
-# Plot of alphas:
-plt.clf()
-for n, alpha in enumerate(alpha_vec):
-    plt.plot(
-        range(2 + n,len(alpha_vec)+2),alpha,color=seabornColormap[n],
-        marker='x',linestyle="--",label = f"$\\alpha_{n+2}$"
-    )
-
-plt.xlabel('$N$')
-plt.ylabel('$\\alpha_n$')
-#plt.yscale('log')
-plt.ylim([-10,10])
-plt.axhline(0.0,linestyle=":",color='k')
-plt.legend(frameon=False)
-plt.savefig(figuresFolder + "alphas_plot.pdf")
-plt.show()
-
+plot_alphas(alpha_vec,savename=figuresFolder + "alphas_plot.pdf")
 
 # What would these be in LPT?
 
-
-
-#-------------------------------------------------------------------------------
-# SPHERICAL OVERDENSITY MODEL
-
-def Delta_theta(theta):
-    if np.isscalar(theta):
-        if theta < 1e-10:
-            return 1 - 3*theta**2/20
-        else:
-            return 9*(np.sinh(theta) - theta)**2/(2*(np.cosh(theta) - 1)**3)
-    else:
-        small = (theta < 1e-10)
-        not_small = np.logical_not(small)
-        retval = np.zeros(theta.shape)
-        retval[small] = 1 - 3*theta[small]**2/20
-        retval[not_small] = (9*(np.sinh(theta[not_small]) - theta[not_small])**2
-                               /(2*(np.cosh(theta[not_small]) - 1)**3))
-        return retval
-
-def V_theta(theta):
-    if np.isscalar(theta):
-        if theta < 1e-10:
-            return theta**2/20
-        else:
-            return 3*(np.sinh(theta)*(np.sinh(theta) - theta)/(2*(np.cosh(theta) - 1)**2)) - 1
-    else:
-        small = (theta < 1e-10)
-        not_small = np.logical_not(small)
-        retval = np.zeros(theta.shape)
-        retval[small] = theta[small]**2/20
-        retval[not_small] = (3*(np.sinh(theta[not_small])*(np.sinh(theta[not_small])
-                            - theta[not_small])/(2*(np.cosh(theta[not_small]) - 1)**2)) - 1)
-        return retval
-
-# Inversion:
-
-def get_upper_bound(Delta,count_max=10):
-    f = lambda x: Delta_theta(x) - Delta - 1
-    theta_max = -np.log(2*(1 + Delta)/9) # Asymtotic guess at solution
-    count = 0
-    while f(theta_max) > 0 and count < count_max:
-        theta_max *= 10
-        count += 1
-    if count >= count_max:
-        raise Exception("Unable to find upper bound on solution.")
-    else:
-        return theta_max
-
-def invert_Delta_theta_scalar(Delta,theta_min=0,theta_max = None,count_max=10):
-    if Delta == -1:
-        return np.inf
-    f = lambda x: Delta_theta(x) - Delta - 1
-    if theta_max is None:
-        theta_max = get_upper_bound(Delta,count_max=count_max)
-    return scipy.optimize.brentq(f,theta_min,theta_max)
-
-def theta_of_Delta(Delta,count_max = 10):
-    theta_min = 0
-    theta_max = 10
-    # Get bound:
-    scalar = np.isscalar(Delta)
-    Delta_min = Delta if scalar else np.min(Delta)
-    theta_max = get_upper_bound(Delta_min,count_max=count_max)
-    if scalar:
-        return invert_Delta_theta_scalar(Delta,theta_max=theta_max,count_max=count_max)
-    else:
-        return np.array(
-            [
-                invert_Delta_theta_scalar(x,theta_max=theta_max,count_max=count_max)
-                for x in Delta
-            ]
-        )
-#-------------------------------------------------------------------------------
-# TEST PLOTS FOR REAL SPACE FIELD
-
-# Test Plot:
-fig, ax = plt.subplots()
-ax.plot(rvals,delta_func(rvals),label='$\\delta(r)$')
-ax.plot(rvals,Delta_func(rvals),label='$\\Delta(r)$')
-ax.set_xlabel('r [$\\mathrm{Mpc}h^{-1}$]')
-ax.set_ylabel('$\\rho(r)$')
-plt.legend(frameon=False)
-plt.savefig(figuresFolder + "rho_real_plot.pdf")
-plt.show()
-
-start_values = np.linspace(0,0.5,101)
-
-x = r_bin_centres
-y = rho_r_mean
-
-fit_large = np.polyfit(np.log(x[x > 1.5]),np.log(y[x > 1.5]),1)
-fit_small = np.polyfit(np.log(x[x < 0.5]),np.log(y[x < 0.5]),1)
-
-plt.clf()
-fig, ax = plt.subplots()
-ax.fill_between(r_bin_centres,rho_r_range_2sigma[0,:],rho_r_range_2sigma[1,:],
-    alpha=0.25,color=seabornColormap[0],ec=None,
-    label='$\\rho_{\\Lambda\\mathrm{CDM}}(r), 95\\%$')
-ax.fill_between(r_bin_centres,rho_r_range_1sigma[0,:],rho_r_range_1sigma[1,:],
-    alpha=0.5,color=seabornColormap[0],ec=None,
-    label='$\\rho_{\\Lambda\\mathrm{CDM}}(r), 68\\%$')
-ax.errorbar(r_bin_centres,rho_r_borg_mean,
-    yerr=np.abs(rho_r_borg_range_1sigma - rho_r_borg_mean),
-    label='$\\rho_{\\mathrm{borg}}(r)$',color=seabornColormap[1])
-#ax.plot(r_bin_centres,field_borg[0]/np.mean(rho_func_borg_z0(start_values)),
-#    label='$\\rho_{\\mathrm{2d}}(0,d)$')
-ax.plot(rvals,np.exp(fit_large[0]*np.log(rvals) + fit_large[1]),
-        linestyle=':',color='k',
-        label="$\\rho = " + ("%.2g" % (np.exp(fit_large[1]))) + "\\cdot " + 
-        "r^{" + ("%.2g" % (fit_large[0])) + "}$")
-ax.plot(rvals,np.exp(fit_small[0]*np.log(rvals) + fit_small[1]),
-        linestyle='--',color='k',
-        label="$\\rho = " + ("%.2g" % (np.exp(fit_small[1]))) + "\\cdot " + 
-        "r^{" + ("%.2g" % (fit_small[0])) + "}$")
-ax.set_xlabel('$r/r_{\\mathrm{eff}}$')
-ax.set_ylabel('$\\rho(r)$')
-#ax.set_yscale('log')
-#ax.set_xscale('log')
-ax.set_ylim([1e-3,0.1])
-ax.set_xlim([0,2])
-plt.legend(frameon=False)
-plt.savefig(figuresFolder + "rho_real_plot_void_only.pdf")
-plt.show()
-
-# 2D profile function test (zspace):
-z = 0.0225
-profile_2d = np.zeros((len(spar_bins)-1,len(sperp_bins)-1))
-
-Om = 0.3111
-f = f_lcdm(z,Om)
-A = 0.013
 
 #-------------------------------------------------------------------------------
 # COVARIANCE MATRIX ESTIMATION:
@@ -1743,7 +785,7 @@ profile_param_ranges = [[0,np.inf],[0,np.inf],[0,np.inf],[-1,0],[-1,1],[0,2]]
 om_ranges = [[0.1,0.5]]
 eps_ranges = [[0.9,1.1]]
 f_ranges = [[0,1]]
-z = 0.0225
+z = 0
 Om_fid = 0.3111
 eps_initial_guess = np.array([1.0,f_lcdm(z,Om_fid)])
 theta_initial_guess = np.array([0.3,f_lcdm(z,0.3)])

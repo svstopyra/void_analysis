@@ -591,4 +591,33 @@ def progressbar(it, prefix="", size=60, out=sys.stdout): # Python3.6+
         show(i+1)
     print("\n", flush=True, file=out)
 
+def get_weighted_samples(data,weights=None,n_boot = 10000,axis=None):
+    n_data = len(data)
+    if weights is None:
+        weights = np.ones(n_data)
+    bootstrap_samples = np.random.choice(n_data,size=(n_data,n_boot))
+    bootstrap_averages = np.array([np.average(
+        data[bootstrap_samples[:,k]],
+        axis=axis,weights=weights[bootstrap_samples[:,k]]) 
+        for k in tools.progressbar(range(0,n_boot))]).T
+    return bootstrap_averages
+
+def weighted_boostrap_error(data,weights,n_boot = 10000,axis=None):
+    bootstrap_averages = get_weighted_samples(data,weights,n_boot=n_boot,
+                                              axis=axis)
+    return np.std(bootstrap_averages)
+
+def get_unit_vector(v):
+    """
+    Compute a normalised unit vector parallel to v
+        
+    Parameters:
+        v (array): vector to normalise.
+        
+    Returns
+        array: same shape as v, normalised
+    """
+    return v/np.sqrt(np.sum(v**2))
+
+
 

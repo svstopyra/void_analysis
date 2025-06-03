@@ -838,10 +838,129 @@ def eulerToZ(pos,vel,cosmo,boxsize,h,centre = None,Ninterp=1000,\
     posZ[np.where(posZ > boxsize/2)] -= boxsize
     return posZ
 
+def comoving_distance_to_redshift(dist,cosmo=None):
+    if cosmo is None:
+        cosmo = astropy.cosmology.LambdaCDM(70,0.3,0.7)
+    return astropy.cosmology.z_at_value(cosmo.comoving_distance,
+        dist*astropy.units.Mpc
+    ).value
 
 
 
+def Hz(z, Om, h=None, Ol=None, Ok=0, Or=0, **kwargs):
+    """
+    Compute the Hubble parameter H(z) in units of km/s/Mpc.
 
+    If h is None, assumes h=1 (returns H(z) / h), yielding units km*h/(s*Mpc).
+    If h is provided, computes H(z) directly in km/s/Mpc.
+
+    Parameters:
+        z (float or array): Redshift(s)
+        Om (float): Matter density
+        h (float or None): Dimensionless Hubble constant (H0/100). Default: None
+        (Other parameters as in Ez2)
+
+    Returns:
+        float or array: H(z) in km/s/Mpc
+    """
+    if h is None:
+        h = 1.0
+    return 100 * h * np.sqrt(Ez2(z, Om, Or=Or, Ok=Ok, Ol=Ol))
+
+def Ez2(z, Om, Or=0, Ok=0, Ol=None, **kwargs):
+    """
+    Compute E(z)^2, the square of the dimensionless Hubble parameter,
+    for general FLRW cosmologies.
+
+    E(z)^2 = Or*(1 + z)^4 + Om*(1 + z)^3 + Ok*(1 + z)^2 + Ol
+
+    Parameters:
+        z (float or array): Redshift(s)
+        Om (float): Matter density parameter
+        Or (float): Radiation density parameter (default: 0)
+        Ok (float): Curvature density parameter (default: 0)
+        Ol (float or None): Dark energy density parameter. If None, inferred
+                            from flatness (1 - Om - Ok - Or)
+
+    Returns:
+        float or array: E(z)^2
+    """
+    if Ol is None:
+        Ol = 1.0 - Om - Ok - Or
+    return Or*(1 + z)**4 + Om*(1 + z)**3 + Ok*(1 + z)**2 + Ol
+
+def Omega_z(z,Om,Ol=None, Ok=0, Or=0,**kwargs):
+    """
+    Matter density parameter as a function of redshift
+    
+    Parameters:
+        z (float or array): Redshift(s)
+        Om (float): Present-day matter density
+        (Other parameters as in Ez2)
+    
+    Returns:
+        float or array: \Omega_m(z)
+    """
+    Ez2_val = Ez2(z, Om, Or=Or, Ok=Ok, Ol=Ol)
+    return (Om * (1 + z)**3 / Ez2_val)
+
+def f_lcdm(z, Om, gamma=0.55, Ol=None, Ok=0, Or=0, **kwargs):
+    """
+    Approximate the linear growth rate f(z) in ΛCDM cosmology.
+
+    f(z) ≈ [Ω_m(z)]^γ, where γ ≈ 0.55 for ΛCDM
+
+    Parameters:
+        z (float or array): Redshift(s)
+        Om (float): Present-day matter density
+        gamma (float): Growth index (default: 0.55)
+        (Other parameters as in Ez2)
+
+    Returns:
+        float or array: Linear growth rate f(z)
+    """
+    return (Omega_z(z,Om,Ol=Ol, Ok=Ok, Or=Or))**gamma
+
+def D1_CPT(z,Omz,Olz = None):
+    """
+    Carrol, Press, Turner (1992) approximation of the linear growth factor
+    
+    Parameters:
+        z (float or array): Redshift(s)
+        Omz (float or array): Omega matter at redshift z
+        Oml (float or array): Omega lambda at redshift z (if not given, 
+                              computed by assuming flat space)
+    
+    Returns:
+        float: un-normalised linear growth factor.
+    """
+    if Olz is None:
+        Olz = 1.0 - Omz
+    a = 1/(1 + z)
+    return a*(5*Omz/2)/(Omz**(4/7) - Olz + (1 + Omz/2)*(1 + Olz/70))
+
+def D1(z,Om,Ol=None,Ok = 0,Or = 0,normalised=True,**kwargs):
+    """
+    Linear growth factor, D_1(z)
+    
+    Parameters:
+        z (float or array): Redshift at which to compute D_1
+        Om (float): Omega matter value for the cosmology:
+        Ol (float): Omega lambda value (inferred if not given)
+        Ok (float): Curvature density (defaults to 0)
+        Or (float): Radiation density (defaults to 0)
+        normalised (bool): If True, returns D_1(z)/D_1(0)
+    """
+    if Ol is None:
+        Ol = 1 - Om - Ok - Or
+    Omz = Omega_z(z,Om,Ol=Ol, Ok=Ok, Or=Or)
+    Ez2_val = Ez2(z, Om, Or=Or, Ok=Ok, Ol=Ol)
+    Olz = Ol/Ez2_val
+    if normalised:
+        denom = D1_CPT(0,Om,Ol)
+    else:
+        denom = 1
+    return D1_CPT(z,Omz,Olz)/denom
 
 
 

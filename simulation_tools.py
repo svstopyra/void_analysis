@@ -655,11 +655,24 @@ def redshift_space_positions(snap,centre=None):
 
 # Convert to los co-ordinates:
 def get_los_pos(pos,los,boxsize):
+    """
+    Get the Line of Sight (LOS) co-ordinates of objects at given positions,
+    along the specified line of sight. Accounts for box periodicity.
+    
+    Parameters:
+        pos (N x 3 array): Positions of object in 3D space to 
+        los (3x1 array): Vector representing the line of sight
+        boxsize (float): Size of the periodic box
+    
+    Returns:
+        N x 2 array: First column gives distance parallel to the LOS, 
+                     second column distance perpendicular to the LOS.
+    """
     los_unit = los/np.sqrt(np.sum(los**2))
     pos_rel = snapedit.unwrap(pos - los,boxsize)
-    z = np.dot(pos_rel,los_unit)
-    d = np.sqrt(np.sum(pos_rel**2,1) - z**2)
-    return np.vstack((z,d)).T
+    s_par = np.dot(pos_rel,los_unit)
+    s_perp = np.sqrt(np.sum(pos_rel**2,1) - s_par**2)
+    return np.vstack((s_par,s_perp)).T
 
 # Get LOS positions, but only for the filtered voids:
 def get_los_pos_with_filter(centres,filt,hr_list,void_indices,positions,
