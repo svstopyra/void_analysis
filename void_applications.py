@@ -168,18 +168,6 @@ if recomputeCatalogues or (not os.path.isfile(data_folder2 + "cat300.p")):
         additionalFilters = snrFilter,verbose=False,\
         refineCentres=refineCentres,sortBy=sortBy,\
         enforceExclusive=enforceExclusive)
-    cat300test = catalogue.combinedCatalogue(
-        borg_snaps.snap_filenames,borg_snaps.snap_reverse_filenames,\
-        muOpt,rSearchOpt,rSphere,\
-        ahProps=borg_snaps.all_property_lists,hrList=borg_snaps["antihalos"],\
-        max_index=None,\
-        twoWayOnly=True,blockDuplicates=True,\
-        massRange = [m_unit*800,mMax],\
-        NWayMatch = NWayMatch,r_min=10,r_max=30,\
-        additionalFilters = snrFilter,verbose=False,\
-        refineCentres=refineCentres,sortBy=sortBy,\
-        enforceExclusive=enforceExclusive)
-    finalCat300test = cat300test.constructAntihaloCatalogue()
     finalCat300 = cat300.constructAntihaloCatalogue()
     tools.savePickle(cat300,data_folder2 + "cat300.p")
 else:
@@ -198,18 +186,6 @@ if recomputeCatalogues or (not os.path.isfile(data_folder2 + "cat300Rand.p")):
         additionalFilters = None,verbose=False,\
         refineCentres=refineCentres,sortBy=sortBy,\
         enforceExclusive=enforceExclusive)
-    cat300RandTest = catalogue.combinedCatalogue(
-        lcdm_snaps.snap_filenames,lcdm_snaps.snap_reverse_filenames,\
-        muOpt,rSearchOpt,rSphere,\
-        ahProps=lcdm_snaps.all_property_lists,hrList=lcdm_snaps["antihalos"],\
-        max_index=None,\
-        twoWayOnly=True,blockDuplicates=True,\
-        massRange = [m_unit*800,mMax],\
-        NWayMatch = NWayMatch,r_min=10,r_max=30,\
-        additionalFilters = None,verbose=False,\
-        refineCentres=refineCentres,sortBy=sortBy,\
-        enforceExclusive=enforceExclusive)
-    finalCat300RandTest = cat300RandTest.constructAntihaloCatalogue()
     finalCat300Rand = cat300Rand.constructAntihaloCatalogue()
     tools.savePickle(cat300Rand,data_folder2 + "cat300Rand.p")
 else:
@@ -329,19 +305,6 @@ from void_analysis.simulation_tools import redshift_space_positions
 from void_analysis.simulation_tools import get_los_pos_for_snapshot
 from void_analysis.simulation_tools import get_los_positions_for_all_catalogues
 from void_analysis.plot import draw_ellipse, plot_los_void_stack
-
-
-
-#-------------------------------------------------------------------------------
-
-
-
-#-------------------------------------------------------------------------------
-# COSMOLOGY CONNECTION
-
-
-
-
 
 
 #-------------------------------------------------------------------------------
