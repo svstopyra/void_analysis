@@ -351,6 +351,13 @@ los_lcdm_zspace_unconstrained = get_los_positions_for_all_catalogues(
 #    filter_list=voids_used_lcdm,dist_max=3,rmin=10,rmax=20,
 #    recompute=False,zspace=False,suffix=".lospos_all.p")
 
+los_lcdm_real_unconstrained = get_los_positions_for_all_catalogues(
+    lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],
+    lcdm_snaps["void_centres"],lcdm_snaps["void_radii"],all_particles=True,
+    filter_list=voids_used_lcdm_unconstrained,dist_max=3,rmin=10,rmax=20,
+    recompute=False,zspace=False,suffix=".lospos_all.p")
+
+
 # BORG LOS positions:
 halo_indices = cat300.get_final_catalogue(void_filter=True,short_list=False).T
 filter_list_borg = [halo_indices[ns] >= 0 for ns in range(0,borg_snaps.N)]
@@ -434,6 +441,14 @@ field_lcdm_uncon = \
     lcdm_snaps,lcdm_snaps["void_radii"],lcdm_snaps["void_centres"],
     spar_bins,sperp_bins,filter_list=voids_used_lcdm_unconstrained,
     recompute=False,los_pos = los_lcdm_zspace_unconstrained,
+    _recomputeData = recompute_fields)
+
+field_lcdm_uncon_real = \
+    tools.loadOrRecompute(data_folder + "lcdm_field_uncon_2d_real.p",
+    get_stacked_void_density_field,
+    lcdm_snaps,lcdm_snaps["void_radii"],lcdm_snaps["void_centres"],
+    spar_bins,sperp_bins,filter_list=voids_used_lcdm_unconstrained,
+    recompute=False,los_pos = los_lcdm_real_unconstrained,
     _recomputeData = recompute_fields)
 
 field_lcdm_1d_uncon, field_lcdm_1d_sigma_uncon = \
@@ -616,7 +631,7 @@ alphas_list = [sol.x for sol in sols]
 
 # Test plot:
 plot_velocity_model(
-    rbin_centres,ur_range,ur_mean,alphas_list,u_filter = u_filter,
+    rbin_centres,Delta_mean,ur_range,ur_mean,alphas_list,u_filter = u_filter,
     savename=figuresFolder + "velocity_model.pdf"
 )
 
@@ -723,6 +738,22 @@ plt.savefig(figuresFolder + "profile_fit_test.pdf")
 plt.show()
 
 
+plt.clf()
+model_profile = profile_modified_hamaus(ri_lcdm,*params_lcdm)
+prof_ratio = (field_lcdm_1d_uncon - 1 - model_profile)/model_profile
+prof_low = (field_lcdm_1d_uncon - 1 - field_lcdm_1d_sigma_uncon - model_profile)/model_profile
+prof_high = (field_lcdm_1d_uncon - 1 + field_lcdm_1d_sigma_uncon - model_profile)/model_profile
+plt.plot(
+    ri_lcdm,prof_ratio,color=seabornColormap[0]
+)
+plt.fill_between(ri_lcdm,prof_low,prof_high,alpha=0.5,color=seabornColormap[0])
+plt.xlim([0,np.sqrt(8)])
+plt.xlabel('$r/r_{\\mathrm{eff}}$')
+plt.ylabel('$(\\rho - \\rho_{\mathrm{model}})/\\rho_{\mathrm{model}}$')
+plt.savefig(figuresFolder + "1d_profile_ratio.pdf")
+plt.show()
+
+
 # Inference for LCDM mock (end-to-end test):
 
 # Inference for Borg catalogue:
@@ -782,6 +813,7 @@ Umap, good_eig = get_nonsingular_subspace(
 F_inv = None
 
 data_field = field_lcdm_uncon.flatten()
+data_field_real = field_lcdm_uncon_real.flatten()
 data_filter = np.ones(data_field.flatten().shape, dtype=bool)
 delta = profile_modified_hamaus
 Delta = integrated_profile_modified_hamaus
@@ -795,7 +827,7 @@ args = (data_field[data_filter],scoords[data_filter,:],
         delta,rho_real)
 kwargs = {'cholesky':True,'tabulate_inverse':True,
           'sample_epsilon':True,'theta_ranges':theta_ranges_epsilon,
-          'singular':False,'Umap':Umap,'good_eig':good_eig,'F_inv':F_inv,
+          'singular':False,'Umap':Umap,'good_eig':good_eig,'F_inv':None,
           'log_density':False,'infer_profile_args':True,
           'linearise_jacobian':False,
           'vel_model':void_los_velocity_ratio_semi_analytic,
@@ -817,8 +849,32 @@ data_field, scoords, inv_cov, z, Delta, delta, rho_real = args
  vel_model, dvel_dlogr_model, N_vel,data_filter,
  normalised,ntab,Om_fid,N_prof] = [kwargs[key] for key in kwargs]
 
+vel_params = vel_param_guess
+epsilon = 1.0
+s_par, s_perp = scoords[:, 0], scoords[:, 1]
+s_par_new, s_perp_new = geometry_correction(s_par,s_perp,epsilon)
+Delta_func = lambda r: Delta(r, *profile_params)
+delta_func = lambda r: delta(r, *profile_params)
+rho_func = lambda r: rho_real(r, *profile_params)
 
+z = 0
+Om_fid = 0.3111
+f1 = f_lcdm(z,Om_fid)
 
+F_inv = get_tabulated_inverse(
+    s_par_new,s_perp_new,ntab,Delta_func,f1,vel_params=vel_params,
+    **kwargs_left
+)
+
+model_field = z_space_profile(
+    s_par_new, s_perp_new, rho_func, Delta_func, delta_func,f1=f1,
+    z=z, Om=Om, epsilon=epsilon,apply_geometry=False,F_inv=F_inv,
+    vel_params=vel_params,**kwargs_left
+)
+
+diff_field = (data_field - model_field).reshape(20,20)
+diff_field_snr = np.abs(diff_field)/np.sqrt(np.diag(rho_cov_lcdm).reshape(20,20))
+diff_field_ratio = diff_field/model_field.reshape(20,20)
 
 # Wrapper allowing us to pass arbitrary arguments that won't be sampled over:
 def posterior_wrapper(theta,additional_args,*args,**kwargs):
@@ -828,6 +884,196 @@ def posterior_wrapper(theta,additional_args,*args,**kwargs):
 nll = lambda theta: -log_likelihood_aptest(theta,*args,**kwargs)
 mle_estimate = scipy.optimize.minimize(nll,initial_guess_eps,
                                        bounds=theta_ranges_epsilon)
+
+
+
+# Test at fixed epsilon:
+f1_range = np.linspace(0,1,101)
+log_like_f1 = np.array([nll(np.hstack([[1.0],[f1],profile_params,vel_param_guess]))
+                        for f1 in f1_range])
+
+plt.clf()
+plt.plot(f1_range,log_like_f1,color=seabornColormap[0],label="log likelihood")
+plt.axvline(f_lcdm(0,0.3111),linestyle=":",color='grey',label="$\\Lambda$-CDM value")
+plt.xlabel('$f_1$')
+plt.ylabel('Log Likelihood')
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "f1_plot.pdf")
+plt.show()
+
+# Plot difference field:
+plt.clf()
+im = plt.imshow(
+    diff_field_ratio,origin='lower',cmap='PuOr_r',vmin=-0.5,vmax=0.5,
+    extent=(0,2,0,2),aspect='auto'
+)
+plt.xlabel('$s_{\\perp}/R_{\\mathrm{eff}}$')
+plt.ylabel('$s_{\\parallel}/R_{\\mathrm{eff}}$')
+plt.colorbar(im,label="Fractional Difference from Model")
+plt.savefig(figuresFolder + "diff_ratio.pdf")
+plt.show()
+
+# Comparison real vs z_space:
+spar_centres = plot.binCentres(spar_bins)
+sperp_centres = plot.binCentres(sperp_bins)
+plot.plot_los_void_stack(\
+    field_lcdm_uncon_real,
+    sperp_centres,spar_centres,
+    cmap='Blues',vmin=0,vmax=1.0,
+    xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$',
+    ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$',fontfamily='serif',
+    title="Simulated field",colorbar=True,
+    colorbar_title = "Fractional Difference",
+    savename=figuresFolder + "real_field.pdf"
+)
+
+
+# Difference map:
+def plot_difference_map(field,theory_field,sperp_centres,spar_centres,
+                        vmin=-0.1,vmax=0.1,filename=None,
+                        title="Simulation - Theory Stack"):
+    plt.clf()
+    diff = field - theory_field.reshape(field.shape)
+    im = plot.plot_los_void_stack(\
+                diff/theory_field.reshape(field.shape),
+                sperp_centres,spar_centres,
+                cmap='PuOr_r',vmin=vmin,vmax=vmax,
+                xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$',
+                ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$',fontfamily='serif',
+                colorbar=True,colorbar_title = "Fractional Difference")
+    ax = plt.gca()
+    ax.set_title(title)
+    if filename is not None:
+        plt.savefig(filename)
+    plt.show()
+
+rcoords = np.sqrt(np.sum(scoords**2,1))
+real_field_estimate = rho_func(rcoords.reshape(20,20))
+
+r_par, r_perp = to_real_space(
+    s_par_new, s_perp_new, f1=f1, z=z, Om=Om,Delta=Delta_func,vel_params=vel_params,
+    **kwargs_left
+)
+
+jacobian = z_space_jacobian(
+    Delta_func, delta_func, r_par, r_perp, Om=Om,z=z,f1=f1,vel_params=vel_params,
+    **kwargs_left
+)
+
+dudr_hz_o1pz = get_dudr_hz_o1pz(
+    Delta_func,delta_func,r_par,r_perp,f1,vel_params=vel_params,**kwargs_left
+)
+
+jacobian_sims = field_lcdm_uncon/field_lcdm_uncon_real
+
+plt.clf()
+plt.plot(r_par.reshape(20,20)[:,0],s_par_new.reshape(20,20)[:,0])
+plt.xlabel("$r_{\\parallel}$")
+plt.ylabel("$s_{\\parallel}$")
+plt.savefig(figuresFolder + "r_par_vs_s_par.pdf")
+plt.show()
+
+plt.clf()
+plt.plot(
+    spar_centres,f1*((2/3)*Delta_func(spar_centres) - delta_func(spar_centres)),
+    label='Linear'
+)
+plt.plot(
+    spar_centres,dudr_hz_o1pz.reshape(20,20)[:,0],
+    label='Calculated'
+)
+plt.xlabel("$r_{\\parallel}$")
+plt.ylabel("$du_{\\parallel}/dr_{\\parallel}$")
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "derivative_factor.pdf")
+plt.show()
+
+
+plt.clf()
+plt.plot(
+    spar_centres,1/(1 + f1*((2/3)*Delta_func(spar_centres) - delta_func(spar_centres))) - 1,
+    label='Linear'
+)
+plt.plot(
+    spar_centres,1/(1 + dudr_hz_o1pz.reshape(20,20)[:,0]) - 1,
+    label='Calculated'
+)
+plt.plot(
+    spar_centres,field_lcdm_uncon[:,0]/field_lcdm_uncon_real[:,0] - 1,
+    label="Simulations"
+)
+plt.xlabel("$r_{\\parallel}$")
+plt.ylabel("Fractional Difference")
+plt.legend(frameon=False)
+plt.savefig(figuresFolder + "jacobian_mapping_density.pdf")
+plt.show()
+
+
+# Comparison real vs z_space:
+spar_centres = plot.binCentres(spar_bins)
+sperp_centres = plot.binCentres(sperp_bins)
+plot.plot_los_void_stack(\
+    field_lcdm_uncon_real,
+    sperp_centres,spar_centres,
+    cmap='Blues',vmin=0,vmax=1.0,
+    xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$',
+    ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$',fontfamily='serif',
+    title="Simulated field",colorbar=True,
+    colorbar_title = "Fractional Difference",
+    savename=figuresFolder + "real_field.pdf"
+)
+plot.plot_los_void_stack(\
+    real_field_estimate,
+    sperp_centres,spar_centres,
+    cmap='Blues',vmin=0,vmax=1.0,
+    xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$',
+    ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$',fontfamily='serif',
+    title="Simulated field",colorbar=True,
+    colorbar_title = "Fractional Difference",
+    savename=figuresFolder + "real_field_estimate.pdf"
+)
+
+plot_difference_map(
+    field_lcdm_uncon_real,real_field_estimate,sperp_centres,spar_centres,
+    vmin=-0.1,vmax=0.1,filename=figuresFolder + "real_field_difference.pdf",
+    title="Stacked - Expected"
+)
+
+plot_difference_map(
+    field_lcdm_uncon,field_lcdm_uncon_real,sperp_centres,spar_centres,
+    vmin=-0.4,vmax=0.4,filename=figuresFolder + "zspace_vs_real_field.pdf",
+    title="Redshift-space - Real-space"
+)
+
+diff_ratio_sims = (field_lcdm_uncon - field_lcdm_uncon_real)/field_lcdm_uncon_real
+diff_ratio_theory = (model_field.reshape(20,20) - real_field_estimate)/real_field_estimate
+
+plot_difference_map(
+    model_field.reshape(20,20),real_field_estimate,sperp_centres,spar_centres,
+    vmin=-0.4,vmax=0.4,filename=figuresFolder + "zspace_vs_real_field_theory.pdf",
+    title="Redshift-space - Real-space (theory)"
+)
+
+plot.plot_los_void_stack(\
+    jacobian.reshape(20,20),
+    sperp_centres,spar_centres,
+    cmap='Blues',vmin=0.8,vmax=1.2,
+    xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$',
+    ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$',fontfamily='serif',
+    title="Simulated field",colorbar=True,
+    colorbar_title = "Jacobian Factor",
+    savename=figuresFolder + "jacobian.pdf"
+)
+plot.plot_los_void_stack(\
+    jacobian_sims,
+    sperp_centres,spar_centres,
+    cmap='Blues',vmin=0.8,vmax=1.2,
+    xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$',
+    ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$',fontfamily='serif',
+    title="Simulated field",colorbar=True,
+    colorbar_title = "Jacobian Factor",
+    savename=figuresFolder + "jacobian_sims.pdf"
+)
 
 
 plt.clf()
@@ -987,9 +1233,12 @@ plt.show()
 def get_theory_field(theta,spar_bins,sperp_bins,
                      Delta=integrated_profile_modified_hamaus,
                      delta=profile_modified_hamaus,ntab=10,
-                     z=0.0225,Om = 0.3111):
+                     z=0,Om = 0.3111,N_prof = 6,**kwargs):
     # Parse arguments:
-    epsilon, f, *profile_args = theta
+    epsilon, f1 = theta[0:2]
+    profile_params = theta[2:(2 + N_prof)]
+    N_vel = len(theta) - N_prof - 2
+    vel_params = None if N_vel <= 0 else theta[(2 + N_prof):(2 + N_prof + N_vel)]
     # Co-ordinate grid:
     scoords = generate_scoord_grid(sperp_bins, spar_bins)
     s_par = scoords[:,0]
@@ -1001,22 +1250,15 @@ def get_theory_field(theta,spar_bins,sperp_bins,
     delta_func = lambda r: delta(r,*profile_args)
     rho_real = lambda r: delta_func(r) + 1.0
     # Precomputed inverse function:
-    svals = np.linspace(np.min(s_par_new),np.max(s_par_new),ntab)
-    rperp_vals = np.linspace(np.min(s_perp_new),np.max(s_perp_new),ntab)
-    rvals = np.zeros((ntab,ntab))
-    for i in range(0,ntab):
-        for j in range(0,ntab):
-            F = (lambda r: r - r*(f/3)*\
-                Delta_func(np.sqrt(r**2 + rperp_vals[i]**2)) \
-                - svals[j])
-            rvals[i,j] = scipy.optimize.fsolve(F,svals[j])
-    F_inv = lambda x, y, z: scipy.interpolate.interpn(
-                                (rperp_vals,svals),rvals,
-                                np.vstack((x,y)).T,method='cubic')
-    theory_val = z_space_profile(s_par_new,s_perp_new,
-                                 rho_real,
-                                 z,Om,Delta_func,delta_func,f=f,
-                                 F_inv=F_inv)
+    F_inv = get_tabulated_inverse(
+        s_par_new,s_perp_new,ntab,Delta_func,f1,vel_params=vel_params,
+        **kwargs
+    )
+    theory_val = z_space_profile(
+        s_par_new, s_perp_new, rho_real, Delta_func, delta_func,f1=f1,
+        z=z, Om=Om, epsilon=epsilon,apply_geometry=False,F_inv=F_inv,
+        vel_params=vel_params,**kwargs
+    )
     return theory_val
 
 def get_diff_vector(N,i):
@@ -1078,23 +1320,7 @@ theory_field_init = get_theory_field(initial_guess_eps,spar_bins,sperp_bins)
 filename = figuresFolder + "theory_vs_simulation_difference_map.pdf"
 
 
-# Difference map:
-def plot_difference_map(field,theory_field,sperp_centres,spar_centres,
-                        vmin=-0.1,vmax=0.1,filename=None):
-    plt.clf()
-    diff = field - theory_field.reshape(field.shape)
-    im = plot.plot_los_void_stack(\
-                diff/theory_field.reshape(field.shape),
-                sperp_centres,spar_centres,
-                cmap='PuOr_r',vmin=vmin,vmax=vmax,
-                xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$',
-                ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$',fontfamily='serif',
-                colorbar=True,colorbar_title = "Fractional Difference")
-    ax = plt.gca()
-    ax.set_title("Simulation - Theory Stack")
-    if filename is not None:
-        plt.savefig(filename)
-    plt.show()
+
 
 plot_difference_map(
     field_lcdm_uncon,theory_field_init,sperp_centres,spar_centres,

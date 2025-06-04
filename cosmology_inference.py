@@ -5230,6 +5230,7 @@ def plot_psi_true(
 
 def plot_velocity_model(
         rbin_centres,
+        Delta_mean,
         ur_range,
         ur_mean,
         alphas_list,
@@ -5256,6 +5257,7 @@ def plot_velocity_model(
         rbin_centres[u_filter],sim_low,sim_high,
         color=seabornColormap[0],label="$Simulation, 68\\% interval$",alpha=0.5
     )
+    u = 1 - np.cbrt(1 + Delta_mean)
     for k in range(len(alphas_list)):
         model_val = semi_analytic_model(
             u[u_filter],alphas_list[k],z=z,Om=Om
