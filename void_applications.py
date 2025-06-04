@@ -477,7 +477,7 @@ ur_profile = np.array([
     for ind in indices
 ])
 
-ur_profile_error = ur_profile = np.array([
+ur_profile_error = np.array([
     np.sqrt(
         stacking.weightedVariance(ur_norm[ind],cell_vols[indices_list][ind]) *
         np.sum(cell_vols[indices_list][ind]**2)) 
@@ -616,7 +616,7 @@ alphas_list = [sol.x for sol in sols]
 
 # Test plot:
 plot_velocity_model(
-    ur_range,ur_mean,alphas_list,u_filter = u_filter,
+    rbin_centres,ur_range,ur_mean,alphas_list,u_filter = u_filter,
     savename=figuresFolder + "velocity_model.pdf"
 )
 

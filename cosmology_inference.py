@@ -1823,7 +1823,7 @@ def get_los_velocities_for_void(void_centre,void_radius,snap,rbins,cell_vols=Non
     if observer is None:
         # assume observer is in the box centre:
         observer = np.array([boxsize/2]*3)
-    los_vector = get_unit_vector(
+    los_vector = tools.get_unit_vector(
         snapedit.unwrap(void_centre - observer,boxsize)
     )
     if tree is None:
@@ -5229,6 +5229,7 @@ def plot_psi_true(
     plt.show()
 
 def plot_velocity_model(
+        rbin_centres,
         ur_range,
         ur_mean,
         alphas_list,
