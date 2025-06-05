@@ -1959,7 +1959,7 @@ def void_los_velocity_ratio_derivative_semi_analytic(r,Delta,delta,f1,params=Non
     sum_term = np.sum([n*alphas[n-2]*Psi_r**(n-1) for n in range(2,N+1)],0)
     return f1*(1.0 + sum_term)*dPsi_r_dlogr
 
-def void_los_velocity(z, Delta, r_par, r_perp, Om, f=None,
+def void_los_velocity(z, Delta, r_par, r_perp, Om, f1=None,h=1,
                       vel_model = void_los_velocity_ratio_1lpt,
                       vel_params=None,**kwargs):
     """
@@ -1973,6 +1973,8 @@ def void_los_velocity(z, Delta, r_par, r_perp, Om, f=None,
         r_perp (float or array): Transverse distance from void center
         Om (float): Matter density
         f1 (float or None): Growth rate. If None, computed via f_lcdm()
+        h (float): Dimensionless Hubble rate. Set to h = 1 if using Mpc/h
+                   for distances.                   
         vel_model (function): function which returns the dimensionless 
                             velocity ratio, (1+z)*v/(H(z)*r) at radius r. Should
                             have r, Delta, and f1 as parameters, but additional
@@ -2077,15 +2079,16 @@ def z_space_jacobian(Delta, delta, r_par, r_perp, f1=None, z = 0, Om=0.3,
     """
     if f1 is None:
         f1 = f_lcdm(z, Om, **kwargs)
-    dudr_hz_o1pz = get_dudr_hz_o1pz(Delta,delta,r_par,r_perp,f1,vel_params=vel_params,
-                                    **kwargs)
+    dudr_hz_o1pz = get_dudr_hz_o1pz(
+        Delta,delta,r_par,r_perp,f1,vel_params=vel_params,**kwargs
+    )
     if linearise_jacobian:
         return 1.0 - dudr_hz_o1pz
     else:
         return 1.0 / (1.0 + dudr_hz_o1pz)
 
 
-def to_z_space(r_par, r_perp, z, Om, Delta=None, u_par=None, f1=None, 
+def to_z_space(r_par, r_perp, z=0, Om=0.3, Delta=None, u_par=None, f1=None, 
                vel_model = void_los_velocity_ratio_1lpt,**kwargs):
     """
     Transform real-space LOS coordinates to redshift space.
@@ -2113,6 +2116,7 @@ def to_z_space(r_par, r_perp, z, Om, Delta=None, u_par=None, f1=None,
         list: [s_par, s_perp] — redshift-space coordinates
     """
     if u_par is None:
+        r = np.sqrt(r_par**2 + r_perp**2)
         u_par = vel_model(r, Delta, f1, **kwargs) * r_par
     s_par = r_par + u_par
     s_perp = r_perp

@@ -197,9 +197,17 @@ rLower = 10
 rUpper = 20
 radBins = np.linspace(rLower,rUpper,nBinEdges)
 cat300.set_filter_from_random_catalogue(cat300Rand,radBins,r_min=10,r_max=25,
-                                        r_sphere=135)
+                                        r_sphere=150)
 
+# Save catalogue information:
+all_cents = cat300.getAllCentres(void_filter=True)
+mean_cent = np.nanmean(all_cents,0)
+std_cent = np.nanstd(all_cents,0)
+all_rad = cat300.getAllProperties("radii",void_filter=True)
+cat_rad = np.nanmean(all_rad,1)
+cat_rad_err = np.nanstd(all_rad,1)
 
+np.savez("cat300_properties.npz",mean_cent,std_cent,cat_rad,cat_rad_err)
 
 #-------------------------------------------------------------------------------
 # CATALOGUE DATA:
@@ -456,6 +464,31 @@ field_lcdm_1d_uncon, field_lcdm_1d_sigma_uncon = \
     get_1d_real_space_field,
     lcdm_snaps,filter_list=voids_used_lcdm_unconstrained,
     _recomputeData = recompute_fields)
+
+# Individual sample fields:
+field_lcdm_uncon_all = [
+    get_stacked_void_density_field(
+        lcdm_snaps,[lcdm_snaps["void_radii"][k]],
+        [lcdm_snaps["void_centres"][k]],
+        spar_bins,sperp_bins,filter_list=[voids_used_lcdm_unconstrained[k]],
+        recompute=False,los_pos = [los_lcdm_zspace_unconstrained[k]],
+        _recomputeData = recompute_fields
+    )
+    for k in range(0,20)
+]
+
+field_lcdm_uncon_real_all = [
+    get_stacked_void_density_field(
+        lcdm_snaps,[lcdm_snaps["void_radii"][k]],
+        [lcdm_snaps["void_centres"][k]],
+        spar_bins,sperp_bins,filter_list=[voids_used_lcdm_unconstrained[k]],
+        recompute=False,los_pos = [los_lcdm_real_unconstrained[k]],
+        _recomputeData = recompute_fields
+    )
+    for k in range(0,20)
+]
+
+
 
 #-------------------------------------------------------------------------------
 # VELOCITY DISTRIBUTION TEST
@@ -966,6 +999,12 @@ dudr_hz_o1pz = get_dudr_hz_o1pz(
 
 jacobian_sims = field_lcdm_uncon/field_lcdm_uncon_real
 
+all_jacobians_sims = [
+    field_z/field_r 
+    for field_z, field_r in zip(field_lcdm_uncon_all,field_lcdm_uncon_real_all)
+]
+
+
 plt.clf()
 plt.plot(r_par.reshape(20,20)[:,0],s_par_new.reshape(20,20)[:,0])
 plt.xlabel("$r_{\\parallel}$")
@@ -992,15 +1031,21 @@ plt.show()
 plt.clf()
 plt.plot(
     spar_centres,1/(1 + f1*((2/3)*Delta_func(spar_centres) - delta_func(spar_centres))) - 1,
-    label='Linear'
+    label='Linear',linestyle='-',color=seabornColormap[0]
 )
 plt.plot(
     spar_centres,1/(1 + dudr_hz_o1pz.reshape(20,20)[:,0]) - 1,
-    label='Calculated'
+    label='Calculated',linestyle='-',color=seabornColormap[1]
 )
+for k in range(0,20):
+    plt.plot(
+        spar_centres,all_jacobians_sims[k][:,0] - 1,
+        linestyle=':',color=seabornColormap[2]
+    )
+
 plt.plot(
     spar_centres,field_lcdm_uncon[:,0]/field_lcdm_uncon_real[:,0] - 1,
-    label="Simulations"
+    label="Simulations",linestyle='-',color=seabornColormap[2]
 )
 plt.xlabel("$r_{\\parallel}$")
 plt.ylabel("Fractional Difference")
@@ -1075,6 +1120,41 @@ plot.plot_los_void_stack(\
     savename=figuresFolder + "jacobian_sims.pdf"
 )
 
+# All jacobians:
+plt.clf()
+nrows = 4
+ncols = 5
+fig, ax = plt.subplots(nrows,ncols)
+for k in range(0,20):
+    i = int(np.floor(k/ncols))
+    j = k - ncols*i
+    axij = ax[i,j]
+    im = plot.plot_los_void_stack(
+        all_jacobians_sims[k],
+        sperp_centres,spar_centres,ax=axij,
+        cmap='Blues',vmin=0.8,vmax=1.2,
+        xlabel = '$s_{\\perp}/R_{\\mathrm{eff}}$',
+        ylabel = '$s_{\\parallel}/R_{\\mathrm{eff}}$',fontfamily='serif',
+        title=None,colorbar=False,
+        colorbar_title = "Jacobian Factor",
+    )
+    if j > 0:
+        axij.yaxis.label.set_visible(False)
+        axij.yaxis.set_major_formatter(NullFormatter())
+        axij.yaxis.set_minor_formatter(NullFormatter())
+    if i < nrows - 1:
+        axij.xaxis.label.set_visible(False)
+        axij.xaxis.set_major_formatter(NullFormatter())
+        axij.xaxis.set_minor_formatter(NullFormatter())
+
+plt.subplots_adjust(wspace=0.0,hspace=0.025,top=0.97,bottom=0.1)
+fig.colorbar(
+    im, ax=ax.ravel().tolist(),shrink=0.9,
+    label='Jacobian factor'
+)
+plt.suptitle("Jacobians for 20 LCDM simulations")
+plt.savefig(figuresFolder + "all_jacobians.pdf")
+plt.show()
 
 plt.clf()
 rrange_lcdm = np.linspace(0,10,1000)
