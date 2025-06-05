@@ -5,7 +5,7 @@ import astropy
 import numexpr as ne
 from .halos import massCentreAboutPoint
 import scipy
-from . import tools, snapedit, context, stacking
+from . import tools, snapedit, context, stacking, cosmology
 import pickle
 import os
 import multiprocessing as mp
@@ -644,14 +644,14 @@ def redshift_space_positions(snap,centre=None):
     a = snap.properties['a']
     z = 1.0/a - 1.0
     Om = snap.properties['omegaM0']
-    Ha = Hz(z,Om,h=1) # Hubble rate / h
+    Ha = cosmology.Hz(z,Om,h=1) # Hubble rate / h
     r = snapedit.unwrap(snap['pos'] - centre,boxsize)
     r2 = np.sum(r**2,1)
     vr = np.sum(snap['vel']*r,1)
     # Assume gadget units:
-    gamma = (np.sqrt(a)/Ha)/pynbody.units.Unit("km a**-1/2 s**-1 Mpc**-1 h")
+    gamma = (np.sqrt(a)/Ha)
     return snapedit.wrap(
-        (1.0 + (gamma*vr/r2).in_units("1.0"))[:,None]*r + centre,boxsize)
+        (1.0 + gamma*vr/r2)[:,None]*r + centre,boxsize)
 
 # Convert to los co-ordinates:
 def get_los_pos(pos,los,boxsize):
