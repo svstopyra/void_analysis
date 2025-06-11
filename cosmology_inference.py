@@ -58,6 +58,8 @@ def get_antihalo_properties(snap, file_suffix="AHproperties",
             str: Filename for later loading.
         Else:
             h5py.File or list: Anti-halo data loaded from file.
+    Tests:
+        No tests implemented
     """
     filename = snap.filename + "." + file_suffix + default
     filename_old = snap.filename + "." + file_suffix + ".p"
@@ -93,6 +95,9 @@ class SnapshotGroup:
     These transformations are controlled by the `swapXZ` and `reverse` flags. 
     Their default values assume a particular snapshot orientation, but users
     should verify and adjust these flags if working with different conventions.
+    
+    Tests:
+        No tests implemented
     """
 
     def __init__(self, snap_list, snap_list_reverse, low_memory_mode=True,
@@ -269,144 +274,32 @@ class SnapshotGroup:
 # COSMOLOGY FUNCTIONS
 
 
-
-def get_bin_edges_from_centres(bin_centres,edge_1 = None):
-    """
-    Computes the edges of the bins for a given list of bin centres. First
-    element is computed assuming equally spaced bins, but can be over-ridden if
-    this doesn't hold.
-    
-    Parameters:
-        bin_centres (array): centres of the bins
-        edge_1 (float or None): first bin edge. If None, computed assuming equal
-                                spacing.
-
-    Returns:
-        array: Edges of the bins.
-    """
-    diffs = np.diff(bin_centres)
-    bin_edges = np.zeros(len(bin_centres) + 1)
-    if edge_1 is None:
-        # Assume equal spacing to get the first edge:
-        edge_1 = (3/2)*bin_centres[0] - bin_centres[1]/2
-    bin_edges[0] = edge_1
-    for k in range(len(bin_centres)):
-        bin_edges[k+1] = 2*bin_centres[k] - bin_edges[k]
-    return bin_edges
-
-def estimate_delta_from_Delta(r,Delta):
-    """
-    Given a cumulative density, Delta(r), at points r, obtain the local
-    density.
-    
-    Parameters:
-        r (array): Points at which Delta is known.
-        Delta (array): Delta at r
-    
-    Returns:
-        array: delta(r), where Delta(r) = (3/r)\int_{0}^{r}\delta(r)r^2dr
-    """
-    rbins = get_bin_edges_from_centres(r,edge_1 = 0)
-    Delta_diff = np.diff(rbins)
-    result = np.zeros(Delta.shape)
-    result[1:] = (r[0:-1]/3)*(Delta[1:] - Delta[0:-1])/Delta_diff[1:]
-    result[0] = Delta[0]
-    return result
-
-def get_profile_derivative(r,Delta,order,delta=None,deltap = None,deltapp=None,
-                           params = None,epsilon = 1e-10):
-    """
-    Computes the derivative of the function Delta(r), with respect to r.
-    
-    Parameters:
-        r (float or array): Value of r at which to evaluate the derivative.
-        Delta(float, array, or function): If float or array, the values of the 
-                                          function at r (must be same type/size
-                                          as r). If a function, must take r
-                                          as an argument.
-        order (int): Order of the derivative to compute
-        delta (float, array, or function): Local shell density. 
-                                           Delta=(3/r^3)\int_{0}^{r}\delta(r)r^2dr
-                                           Estimated if not known. 
-        deltap (float, array, or function): 1st derivative of delta
-        deltapp (float, array, or function): 2nd derivative of delta
-
-    Returns:
-        float or array: Derivative of Delta at requested order.
-    """
-    if order not in [0,1,2,3]:
-        raise Exception("Derivative order not implemented or invalid.")
-    Delta_vals = Delta(r) if callable(Delta) else Delta
-    # 0th derivative:
-    if order == 0:
-        return Delta_vals
-    # 1st derivative:
-    if delta is None:
-        # Obtain a profile model:
-        if params is None:
-            params = get_profile_parameters_fixed(
-                r,Delta_vals,0.05*Delta_vals,
-                model = integrated_profile_modified_hamaus
-            )
-        delta = lambda r: profile_modified_hamaus(r,*params)
-    delta_vals = delta(r)
-    if order == 1:
-        # Carefully treat r = 0 case:
-        return -3*ratio_where_finite(Delta_vals - delta_vals,r,
-                                     undefined_value = 0.0)
-    # 2nd derivative:
-    if deltap is None:
-        if params is None:
-            params = get_profile_parameters_fixed(
-                r,Delta_vals,0.05*Delta_vals,
-                model = integrated_profile_modified_hamaus
-            )
-        deltap = lambda r: profile_modified_hamaus_derivative(r,1,*params)
-    if deltapp is None:
-        if params is None:
-            params = get_profile_parameters_fixed(
-                r,Delta_vals,0.05*Delta_vals,
-                model = integrated_profile_modified_hamaus
-            )
-        deltapp = lambda r: profile_modified_hamaus_derivative(r,2,*params)
-    deltap_vals = deltap(r)
-    if order == 2:
-        # Carefully treat r = 0 case:
-        if deltap(0) == 0:
-            return (12*ratio_where_finite(Delta_vals - delta_vals,r**2,
-                                          undefined_value = (3/5)*deltapp(0)) 
-                    + 3*ratio_where_finite(deltap_vals,r,
-                                           undefined_value = deltapp(0)))
-        else:
-            return (12*ratio_where_finite(Delta_vals - delta_vals,r**2,
-                                          undefined_value = np.inf) 
-                    + 3*ratio_where_finite(deltap_vals,r,
-                                           undefined_value = np.inf))
-    # 3rd derivative:
-    deltapp_vals = deltapp(r)
-    if order == 3:
-        # Carefully treat r = 0 case:
-        if deltapp(0) == 0:
-            # Rough regularisation:
-            Delta_vals = Delta(r + epsilon)
-            delta_vals = delta(r + epsilon)
-            deltap_vals = deltap(r + epsilon)
-            deltapp_vals = deltapp(r + epsilon)
-            return (-(60/(r + epsilon)**3)*(Delta_vals - delta_vals) 
-                    -15*deltap_vals/(r + epslilon)**2
-                    + 3*deltapp_vals/(r + epsilon))
-        else:
-            return (-60*ratio_where_finite(Delta_vals - delta_vals,r**3,
-                                           undefined_value=np.inf)
-                    -15*ratio_where_finite(deltap_vals,r**2,
-                                           undefined_value=np.inf)
-                    +4*ratio_where_finite(deltapp_vals,r,
-                                          undefined_value=np.inf))
-
 def get_D_coefficients(Om,order=1,n2 = -1/143,n3a = -4/275,
                        n3b = -269/17875,n4a = 0.0,n4b=0.0,n4c = 0.0,n4d = 0.0,
                        n5a=0.0,n5b=0.0,n5c=0.0,n5d=0.0,n5e=0.0,n5f=0.0,
                        n5g=0.0,n5h=0.0,n5i=0.0,return_all = False,**kwargs):
+    """
+    Compute the coefficients of the time-dependent parts of the LPT solutions
+    of different orders. Coefficients are computed by solving the 
+    Einstein-de-Sitter (EdS) universe case which is analytic. Other solutions
+    are typically proportional to this with some power of Omega
+    
+    Parameters:
+        Om (float): Matter density parameter at the relevant redshift.
+        order (int): Order of Lagrangian Perturbation Theory
+        nNx (float): Exponent of Om(z)^nNx for order N, solution x (alphabetic).
+        reuturn_all (bool): If true, return all coefficient up to the specified
+                            order. Otherwise, return only coefficients of the
+                            specified order.
+    
+    Returns:
+        List of floats: giving the solutions DNx(t) for each spatial solution
+                        in LPT.
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Regression test: test_get_D_coefficients
+    """
     if order not in [1,2,3,4,5]:
         raise Exception("Perturbation order invalid or not implemented.")
     if order >= 1:
@@ -485,6 +378,23 @@ def get_D_coefficients(Om,order=1,n2 = -1/143,n3a = -4/275,
 
 def get_ic_polynomial_coefficients(order,Om=0.3,n2 = -1/143,n3a = -4/275,
                           n3b = -269/17875,**kwargs):
+    """
+    Computes the coefficients of the initial conditions polynomial for LPT, 
+    under the assumption that we use a perturbative estimate for the 
+    final density.
+    
+    Parameters:
+        order (int): Order of LPT
+        Om (float): Matter density parameter
+        nNx (float): Exponent of Om(z)^nNx for order N, solution x (alphabetic).
+    
+    Returns:
+        A1...AN (floats): Coefficients of the initial conditions polynomial
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Regression test: test_get_ic_polynomial_coefficients
+    """
     if order not in [1,2,3,4,5]:
         raise Exception("Perturbation order invalid or not implemented.")
     coeffs = get_D_coefficients(
@@ -520,6 +430,23 @@ def get_ic_polynomial_coefficients(order,Om=0.3,n2 = -1/143,n3a = -4/275,
 
 def get_nonperturbative_polynomial_coefficients(
         order,Om=0.3,n2 = -1/143,n3a = -4/275,n3b = -269/17875,**kwargs):
+    """
+    Computed initial conditions polynomial coefficients, using the
+    non-perturbative expression for the final density in the spherically
+    symmetric case.
+    
+    Parameters:
+        order (int): Order of LPT
+        Om (float): Matter density parameter
+        nNx (float): Exponent of Om(z)^nNx for order N, solution x (alphabetic).
+    
+    Returns:
+        B1...BN (floats): Coefficients of the initial conditions polynomial
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Regression test: test_get_nonperturbative_polynomial_coefficients
+    """
     if order not in [1,2,3,4,5]:
         raise Exception("Perturbation order invalid or not implemented.")
     coeffs = get_D_coefficients(
@@ -554,6 +481,24 @@ def get_nonperturbative_polynomial_coefficients(
 
 def get_taylor_polynomial_coefficients(
         order,Om=0.3,n2 = -1/143,n3a = -4/275,n3b = -269/17875,**kwargs):
+    """
+    Computed initial conditions polynomial coefficients, using a Taylor-expanded
+    expression for the density field. This turned out not to work so well
+    because the Taylor expansion converges very slowly, so
+    should probably be avoided, but we retain it here for future use.
+    
+    Parameters:
+        order (int): Order of LPT
+        Om (float): Matter density parameter
+        nNx (float): Exponent of Om(z)^nNx for order N, solution x (alphabetic).
+    
+    Returns:
+        B1...BN (floats): Coefficients of the initial conditions polynomial
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Regression test: test_get_taylor_polynomial_coefficients
+    """
     if order not in [1,2,3,4,5]:
         raise Exception("Perturbation order invalid or not implemented.")
     coeffs = get_D_coefficients(
@@ -591,6 +536,33 @@ def get_taylor_polynomial_coefficients(
 
 def find_suitable_solver_bounds(f,RHS,D10,taylor_expand=True,iter_max = 10,
                                 uupp = None):
+    """
+    Finds bounds for the solution of f = RHS. Used when solving the initial
+    conditions polynomial, so that we can guarantee finding a solution 
+    with brents method.
+    
+    Parameters:
+        f (function): Function we wish to solve
+        RHS (float or array): Values for which we wish to solve f = RHS.
+        D10 (float): Value of the D1 function.
+        taylor_expand (bool): If True, using a taylor-expanded version of the 
+                              density for f. Otherwise, uses the 
+                              non-perturbative expression.
+        iter_max(int): Maximum number of iterations before we give up and throw
+                       an error. Exceeding this probably means no solution 
+                       exists, which typically only happens if the polynomial
+                       was incorrectly computed.
+        uupp (float or None): Existing upper bound. If None, will attemtp to
+                              find one. Otherwise, this will be used and the
+                              function simply finds a lower bound only.
+    
+    Returns:
+        ulow (float), uupp (float): Lower and upper bounds for the solution.
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Unit test: test_find_suitable_solver_bounds_valid
+    """
     RHS_max = np.max(RHS)
     if taylor_expand:
         if uupp is None:
@@ -644,6 +616,10 @@ def get_initial_condition_non_perturbative(Delta,order=1,Om=0.3,n2 = -1/143,
                               Psi_r/q, avoiding inconsistency problems.
     Returns:
         float or array: Solution for S_1r/r at this value of Delta
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Regression test: test_get_initial_condition_non_perturbative
     """
     if order not in [1,2,3,4,5]:
         raise Exception("Perturbation order invalid or not implemented.")
@@ -839,6 +815,10 @@ def get_initial_condition(Delta,order=1,Om=0.3,n2 = -1/143,n3a = -4/275,
                                    nan values as the solution.
     Returns:
         float or array: Solution for S_1r/r at this value of Delta
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Regression test: test_get_initial_condition
     """
     if order not in [1,2,3,4,5]:
         raise Exception("Perturbation order invalid or not implemented.")
@@ -1021,6 +1001,10 @@ def get_S1r(Delta_r,rval,Om,order=1,n2 = -1/143,n3a = -4/275,n3b = -269/17875,
                               the non-perturbative relationship.
     Returns:
         float or array: Value of S_{1r}
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Regression test: test_get_S1r
     """
     D10 = D1(0,Om,**kwargs)
     # Solve for the initial conditions, possibly numerically:
@@ -1068,6 +1052,10 @@ def get_S2r(Delta_r,rval,Om,n2 = -1/143,n3a = -4/275,n3b = -269/17875,order=2,
                               the non-perturbative relationship.
     Returns:
         float or array: Value of S_{2r}
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Regression test: test_get_S2r
     """
     # Solve for initial conditions (numerically if 3rd order):
     if S1r is None:
@@ -1092,6 +1080,7 @@ def get_S2r(Delta_r,rval,Om,n2 = -1/143,n3a = -4/275,n3b = -269/17875,order=2,
     return S2r
 
 def get_S3r(Delta_r,rval,Om,order=3,perturbative_ics = False,
+            n2 = -1/143,n3a = -4/275,n3b = -269/17875,
             S1r = None,taylor_expand=True,**kwargs):
     """
     Compute the spatial part of the third order Lagrangian perturbation, by 
@@ -1118,6 +1107,10 @@ def get_S3r(Delta_r,rval,Om,order=3,perturbative_ics = False,
     Returns:
         S3ar (float or array): Value of S_{3ar}
         S3br (float or array): Value of S_{3br}
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Regression test: test_get_S3r
     """
     D10 = D1(0,Om,**kwargs)
     if S1r is None:
@@ -1137,7 +1130,7 @@ def get_S3r(Delta_r,rval,Om,order=3,perturbative_ics = False,
     return S3ar, S3br
 
 def get_S4r(Delta_r,rval,Om,order=4,perturbative_ics = False,taylor_expand=True,
-            S1r = None,**kwargs):
+            S1r = None,n2 = -1/143,n3a = -4/275,n3b = -269/17875,**kwargs):
     """
     Compute the spatial part of the fourth order Lagrangian perturbation, by 
     matching to the provided final density field.
@@ -1164,6 +1157,10 @@ def get_S4r(Delta_r,rval,Om,order=4,perturbative_ics = False,taylor_expand=True,
         S4br (float or array): Value of S_{4br}
         S4cr (float or array): Value of S_{4cr}
         S4dr (float or array): Value of S_{4dr}
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Regression test: test_get_S4r
     """
     D10 = D1(0,Om,**kwargs)
     if S1r is None:
@@ -1183,7 +1180,8 @@ def get_S4r(Delta_r,rval,Om,order=4,perturbative_ics = False,taylor_expand=True,
     return S4ar, S4br, S4cr, S4dr
 
 def get_S5r(Delta_r,rval,Om,order=5,perturbative_ics = False,
-            taylor_expand=True,S1r = None,**kwargs):
+            taylor_expand=True,S1r = None,
+            n2 = -1/143,n3a = -4/275,n3b = -269/17875,**kwargs):
     """
     Compute the spatial part of the fifth order Lagrangian perturbation, by 
     matching to the provided final density field.
@@ -1216,6 +1214,10 @@ def get_S5r(Delta_r,rval,Om,order=5,perturbative_ics = False,
         S5dr (float or array): Value of S_{5dr}
         S5er (float or array): Value of S_{5er}
         S5fr (float or array): Value of S_{5fr}
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Regression test: test_get_S5r
     """
     D10 = D1(0,Om,**kwargs)
     if S1r is None:
@@ -1256,6 +1258,10 @@ def get_psi_n_r(Delta_r,rval,n,z=0,Om=0.3,order=None,n2 = -1/143,
 
     Return:
         float or array: Correction to the displacement field of order n
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Regression test: test_get_psi_n_r
     """
     order_list = []
     if order is None:
@@ -1348,6 +1354,10 @@ def get_delta_lpt(Delta_r,z=0,Om=0.3,order=1,return_all=False,**kwargs):
         float or array (return_all = False): Final density field estimate
         3 floats or arrays (return_all = True): Perturbative corrections to the
                                                 density field at each order
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Regression test: test_get_delta_lpt
     """
     if order not in [1,2,3,4,5]:
         raise Exception("Perturbation order invalid or not implemented.")
@@ -1416,6 +1426,31 @@ def get_delta_lpt(Delta_r,z=0,Om=0.3,order=1,return_all=False,**kwargs):
 
 def get_eulerian_ratio_from_lagrangian_ratio(quant_list_q,Psi_q_list,order,
                                              expand_denom_only=False):
+    """
+    Computes the ratio Q/r where Q is some quantity determined from LPT (usually
+    displacement, Psi, or velocity, v), and r is the Eulerian radius, assuming
+    spherical symmetry and that Q is the same ratio in Lagrangian co-ordinates
+    (ie, with respect to q, the Lagrangian radius).
+    
+    This function is used by process_radius to control whether we output the 
+    results in Lagrangian or Eulerian co-ordinates.
+    
+    Parameters:
+        quant_list_q (list of floats/arrays): List containing the quantity in 
+                                              Lagrangian co-ordinates at each 
+                                              order
+        Psi_q_list (list of floats/arrays): List containing the displacement
+                                            field corrections at each order.
+        order (int): LPT order. Should match the lengths of the lists above.
+        expand_denom_only (bool): If True, only the denominator is expanded
+                                  (useful if the numerator represents an exactly
+                                   known quantity). Otherwise, we expand both
+                                   numerator and denominator.
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Regression test: test_get_eulerian_ratio_from_lagrangian_ratio
+    """
     if order not in [1,2,3,4,5]:
         raise Exception("Perturbation order invalid or not implemented.")
     if order >= 1:
@@ -1504,6 +1539,10 @@ def process_radius(r,Psi_q,quant_q = None,radial_fraction=True,
         
     Returns:
         (float or array): Psi_r/r or Psi_r, same size as r
+
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Unit test: test_process_radius_gives_radial_ratio
     """
     if quant_q is None:
         quant_q = Psi_q
@@ -1555,8 +1594,9 @@ def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
                                nf3a = 13/24,nf3b = 13/24,fixed_delta = False,
                                radial_fraction = False,S1r = None,
                                eulerian_radius=True,expand_denom_only=False,
-                               taylor_expand=True,return_all=False,
-                               expand_euler_ratio=False,**kwargs):
+                               taylor_expand=True,expand_euler_ratio=False,
+                               return_all=False,
+                               **kwargs):
     """
     Compute the radial component of the displacement field, in Lagrangian 
     perturbation theory, assuming spherical symmetry for the density field.
@@ -1580,9 +1620,25 @@ def spherical_lpt_displacement(r,Delta,order=1,z=0,Om=0.3,
         eulerian_radius (bool): If True, radius is assumed to be in Eulerian
                                 space. Otherwise (Default) it is assumed to be
                                 in Lagrangian co-ordinates.
+        expand_denom_only (bool): If True, expand only the denominator when
+                                  converting to Eulerian co-ordinates
+                                  (see processRadius)
+        taylor_expand (bool): If True, use taylor-expanded final-density 
+                              expression, rather than the non-perturbative
+                              expression. Generally speaking this performs
+                              less well, but we retain the option.
+        expand_euler_ratio (bool): If True, use a Taylor expansion in 
+                                   processRadius when converting to Eulerian
+                                   co-ordinates.
+        return_all (bool): If True, forces us to return separate velocity
+                           corrections for each order.
 
     Returns:
         float or array: Radial component of the displacement field.
+
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Regression test: test_spherical_lpt_displacement
     """
     if order not in [1,2,3,4,5]:
         raise Exception("Perturbation order invalid or not implemented.")
@@ -1679,9 +1735,28 @@ def spherical_lpt_velocity(r,Delta,order=1,z=0,Om=0.3,
         radial_fraction (bool): If True, compute v/r, rather than v
         fixed_delta (bool): If True, Delta is assumed to be a pre-computed
                             array, rather than a function.
+        eulerian_radius (bool): If True, radius is assumed to be in Eulerian
+                                space. Otherwise (Default) it is assumed to be
+                                in Lagrangian co-ordinates.
+        expand_denom_only (bool): If True, expand only the denominator when
+                                  converting to Eulerian co-ordinates
+                                  (see processRadius)
+        taylor_expand (bool): If True, use taylor-expanded final-density 
+                              expression, rather than the non-perturbative
+                              expression. Generally speaking this performs
+                              less well, but we retain the option.
+        expand_euler_ratio (bool): If True, use a Taylor expansion in 
+                                   processRadius when converting to Eulerian
+                                   co-ordinates.
+        return_all (bool): If True, forces us to return separate velocity
+                           corrections for each order.
     
     Returns:
         float or array: Radial component of the velocity field.
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Regression test: test_spherical_lpt_velocity
     """
     print(kwargs)
     print({"radial_fraction":radial_fraction,"fixed_delta":fixed_delta,
