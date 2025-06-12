@@ -2292,7 +2292,11 @@ def iterative_zspace_inverse_scalar(s_par, s_perp, f1, Delta, N_max = 5,
     r_perp = s_perp
     for _ in range(N_max):
         r = np.sqrt(r_par_guess**2 + r_perp**2)
-        r_par_new = s_par / (1.0 + vel_model(r,Delta,f1,params=vel_params,**kwargs))
+        r_par_new = s_par / (1.0 + vel_model(
+                                             r,Delta,f1,params=vel_params,
+                                             **kwargs
+                                   )
+                            )
         if np.abs(r_par_new - r_par_guess) < atol or \
            np.abs(r_par_new / r_par_guess - 1.0) < rtol:
             break
@@ -2329,8 +2333,9 @@ def iterative_zspace_inverse(s_par, s_perp, f1, Delta, N_max=5, atol=1e-5,
     # Scalar input case
     if s_par.ndim == 0:
         return iterative_zspace_inverse_scalar(s_par, s_perp, f1, Delta,
-                                               N_max=N_max, atol=atol, rtol=rtol,
-                                               vel_params=vel_params,**kwargs)
+                                               N_max=N_max, atol=atol, 
+                                               rtol=rtol,vel_params=vel_params,
+                                               **kwargs)
     # Vectorized case (apply element-wise)
     return np.array([
         iterative_zspace_inverse_scalar(sp, sp_perp, f1, Delta,
@@ -2423,7 +2428,8 @@ def geometry_correction(s_par, s_perp, epsilon, **kwargs):
     of the cosmological parameters
 
     Based on the transformation:
-        - s_factor adjusts the total distance accounting for ε-dependent anisotropy.
+        - s_factor adjusts the total distance accounting for ε-dependent 
+          anisotropy.
         - mus (cosine of LOS angle) is adjusted to mus_new.
         - New coordinates are computed from these corrected values.
 
@@ -2487,7 +2493,8 @@ def z_space_profile(s_par, s_perp, rho_real, Delta, delta, f1=None,z=0, Om=0.3,
         delta (function): Local density contrast profile δ(r)
         Om_fid (float): Fiducial matter density (default: 0.3111)
         epsilon (float or None): Alcock-Paczynski distortion parameter ε.
-                                 If None and apply_geometry is True, it is computed.
+                                 If None and apply_geometry is True, it is 
+                                 computed.
         apply_geometry (bool): Whether to apply the AP correction
         vel_params (array or None): Additional parameter for the velocity model
 
