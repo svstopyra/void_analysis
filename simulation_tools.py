@@ -816,9 +816,148 @@ def get_los_positions_for_all_catalogues(snapList,snapListRev,
     return los_list
 
 
+def sample_from_distribution(pdf, x_range, n_samples=1, max_pdf_value=None,
+                             max_attempts = None):
+    """
+    Generate random samples from an arbitrary distribution using rejection 
+    sampling.
+    
+    Parameters:
+    - pdf: function, the probability density function 
+           (doesn't need to be normalized).
+    - x_range: tuple, the range (min, max) of x values to sample from.
+    - n_samples: int, the number of samples to generate.
+    - max_pdf_value: float, the maximum value of the pdf over x_range. 
+                     If None, it will be estimated.
+
+    Returns:
+    - samples: np.ndarray, an array of sampled values.
+    """
+    xmin, xmax = x_range
+    samples = []
+    attempts = 0
+    if max_attempts is None:
+        max_attempts = n_samples * 10  # To avoid infinite loops
+    # Estimate max_pdf_value if not provided
+    if max_pdf_value is None:
+        x_vals = np.linspace(xmin, xmax, 1000)
+        max_pdf_value = max(pdf(x) for x in x_vals)
+    while len(samples) < n_samples and attempts < max_attempts:
+        x = np.random.uniform(xmin, xmax)
+        y = np.random.uniform(0, max_pdf_value)
+        if y < pdf(x):
+            samples.append(x)
+        attempts += 1
+    if len(samples) < n_samples:
+        raise RuntimeError(
+            "Sampling failed. Try increasing max_pdf_value or max_attempts."
+        )
+    return np.array(samples)
+
+class DummySnapshot:
+    def __init__(self,pos,vel,mass,**properties):
+        self.keydict = {'pos':pos,'vel':vel,'mass':mass}
+        self.properties = properties
+    def __getitem__(self, property_name):
+        return self.keydict[property_name]
+    def __len__(self):
+        return len(self.keydict['pos'])
 
 
+def gaussian_delta(r,A=0.85,sigma=1):
+    """
+    Gaussian model for the void contrast of a void (mostly used for testing)
+    
+    Parameters:
+        r (float or array): Radial distance from void centre
+        A (float): Amplitude, equal to the negative of the Central density 
+                   contrast
+        sigma (float): Width of the Guassian (roughly the void radius)
+    
+    Returns:
+        float or array: Density contrast at r
+    """
+    return -A*np.exp(-0.5*(r/sigma)**2)
 
+def gaussian_Delta(r,A=0.85,sigma=1,thresh=1e-5,exact=False,taylor=False):
+    """
+    Gaussian model for the cumulative void contrast of a void. Integral of
+    3/r^3\int(x**2*guassian_Delta(x,A,sigma)dx)_0^{r}
+    
+    Parameters:
+        r (float or array): Radial distance from void centre
+        A (float): Amplitude, equal to the negative of the Central density 
+                   contrast
+        sigma (float): Width of the Guassian (roughly the void radius)
+        thresh (float): If (r/sigma)^2 < thresh, switch to a Taylor expansion
+                        to avoid problems near r = 0
+        exact (bool): If true, return the exact expression even if this would
+                      have problems near r = 0
+        taylor (bool): If true, force the use of the Taylor expansion around
+                       r = 0
+    
+    Returns:
+        float or array: Density contrast at r
+    """
+    if exact:
+        # Exact expression. This is numerically unstable near r = 0
+        return - 3*A*np.sqrt(np.pi/2)*(sigma/r)**3*scipy.special.erf(
+                   (r/sigma)/np.sqrt(2)
+               ) + 3*A*(sigma/r)**2*np.exp(-0.5*(r/sigma)**2)
+    if taylor:
+        # Taylor expansion around r = 0:
+        return -A*(1 - (r/sigma)**2/10 + (r/sigma)**4/56)
+    if np.isscalar(r):
+        if (r/sigma)**2 > 1e-5:
+            return gaussian_Delta(r,A=A,sigma=sigma,exact=True)
+        else:
+            return gaussian_Delta(r,A=A,sigma=sigma,taylor=True)
+    else:
+        small = (r/sigma)**2 < thresh
+        not_small = np.logical_not(small)
+        value = np.zeros(r.shape)
+        value[small] = gaussian_Delta(r[small],A=A,sigma=sigma,taylor=True)
+        value[not_small] = gaussian_Delta(
+            r[not_small],A=A,sigma=sigma,exact=True
+        )
+        return value
+
+def generate_synthetic_void_snap(N=32,rmax=50,A=0.85,sigma=10,seed=0,H0=70):
+    """
+        Generate a synthetic snapshot with a void, which has realistic
+        velocities. Mostly used for testing purposes.
+    """
+    np.random.seed(seed)
+    # Random distribution on a sphere:
+    thetas = np.arcsin(np.random.rand(N**3)*2 - 1)
+    phis = np.random.rand(N**3)*2*np.pi
+    # Radii randomly distributed according to a specified distribution:
+    rho_void = lambda r: 1 + gaussian_delta(r,A=A,sigma=sigma)
+    # Cumulative density contrast, obtained by integrating:
+    Delta_void = lambda r: gaussian_Delta(r,A=A,sigma=sigma)
+    rs = sample_from_distribution(
+        lambda r: rho_void(r)*r**2,[0,rmax],n_samples=N**3,max_pdf_value = None
+    )
+    xs, ys, zs = [
+        rs*np.cos(thetas)*np.cos(phis),
+        rs*np.cos(thetas)*np.sin(phis),
+        rs*np.sin(thetas)]
+    pos = np.vstack([xs,ys,zs]).T
+    # Generate velocities using a 1LPT approximation, given the known density:
+    rvec = pos/rs[:,None] # Unit vectors from centre of void
+    vr = -100*0.53*(Delta_void(rs)/3)*rs # Radial velocities
+    # Velocities in 3D, with Gaussian noise:
+    vel = rvec*vr[:,None] + np.random.randn(N**3,3)*3
+    # Fake masses:
+    G = 6.67e-11
+    Mpc = 3.0857e22
+    Msol = 1.989e30
+    rho_crit = (3*(1e5/Mpc)**2/(8*np.pi*G))*Mpc**3/Msol
+    Munit = (4*np.pi*rmax**3/3)*rho_crit/N**3
+    mass = np.full(rs.shape,Munit)
+    return DummySnapshot(
+        pos,vel,mass,boxsize=2*rmax*pynbody.units.Unit("Mpc a h**-1")
+    )
 
 
 

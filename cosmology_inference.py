@@ -1893,8 +1893,19 @@ def get_los_velocities_for_void(void_centre,void_radius,snap,rbins,cell_vols=Non
         u_par (array): Parallel components of velocity relative to void centre
         u: Velocity relative to void centre
         disp: Displacement from void centre
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_stacking_functions.py:
+        Regression test: test_get_los_velocities_for_void
     """
     boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+    wrapped = np.all(snap['pos'] > 0) and np.all(snap['pos'] < boxsize)
+    wrapped_pos = snap['pos'] if wrapped else snapedit.wrap(
+        snap['pos'],boxsize
+    )
+    wrapped_centre = void_centre if wrapped else snapedit.wrap(
+        void_centre,boxsize
+    )
     if observer is None:
         # assume observer is in the box centre:
         observer = np.array([boxsize/2]*3)
@@ -1902,8 +1913,8 @@ def get_los_velocities_for_void(void_centre,void_radius,snap,rbins,cell_vols=Non
         snapedit.unwrap(void_centre - observer,boxsize)
     )
     if tree is None:
-        tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
-    indices_list = np.array(tree.query_ball_point(void_centre,\
+        tree = scipy.spatial.cKDTree(wrapped_pos,boxsize=boxsize)
+    indices_list = np.array(tree.query_ball_point(wrapped_centre,\
             rbins[-1]*void_radius,workers=n_threads),dtype=np.int64)
     disp = snapedit.unwrap(snap['pos'][indices_list,:] - void_centre,boxsize)
     r = np.array(np.sqrt(np.sum(disp**2,1)))
@@ -1936,6 +1947,11 @@ def ap_parameter(z, Om, Om_fid, h=0.7, h_fid=0.7, **kwargs):
 
     Returns:
         float: Alcock-Paczynski distortion parameter ε(z)
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_cosmology_utils.py:
+        Regression tests: test_ap_parameter_regression
+        Unit tests: test_ap_parameter_basic
     """
     # Cosmologies:
     cosmo_fid = astropy.cosmology.FlatLambdaCDM(H0=100*h_fid, Om0=Om_fid)
@@ -1960,6 +1976,10 @@ def void_los_velocity_ratio_1lpt(r,Delta,f1,**kwargs):
 
     Returns:
         float or array: LOS velocity in km/s
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Regression tests: test_void_los_velocity_ratio_1lpt
     """
     return -(f1 / 3.0) * Delta(r)
 
@@ -1975,7 +1995,12 @@ def void_los_velocity_ratio_derivative_1lpt(r,Delta,delta,f1,**kwargs):
         f1 (float or None): Growth rate
 
     Returns:
-        float: Derivative of velocity w.r.t. r_par
+        float: Derivative of velocity w.r.t. log r
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Regression tests: test_void_los_velocity_ratio_derivative_1lpt
+        Unit tests: test_lpt_velocity_derivative_integral
     """
     return f1*(Delta(r) - delta(r))
 

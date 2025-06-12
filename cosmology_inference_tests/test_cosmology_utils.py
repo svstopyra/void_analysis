@@ -12,7 +12,8 @@ from void_analysis.cosmology_inference import (
 
 SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "snapshots")
 
-# ---------------------- UNIT TESTS: Ez2 ----------------------
+
+# ---------------------- UNIT TESTS: Ez2 ---------------------------------------
 
 def test_Ez2_positive():
     z = np.linspace(0, 2, 100)
@@ -26,7 +27,7 @@ def test_Ez2_monotonic_increasing():
     Ez2_vals = Ez2(z, Om)
     assert np.all(np.diff(Ez2_vals) >= 0)
 
-# ---------------------- UNIT TESTS: Hz ----------------------
+# ---------------------- UNIT TESTS: Hz ----------------------------------------
 
 def test_Hz_positive():
     z = np.linspace(0, 2, 100)
@@ -43,7 +44,7 @@ def test_Hz_scaling_with_h():
     hz2 = Hz(z, Om, h=h2)
     assert np.isclose(hz2/hz1, h2/h1, rtol=1e-6)
 
-# ---------------------- UNIT TESTS: f_lcdm ----------------------
+# ---------------------- UNIT TESTS: f_lcdm ------------------------------------
 
 def test_f_lcdm_typical_values():
     z = np.linspace(0, 2, 100)
@@ -51,7 +52,7 @@ def test_f_lcdm_typical_values():
     f_vals = f_lcdm(z, Om)
     assert np.all((f_vals >= 0) & (f_vals <= 1))
 
-# ---------------------- UNIT TESTS: ap_parameter ----------------------
+# ---------------------- UNIT TESTS: ap_parameter ------------------------------
 
 def test_ap_parameter_basic():
     z = np.linspace(0, 2, 50)
@@ -60,7 +61,7 @@ def test_ap_parameter_basic():
     ap = ap_parameter(z, Om, Om_fid)
     assert np.allclose(ap, np.ones_like(z), rtol=1e-5)
 
-# ---------------------- REGRESSION TESTS ----------------------
+# ---------------------- REGRESSION TESTS --------------------------------------
 
 def test_Ez2_regression():
     z = np.linspace(0, 2, 100)
@@ -90,4 +91,21 @@ def test_ap_parameter_regression():
     ap = ap_parameter(z, Om, Om_fid)
     ref = np.load(os.path.join(SNAPSHOT_DIR, "ap_parameter_ref.npy"))
     np.testing.assert_allclose(ap, ref, rtol=1e-6)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

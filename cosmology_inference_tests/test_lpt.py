@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import pytest
+import scipy
 
 from void_analysis.cosmology_inference import (
     get_D_coefficients,
@@ -19,16 +20,25 @@ from void_analysis.cosmology_inference import (
     get_eulerian_ratio_from_lagrangian_ratio,
     process_radius,
     spherical_lpt_displacement,
-    spherical_lpt_velocity
+    spherical_lpt_velocity,
+    find_suitable_solver_bounds,
+    void_los_velocity_ratio_1lpt,
+    void_los_velocity_ratio_derivative_1lpt,
 )
+
+from void_analysis.simulation_tools import gaussian_delta, gaussian_Delta
 
 SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "snapshots")
 
 @pytest.fixture
 def mock_profile_data():
     rvals = np.linspace(0,3,101)
-    Delta = -0.85*np.exp(-rvals**2/2)
-    return rvals, Delta
+    A = 0.85
+    sigma = 1
+    delta_f = lambda r: gaussian_delta(r,A=A,sigma=sigma)
+    Delta_f = lambda r: gaussian_Delta(r,A=A,sigma=sigma)
+    Delta = delta_f(rvals)
+    return rvals, Delta, delta_f, Delta_f, A, sigma
 
 @pytest.fixture
 def mock_lpt_order_data():
@@ -41,9 +51,14 @@ def mock_lpt_order_data():
 def test_find_suitable_solver_bounds_valid():
     f = lambda x: -x**3
     ulow, uupp = find_suitable_solver_bounds(
-        f,-5,1.0,taylor_expand=False,
+        f,-0.75,1.0,taylor_expand=True,
     )
-    assert (f(ulow) + 5)*(f(uup) + 5) <= 0.0
+    assert (f(ulow) + 0.75)*(f(uupp) + 0.75) <= 0.0
+    f = lambda x: x**3
+    ulow, uupp = find_suitable_solver_bounds(
+        f,0.75,1.0,taylor_expand=False,
+    )
+    assert (f(ulow) - 0.75)*(f(uupp) - 0.75) <= 0.0
 
 def test_process_radius_gives_radial_ratio(mock_lpt_order_data):
     rvals, Psi_n = mock_lpt_order_data
@@ -51,9 +66,10 @@ def test_process_radius_gives_radial_ratio(mock_lpt_order_data):
         rvals,Psi_n,quant_q = Psi_n,radial_fraction=True,eulerian_radius=True,
         taylor_expand=True,order=5,expand_denom_only=False
     )
-    fully_expanded_ref, denom_only_ref = np.load(
+    ref_data = np.load(
         os.path.join(SNAPSHOT_DIR, "eulerian_ratio_data.npz")
     )
+    fully_expanded_ref, denom_only_ref = [ref_data[key] for key in ref_data]
     # With eulerian_radius=True, should always return the output of 
     # get_eulerian_ratio_from_lagrangian_ratio.
     np.testing.assert_allclose(
@@ -75,13 +91,32 @@ def test_process_radius_gives_radial_ratio(mock_lpt_order_data):
         rvals,Psi_n,radial_fraction=False,eulerian_radius=True,
         taylor_expand=False,order=5,expand_denom_only=False
     )
-    assert(isinstance(ratio_value,type(full_value)))
-    if isinstance(ratio_value,list):
-        for x, y in zip(ratio_value,full_value):
-            np.testing.assert_allclose(x*rvals,y)
-    else:
-        np.testing.assert_allclose(ratio_value*rvals,full_value)
-    
+    for x, y in zip(ratio_value,full_value):
+        np.testing.assert_allclose(x*rvals,y)
+
+def test_lpt_velocity_derivative_integral(mock_profile_data):
+    """
+    Test whether the derivative profile integrates to the original profile
+    """
+    rvals, Delta, delta_f, Delta_f, A, sigma = mock_profile_data
+    u = lambda r: void_los_velocity_ratio_1lpt(r,Delta_f,0.53)
+    up = lambda r: void_los_velocity_ratio_derivative_1lpt(
+        r,Delta_f,delta_f,0.53
+    )
+    lower_lim = -10
+    ri = rvals[rvals >= np.exp(lower_lim)]
+    integrals = np.array(
+        [
+            scipy.integrate.quad(
+                lambda logr: up(np.exp(logr)),lower_lim,np.log(r)
+            )[0]
+            for r in ri
+        ]
+    )
+    np.testing.assert_allclose(
+        u(ri) - u(0), integrals, rtol=1e-5, atol=1e-5
+    )
+
 # ---------------------- REGRESSION TESTS---------------------------------------
 
 def test_get_D_coefficients():
@@ -129,7 +164,7 @@ def test_get_taylor_polynomial_coefficients():
     )
 
 def test_get_initial_condition_non_perturbative(mock_profile_data):
-    rvals, Delta = mock_profile_data
+    rvals, Delta, _,_,_,_ = mock_profile_data
     current_output = get_initial_condition_non_perturbative(
         Delta,order=5,Om=0.3,use_linear_on_fail=False,
         taylor_expand=False
@@ -142,10 +177,10 @@ def test_get_initial_condition_non_perturbative(mock_profile_data):
     )
 
 # Test needs fixing, so skip for now
-def broken_test_get_initial_condition(mock_profile_data):
-    rvals, Delta = mock_profile_data
+def test_get_initial_condition(mock_profile_data):
+    rvals, Delta, _,_,_,_ = mock_profile_data
     current_output = get_initial_condition(
-        Delta,order=5,Om=0.3,use_linear_on_fail=False
+        Delta,order=4,Om=0.3,use_linear_on_fail=False
     )
     reference_output = np.load(
         os.path.join(SNAPSHOT_DIR, "Pert_initial_conditions.npy")
@@ -155,7 +190,7 @@ def broken_test_get_initial_condition(mock_profile_data):
     )
 
 def test_get_S1r(mock_profile_data):
-    rvals, Delta = mock_profile_data
+    rvals, Delta, _,_,_,_ = mock_profile_data
     current_output = get_S1r(
         Delta,rvals,0.3,order=5,perturbative_ics = False,taylor_expand=False,
         force_linear_ics = False
@@ -168,59 +203,59 @@ def test_get_S1r(mock_profile_data):
     )
 
 def test_get_S2r(mock_profile_data):
-    rvals, Delta = mock_profile_data
+    rvals, Delta, _,_,_,_ = mock_profile_data
     current_output = get_S2r(
         Delta,rvals,0.3,order=5,perturbative_ics = False,taylor_expand=False,
         force_linear_ics = False
     )
     reference_output = np.load(
-        os.path.join(SNAPSHOT_DIR, "S1r_data.npy")
+        os.path.join(SNAPSHOT_DIR, "S2r_data.npy")
     )
     np.testing.assert_allclose(
         current_output, reference_output, rtol=1e-6, atol=1e-10
     )
 
 def test_get_S3r(mock_profile_data):
-    rvals, Delta = mock_profile_data
+    rvals, Delta, _,_,_,_ = mock_profile_data
     current_output = get_S3r(
         Delta,rvals,0.3,order=5,perturbative_ics = False,taylor_expand=False,
         force_linear_ics = False
     )
     reference_output = np.load(
-        os.path.join(SNAPSHOT_DIR, "S1r_data.npy")
+        os.path.join(SNAPSHOT_DIR, "S3r_data.npy")
     )
     np.testing.assert_allclose(
         current_output, reference_output, rtol=1e-6, atol=1e-10
     )
 
 def test_get_S4r(mock_profile_data):
-    rvals, Delta = mock_profile_data
+    rvals, Delta, _,_,_,_ = mock_profile_data
     current_output = get_S4r(
         Delta,rvals,0.3,order=5,perturbative_ics = False,taylor_expand=False,
         force_linear_ics = False
     )
     reference_output = np.load(
-        os.path.join(SNAPSHOT_DIR, "S1r_data.npy")
+        os.path.join(SNAPSHOT_DIR, "S4r_data.npy")
     )
     np.testing.assert_allclose(
         current_output, reference_output, rtol=1e-6, atol=1e-10
     )
 
 def test_get_S5r(mock_profile_data):
-    rvals, Delta = mock_profile_data
+    rvals, Delta, _,_,_,_ = mock_profile_data
     current_output = get_S5r(
         Delta,rvals,0.3,order=5,perturbative_ics = False,taylor_expand=False,
         force_linear_ics = False
     )
     reference_output = np.load(
-        os.path.join(SNAPSHOT_DIR, "S1r_data.npy")
+        os.path.join(SNAPSHOT_DIR, "S5r_data.npy")
     )
     np.testing.assert_allclose(
         current_output, reference_output, rtol=1e-6, atol=1e-10
     )
 
 def test_get_psi_n_r(mock_profile_data):
-    rvals, Delta = mock_profile_data
+    rvals, Delta, _,_,_,_ = mock_profile_data
     current_output = get_psi_n_r(
         Delta,rvals,5,z=0,Om=0.3,order=5,return_all=True
     )
@@ -232,7 +267,7 @@ def test_get_psi_n_r(mock_profile_data):
     )
 
 def test_get_delta_lpt(mock_profile_data):
-    rvals, Delta = mock_profile_data
+    rvals, Delta, _,_,_,_ = mock_profile_data
     current_output = get_delta_lpt(
         Delta,z=0,Om=0.3,order=5,return_all=True
     )
@@ -252,9 +287,10 @@ def test_get_eulerian_ratio_from_lagrangian_ratio(mock_lpt_order_data):
     denom_only = get_eulerian_ratio_from_lagrangian_ratio(
         np.sum(Psi_n,0),Psi_n,5,expand_denom_only=True
     )
-    fully_expanded_ref, denom_only_ref = np.load(
+    ref_data = np.load(
         os.path.join(SNAPSHOT_DIR, "eulerian_ratio_data.npz")
     )
+    fully_expanded_ref, denom_only_ref = [ref_data[key] for key in ref_data]
     # Assertions:
     np.testing.assert_allclose(
         denom_only, denom_only_ref, rtol=1e-6, atol=1e-10
@@ -271,7 +307,7 @@ def test_process_radius(mock_lpt_order_data):
     )
 
 def test_spherical_lpt_displacement(mock_profile_data):
-    rvals, Delta = mock_profile_data
+    rvals, Delta, _,_,_,_ = mock_profile_data
     current_value = spherical_lpt_displacement(
         rvals,Delta,order=5,z=0,Om=0.3,fixed_delta = True,
         radial_fraction = True,eulerian_radius=False,expand_denom_only=False,
@@ -285,7 +321,7 @@ def test_spherical_lpt_displacement(mock_profile_data):
     )
 
 def test_spherical_lpt_velocity(mock_profile_data):
-    rvals, Delta = mock_profile_data
+    rvals, Delta, _,_,_,_ = mock_profile_data
     current_value = spherical_lpt_velocity(
         rvals,Delta,order=5,z=0,Om=0.3,radial_fraction = True,
         fixed_delta = True,eulerian_radius=False,taylor_expand=False,
@@ -298,10 +334,27 @@ def test_spherical_lpt_velocity(mock_profile_data):
         current_value, reference_value, rtol=1e-6, atol=1e-10
     )
 
+def test_void_los_velocity_ratio_1lpt(mock_profile_data):
+    rvals, _, _ , Delta_f, _, _ = mock_profile_data
+    computed = void_los_velocity_ratio_1lpt(rvals,Delta_f,0.53)
+    reference = np.load(os.path.join(
+        SNAPSHOT_DIR, "test_void_los_velocity_ratio_1lpt.npy")
+    )
+    np.testing.assert_allclose(
+        computed, reference, rtol=1e-6, atol=1e-10
+    )
 
-
-
-
+def test_void_los_velocity_ratio_derivative_1lpt(mock_profile_data):
+    rvals, Delta, delta_f, Delta_f, A, sigma = mock_profile_data
+    computed = void_los_velocity_ratio_derivative_1lpt(
+        rvals,Delta_f,delta_f,0.53
+    )
+    reference = np.load(os.path.join(
+        SNAPSHOT_DIR, "test_void_los_velocity_ratio_derivative_1lpt.npy")
+    )
+    np.testing.assert_allclose(
+        computed, reference, rtol=1e-6, atol=1e-10
+    )
 
 
 

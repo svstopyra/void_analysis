@@ -9,7 +9,13 @@ from void_analysis.cosmology_inference import (
     get_2d_fields_per_void,
     get_field_from_los_data,
     trim_los_list,
-    get_trimmed_los_list_per_void
+    get_trimmed_los_list_per_void,
+    get_los_velocities_for_void
+)
+
+from void_analysis.simulation_tools import (
+    DummySnapshot, 
+    generate_synthetic_void_snap
 )
 
 GENERATED_SNAPSHOTS = [
@@ -22,7 +28,8 @@ GENERATED_SNAPSHOTS = [
     "get_trimmed_los_list_per_void_ref.npy",
     "stacked_void_density_ref.npy",
     "real_space_profile_mean_ref.npy",
-    "real_space_profile_std_ref.npy"
+    "real_space_profile_std_ref.npy",
+    "get_los_velocities_for_void_test.npz"
 ]
 
 def generate_snapshots():
@@ -100,6 +107,18 @@ def generate_snapshots():
     rho_mean, rho_std = get_1d_real_space_field(snaps, rbins=spar_bins)
     np.save("real_space_profile_mean_ref.npy", rho_mean)
     np.save("real_space_profile_std_ref.npy", rho_std)
+
+    # Void velocity LOS test:
+    synthetic_void_snap = generate_synthetic_void_snap(
+        N=32,rmax=50,A=0.85,sigma=10,seed=0,H0=70
+    )
+    r_par, u_par, disp, u = get_los_velocities_for_void(
+        np.array([0]*3),10,synthetic_void_snap,np.linspace(0,30,101)
+    )
+    np.savez(
+        "get_los_velocities_for_void_test.npz",r_par=r_par, u_par=u_par,
+        disp=disp, u=u
+    )
 
     print("✅ Stacking snapshots generated successfully.")
 
