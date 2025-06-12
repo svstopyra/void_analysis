@@ -24,9 +24,12 @@ from void_analysis.cosmology_inference import (
     find_suitable_solver_bounds,
     void_los_velocity_ratio_1lpt,
     void_los_velocity_ratio_derivative_1lpt,
+    void_los_velocity_ratio_semi_analytic,
+    void_los_velocity_ratio_derivative_semi_analytic
 )
 
 from void_analysis.simulation_tools import gaussian_delta, gaussian_Delta
+from void_analysis import tools
 
 SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "snapshots")
 
@@ -96,26 +99,28 @@ def test_process_radius_gives_radial_ratio(mock_lpt_order_data):
 
 def test_lpt_velocity_derivative_integral(mock_profile_data):
     """
-    Test whether the derivative profile integrates to the original profile
+    Test whether the derivative profile integrates to the original profile,
+    for the lpt model.
     """
-    rvals, Delta, delta_f, Delta_f, A, sigma = mock_profile_data
-    u = lambda r: void_los_velocity_ratio_1lpt(r,Delta_f,0.53)
-    up = lambda r: void_los_velocity_ratio_derivative_1lpt(
-        r,Delta_f,delta_f,0.53
+    rvals, _, delta_f, Delta_f, _,_ = mock_profile_data
+    profile_derivative_test(
+        rvals,delta_f,Delta_f,void_los_velocity_ratio_1lpt,
+        void_los_velocity_ratio_derivative_1lpt,
+        rtol=1e-5,atol=1e-5,f1=0.53,lower_lim = -10
     )
-    lower_lim = -10
-    ri = rvals[rvals >= np.exp(lower_lim)]
-    integrals = np.array(
-        [
-            scipy.integrate.quad(
-                lambda logr: up(np.exp(logr)),lower_lim,np.log(r)
-            )[0]
-            for r in ri
-        ]
+
+def test_semi_analytic_velocity_derivative_integral(mock_profile_data):
+    """
+    Test whether the derivative profile integrates to the original profile
+    for the semi-analytic model.
+    """
+    rvals, _, delta_f, Delta_f, _,_ = mock_profile_data
+    profile_derivative_test(
+        rvals,delta_f,Delta_f,void_los_velocity_ratio_semi_analytic,
+        void_los_velocity_ratio_derivative_semi_analytic,
+        rtol=1e-5,atol=1e-5,f1=0.53,lower_lim = -10
     )
-    np.testing.assert_allclose(
-        u(ri) - u(0), integrals, rtol=1e-5, atol=1e-5
-    )
+
 
 # ---------------------- REGRESSION TESTS---------------------------------------
 
@@ -356,10 +361,26 @@ def test_void_los_velocity_ratio_derivative_1lpt(mock_profile_data):
         computed, reference, rtol=1e-6, atol=1e-10
     )
 
+def test_void_los_velocity_ratio_semi_analytic(mock_profile_data):
+    rvals, Delta, delta_f, Delta_f, A, sigma = mock_profile_data
+    tools.run_basic_regression_test(
+        void_los_velocity_ratio_semi_analytic,
+        os.path.join(
+            SNAPSHOT_DIR, "test_void_los_velocity_ratio_semi_analytic.npy"
+        ),
+        rvals,Delta_f,0.53,rtol=1e-5,atol=1e-5,params = [-0.5,0.1]
+    )
 
-
-
-
+def test_void_los_velocity_ratio_semi_analytic(mock_profile_data):
+    rvals, Delta, delta_f, Delta_f, A, sigma = mock_profile_data
+    tools.run_basic_regression_test(
+        void_los_velocity_ratio_derivative_semi_analytic,
+        os.path.join(
+            SNAPSHOT_DIR, 
+            "test_void_los_velocity_ratio_derivative_semi_analytic.npy"
+        ),
+        rvals,Delta_f,delta_f,0.53,rtol=1e-5,atol=1e-5,params = [-0.5,0.1]
+    )
 
 
 

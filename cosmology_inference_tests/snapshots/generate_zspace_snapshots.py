@@ -9,7 +9,8 @@ from void_analysis.cosmology_inference import (
     iterative_zspace_inverse_scalar,
     iterative_zspace_inverse,
     void_los_velocity,
-    void_los_velocity_derivative
+    void_los_velocity_derivative,
+    get_dudr_hz_o1pz
 )
 
 GENERATED_SNAPSHOTS = [
@@ -90,6 +91,15 @@ def generate_snapshots():
     print("Snapshots for to_real_space, to_z_space, z_space_jacobian, " + 
           "z_space_profile, iterative_zspace_inverse_scalar, and " + 
           "iterative_zspace_inverse saved.")
+
+    # Consistent framework for regression tests:
+    tools.generate_regression_test_data(
+        get_dudr_hz_o1pz,
+        "get_dudr_hz_o1pz_ref.npy",
+        Delta_f, delta_f, r_par, r_perp, f1,
+        vel_model = void_los_velocity_ratio_1lpt,
+        dvel_dlogr_model = void_los_velocity_ratio_derivative_1lpt
+    )
 
 if __name__ == "__main__":
     generate_snapshots()

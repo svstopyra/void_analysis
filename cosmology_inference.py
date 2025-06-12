@@ -10,6 +10,7 @@ from void_analysis.simulation_tools import get_los_pos_for_snapshot
 from void_analysis.simulation_tools import get_los_positions_for_all_catalogues
 from void_analysis.plot import draw_ellipse, plot_los_void_stack
 from void_analysis import context
+from void_analysis.tools import ratio_where_finite, product_where_finite
 from matplotlib import transforms
 import matplotlib.ticker
 from matplotlib.ticker import NullFormatter
@@ -2024,6 +2025,11 @@ def void_los_velocity_ratio_semi_analytic(r,Delta,f1,params=None,
 
     Returns:
         float or array: LOS velocity in km/s
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Regression tests: test_void_los_velocity_ratio_semi_analytic
+        Unit tests: test_semi_analytic_velocity_derivative_integral
     """
     # Displacement field over r:
     Psi_r = 1 - np.cbrt(1 + Delta(r)) if exact_displacement else -Delta(r)/3
@@ -2049,6 +2055,11 @@ def void_los_velocity_ratio_derivative_semi_analytic(r,Delta,delta,f1,params=Non
 
     Returns:
         float: Derivative of velocity w.r.t. r_par
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py:
+        Regression tests: test_void_los_velocity_ratio_derivative_semi_analytic
+        Unit tests: test_semi_analytic_velocity_derivative_integral
     """
     Psi_r = 1 - np.cbrt(1 + Delta(r)) if exact_displacement else -Delta(r)/3
     dPsi_r_dlogr = ((Delta(r) - delta(r))/(np.cbrt(1 + Delta(r))**2) 
@@ -2084,6 +2095,10 @@ def void_los_velocity(z, Delta, r_par, r_perp, Om, f1=None,h=1,
 
     Returns:
         float or array: LOS velocity in km/s
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_z_space_profile.py
+        Regression tests: test_void_los_velocity_regression
     """
     if f1 is None:
         f1 = f_lcdm(z, Om, **kwargs)
@@ -2118,6 +2133,10 @@ def get_dudr_hz_o1pz(Delta, delta, r_par, r_perp, f1,
         
     Returns:
         float: Derivative of velocity w.r.t. r_par
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_z_space_profile.py
+        Regression tests: test_get_dudr_hz_o1pz
     """
     r = np.sqrt(r_par**2 + r_perp**2)
     # Get the dimensionless velocity ratio, v*(1+z)/(r*H(z))
@@ -2149,6 +2168,10 @@ def void_los_velocity_derivative(z, Delta, delta, r_par, r_perp, Om, f1=None,
         
     Returns:
         float: Derivative of velocity w.r.t. r_par
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_z_space_profile.py
+        Regression tests: test_void_los_velocity_derivative
     """
     hz = Hz(z, Om, **kwargs)
     if f1 is None:
@@ -2176,6 +2199,11 @@ def z_space_jacobian(Delta, delta, r_par, r_perp, f1=None, z = 0, Om=0.3,
 
     Returns:
         float: Jacobian of the transformation
+    Tests:
+        Tested in cosmology_inference_tests/text_z_space_profile.py
+        Regression tests: test_z_space_jacobian_regression,
+                          test_z_space_jacobian_finite
+        Unit tests: test_z_space_jacobian_positive, 
     """
     if f1 is None:
         f1 = f_lcdm(z, Om, **kwargs)
@@ -2214,6 +2242,11 @@ def to_z_space(r_par, r_perp, z=0, Om=0.3, Delta=None, u_par=None, f1=None,
 
     Returns:
         list: [s_par, s_perp] — redshift-space coordinates
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_z_space_profile.py
+        Regression: test_to_z_space_regression
+        Unit: test_to_real_space_consistency
     """
     if u_par is None:
         r = np.sqrt(r_par**2 + r_perp**2)
@@ -2248,6 +2281,12 @@ def iterative_zspace_inverse_scalar(s_par, s_perp, f1, Delta, N_max = 5,
     
     Returns:
         float: Estimated r_par
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_z_space_profile.py
+        Regression: test_iterative_zspace_inverse_scalar_regression
+        Unit: test_iterative_zspace_inverse_scalar_identity,
+              test_iterative_zspace_inverse_array_matches_scalar
     """
     r_par_guess = s_par
     r_perp = s_perp
@@ -2277,6 +2316,11 @@ def iterative_zspace_inverse(s_par, s_perp, f1, Delta, N_max=5, atol=1e-5,
 
     Returns:
         np.ndarray or float: Estimated real-space LOS coordinate(s)
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_z_space_profile.py
+        Regression: test_iterative_zspace_inverse_regression
+        Unit: test_iterative_zspace_inverse_array_matches_scalar
     """
     s_par = np.asarray(s_par)
     s_perp = np.asarray(s_perp)
@@ -2296,30 +2340,36 @@ def iterative_zspace_inverse(s_par, s_perp, f1, Delta, N_max=5, atol=1e-5,
     ).reshape(s_par.shape)
 
 
-def to_real_space(s_par, s_perp, Delta=None, u_par=None, f1=None,z=0, Om=0.3, 
-                  N_max=5, atol=1e-5, rtol=1e-5, F_inv=None, vel_params=None, **kwargs):
+def to_real_space(s_par, s_perp,
+        Delta=None, u_par=None, f1=None, z=0, Om=0.3, N_max=5, atol=1e-5,
+        rtol=1e-5, F_inv=None, vel_params=None, **kwargs
+    ):
     """
     Convert redshift-space coordinates (s_par, s_perp) back into real-space 
     coordinates (r_par, r_perp), assuming either:
 
-    - A linear-theory velocity model derived from the cumulative density profile Delta(r), or
+    - A linear-theory velocity model derived from the cumulative density 
+        profile Delta(r), or
     - An explicit peculiar velocity field u_par
 
     Optionally uses a precomputed inverse mapping function F_inv, or falls 
     back to an iterative inversion method.
 
     Parameters:
-        s_par (float): LOS redshift-space coordinate (must be scalar if inverting manually)
+        s_par (float): LOS redshift-space coordinate (must be scalar if 
+                       inverting manually)
         s_perp (float or array): Transverse redshift-space coordinate
         z (float): Redshift
         Om (float): Matter density
-        Om_fid (float or None): Fiducial matter density (unused here but may be passed downstream)
-        Delta (function): Cumulative density contrast profile Δ(r), required for linear inversion
-        u_par (float or array or None): LOS dimensionless peculiar velocity ratio
-                                        (if supplied, used directly). Ie, 
-                                        (1+z)*v/(H(z)*r). Usually, this isn't
-                                        known, so leave as None to compute it using the
-                                        model.
+        Om_fid (float or None): Fiducial matter density (unused here but may 
+                                be passed downstream)
+        Delta (function): Cumulative density contrast profile Δ(r), required 
+                          for linear inversion
+        u_par (float or array or None): LOS dimensionless peculiar velocity 
+                                        ratio (if supplied, used directly). 
+                                        Ie, (1+z)*v/(H(z)*r). Usually, this 
+                                        isn't known, so leave as None to 
+                                        compute it using the model.
         f1 (float or None): Growth rate; computed via f_lcdm if not supplied
         N_max (int): Max number of iterations for manual inversion
         atol (float): Absolute tolerance for iterative convergence
@@ -2329,6 +2379,13 @@ def to_real_space(s_par, s_perp, Delta=None, u_par=None, f1=None,z=0, Om=0.3,
 
     Returns:
         list: [r_par, r_perp] — real-space coordinates
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_z_space_profile.py
+        Regression: test_to_real_space_regression
+        Unit: test_to_real_space_preserves_shape,
+              test_to_real_space_consistency,
+              test_z_space_profile_basic
     """
     r_perp = s_perp  # Perpendicular component is unaffected
     if u_par is None:
@@ -2338,7 +2395,8 @@ def to_real_space(s_par, s_perp, Delta=None, u_par=None, f1=None,z=0, Om=0.3,
         if F_inv is None:
             # Manual inversion via iterative method:
             if Delta is None:
-                raise ValueError("Delta profile must be supplied for linear inversion.")
+                raise ValueError("Delta profile must be supplied for linear " + 
+                                 "inversion.")
             # Use helper to handle the iterative logic
             r_par = iterative_zspace_inverse(s_par, s_perp, f1, Delta, N_max,
                                              atol = atol, rtol = rtol,
@@ -2352,76 +2410,7 @@ def to_real_space(s_par, s_perp, Delta=None, u_par=None, f1=None,z=0, Om=0.3,
         r_par = s_par - u_par
     return [r_par, r_perp]
 
-def ratio_where_finite(x,y,undefined_value = 0.0):
-    """
-    Return the ratio of x and y, except where y is zero, in which case
-    return the specified undefined value (default 0.0)
-    
-    Parameters:
-        x (float or array): Numerator(s)
-        y (float or array): Denominator(s)
-        undefined_value (default 0.0): Value to use for ratio when y is zero.
-    
-    Returns:
-        ratio (float or array), same shape as x/y
-    """
-    if np.isscalar(y):
-        if y == 0.0:
-            return undefined_value
-        else:
-            return x/y
-    else:
-        res = np.full(y.shape,undefined_value)
-        nz = (y != 0)
-        if np.isscalar(x):
-            res[nz] = x/y[nz]
-        else:
-            res[nz] = x[nz]/y[nz]
-        return res
 
-def product_where_finite(x,y,undefined_value = 0.0):
-    """
-    Return the product of x and y, except where x or y is infinite, in which case
-    return the specified undefined value (default 0.0)
-    
-    Parameters:
-        x, y (float or array): Values to multiply
-        undefined_value (default 0.0): Value to use for product when x or y is
-            not finite.
-    
-    Returns:
-        ratio (float or array), same shape as x*y
-    """
-    if np.isscalar(x):
-        if np.isscalar(y):
-            if np.isfinite(x) and np.isfinite(y):
-                return x*y
-            else:
-                return undefined_value
-        else:
-            if np.isfinite(x):
-                res = np.full(y.shape,undefined_value)
-                finite = np.isfinite(y)
-                res[finite] = x*y[finite]
-                return res
-            else:
-                return np.full(y.shape,undefined_value)
-    else:
-        if np.isscalar(y):
-            if np.isfinite(y):
-                res = np.full(x.shape,undefined_value)
-                finite = np.isfinite(x)
-                res[finite] = x[finite]*y
-                return res
-            else:
-                return undefined_value
-        else:
-            finite_x = np.isfinite(x)
-            finite_y = np.isfinite(y)
-            res = np.full(y.shape,undefined_value)
-            finite = finite_x & finite_y
-            res[finite] = x[finite]*y[finite]
-            return res
 
 def geometry_correction(s_par, s_perp, epsilon, **kwargs):
     """
@@ -2446,6 +2435,13 @@ def geometry_correction(s_par, s_perp, epsilon, **kwargs):
 
     Returns:
         tuple: (s_par_new, s_perp_new) — corrected redshift-space coordinates
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_geometry.py
+        Regression: test_geometry_correction_regression
+        Unit: test_geometry_correction_identity,
+              test_geometry_correction_output_shape,
+              test_geometry_correction_reversibility
     """
     if epsilon is None:
         epsilon = 1.0
@@ -2497,6 +2493,11 @@ def z_space_profile(s_par, s_perp, rho_real, Delta, delta, f1=None,z=0, Om=0.3,
 
     Returns:
         float: Redshift-space density ρ(s_par, s_perp)
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_z_space_profile.py
+        Regression: test_z_space_profile_regression
+        Unit: test_z_space_profile_basic
     """
     # Step 1: Apply Alcock-Paczynski geometric correction (if requested)
     if apply_geometry:
@@ -2546,106 +2547,6 @@ def compute_singular_log_likelihood(x,Umap,good_eig):
     uDu = np.sum(u*Du)
     N = len(good_eig)
     return -0.5*uDu - (N/2)*np.log(2*np.pi) - 0.5*np.sum(np.log(good_eig))
-
-
-
-# Likelihood function:
-def log_likelihood_aptest_old(theta,data_field,scoords,inv_cov,
-                          z,Delta,delta,rho_real,data_filter=None,
-                          cholesky=False,normalised=False,tabulate_inverse=True,
-                          ntab = 10,sample_epsilon=False,Om_fid=None,
-                          singular=False,Umap=None,good_eig=None,
-                          F_inv=None,log_density=False,infer_profile_args=False,
-                          **kwargs):
-    s_par = scoords[:,0]
-    s_perp = scoords[:,1]
-    if sample_epsilon:
-        epsilon, f, *profile_args = theta
-        if Om_fid is not None:
-            Om = Om_fid
-        else:
-            Om = 0.3
-    else:
-        Om, f , *profile_args = theta
-        if Om_fid is not None:
-            epsilon = ap_parameter(z,Om,Om_fid,**kwargs)
-        else:
-            epsilon = 1.0
-    M = len(s_par)
-    delta_rho = np.zeros(s_par.shape)
-    # Apply geometric correction to account for miss-specified cosmology:
-    s_par_new, s_perp_new = geometry_correction(s_par,s_perp,epsilon)
-    # Wrappers if we are inferring profile arguments:
-    if infer_profile_args:
-        Delta_func = lambda r: Delta(r,*profile_args)
-        delta_func = lambda r: delta(r,*profile_args)
-    else:
-        # Fixed profile:
-        Delta_func = Delta
-        delta_func = delta
-    # Evaluate the profile for the supplied value of the parameters:
-    if tabulate_inverse:
-        # Tabulate an inverse function and then evaluate an interpolated
-        # inverse, rather than repeatedly inverting:
-        data_val = data_field
-        if F_inv is None:
-            svals = np.linspace(np.min(s_par_new),np.max(s_par_new),ntab)
-            rperp_vals = np.linspace(np.min(s_perp_new),np.max(s_perp_new),ntab)
-            rvals = np.zeros((ntab,ntab))
-            for i in range(0,ntab):
-                for j in range(0,ntab):
-                    F = (lambda r: r - r*(f/3)*\
-                        Delta_func(np.sqrt(r**2 + rperp_vals[i]**2)) \
-                        - svals[j])
-                    rvals[i,j] = scipy.optimize.fsolve(F,svals[j])
-            F_inv = lambda x, y, z: scipy.interpolate.interpn(
-                                        (rperp_vals,svals),rvals,
-                                        np.vstack((x,y)).T,method='cubic')
-            theory_val = z_space_profile(s_par_new,s_perp_new,
-                                         lambda r: rho_real(r,*profile_args),
-                                         Delta_func,delta_func,f=f,z=z,Om=Om,
-                                         F_inv=F_inv,**kwargs)
-        else:
-            theory_val = z_space_profile(s_par_new,s_perp_new,
-                                         lambda r: rho_real(r,*profile_args),
-                                         Delta_func,delta_func,f=f,z=z,Om=Om,
-                                         F_inv=lambda x, y, z: F_inv(x,y,z),
-                                         **kwargs)
-        if log_density:
-            # Examine the log density. Assumes that the user has already 
-            # provided log-data and a relevant estimated covariance matrix
-            theory_val = np.log(theory_val)
-        if normalised:
-            delta_rho = 1.0 - theory_val/data_val
-        else:
-            delta_rho = data_val - theory_val
-    else:
-        for k in range(0,M):
-            data_val = data_field[k]
-            theory_val = z_space_profile(s_par_new[k],s_perp_new[k],
-                                         lambda r: rho_real(r,*profile_args),
-                                         Delta_func,delta_func,f=f,z=z,Om=Om,
-                                         **kwargs)
-            if normalised:
-                delta_rho[k] = 1.0 - theory_val/data_val
-            else:
-                delta_rho[k] = data_val - theory_val
-    if cholesky:
-        # We assume that the covariance is given in it's lower triangular form,
-        # rather than an explicit covariance. We then solve this rather than
-        # actually computing 
-        x = scipy.linalg.solve_triangular(inv_cov,delta_rho,lower=True)
-        #return -0.5*np.sum(x**2)  - (M/2)*np.log(2*np.pi) - \
-        #     np.sum(np.log(np.diag(inv_cov)))
-        return -0.5*np.sum(x**2)
-    elif singular:
-        if (Umap is None) or (good_eig is None):
-            raise Exception("Must provide Umap and good_eigenvalues for " + 
-                "handling singular covariance matrices")
-        return compute_singular_log_likelihood(delta_rho,Umap,good_eig)
-    else:
-        return -0.5*np.matmul(np.matmul(delta_rho,inv_cov),delta_rho.T)
-
 
 def get_tabulated_inverse(
         s_par,

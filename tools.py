@@ -619,5 +619,187 @@ def get_unit_vector(v):
     """
     return v/np.sqrt(np.sum(v**2))
 
+def profile_derivative_test(rvals,delta,Delta,profile,profile_log_derivative,
+        rtol=1e-5,atol=1e-5,f1=0.53,lower_lim = -10
+    ):
+    """
+    Test whether the logarithmic derivative of a velocity profile actually 
+    integrates back to the original profile. Used for testing purposes.
+    
+    Parameters:
+    rvals (float or array): Values of r at which to test the profiles.
+    delta (function): Density contrast, function taking r as an argument.
+    Delta (function): Cumulative density contrast.
+    profile (function): Velocity profile to test. Should take arguments
+                        profile(rvals,Delta,f1)
+    profile_log_derivative (function): Derivative of profile with respect to
+                                       log(r), which we wish to test. Should
+                                       take arguments 
+                                       profile_log_deriative(
+                                           rvals,Delta,delta,f1
+                                       )
+    rtol (float): Relative tolerance in the difference between the integral
+                  and the profile.
+    atol (float): Absolute tolerance
+    f1 (float): Linear growth rate, which is always a parameter of the models
+                we wish to test.
+    lower_lim (float): Logarithm of the lower limit of the integral, to avoid
+                       integrations problems near r = 0.
+    """
+    u = lambda r: profile(r,Delta,f1)
+    up = lambda logr: profile_log_derivative(
+        np.exp(logr),Delta,delta,f1
+    )
+    ri = rvals[rvals >= np.exp(lower_lim)]
+    integrals = np.array(
+        [
+            scipy.integrate.quad(
+                lambda logr: up(logr),lower_lim,np.log(r)
+            )[0]
+            for r in ri
+        ]
+    )
+    np.testing.assert_allclose(
+        u(ri) - u(0), integrals, rtol=rtol,atol=atol
+    )
+
+def run_basic_regression_test(
+        function,filename,*args,rtol=1e-5,atol=1e-5,**kwargs
+    ):
+    """
+    Run a basic regression test, comparing the computed output of some function
+    to a snapshot of the expected output.
+    
+    Parameters:
+        function (function): function that produces the output we wish to test.
+        filename (string): File where reference is stored.
+        args: arguments to be passed to the function being tested.
+        rtol (float): Relative tolerance for the comparison.
+        atol (float): Absolute tolerance for the comparison.
+        kwargs (dictionary): Keyword arguments for the function being tested.
+    """
+    computed = function(*args,**kwargs)
+    name, ext = os.path.splitext(filename)
+    if ext == ".npy":
+        reference = np.load(filename)
+        np.testing.assert_allclose(computed,reference,rtol=rtol,atol=atol)
+    elif ext == ".npz":
+        all_refs = np.load(filename)
+        reference = [all_refs[key] for key in all_refs]
+    elif ext == ".p":
+        reference = tools.loadPickle(filename)
+    else:
+        raise Exception("File type not implemented or not recognised.")
+    if len(computed) != len(reference):
+        raise Exception("Number of references does not match number of " + 
+                        "computed.")
+    for comp, ref in zip(computed, reference):
+        np.testing.assert_allclose(comp,ref,rtol=rtol,atol=atol)
+
+def generate_regression_test_data(function,filename,*args,**kwargs):
+    """
+    Generate reference data used for a regression test.
+    
+    Parameters:
+        function (function): Function which generates the regression test data.
+        filename (string): File in which to save the test data.
+        *args (tuple): Arguments supplied to function
+        **kwargs (dictionary): Keyword arguments supplied to function.
+    """
+    computed = function(*args,**kwargs)
+    name, ext = os.path.splitext(filename)
+    if ext == ".npy":
+        np.save(filename,computed)
+    elif ext == ".npz":
+        np.savez(filename,*computed)
+    elif ext == ".p":
+        tools.savePickle(filename,computed)
+
+def ratio_where_finite(x,y,undefined_value = 0.0):
+    """
+    Return the ratio of x and y, except where y is zero, in which case
+    return the specified undefined value (default 0.0)
+    
+    Parameters:
+        x (float or array): Numerator(s)
+        y (float or array): Denominator(s)
+        undefined_value (default 0.0): Value to use for ratio when y is zero.
+    
+    Returns:
+        ratio (float or array), same shape as x/y
+    """
+    if np.isscalar(y):
+        if y == 0.0:
+            return undefined_value
+        else:
+            return x/y
+    else:
+        res = np.full(y.shape,undefined_value)
+        nz = (y != 0)
+        if np.isscalar(x):
+            res[nz] = x/y[nz]
+        else:
+            res[nz] = x[nz]/y[nz]
+        return res
+
+def product_where_finite(x,y,undefined_value = 0.0):
+    """
+    Return the product of x and y, except where x or y is infinite, in which 
+    case return the specified undefined value (default 0.0)
+    
+    Parameters:
+        x, y (float or array): Values to multiply
+        undefined_value (default 0.0): Value to use for product when x or y is
+            not finite.
+    
+    Returns:
+        ratio (float or array), same shape as x*y
+    """
+    if np.isscalar(x):
+        if np.isscalar(y):
+            if np.isfinite(x) and np.isfinite(y):
+                return x*y
+            else:
+                return undefined_value
+        else:
+            if np.isfinite(x):
+                res = np.full(y.shape,undefined_value)
+                finite = np.isfinite(y)
+                res[finite] = x*y[finite]
+                return res
+            else:
+                return np.full(y.shape,undefined_value)
+    else:
+        if np.isscalar(y):
+            if np.isfinite(y):
+                res = np.full(x.shape,undefined_value)
+                finite = np.isfinite(x)
+                res[finite] = x[finite]*y
+                return res
+            else:
+                return undefined_value
+        else:
+            finite_x = np.isfinite(x)
+            finite_y = np.isfinite(y)
+            res = np.full(y.shape,undefined_value)
+            finite = finite_x & finite_y
+            res[finite] = x[finite]*y[finite]
+            return res
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

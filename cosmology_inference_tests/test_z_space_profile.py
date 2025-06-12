@@ -11,8 +11,13 @@ from void_analysis.cosmology_inference import (
     iterative_zspace_inverse_scalar,
     iterative_zspace_inverse,
     void_los_velocity,
-    void_los_velocity_derivative
+    void_los_velocity_derivative,
+    void_los_velocity_ratio_1lpt,
+    void_los_velocity_ratio_derivative_1lpt,
+    get_dudr_hz_o1pz
 )
+
+from void_analysis import tools
 
 SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "snapshots")
 
@@ -28,6 +33,16 @@ def synthetic_profile_data():
     delta = lambda r: -0.2 * np.exp(-r**2)
     rho_real_func = lambda r: delta(r) + 1.0
     return r_par, r_perp, z, Om, Delta, delta, rho_real_func
+
+@pytest.fixture
+def mock_profile_data():
+    rvals = np.linspace(0,3,101)
+    A = 0.85
+    sigma = 1
+    delta_f = lambda r: gaussian_delta(r,A=A,sigma=sigma)
+    Delta_f = lambda r: gaussian_Delta(r,A=A,sigma=sigma)
+    Delta = delta_f(rvals)
+    return rvals, Delta, delta_f, Delta_f, A, sigma
 
 @pytest.fixture
 def simple_delta_function():
@@ -175,4 +190,43 @@ def test_void_los_velocity_derivative_regression(synthetic_profile_data):
     v_los_deriv = void_los_velocity_derivative(z, Delta, dDelta,r_par,r_perp,Om)
     ref = np.load(os.path.join(SNAPSHOT_DIR, "void_los_velocity_derivative_ref.npy"))
     np.testing.assert_allclose(v_los_deriv, ref, rtol=1e-6)
+
+def test_get_dudr_hz_o1pz(mock_profile_data):
+    A = 0.85
+    sigma = 1
+    delta_f = lambda r: gaussian_delta(r,A=A,sigma=sigma)
+    Delta_f = lambda r: gaussian_Delta(r,A=A,sigma=sigma)
+    rvals = np.linspace(0,3,31)
+    r_par = np.linspace(0,2,21)
+    r_perp = np.linspace(0,2,21)
+    f1 = 0.53
+    tools.run_basic_regression_test(
+        get_dudr_hz_o1pz,
+        os.path.join(SNAPSHOT_DIR, "get_dudr_hz_o1pz_ref.npy"),
+        Delta_f, delta_f, r_par, r_perp, f1, rtol=1e-5,atol=1e-5
+        vel_model = void_los_velocity_ratio_1lpt,
+        dvel_dlogr_model = void_los_velocity_ratio_derivative_1lpt
+    )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
