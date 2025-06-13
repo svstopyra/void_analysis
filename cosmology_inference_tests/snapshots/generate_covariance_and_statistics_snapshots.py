@@ -5,12 +5,14 @@ from void_analysis.cosmology_inference import (
     tikhonov_regularisation,
     regularise_covariance,
     get_inverse_covariance,
+    range_excluding,
+    get_nonsingular_subspace,
+    get_solved_residuals,
     compute_normality_test_statistics,
     covariance,
     profile_jackknife_covariance,
     compute_singular_log_likelihood,
-    get_solved_residuals,
-    get_nonsingular_subspace
+    get_covariance_matrix
 )
 
 GENERATED_SNAPSHOTS = [
@@ -20,8 +22,11 @@ GENERATED_SNAPSHOTS = [
     "normality_statistics_ref.npy",
     "covariance_old_ref.npy",
     "profile_jackknife_covariance_ref.npy",
-    "singular_log_likelihood_ref.npy"
+    "singular_log_likelihood_ref.npy",
+    "get_solved_residuals_ref.npy"
 ]
+
+from void_analysis import tools
 
 def generate_snapshots():
     np.random.seed(42)
@@ -54,6 +59,17 @@ def generate_snapshots():
     np.save("covariance_old_ref.npy", cov_direct)
     np.save("profile_jackknife_covariance_ref.npy", jackknife_cov)
     np.save("singular_log_likelihood_ref.npy", singular_log_like)
+
+    # get_solved_residuals
+    np.random.seed(0)
+    samples = np.random.randn(5, 100)
+    cov = np.cov(samples)
+    xbar = np.mean(samples, axis=1)
+    tools.generate_regression_test_data(
+        get_solved_residuals,
+        "get_solved_residuals_ref.npy",
+        samples,cov,xbar
+    )
 
     print("✅ Covariance and statistical snapshots saved!")
 

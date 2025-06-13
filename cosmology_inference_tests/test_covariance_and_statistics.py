@@ -17,6 +17,8 @@ from void_analysis.cosmology_inference import (
     get_covariance_matrix
 )
 
+from void_analysis import tools
+
 SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "snapshots")
 
 @pytest.fixture
@@ -201,4 +203,14 @@ def test_covariance_matrix_regression(mock_los_data, bin_edges):
     ref = np.load(os.path.join(SNAPSHOT_DIR, "covariance_ref.npy"))
     np.testing.assert_allclose(cov, ref, rtol=1e-6, atol=1e-10)
 
+def test_get_solved_residuals():
+    np.random.seed(0)
+    samples = np.random.randn(5, 100)
+    covariance = np.cov(samples)
+    xbar = np.mean(samples, axis=1)
+    tools.run_basic_regression_test(
+        get_solved_residuals,
+        os.path.join(SNAPSHOT_DIR, "get_solved_residuals_ref.npy"),
+        samples,covariance,xbar
+    )
 

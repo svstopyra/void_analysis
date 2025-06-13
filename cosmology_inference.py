@@ -2890,6 +2890,10 @@ def tikhonov_regularisation(cov_matrix, lambda_reg=1e-10):
 
     Returns:
         ndarray: Regularised covariance matrix
+    Tests:
+        Tested in cosmology_inference_tests/test_covariance_and_statistics.py
+        Regression tests: test_tikhonov_regularisation_regression
+        Unit tests: test_tikhonov_regularisation_identity
     """
     return cov_matrix + lambda_reg * np.eye(cov_matrix.shape[0])
 
@@ -2905,15 +2909,25 @@ def regularise_covariance(cov, lambda_reg=1e-10):
 
     Returns:
         ndarray: Symmetrised and regularised covariance matrix
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_covariance_and_statistics
+        Regression tests: test_regularise_covariance_regression
+        Unit tests: test_regularise_covariance_is_symmetric,
+                    test_regularise_covariance_is_positive_definite,
+                    test_regularise_covariance_symmetry
     """
     symmetric_cov = 0.5 * (cov + cov.T)
-    regularised_cov = tikhonov_regularisation(symmetric_cov, lambda_reg=lambda_reg)
+    regularised_cov = tikhonov_regularisation(
+        symmetric_cov, lambda_reg=lambda_reg
+    )
     return regularised_cov
 
 
 def get_inverse_covariance(cov, lambda_reg=1e-10):
     """
-    Compute the inverse of a (regularised) covariance matrix using Cholesky decomposition.
+    Compute the inverse of a (regularised) covariance matrix using Cholesky 
+    decomposition.
 
     This involves:
     - Symmetrising the input
@@ -2927,6 +2941,12 @@ def get_inverse_covariance(cov, lambda_reg=1e-10):
 
     Returns:
         ndarray: Inverse of the regularised covariance matrix
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_covariance_and_statistics
+        Regression tests: test_get_inverse_covariance_regression
+        Unit tests: test_inverse_covariance_sane,
+                    test_get_inverse_covariance_consistency
     """
     regularised_cov = regularise_covariance(cov, lambda_reg=lambda_reg)
     L = np.linalg.cholesky(regularised_cov)      # Lower triangular matrix
@@ -2946,6 +2966,10 @@ def range_excluding(kmin, kmax, exclude):
 
     Returns:
         ndarray: Array of integers not in 'exclude'
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_covariance_and_statistics
+        Unit tests: test_range_excluding_basic
     """
     return np.setdiff1d(range(kmin, kmax), exclude)
 
@@ -2956,13 +2980,15 @@ def get_nonsingular_subspace(C, lambda_reg,
     """
     Compute a projection onto the non-singular subspace of a covariance matrix.
 
-    The covariance is regularised and optionally normalised before eigenvalue decomposition.
-    Only eigenvectors with eigenvalues above a cutoff are retained.
+    The covariance is regularised and optionally normalised before eigenvalue 
+    decomposition. Only eigenvectors with eigenvalues above a cutoff are 
+    retained.
 
     Parameters:
         C (ndarray): Covariance matrix (k x k)
         lambda_reg (float): Tikhonov regularisation parameter
-        lambda_cut (float or None): Minimum eigenvalue to keep (default: 10 * lambda_reg)
+        lambda_cut (float or None): Minimum eigenvalue to keep 
+                                    (default: 10 * lambda_reg)
         normalised_cov (bool): If True, normalise C by mu.outer(mu)
         mu (ndarray or None): Mean vector (required if normalised_cov=True)
 
@@ -2970,11 +2996,18 @@ def get_nonsingular_subspace(C, lambda_reg,
         tuple:
             - Umap (ndarray): Projection matrix to nonsingular eigenspace
             - good_eig (ndarray): Retained eigenvalues
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_covariance_and_statistics
+        Regression tests: test_compute_singular_log_likelihood_regression
+        Unit tests: test_compute_singular_log_likelihood_basic,
+                    test_get_nonsingular_subspace_structure
     """
     reg_cov = regularise_covariance(C, lambda_reg=lambda_reg)
     if normalised_cov:
         if mu is None:
-            raise ValueError("Mean 'mu' must be provided for normalised covariance.")
+            raise ValueError("Mean 'mu' must be provided for normalised " + 
+                             "covariance.")
         norm_cov = C / np.outer(mu, mu)
         norm_reg_cov = regularise_covariance(norm_cov, lambda_reg=lambda_reg)
         eig, U = scipy.linalg.eigh(norm_reg_cov)
@@ -3014,6 +3047,12 @@ def get_solved_residuals(samples, covariance, xbar,
 
     Returns:
         ndarray: Whitened residuals (projected or full)
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_covariance_and_statistics
+        Regression tests: test_get_solved_residuals
+        Unit tests: test_compute_singular_log_likelihood_basic,
+                    test_get_solved_residuals_shape
     """
     k, n = samples.shape
     if not singular:
@@ -3061,13 +3100,19 @@ def compute_normality_test_statistics(samples,
 
     Parameters:
         samples (ndarray): (k, n) array of samples
-        covariance (ndarray or None): Covariance matrix (used if residuals not provided)
+        covariance (ndarray or None): Covariance matrix (used if residuals not
+                                      provided)
         xbar (ndarray or None): Mean vector (used if residuals not provided)
         solved_residuals (ndarray or None): Precomputed whitened residuals
         low_memory_sum (bool): If True, use a lower-memory summation loop
 
     Returns:
         list: [A, B] — test statistics
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_covariance_and_statistics
+        Regression tests: test_compute_normality_statistics_regression
+        Unit tests: test_compute_normality_statistics_output
     """
     n = samples.shape[1]
     k = samples.shape[0]
@@ -3076,11 +3121,15 @@ def compute_normality_test_statistics(samples,
     if xbar is None:
         xbar = np.mean(samples, axis=1)
     if solved_residuals is None:
-        solved_residuals = get_solved_residuals(samples, covariance, xbar, **kwargs)
+        solved_residuals = get_solved_residuals(
+            samples, covariance, xbar, **kwargs
+        )
     if low_memory_sum:
         Ai = np.array([
             np.sum(
-                np.sum(solved_residuals[:, i][:, None] * solved_residuals, axis=0) ** 3
+                np.sum(
+                    solved_residuals[:, i][:, None] * solved_residuals, axis=0
+                ) ** 3
             ) for i in tools.progressbar(range(n))
         ])
         A = np.sum(Ai) / (6 * n)
@@ -3100,22 +3149,28 @@ def get_zspace_centres(halo_indices, snap_list, snap_list_rev,
                        hrlist=None, recompute_zspace=False,
                        swapXZ=False, reverse=True):
     """
-    Compute redshift-space void centers from a halo catalogue (in reverse simulations).
+    Compute redshift-space void centers from a halo catalogue (in reverse 
+    simulations).
 
     This function:
-      - Loads the redshift-space positions of all particles in the forward snapshot
+      - Loads the redshift-space positions of all particles in the forward 
+        snapshot
       - Uses the halo catalogue (from reverse sim) to identify void particles
       - Computes the redshift-space center for each void
       - Applies remapping to shift into the final coordinate frame
 
     Parameters:
-        halo_indices (list of lists): Per-snapshot list of halo indices representing voids
+        halo_indices (list of lists): Per-snapshot list of halo indices 
+                                      representing voids
         snap_list (list): Forward simulation snapshots (used for positions)
         snap_list_rev (list): Reverse snapshots (used for halos = voids)
-        hrlist (list or None): If supplied, overrides halos loaded from snap_list_rev
-        recompute_zspace (bool): If True, force recomputation of redshift-space positions
+        hrlist (list or None): If supplied, overrides halos loaded from 
+                               snap_list_rev
+        recompute_zspace (bool): If True, force recomputation of redshift-space 
+                                 positions
         swapXZ (bool): Whether to swap X and Z axes during coordinate remapping
-        reverse (bool): Whether to reflect coordinates around box center during remapping
+        reverse (bool): Whether to reflect coordinates around box center during 
+                        remapping
 
     Returns:
         list of arrays: Redshift-space centers of voids for each snapshot
