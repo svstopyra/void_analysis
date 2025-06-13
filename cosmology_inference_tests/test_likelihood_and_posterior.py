@@ -12,7 +12,13 @@ from void_analysis.cosmology_inference import (
     get_profile_parameters_fixed,
     profile_modified_hamaus,
     generate_scoord_grid,
+    void_los_velocity_ratio_1lpt,
+    get_tabulated_inverse,
+    iterative_zspace_inverse
 )
+from void_analysis import tools
+from void_analysis.simulation_tools import gaussian_delta, gaussian_Delta
+
 
 SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "snapshots")
 
@@ -38,6 +44,16 @@ def synthetic_profile_data():
     delta_noisy = delta + 0.02 * np.random.randn(len(r))
     sigma = 0.02 * np.ones_like(r)
     return r, delta_noisy, sigma, true_params
+
+@pytest.fixture
+def synthetic_inversion_data():
+    spar_bins = np.linspace(0,2,21)
+    sperp_bins = np.linspace(0,2,21)
+    scoords = generate_scoord_grid(sperp_bins,spar_bins)
+    ntab = 10
+    f1 = 0.53
+    return spar_bins,sperp_bins,scoords, ntab, f1
+    
 
 # ---------------------- UNIT TESTS: Flat Priors ----------------------
 
@@ -77,15 +93,16 @@ def test_log_likelihood_profile_basic():
 # ---------------------- UNIT TESTS: Profile Fitting ----------------------
 
 def test_get_profile_parameters_fixed_convergence():
-    r = np.linspace(0.1, 2.0, 300)
+    r = np.linspace(0, 10, 1001)
     true_params = [1.0, 2.0, 1.0, -0.5, 0.0, 1.0]
     y_true = profile_modified_hamaus(r, *true_params)
     noise = 0.01
+    np.random.seed(0)
     y_obs = y_true + noise * np.random.randn(len(r))
     sigma = noise * np.ones_like(r)
 
     fitted_params = get_profile_parameters_fixed(r, y_obs, sigma)
-    assert np.allclose(fitted_params, true_params, atol=0.5)
+    assert np.allclose(fitted_params, true_params, atol=0.1,rtol=0.1)
 
 
 def test_log_likelihood_output(synthetic_profile_data):
@@ -127,7 +144,35 @@ def test_log_probability_aptest_sanity():
                                    Umap=None, good_eig=None)
     assert np.isfinite(logp)
 
-
+def test_tabluated_inverse_accuracy(synthetic_inversion_data):
+    """
+    Test whether the tabulated inverse is sufficiently close to the true inverse
+    """
+    tabulated = _,_,scoords, ntab, f1 = synthetic_inversion_data
+    s_par, s_perp = [scoords[:,0], scoords[:,1]]
+    Delta = lambda r: gaussian_Delta(r,A=0.85,sigma=1)
+    F_inv = get_tabulated_inverse(
+        s_par,s_perp,ntab,Delta,f1,
+        vel_model = void_los_velocity_ratio_1lpt,vel_params=None,
+        use_iterative = True
+    )
+    # Points at wich to test the inversion:
+    spar_bins2 = np.linspace(0,2,16)
+    sperp_bins2 = np.linspace(0,2,16)
+    scoords2 = generate_scoord_grid(sperp_bins2,spar_bins2)
+    spar2, sperp2 = [scoords2[:,0], scoords2[:,1]]
+    # Tabulated inversion:
+    tabulated = F_inv(spar2,sperp2)
+    # Exact inversion:
+    exact = iterative_zspace_inverse(
+        spar2, sperp2, f1, Delta, N_max=5, atol=1e-5, rtol=1e-5,
+        vel_params=None
+    )
+    # Check these are sufficiently close. Tolerances are quite high,
+    # because we don't expect this to be a brilliant approximation, it just
+    # needs to be a fast but "good enough" approximation. Tenth of a percent
+    # level should be more than enough.
+    np.testing.assert_allclose(tabulated,exact,atol=1e-3,rtol=1e-3)
 
 # ---------------------- REGRESSION TESTS ----------------------
 
@@ -160,3 +205,16 @@ def test_log_probability_aptest_regression(synthetic_data):
     output = log_probability_aptest(theta, data_field, scoords, inverse_matrix, z, Delta_func, delta_func, rho_real,theta_ranges = [[-1,1],[0,1]])
     np.testing.assert_allclose(output, ref, rtol=1e-5)
 
+def test_get_tabulated_inverse(synthetic_inversion_data):
+    _,_,scoords, ntab, f1 = synthetic_inversion_data
+    s_par, s_perp = [scoords[:,0], scoords[:,1]]
+    Delta = lambda r: gaussian_Delta(r,A=0.85,sigma=1)
+    F_inv = get_tabulated_inverse(
+        s_par,s_perp,ntab,gaussian_Delta,f1,
+        vel_model = void_los_velocity_ratio_1lpt,vel_params=None,
+        use_iterative = True
+    )
+    tools.run_basic_regression_test(
+        F_inv,os.path.join(SNAPSHOT_DIR, "get_tabulated_inverse_ref.npy"),
+        s_par,s_perp
+    )

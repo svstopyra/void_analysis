@@ -2645,6 +2645,11 @@ def get_tabulated_inverse(
         
     Returns:
         Inverse function
+    
+    Tests:
+        Tested in cosmology_inference/test_likelihood_and_posterior.py
+        Regression tests: test_get_tabulated_inverse
+        Unit tests: test_tabluated_inverse_accuracy
     """
     spar_vals = np.linspace(np.min(s_par),np.max(s_par),ntab)
     rperp_vals = np.linspace(np.min(s_perp),np.max(s_perp),ntab)
