@@ -18,6 +18,7 @@ from void_analysis.cosmology_inference import (
 )
 
 from void_analysis import tools
+from void_analysis.simulation_tools import gaussian_delta, gaussian_Delta
 
 SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "snapshots")
 
@@ -203,7 +204,7 @@ def test_get_dudr_hz_o1pz(mock_profile_data):
     tools.run_basic_regression_test(
         get_dudr_hz_o1pz,
         os.path.join(SNAPSHOT_DIR, "get_dudr_hz_o1pz_ref.npy"),
-        Delta_f, delta_f, r_par, r_perp, f1, rtol=1e-5,atol=1e-5
+        Delta_f, delta_f, r_par, r_perp, f1, rtol=1e-5,atol=1e-5,
         vel_model = void_los_velocity_ratio_1lpt,
         dvel_dlogr_model = void_los_velocity_ratio_derivative_1lpt
     )

@@ -103,7 +103,7 @@ def test_lpt_velocity_derivative_integral(mock_profile_data):
     for the lpt model.
     """
     rvals, _, delta_f, Delta_f, _,_ = mock_profile_data
-    profile_derivative_test(
+    tools.profile_derivative_test(
         rvals,delta_f,Delta_f,void_los_velocity_ratio_1lpt,
         void_los_velocity_ratio_derivative_1lpt,
         rtol=1e-5,atol=1e-5,f1=0.53,lower_lim = -10
@@ -115,7 +115,7 @@ def test_semi_analytic_velocity_derivative_integral(mock_profile_data):
     for the semi-analytic model.
     """
     rvals, _, delta_f, Delta_f, _,_ = mock_profile_data
-    profile_derivative_test(
+    tools.profile_derivative_test(
         rvals,delta_f,Delta_f,void_los_velocity_ratio_semi_analytic,
         void_los_velocity_ratio_derivative_semi_analytic,
         rtol=1e-5,atol=1e-5,f1=0.53,lower_lim = -10

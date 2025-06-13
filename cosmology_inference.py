@@ -2530,28 +2530,85 @@ def z_space_profile(s_par, s_perp, rho_real, Delta, delta, f1=None,z=0, Om=0.3,
 
 # Compute the covariance matrix of a set of data:
 def covariance(data):
-    # data should be an (N,M) array of N data elements, each with M values.
-    # We seek to compute an M x M covariance matrix of this data
+    """
+    Compute the covariance of the supplied data. data should be an (N,M) 
+    array of N data elements, each with M values.
+    We seek to compute an M x M covariance matrix of this data
+    
+    Old method, and probably suitable for being deprecated.
+    
+    Parameters:
+        data (array): NxM matrix array of N data samples, each of which is
+                      an M-component vector.
+    
+    Returns:
+        array: MxM covariance matrix of the data.
+    
+    Tests:
+        Tested in test_covariance_and_statistics.py
+        Regression tests: test_covariance_regression
+        Unit tests: test_covariance_symmetry,
+    """
     N, M = data.shape
     mean = np.mean(data,0)
     diff = data.T - mean[:,None]
     cov = np.matmul(diff,diff.T)/N
     return cov
 
-# Estimate covariance of the profile using the jackknife method:
-def profile_jackknife_covariance(data,profile_function,**kwargs):
+def profile_jackknife_covariance(data,profile_function,*args,**kwargs):
+    """
+    Estimate covariance of the profile using the jackknife method.
+    
+    Parameters:
+        data (array): NxM matrix array of N data samples, each of which is
+                      an M-component vector.
+        profile_function (function): Function which takes the data and fits
+                                     a profile to it.
+        *args (tuple): Additional arguments passed to the profile function.
+        kwargs (dictionary): Keyword arguments passed to the profile function.
+    
+    Results:
+        array: Covariance of the profile. 
+    
+    Tests:
+        Tested in test_covariance_and_statistics.py
+        Regression tests: test_profile_jackknife_covariance_regression
+        Unit tests: test_profile_jackknife_covariance_shape
+    """
     N, M = data.shape
     jacknife_data = np.zeros((N,M))
     for k in range(0,N):
         sample = np.setdiff1d(range(0,N),np.array([k]))
-        jacknife_data[k,:] = profile_function(data[sample,:],**kwargs)
+        jacknife_data[k,:] = profile_function(data[sample,:],*args,**kwargs)
     return covariance(jacknife_data)/(N-1)
 
 
 def compute_singular_log_likelihood(x,Umap,good_eig):
-    u = np.matmul(Umap,x)
-    Du = u/good_eig
-    uDu = np.sum(u*Du)
+    """
+    Compute the log-likelihood of data after regularising poorly conditioned
+    eigenvectors in the covariance matrix.
+    
+    Parameters:
+        x (array): M-component residual of the data vector relative to a model.
+        Umap (array): N x M matrix which maps the data residual into an 
+                      eigenspace with well-conditioned eigenvectors. 
+                      This is a projection operator constructed from the 
+                      well-conditioned eigenvalues, while projecting out
+                      everything in the poorly-conditioned subspace.
+        good_eig (array): N-component array containing the well-conditioned 
+                          eigenvalues in question.
+        
+    Returns:
+        float: Log-likelihood after removing singular directions in data space.
+    
+    Tests:
+        Tested in test_covariance_and_statistics.py
+        Regression tests: test_compute_singular_log_likelihood_regression
+        Unit tests: test_compute_singular_log_likelihood_basic
+    """
+    u = np.matmul(Umap,x) # Data mapped into the well-conditioned eigenspace
+    Du = u/good_eig # Apply covariance, which is diagonal in this eigenspace
+    uDu = np.sum(u*Du) # Covariance including only good eigenspace.
     N = len(good_eig)
     return -0.5*uDu - (N/2)*np.log(2*np.pi) - 0.5*np.sum(np.log(good_eig))
 
@@ -2567,8 +2624,8 @@ def get_tabulated_inverse(
         **kwargs
     ):
     """
-    Construct an interpolated function that inverts the mapping between real space
-    and redshift space.
+    Construct an interpolated function that inverts the mapping between real 
+    space and redshift space.
     
     Parameters:
         s_par (array): Redshift space co-ordinates parallel to LOS
@@ -2579,8 +2636,8 @@ def get_tabulated_inverse(
                             have r, Delta, and f1 as parameters, but additional
                             parameters may be required depending on the model,
                             passed via kwargs.
-        Delta_func (function) function that returns the cumulative density contrast
-                              at radius r.
+        Delta_func (function) function that returns the cumulative density 
+                              contrast at radius r.
         f1 (float): Linear growth rate.
         vel_params (array or None): Additional parameters for velocity model.
         use_iterative (bool): If True, use iterative method to invert. Otherwise
@@ -2588,6 +2645,11 @@ def get_tabulated_inverse(
         
     Returns:
         Inverse function
+    
+    Tests:
+        Tested in cosmology_inference/test_likelihood_and_posterior.py
+        Regression tests: test_get_tabulated_inverse
+        Unit tests: test_tabluated_inverse_accuracy
     """
     spar_vals = np.linspace(np.min(s_par),np.max(s_par),ntab)
     rperp_vals = np.linspace(np.min(s_perp),np.max(s_perp),ntab)
@@ -2669,6 +2731,10 @@ def log_likelihood_aptest(theta, data_field, scoords, inv_cov, z,
 
     Returns:
         float: Log-likelihood value
+    
+    Tests:
+        Tested in cosmology_inference/test_likelihood_and_posterior.py
+        Regression tests: test_log_likelihood_aptest_regression
     """
     # Apply optional data filtering
     if data_filter is not None:
@@ -2685,10 +2751,11 @@ def log_likelihood_aptest(theta, data_field, scoords, inv_cov, z,
         Om, f1 = theta[0], theta[1]
         epsilon = ap_parameter(z, Om, Om_fid, **kwargs)
     profile_params = theta[2:(2 + N_prof)]
-    vel_params = None if N_vel == 0 else theta[(2 + N_prof):(2 + N_prof + N_vel)]
-    # Apply geometric correction to account for miss-specified cosmology. NB, this
-    # means that we SHOULDN'T apply geometry corrections below, because they
-    # have already been applied here!
+    vel_params = (None if N_vel == 0 
+                  else theta[(2 + N_prof):(2 + N_prof + N_vel)])
+    # Apply geometric correction to account for miss-specified cosmology. 
+    # NB, this means that we SHOULDN'T apply geometry corrections below, 
+    # because they have already been applied here!
     s_par_new, s_perp_new = geometry_correction(s_par,s_perp,epsilon)
     # Construct profile functions
     if infer_profile_args:
@@ -2705,8 +2772,8 @@ def log_likelihood_aptest(theta, data_field, scoords, inv_cov, z,
             s_par_new,s_perp_new,ntab,Delta_func,f1,vel_params=vel_params,
             **kwargs
         )
-    # Evaluate the model at each (s_par, s_perp) coordinate. Setting apply_geometry
-    # to False, because they were already applied above.
+    # Evaluate the model at each (s_par, s_perp) coordinate. Setting 
+    # apply_geometry to False, because they were already applied above.
     model_field = z_space_profile(
         s_par_new, s_perp_new, rho_func, Delta_func, delta_func,f1=f1,
         z=z, Om=Om, epsilon=epsilon,apply_geometry=False,F_inv=F_inv,
@@ -2720,7 +2787,8 @@ def log_likelihood_aptest(theta, data_field, scoords, inv_cov, z,
         model_field = Umap @ model_field
         inv_cov = np.diag(1.0 / good_eig)
     # Compute residual
-    delta_vec = 1.0 - model_field/data_field if normalised else data_field - model_field
+    delta_vec = (1.0 - model_field/data_field if normalised else 
+                 data_field - model_field)
     if cholesky:
         alpha = scipy.linalg.solve_triangular(inv_cov, delta_vec, lower=True)
         return -0.5 * np.dot(alpha, alpha)
@@ -2740,6 +2808,13 @@ def log_flat_prior_single(x, bounds):
 
     Returns:
         float: 0 if within bounds, -inf if out of bounds
+    
+    Tests:
+        Tested in cosmology_inference/test_likelihood_and_posterior.py
+        Regression tests: test_log_flat_prior_single
+        Unit tests: test_log_flat_prior_single_inside,
+                    test_log_flat_prior_single_outside
+        
     """
     xmin, xmax = bounds
     return 0.0 if xmin <= x <= xmax else -np.inf
@@ -2754,32 +2829,16 @@ def log_flat_prior(theta, bounds):
 
     Returns:
         float: 0 if all parameters are within bounds, -inf otherwise
+    
+    Tests:
+        Tested in cosmology_inference/test_likelihood_and_posterior.py
+        Regression tests: test_log_flat_prior
+        Unit tests: test_log_flat_prior_batch_inside,
+                    test_log_flat_prior_batch_outside
     """
     if any(t < b[0] or t > b[1] for t, b in zip(theta, bounds)):
         return -np.inf
     return 0.0
-
-# DEPRECATED Prior (assuming flat prior for now):
-def log_prior_aptest_old(theta,
-                     theta_ranges=[[0.1,0.5],[0,1.0],[-np.inf,np.inf],[0,2],
-                                   [-np.inf,0],[0,np.inf],[-1,1]],
-                    **kwargs):
-    log_prior_array = np.zeros(theta.shape)
-    flat_priors = [0,1,2,3,4,5,6]
-    theta_flat = [theta[k] for k in flat_priors]
-    theta_ranges_flat = [theta_ranges[k] for k in flat_priors]
-    for k in flat_priors:
-        log_prior_array[k] = log_flat_prior_single(theta[k],theta_ranges[k])
-    # Amplitude prior (Jeffries):
-    #log_prior_array[2] = -np.log(theta[2])
-    return np.sum(log_prior_array)
-
-# DEPRECATED Posterior (unnormalised):
-def log_probability_aptest_old(theta,*args,**kwargs):
-    lp = log_prior_aptest(theta,**kwargs)
-    if not np.isfinite(lp):
-        return -np.inf
-    return lp + log_likelihood_aptest(theta,*args,**kwargs)
 
 def log_probability_aptest(theta, *args, **kwargs):
     """
@@ -2799,23 +2858,20 @@ def log_probability_aptest(theta, *args, **kwargs):
 
     Returns:
         float: Log posterior
+    
+    Tests:
+        Tested in cosmology_inference/test_likelihood_and_posterior.py
+        Regression tests: test_log_probability_aptest_regression
+        Unit tests: test_log_probability_aptest_sanity
     """
     theta_ranges = kwargs.pop("theta_ranges", None)
     if theta_ranges is None:
-        raise ValueError("Missing 'theta_ranges' in kwargs for prior evaluation.")
+        raise ValueError("Missing 'theta_ranges' in kwargs for " + 
+                         "prior evaluation.")
     lp = log_flat_prior(theta, theta_ranges)
     if not np.isfinite(lp):
         return -np.inf
     return lp + log_likelihood_aptest(theta, *args, **kwargs)
-
-# UNUSED
-def log_probability_aptest_parallel(theta,*args,**kwargs):
-    lp = log_prior_aptest(theta,**kwargs)
-    if not np.isfinite(lp):
-        return -np.inf
-    return lp + log_likelihood_aptest_parallel(theta,*args,**kwargs)
-
-
 
 #-------------------------------------------------------------------------------
 # GAUSSIANITY TESTING
@@ -2824,7 +2880,8 @@ def tikhonov_regularisation(cov_matrix, lambda_reg=1e-10):
     """
     Apply Tikhonov regularisation to a covariance matrix.
 
-    This adds a scaled identity matrix to the covariance, stabilising the inverse:
+    This adds a scaled identity matrix to the covariance, stabilising the 
+    inverse:
         cov_reg = cov + alpha * I
 
     Parameters:
@@ -2833,6 +2890,10 @@ def tikhonov_regularisation(cov_matrix, lambda_reg=1e-10):
 
     Returns:
         ndarray: Regularised covariance matrix
+    Tests:
+        Tested in cosmology_inference_tests/test_covariance_and_statistics.py
+        Regression tests: test_tikhonov_regularisation_regression
+        Unit tests: test_tikhonov_regularisation_identity
     """
     return cov_matrix + lambda_reg * np.eye(cov_matrix.shape[0])
 
@@ -2848,15 +2909,25 @@ def regularise_covariance(cov, lambda_reg=1e-10):
 
     Returns:
         ndarray: Symmetrised and regularised covariance matrix
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_covariance_and_statistics
+        Regression tests: test_regularise_covariance_regression
+        Unit tests: test_regularise_covariance_is_symmetric,
+                    test_regularise_covariance_is_positive_definite,
+                    test_regularise_covariance_symmetry
     """
     symmetric_cov = 0.5 * (cov + cov.T)
-    regularised_cov = tikhonov_regularisation(symmetric_cov, lambda_reg=lambda_reg)
+    regularised_cov = tikhonov_regularisation(
+        symmetric_cov, lambda_reg=lambda_reg
+    )
     return regularised_cov
 
 
 def get_inverse_covariance(cov, lambda_reg=1e-10):
     """
-    Compute the inverse of a (regularised) covariance matrix using Cholesky decomposition.
+    Compute the inverse of a (regularised) covariance matrix using Cholesky 
+    decomposition.
 
     This involves:
     - Symmetrising the input
@@ -2870,6 +2941,12 @@ def get_inverse_covariance(cov, lambda_reg=1e-10):
 
     Returns:
         ndarray: Inverse of the regularised covariance matrix
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_covariance_and_statistics
+        Regression tests: test_get_inverse_covariance_regression
+        Unit tests: test_inverse_covariance_sane,
+                    test_get_inverse_covariance_consistency
     """
     regularised_cov = regularise_covariance(cov, lambda_reg=lambda_reg)
     L = np.linalg.cholesky(regularised_cov)      # Lower triangular matrix
@@ -2889,6 +2966,10 @@ def range_excluding(kmin, kmax, exclude):
 
     Returns:
         ndarray: Array of integers not in 'exclude'
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_covariance_and_statistics
+        Unit tests: test_range_excluding_basic
     """
     return np.setdiff1d(range(kmin, kmax), exclude)
 
@@ -2899,13 +2980,15 @@ def get_nonsingular_subspace(C, lambda_reg,
     """
     Compute a projection onto the non-singular subspace of a covariance matrix.
 
-    The covariance is regularised and optionally normalised before eigenvalue decomposition.
-    Only eigenvectors with eigenvalues above a cutoff are retained.
+    The covariance is regularised and optionally normalised before eigenvalue 
+    decomposition. Only eigenvectors with eigenvalues above a cutoff are 
+    retained.
 
     Parameters:
         C (ndarray): Covariance matrix (k x k)
         lambda_reg (float): Tikhonov regularisation parameter
-        lambda_cut (float or None): Minimum eigenvalue to keep (default: 10 * lambda_reg)
+        lambda_cut (float or None): Minimum eigenvalue to keep 
+                                    (default: 10 * lambda_reg)
         normalised_cov (bool): If True, normalise C by mu.outer(mu)
         mu (ndarray or None): Mean vector (required if normalised_cov=True)
 
@@ -2913,11 +2996,18 @@ def get_nonsingular_subspace(C, lambda_reg,
         tuple:
             - Umap (ndarray): Projection matrix to nonsingular eigenspace
             - good_eig (ndarray): Retained eigenvalues
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_covariance_and_statistics
+        Regression tests: test_compute_singular_log_likelihood_regression
+        Unit tests: test_compute_singular_log_likelihood_basic,
+                    test_get_nonsingular_subspace_structure
     """
     reg_cov = regularise_covariance(C, lambda_reg=lambda_reg)
     if normalised_cov:
         if mu is None:
-            raise ValueError("Mean 'mu' must be provided for normalised covariance.")
+            raise ValueError("Mean 'mu' must be provided for normalised " + 
+                             "covariance.")
         norm_cov = C / np.outer(mu, mu)
         norm_reg_cov = regularise_covariance(norm_cov, lambda_reg=lambda_reg)
         eig, U = scipy.linalg.eigh(norm_reg_cov)
@@ -2957,6 +3047,12 @@ def get_solved_residuals(samples, covariance, xbar,
 
     Returns:
         ndarray: Whitened residuals (projected or full)
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_covariance_and_statistics
+        Regression tests: test_get_solved_residuals
+        Unit tests: test_compute_singular_log_likelihood_basic,
+                    test_get_solved_residuals_shape
     """
     k, n = samples.shape
     if not singular:
@@ -3004,13 +3100,19 @@ def compute_normality_test_statistics(samples,
 
     Parameters:
         samples (ndarray): (k, n) array of samples
-        covariance (ndarray or None): Covariance matrix (used if residuals not provided)
+        covariance (ndarray or None): Covariance matrix (used if residuals not
+                                      provided)
         xbar (ndarray or None): Mean vector (used if residuals not provided)
         solved_residuals (ndarray or None): Precomputed whitened residuals
         low_memory_sum (bool): If True, use a lower-memory summation loop
 
     Returns:
         list: [A, B] — test statistics
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_covariance_and_statistics
+        Regression tests: test_compute_normality_statistics_regression
+        Unit tests: test_compute_normality_statistics_output
     """
     n = samples.shape[1]
     k = samples.shape[0]
@@ -3019,11 +3121,15 @@ def compute_normality_test_statistics(samples,
     if xbar is None:
         xbar = np.mean(samples, axis=1)
     if solved_residuals is None:
-        solved_residuals = get_solved_residuals(samples, covariance, xbar, **kwargs)
+        solved_residuals = get_solved_residuals(
+            samples, covariance, xbar, **kwargs
+        )
     if low_memory_sum:
         Ai = np.array([
             np.sum(
-                np.sum(solved_residuals[:, i][:, None] * solved_residuals, axis=0) ** 3
+                np.sum(
+                    solved_residuals[:, i][:, None] * solved_residuals, axis=0
+                ) ** 3
             ) for i in tools.progressbar(range(n))
         ])
         A = np.sum(Ai) / (6 * n)
@@ -3043,22 +3149,28 @@ def get_zspace_centres(halo_indices, snap_list, snap_list_rev,
                        hrlist=None, recompute_zspace=False,
                        swapXZ=False, reverse=True):
     """
-    Compute redshift-space void centers from a halo catalogue (in reverse simulations).
+    Compute redshift-space void centers from a halo catalogue (in reverse 
+    simulations).
 
     This function:
-      - Loads the redshift-space positions of all particles in the forward snapshot
+      - Loads the redshift-space positions of all particles in the forward 
+        snapshot
       - Uses the halo catalogue (from reverse sim) to identify void particles
       - Computes the redshift-space center for each void
       - Applies remapping to shift into the final coordinate frame
 
     Parameters:
-        halo_indices (list of lists): Per-snapshot list of halo indices representing voids
+        halo_indices (list of lists): Per-snapshot list of halo indices 
+                                      representing voids
         snap_list (list): Forward simulation snapshots (used for positions)
         snap_list_rev (list): Reverse snapshots (used for halos = voids)
-        hrlist (list or None): If supplied, overrides halos loaded from snap_list_rev
-        recompute_zspace (bool): If True, force recomputation of redshift-space positions
+        hrlist (list or None): If supplied, overrides halos loaded from 
+                               snap_list_rev
+        recompute_zspace (bool): If True, force recomputation of redshift-space 
+                                 positions
         swapXZ (bool): Whether to swap X and Z axes during coordinate remapping
-        reverse (bool): Whether to reflect coordinates around box center during remapping
+        reverse (bool): Whether to reflect coordinates around box center during 
+                        remapping
 
     Returns:
         list of arrays: Redshift-space centers of voids for each snapshot

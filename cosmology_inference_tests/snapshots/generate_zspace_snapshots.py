@@ -10,8 +10,13 @@ from void_analysis.cosmology_inference import (
     iterative_zspace_inverse,
     void_los_velocity,
     void_los_velocity_derivative,
-    get_dudr_hz_o1pz
+    get_dudr_hz_o1pz,
+    void_los_velocity_ratio_1lpt,
+    void_los_velocity_ratio_derivative_1lpt
 )
+
+from void_analysis import tools
+from void_analysis.simulation_tools import gaussian_delta, gaussian_Delta
 
 GENERATED_SNAPSHOTS = [
     "to_real_space_ref.npy",
@@ -21,7 +26,8 @@ GENERATED_SNAPSHOTS = [
     "iterative_zspace_inverse_scalar_ref.npy",
     "iterative_zspace_inverse_ref.npy",
     "void_los_velocity_ref.npy",
-    "void_los_velocity_derivative_ref.npy"
+    "void_los_velocity_derivative_ref.npy",
+    "get_dudr_hz_o1pz_ref.npy"
 ]
 
 def generate_snapshots():
@@ -93,6 +99,14 @@ def generate_snapshots():
           "iterative_zspace_inverse saved.")
 
     # Consistent framework for regression tests:
+    A = 0.85
+    sigma = 1
+    delta_f = lambda r: gaussian_delta(r,A=A,sigma=sigma)
+    Delta_f = lambda r: gaussian_Delta(r,A=A,sigma=sigma)
+    rvals = np.linspace(0,3,31)
+    r_par = np.linspace(0,2,21)
+    r_perp = np.linspace(0,2,21)
+    f1 = 0.53
     tools.generate_regression_test_data(
         get_dudr_hz_o1pz,
         "get_dudr_hz_o1pz_ref.npy",

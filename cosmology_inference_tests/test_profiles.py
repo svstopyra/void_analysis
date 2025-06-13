@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import os
 import scipy
-from cosmology_inference import (
+from void_analysis.cosmology_inference import (
     profile_modified_hamaus,
     integrated_profile_modified_hamaus,
     profile_broken_power,
