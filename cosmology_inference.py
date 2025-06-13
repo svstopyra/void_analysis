@@ -2530,28 +2530,85 @@ def z_space_profile(s_par, s_perp, rho_real, Delta, delta, f1=None,z=0, Om=0.3,
 
 # Compute the covariance matrix of a set of data:
 def covariance(data):
-    # data should be an (N,M) array of N data elements, each with M values.
-    # We seek to compute an M x M covariance matrix of this data
+    """
+    Compute the covariance of the supplied data. data should be an (N,M) 
+    array of N data elements, each with M values.
+    We seek to compute an M x M covariance matrix of this data
+    
+    Old method, and probably suitable for being deprecated.
+    
+    Parameters:
+        data (array): NxM matrix array of N data samples, each of which is
+                      an M-component vector.
+    
+    Returns:
+        array: MxM covariance matrix of the data.
+    
+    Tests:
+        Tested in test_covariance_and_statistics.py
+        Regression tests: test_covariance_regression
+        Unit tests: test_covariance_symmetry,
+    """
     N, M = data.shape
     mean = np.mean(data,0)
     diff = data.T - mean[:,None]
     cov = np.matmul(diff,diff.T)/N
     return cov
 
-# Estimate covariance of the profile using the jackknife method:
-def profile_jackknife_covariance(data,profile_function,**kwargs):
+def profile_jackknife_covariance(data,profile_function,*args,**kwargs):
+    """
+    Estimate covariance of the profile using the jackknife method.
+    
+    Parameters:
+        data (array): NxM matrix array of N data samples, each of which is
+                      an M-component vector.
+        profile_function (function): Function which takes the data and fits
+                                     a profile to it.
+        *args (tuple): Additional arguments passed to the profile function.
+        kwargs (dictionary): Keyword arguments passed to the profile function.
+    
+    Results:
+        array: Covariance of the profile. 
+    
+    Tests:
+        Tested in test_covariance_and_statistics.py
+        Regression tests: test_profile_jackknife_covariance_regression
+        Unit tests: test_profile_jackknife_covariance_shape
+    """
     N, M = data.shape
     jacknife_data = np.zeros((N,M))
     for k in range(0,N):
         sample = np.setdiff1d(range(0,N),np.array([k]))
-        jacknife_data[k,:] = profile_function(data[sample,:],**kwargs)
+        jacknife_data[k,:] = profile_function(data[sample,:],*args,**kwargs)
     return covariance(jacknife_data)/(N-1)
 
 
 def compute_singular_log_likelihood(x,Umap,good_eig):
-    u = np.matmul(Umap,x)
-    Du = u/good_eig
-    uDu = np.sum(u*Du)
+    """
+    Compute the log-likelihood of data after regularising poorly conditioned
+    eigenvectors in the covariance matrix.
+    
+    Parameters:
+        x (array): M-component residual of the data vector relative to a model.
+        Umap (array): N x M matrix which maps the data residual into an 
+                      eigenspace with well-conditioned eigenvectors. 
+                      This is a projection operator constructed from the 
+                      well-conditioned eigenvalues, while projecting out
+                      everything in the poorly-conditioned subspace.
+        good_eig (array): N-component array containing the well-conditioned 
+                          eigenvalues in question.
+        
+    Returns:
+        float: Log-likelihood after removing singular directions in data space.
+    
+    Tests:
+        Tested in test_covariance_and_statistics.py
+        Regression tests: test_compute_singular_log_likelihood_regression
+        Unit tests: test_compute_singular_log_likelihood_basic
+    """
+    u = np.matmul(Umap,x) # Data mapped into the well-conditioned eigenspace
+    Du = u/good_eig # Apply covariance, which is diagonal in this eigenspace
+    uDu = np.sum(u*Du) # Covariance including only good eigenspace.
     N = len(good_eig)
     return -0.5*uDu - (N/2)*np.log(2*np.pi) - 0.5*np.sum(np.log(good_eig))
 
