@@ -1,0 +1,20 @@
+# genetIC v1.4.0, compiled: Jun 11 2025, 08:51:28
+#                  runtime: Jun 13 2025, 15:55:23
+
+# git HEAD:f34e9fa
+# At the time of compilation, the following files had been modified:
+#   src/main.cpp
+#   
+om 0.279 
+ol 0.721 
+ob 0 
+s8 0.817 
+zin 99 
+random_seed_real_space 2 
+camb transfer_z99.txt 
+outname ics 
+outdir ./ 
+outformat gadget2 
+base_grid 50 32 
+reverse 
+done 

@@ -1,0 +1,396 @@
+===============================================================================
+	             A        H       H   FFFFFFFF    
+	           A A       H       H   F           
+	         A   A      H       H   F           
+	       AAAAAAA     HHHHHHHHH   FFFFFF      
+	     A       A    H       H   F           
+	   A         A   H       H   F           
+	 A           A  H       H   F       (1.0/119)
+===============================================================================
+
+ User Input:
+=============
+ic_filename       = snapshot_001 (Gadget binary, 60)
+outfile_prefix    = snapshot_001
+LgridDomain       = 32
+LgridMax          = 16777216
+NminPerHalo       = 20
+VescTune          = 1.5
+NperDomCell       = 5
+NperRefCell       = 5
+RhoVir            = 0
+Dvir              = 200
+MaxGatherRad      = 6 Mpc/h
+
+
+ OpenMP Info:
+==============
+Number of available processors = 32
+Number of threads in use       = 32
+
+
+
+
+
+
+===============================================================================
+
+		PART A
+	Setting up the run
+
+===============================================================================
+
+
+
+===============================================================================
+  A-1  Opening the data file
+===============================================================================
+
+Opening snapshot_001, a Gadget binary file on 1 processes.
+Will try to find out swap status
+Boundary (file): 256 Boundary (swapped): 65536
+Trying nonswapped...
+Will skip 256 bytes...
+Second boundary (file): 256
+Identified a not byte swapped file.
+Assuming a Gadget1 file.
+Starting to initialize file object from snapshot_001
+Done with initializing file object from snapshot_001
+Fileobject information:
+  Filetype:             Gadget binary
+  Filename:             snapshot_001
+  Mode:                 1
+  Swapping:             0
+  File version:         1
+  Header size:          1
+  No. particles:        32768
+  No. particles w/mass: 0
+  Multimass:            0
+      Part type 0:      0
+      Part type 1:      0
+      Part type 2:      0
+      Part type 3:      0
+      Part type 4:      0
+      Part type 5:      0
+  MMass (Halo parts):   1e+40
+  Minimal Weight:       1e+40
+  Maximal Weight:       0
+  Sum of all weights:   0
+  No. of species:       0
+  Position scale:       1
+  Weight scale:         1e+10
+Headerobject information:
+  No of particles in file:       0
+                                 32768
+                                 0
+                                 0
+                                 0
+                                 0
+  Mass of particle species:      0.000000e+00
+                                 2.952896e+01
+                                 0.000000e+00
+                                 0.000000e+00
+                                 0.000000e+00
+                                 0.000000e+00
+  Expansion:                     1.000000e+00
+  Redshift:                      0.000000e+00
+  Flagsfr:                       0
+  Flag Feedback:                 0
+  No of particles in total:      0
+                                 32768
+                                 0
+                                 0
+                                 0
+                                 0
+  Flag Cooling:                  0
+  Number of files:               1
+  Boxsize:                       5.000000e+01
+  Omega0:                        2.790000e-01
+  OmegaLambda:                   7.210000e-01
+  Hubble parameter:              6.766000e-01
+  Flag Stellar Age:              0
+  Flag Metals:                   0
+  No of particles in total (HW): 0
+                                 0
+                                 0
+                                 0
+                                 0
+                                 0
+  Flag Entropy insted U:         0
+
+
+===============================================================================
+  A-2  Reading data from file
+===============================================================================
+
+
+-------------------------------------------------------------------------------
+  A-2.1  Creating Storage
+-------------------------------------------------------------------------------
+
+WARNING: There are 32768 particles in the file, but the choice of pread and pskip would need 18446744073709551615, adjusting to 32768
+posx:
+  val    = 0x717e39860018
+  stride = 48
+posy:
+  val    = 0x717e3986001c
+  stride = 48
+posz:
+  val    = 0x717e39860020
+  stride = 48
+momx:
+  val    = 0x717e39860024
+  stride = 48
+momy:
+  val    = 0x717e39860028
+  stride = 48
+momz:
+  val    = 0x717e3986002c
+  stride = 48
+weight:
+  val    = (nil)
+  stride = 0
+id:
+  val    = 0x717e39860038
+  stride = 48
+u:
+  val    = (nil)
+  stride = 0
+bytes_float: 4
+bytes_int:   8
+
+-------------------------------------------------------------------------------
+  A-2.2  Reading
+-------------------------------------------------------------------------------
+
+Obviously the file uses float for floating point values (4 bytes).
+A total of 32768 particle positions with 4 bytes per float (0.375000 MB total) are stored.
+Asked to read 32768 and to skip 0 particles. Checking those numbers.
+Block claimed correctly to be 0.375000 MB long.
+Obviously the file uses float for floating point values (4 bytes).
+A total of 32768 particle velocities with 4 bytes per float (0.375000 MB total) are stored.
+Block claimed correctly to be 0.375000 MB long.
+A total of 32768 particle IDs with 8 bytes per int (0.250000 MB total) are stored.
+Block claimed correctly to be 0.250000 MB long.
+Will construct mass information solely from the header.
+WARNING: Discarding masses as no storage for the masses has been specified.
+Extreme positions: xmin = 0.000777139  xmax = 49.9988
+                   ymin = 0.000972211  ymax = 49.9998
+                   zmin = 0.0055881  zmax = 49.9968
+Applying shift: (0, 0, 0)
+Scaling by:  positions:  0.02
+             velocities: 0.0002
+             weights:    0.0338651
+             u:          1
+
+-------------------------------------------------------------------------------
+  A-2.3  Short sanity check
+-------------------------------------------------------------------------------
+
+First particle:
+    positions (x,y,z):      0.0389825  0.0224761  0.024699
+    velocities (vx,vy,vz):  -0.016766  -0.0102942  -0.0232744
+    ID:                     2082
+Last particle:
+    positions (x,y,z):      0.0265304  0.0345444  0.982815
+    velocities (vx,vy,vz):  -0.00829502  -0.00610133  -0.0296681
+    ID:                     1057
+
+
+===============================================================================
+  A-3  Setting simulation parameter
+===============================================================================
+
+
+-------------------------------------------------------------------------------
+  A-3.1  Information from file
+-------------------------------------------------------------------------------
+
+WARNING: ainitial is not set in a Gadget file, using current expansion.
+WARNING: Gadget files don't store the use of double precision. Assuming it is not double precision.
+WARNING: Gadget files don't store the step number. Setting to 0.
+WARNING: Since a_initial = 1 is equal to a_final = 1, create_timeline will not function correctly, setting a_initial = .1 * a_final = 0.1
+
+-------------------------------------------------------------------------------
+  A-3.2  Gathering from reading processes
+-------------------------------------------------------------------------------
+
+
+-------------------------------------------------------------------------------
+  A-3.3  Local setup
+-------------------------------------------------------------------------------
+
+Creating timeline from a = 0.01 to a = 1
+
+creating timeline from a=0.01 to a=1 (MAXTIME=10000) ... done
+
+Timeline created
+Setting volume boundaries
+  minkey: 0
+  maxkey: 0
+  level : 0
+  ctype : Hilbert curve
+
+-------------------------------------------------------------------------------
+  A-3.4  Used simulation parameters
+-------------------------------------------------------------------------------
+
+simu.omega0          :  0.279
+simu.lambda0         :  0.721
+simu.boxsize         :  50
+simu.a_initial       :  0.1
+simu.a_final         :  1
+simu.z_initial       :  0
+simu.z_final         :  0
+simu.t_initial       :  0.0398951
+simu.t_final         :  0.983753
+simu.super_t_initial :  -7.60169
+simu.super_t_final   :  -0
+simu.mean_dens       :  1
+simu.FourPiG         :  0.4185
+simu.pmass           :  2.9529e+11
+simu.t_unit          :  0.01
+simu.gamma           :  0
+simu.timeline (ptr)  :  0x5cf342d20168
+simu.no_part         :  32768
+simu.no_vpart        :  32768
+simu.no_species      :  1
+simu.no_halos        :  0
+simu.NGRID_DOM       :  32
+simu.NGRID_MIN       :  32
+simu.NGRID_MAX       :  16777216
+simu.Nth_dom         :  5
+simu.Nth_ref         :  5
+simu.MaxGatherRad    :  6
+simu.lb_level        :  0
+simu.min_weight      :  1
+simu.max_weight      :  1
+simu.np_limit        :  0
+simu.mmfocus         :  0
+simu.multi_mass      :  0
+simu.double_precision:  0
+
+-------------------------------------------------------------------------------
+  A-3.5  Setting time counter
+-------------------------------------------------------------------------------
+
+WARNING: Gadget files don't store the step number. Setting to 0.
+WARNING: Gadget files don't store the timestep. Setting to 0.0
+
+
+===============================================================================
+  A-4  Tidying
+===============================================================================
+
+Closing a Gadget binary file.
+amiga_main:  running with 32768 particles
+
+
+
+
+
+
+===============================================================================
+
+		PART B
+	Handing over logging to AMIGA
+
+===============================================================================
+
+################## ahf_gridinfo ###################
+Number of grids           = 5
+Number of refinements     = 4
+global.domgrid_no         = 0
+l1dim =               32 refine_ovdens =            1.394 ovlim =              200
+l1dim =               64 refine_ovdens =            11.16 ovlim =              200
+l1dim =              128 refine_ovdens =            89.25 ovlim =              200
+l1dim =              256 refine_ovdens =              714 ovlim =              200
+l1dim =              512 refine_ovdens =             5712 ovlim =              200
+max_ovdens = 5711.77
+min_ref = 2    (ahf_nogrids = 3)
+################## ahf_gridinfo finished ##################
+
+#################### ahf_halos ####################
+AHF_MINPART  = 20
+AHF_VTUNE    = 1.5
+z            = 0
+Omega(z)     = 0.279
+OmegaL(z)    = 0.721
+rho_crit(z)  = 2.77554e+11
+rho_back(z)  = 7.74376e+10
+rho_vir(z)   = 2.77554e+11 (actual normalisation density)
+Delta_vir(z) = 200
+Hubble(z)    = 100
+
+Collecting the isolated refinements ... done
+
+Analysing the isolated refinements:
+
+Converting the spatialRef[][] tree to a halos[] array:
+ spatialRef2halos():
+  number of isolated refinements  = 94
+  first guess for number of halos = 69
+  constructing 69 (potential) halos from all 3 grid levels...
+      grid level        0 (         128) ->         62 isolated refinements ... finished
+      grid level        1 (         256) ->         30 isolated refinements ... finished
+      grid level        2 (         512) ->          2 isolated refinements ... finished
+      number of halos: found=69 (max=94) expected=69 (tmpCount=69)
+      numDensZero = 1, numPartZero = 1
+
+Free'ing all grid structures:
+  free'ing grid 512
+  free'ing grid 256
+  free'ing grid 128
+  free'ing grid 64
+  free'ing grid 32
+
+Constructing Halos (69)
+===================================
+
+Re-hashing substructure information using final radii
+=====================================================
+
+  Used   0.00021128s to write halos
+  Used   0.00064086s to write profiles
+  Used   1.7473e-05s to write substructures
+  Used   0.00011136s to write particles
+Used    0.0009903s to write data to ASCII files
+################## ahf_halos finished ##################
+
+supercomoving T = -0.000000
+scale factor  a = 1.000000
+redshift      z = 0.000000
+
+grid information
+----------------
+GRID           32: nodes=       32768 (0.000732 GB) npart=       12993 - TIME: pot=     0 dens=     0 DK=     0 grid=     0 hydro=     0 - SWEEPS: 0 0
+GRID           64: nodes=       47744 ( 0.00107 GB) npart=       12660 - TIME: pot=     0 dens=     0 DK=     0 grid=     0 hydro=     0 - SWEEPS: 0 0
+GRID          128: nodes=       26776 (0.000598 GB) npart=        5034 - TIME: pot=     0 dens=     0 DK=     0 grid=     0 hydro=     0 - SWEEPS: 0 0
+GRID          256: nodes=       10088 (0.000225 GB) npart=        1886 - TIME: pot=     0 dens=     0 DK=     0 grid=     0 hydro=     0 - SWEEPS: 0 0
+GRID          512: nodes=         960 (2.15e-05 GB) npart=         195 - TIME: pot=     0 dens=     0 grid=     0
+                                                                                        0           0         0
+detailed timing information (in sec.)
+-------------------------------------
+io           = 0
+      - startrun     = 0
+      - sfckey       = 0
+gendomgrids  = 0
+ll           = 0
+genrefgrids  = 0
+densrecovery = 0
+ahf_gridinfo = 0
+ahf_halos    = 0
+      - RefCentre                   = 0
+      - analyseRef                  = 0
+      - spatialRef2halos            = 0
+      - ahf_halos_sfc_constructHalo = 0
+      - I/O                         = 0
+
+summary information
+-------------------
+total time          =        0 seconds (       0 hours)
+cumulative time     =        0 hours (0 days)
+memory during step  =  0.00415 GB
+==========================================================
+                       FINISHED (v1.0/119)
+==========================================================
