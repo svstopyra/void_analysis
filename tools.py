@@ -683,6 +683,7 @@ def run_basic_regression_test(
     if ext == ".npy":
         reference = np.load(filename)
         np.testing.assert_allclose(computed,reference,rtol=rtol,atol=atol)
+        return None
     elif ext == ".npz":
         all_refs = np.load(filename)
         reference = [all_refs[key] for key in all_refs]

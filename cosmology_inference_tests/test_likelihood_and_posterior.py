@@ -55,7 +55,7 @@ def synthetic_inversion_data():
     return spar_bins,sperp_bins,scoords, ntab, f1
     
 
-# ---------------------- UNIT TESTS: Flat Priors ----------------------
+# ---------------------- UNIT TESTS: Flat Priors -------------------------------
 
 def test_log_flat_prior_single_inside():
     val = 0.5
@@ -77,7 +77,7 @@ def test_log_flat_prior_batch_outside():
     bounds = [(0.0, 1.0)] * 3
     assert log_flat_prior(params, bounds) == -np.inf
 
-# ---------------------- UNIT TESTS: Profile Likelihood ----------------------
+# ---------------------- UNIT TESTS: Profile Likelihood ------------------------
 
 def test_log_likelihood_profile_basic():
     r = np.linspace(0.1, 2.0, 100)
@@ -87,10 +87,12 @@ def test_log_likelihood_profile_basic():
     y_obs = y_true + noise * np.random.randn(len(r))
     sigma = noise * np.ones_like(r)
 
-    ll = log_likelihood_profile(params, r, y_obs, sigma, profile_modified_hamaus)
+    ll = log_likelihood_profile(
+        params, r, y_obs, sigma, profile_modified_hamaus
+    )
     assert isinstance(ll, float)
 
-# ---------------------- UNIT TESTS: Profile Fitting ----------------------
+# ---------------------- UNIT TESTS: Profile Fitting ---------------------------
 
 def test_get_profile_parameters_fixed_convergence():
     r = np.linspace(0, 10, 1001)
@@ -107,15 +109,21 @@ def test_get_profile_parameters_fixed_convergence():
 
 def test_log_likelihood_output(synthetic_profile_data):
     r, delta_noisy, sigma, true_params = synthetic_profile_data
-    ll = log_likelihood_profile(true_params, r, delta_noisy, sigma, profile_modified_hamaus)
+    ll = log_likelihood_profile(
+        true_params, r, delta_noisy, sigma, profile_modified_hamaus
+    )
     assert isinstance(ll, float)
     assert np.isfinite(ll)
 
 def test_log_likelihood_penalizes_wrong_model(synthetic_profile_data):
     r, delta_noisy, sigma, true_params = synthetic_profile_data
     wrong_params = tuple(p * 1.5 for p in true_params)
-    ll_true = log_likelihood_profile(true_params, r, delta_noisy, sigma, profile_modified_hamaus)
-    ll_wrong = log_likelihood_profile(wrong_params, r, delta_noisy, sigma, profile_modified_hamaus)
+    ll_true = log_likelihood_profile(
+        true_params, r, delta_noisy, sigma, profile_modified_hamaus
+    )
+    ll_wrong = log_likelihood_profile(
+        wrong_params, r, delta_noisy, sigma, profile_modified_hamaus
+    )
     assert ll_true > ll_wrong
 
 def test_get_profile_parameters_fixed_converges(synthetic_profile_data):
@@ -123,9 +131,10 @@ def test_get_profile_parameters_fixed_converges(synthetic_profile_data):
     best_fit = get_profile_parameters_fixed(r, delta_noisy, sigma,
                                             model=profile_modified_hamaus)
     assert len(best_fit) == 6
-    rel_errors = np.abs((np.array(best_fit) - true_params) / np.array(true_params))
+    rel_errors = np.abs((np.array(best_fit) - true_params)
+                        / np.array(true_params))
     assert np.all(rel_errors < 0.1)
-# -----------------------------------UNIT TESTS ------------------------------------
+# -----------------------------------UNIT TESTS --------------------------------
 
 def test_log_probability_aptest_sanity():
     # Minimal fake inputs
@@ -137,11 +146,12 @@ def test_log_probability_aptest_sanity():
     Delta = lambda r: 0.2 * np.exp(-r**2)
     delta = lambda r: -0.2 * np.exp(-r**2)
     rho_real = lambda r: delta(r) + 1.0
-    logp = log_probability_aptest(theta, field, scoords, cov, z, Delta, delta, rho_real,
-                                   cholesky=False, tabulate_inverse=False,
-                                   sample_epsilon=True, theta_ranges=[[0.9, 1.1], [0.0, 1.0]],
-                                   singular=False, log_density=False, F_inv=None,
-                                   Umap=None, good_eig=None)
+    logp = log_probability_aptest(
+        theta, field, scoords, cov, z, Delta, delta, rho_real,
+        cholesky=False, tabulate_inverse=False,sample_epsilon=True, 
+        theta_ranges=[[0.9, 1.1], [0.0, 1.0]],singular=False,
+        log_density=False, F_inv=None,Umap=None, good_eig=None
+    )
     assert np.isfinite(logp)
 
 def test_tabluated_inverse_accuracy(synthetic_inversion_data):
@@ -179,7 +189,9 @@ def test_tabluated_inverse_accuracy(synthetic_inversion_data):
 
 def test_profile_fit_regression(synthetic_profile_data):
     r, delta_noisy, sigma, _ = synthetic_profile_data
-    best_fit = get_profile_parameters_fixed(r, delta_noisy, sigma, model=profile_modified_hamaus)
+    best_fit = get_profile_parameters_fixed(
+        r, delta_noisy, sigma, model=profile_modified_hamaus
+    )
     ref = np.load(os.path.join(SNAPSHOT_DIR, "profile_fit_params_ref.npy"))
     np.testing.assert_allclose(best_fit, ref, rtol=1e-5, atol=1e-7)
 
@@ -192,7 +204,10 @@ def test_log_likelihood_aptest_regression(synthetic_data):
     rho_real = lambda r: r
     theta = np.array([1.0, 0.5])
     ref = np.load(os.path.join(SNAPSHOT_DIR, "log_likelihood_aptest_ref.npy"))
-    output = log_likelihood_aptest(theta, data_field, scoords, inverse_matrix, z, Delta_func, delta_func, rho_real)
+    output = log_likelihood_aptest(
+        theta, data_field, scoords, inverse_matrix, z, Delta_func, delta_func, 
+        rho_real
+    )
     np.testing.assert_allclose(output, ref, rtol=1e-5)
 
 def test_log_probability_aptest_regression(synthetic_data):
@@ -202,7 +217,10 @@ def test_log_probability_aptest_regression(synthetic_data):
     rho_real = lambda r: r
     theta = np.array([1.0, 0.5])
     ref = np.load(os.path.join(SNAPSHOT_DIR, "log_probability_aptest_ref.npy"))
-    output = log_probability_aptest(theta, data_field, scoords, inverse_matrix, z, Delta_func, delta_func, rho_real,theta_ranges = [[-1,1],[0,1]])
+    output = log_probability_aptest(
+        theta, data_field, scoords, inverse_matrix, z, Delta_func, delta_func, 
+        rho_real,theta_ranges = [[-1,1],[0,1]]
+    )
     np.testing.assert_allclose(output, ref, rtol=1e-5)
 
 def test_get_tabulated_inverse(synthetic_inversion_data):
@@ -218,3 +236,18 @@ def test_get_tabulated_inverse(synthetic_inversion_data):
         F_inv,os.path.join(SNAPSHOT_DIR, "get_tabulated_inverse_ref.npy"),
         s_par,s_perp
     )
+
+def test_log_flat_prior_single():
+    tools.run_basic_regression_test(
+        log_flat_prior_single,
+        os.path.join(SNAPSHOT_DIR, "log_flat_prior_single_ref.npy"),
+        0.5, (0.0,1.0)
+    )
+
+def test_log_flat_prior():
+    tools.run_basic_regression_test(
+        log_flat_prior,
+        os.path.join(SNAPSHOT_DIR, "log_flat_prior_ref.npy"),
+        np.array([0.1, 0.5, 0.9]),[(0.0, 1.0)] * 3
+    )
+

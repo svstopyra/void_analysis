@@ -2624,8 +2624,8 @@ def get_tabulated_inverse(
         **kwargs
     ):
     """
-    Construct an interpolated function that inverts the mapping between real space
-    and redshift space.
+    Construct an interpolated function that inverts the mapping between real 
+    space and redshift space.
     
     Parameters:
         s_par (array): Redshift space co-ordinates parallel to LOS
@@ -2636,8 +2636,8 @@ def get_tabulated_inverse(
                             have r, Delta, and f1 as parameters, but additional
                             parameters may be required depending on the model,
                             passed via kwargs.
-        Delta_func (function) function that returns the cumulative density contrast
-                              at radius r.
+        Delta_func (function) function that returns the cumulative density 
+                              contrast at radius r.
         f1 (float): Linear growth rate.
         vel_params (array or None): Additional parameters for velocity model.
         use_iterative (bool): If True, use iterative method to invert. Otherwise
@@ -2731,6 +2731,10 @@ def log_likelihood_aptest(theta, data_field, scoords, inv_cov, z,
 
     Returns:
         float: Log-likelihood value
+    
+    Tests:
+        Tested in cosmology_inference/test_likelihood_and_posterior.py
+        Regression tests: test_log_likelihood_aptest_regression
     """
     # Apply optional data filtering
     if data_filter is not None:
@@ -2747,10 +2751,11 @@ def log_likelihood_aptest(theta, data_field, scoords, inv_cov, z,
         Om, f1 = theta[0], theta[1]
         epsilon = ap_parameter(z, Om, Om_fid, **kwargs)
     profile_params = theta[2:(2 + N_prof)]
-    vel_params = None if N_vel == 0 else theta[(2 + N_prof):(2 + N_prof + N_vel)]
-    # Apply geometric correction to account for miss-specified cosmology. NB, this
-    # means that we SHOULDN'T apply geometry corrections below, because they
-    # have already been applied here!
+    vel_params = (None if N_vel == 0 
+                  else theta[(2 + N_prof):(2 + N_prof + N_vel)])
+    # Apply geometric correction to account for miss-specified cosmology. 
+    # NB, this means that we SHOULDN'T apply geometry corrections below, 
+    # because they have already been applied here!
     s_par_new, s_perp_new = geometry_correction(s_par,s_perp,epsilon)
     # Construct profile functions
     if infer_profile_args:
@@ -2767,8 +2772,8 @@ def log_likelihood_aptest(theta, data_field, scoords, inv_cov, z,
             s_par_new,s_perp_new,ntab,Delta_func,f1,vel_params=vel_params,
             **kwargs
         )
-    # Evaluate the model at each (s_par, s_perp) coordinate. Setting apply_geometry
-    # to False, because they were already applied above.
+    # Evaluate the model at each (s_par, s_perp) coordinate. Setting 
+    # apply_geometry to False, because they were already applied above.
     model_field = z_space_profile(
         s_par_new, s_perp_new, rho_func, Delta_func, delta_func,f1=f1,
         z=z, Om=Om, epsilon=epsilon,apply_geometry=False,F_inv=F_inv,
@@ -2782,7 +2787,8 @@ def log_likelihood_aptest(theta, data_field, scoords, inv_cov, z,
         model_field = Umap @ model_field
         inv_cov = np.diag(1.0 / good_eig)
     # Compute residual
-    delta_vec = 1.0 - model_field/data_field if normalised else data_field - model_field
+    delta_vec = (1.0 - model_field/data_field if normalised else 
+                 data_field - model_field)
     if cholesky:
         alpha = scipy.linalg.solve_triangular(inv_cov, delta_vec, lower=True)
         return -0.5 * np.dot(alpha, alpha)
@@ -2802,6 +2808,13 @@ def log_flat_prior_single(x, bounds):
 
     Returns:
         float: 0 if within bounds, -inf if out of bounds
+    
+    Tests:
+        Tested in cosmology_inference/test_likelihood_and_posterior.py
+        Regression tests: test_log_flat_prior_single
+        Unit tests: test_log_flat_prior_single_inside,
+                    test_log_flat_prior_single_outside
+        
     """
     xmin, xmax = bounds
     return 0.0 if xmin <= x <= xmax else -np.inf
@@ -2816,32 +2829,16 @@ def log_flat_prior(theta, bounds):
 
     Returns:
         float: 0 if all parameters are within bounds, -inf otherwise
+    
+    Tests:
+        Tested in cosmology_inference/test_likelihood_and_posterior.py
+        Regression tests: test_log_flat_prior
+        Unit tests: test_log_flat_prior_batch_inside,
+                    test_log_flat_prior_batch_outside
     """
     if any(t < b[0] or t > b[1] for t, b in zip(theta, bounds)):
         return -np.inf
     return 0.0
-
-# DEPRECATED Prior (assuming flat prior for now):
-def log_prior_aptest_old(theta,
-                     theta_ranges=[[0.1,0.5],[0,1.0],[-np.inf,np.inf],[0,2],
-                                   [-np.inf,0],[0,np.inf],[-1,1]],
-                    **kwargs):
-    log_prior_array = np.zeros(theta.shape)
-    flat_priors = [0,1,2,3,4,5,6]
-    theta_flat = [theta[k] for k in flat_priors]
-    theta_ranges_flat = [theta_ranges[k] for k in flat_priors]
-    for k in flat_priors:
-        log_prior_array[k] = log_flat_prior_single(theta[k],theta_ranges[k])
-    # Amplitude prior (Jeffries):
-    #log_prior_array[2] = -np.log(theta[2])
-    return np.sum(log_prior_array)
-
-# DEPRECATED Posterior (unnormalised):
-def log_probability_aptest_old(theta,*args,**kwargs):
-    lp = log_prior_aptest(theta,**kwargs)
-    if not np.isfinite(lp):
-        return -np.inf
-    return lp + log_likelihood_aptest(theta,*args,**kwargs)
 
 def log_probability_aptest(theta, *args, **kwargs):
     """
@@ -2861,23 +2858,20 @@ def log_probability_aptest(theta, *args, **kwargs):
 
     Returns:
         float: Log posterior
+    
+    Tests:
+        Tested in cosmology_inference/test_likelihood_and_posterior.py
+        Regression tests: test_log_probability_aptest_regression
+        Unit tests: test_log_probability_aptest_sanity
     """
     theta_ranges = kwargs.pop("theta_ranges", None)
     if theta_ranges is None:
-        raise ValueError("Missing 'theta_ranges' in kwargs for prior evaluation.")
+        raise ValueError("Missing 'theta_ranges' in kwargs for " + 
+                         "prior evaluation.")
     lp = log_flat_prior(theta, theta_ranges)
     if not np.isfinite(lp):
         return -np.inf
     return lp + log_likelihood_aptest(theta, *args, **kwargs)
-
-# UNUSED
-def log_probability_aptest_parallel(theta,*args,**kwargs):
-    lp = log_prior_aptest(theta,**kwargs)
-    if not np.isfinite(lp):
-        return -np.inf
-    return lp + log_likelihood_aptest_parallel(theta,*args,**kwargs)
-
-
 
 #-------------------------------------------------------------------------------
 # GAUSSIANITY TESTING
@@ -2886,7 +2880,8 @@ def tikhonov_regularisation(cov_matrix, lambda_reg=1e-10):
     """
     Apply Tikhonov regularisation to a covariance matrix.
 
-    This adds a scaled identity matrix to the covariance, stabilising the inverse:
+    This adds a scaled identity matrix to the covariance, stabilising the 
+    inverse:
         cov_reg = cov + alpha * I
 
     Parameters:

@@ -20,7 +20,9 @@ from void_analysis.simulation_tools import gaussian_delta, gaussian_Delta
 GENERATED_SNAPSHOTS = [
     "log_likelihood_aptest_ref.npy",
     "log_probability_aptest_ref.npy",
-    "get_tabulated_inverse_ref.npy"
+    "get_tabulated_inverse_ref.npy",
+    "log_flat_prior_single_ref.npy",
+    "log_flat_prior_ref.npy"
 ]
 
 def generate_snapshots():
@@ -55,7 +57,7 @@ def generate_snapshots():
 
     np.save("log_likelihood_aptest_ref.npy", ll_aptest)
     np.save("log_probability_aptest_ref.npy", logp_aptest)
-    
+    # get_tabulated_inverse:
     F_inv = get_tabulated_inverse(
         s_par,s_perp,ntab,gaussian_Delta,f1,
         vel_model = void_los_velocity_ratio_1lpt,vel_params=None,
@@ -66,6 +68,19 @@ def generate_snapshots():
         F_inv,"get_tabulated_inverse_ref.npy",
         s_par,s_perp
     )
+    
+    # log_flat_prior_single
+    tools.generate_regression_test_data(
+        log_flat_prior_single,"log_flat_prior_single_ref.npy",
+        0.5, (0.0,1.0)
+    )
+    # log_flat_prior
+    tools.generate_regression_test_data(
+        log_flat_prior,"log_flat_prior_ref.npy",
+        np.array([0.1, 0.5, 0.9]),[(0.0, 1.0)] * 3
+    )
+    
+    
 
     print("✅ Likelihood and posterior snapshots saved!")
 
