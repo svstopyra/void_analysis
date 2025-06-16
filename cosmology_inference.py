@@ -2029,7 +2029,8 @@ def void_los_velocity_ratio_semi_analytic(r,Delta,f1,params=None,
     Tests:
         Tested in cosmology_inference_tests/test_lpt.py:
         Regression tests: test_void_los_velocity_ratio_semi_analytic
-        Unit tests: test_semi_analytic_velocity_derivative_integral
+        Unit tests: test_semi_analytic_velocity_derivative_integral,
+                    test_semi_analytic_model_functions_consistency
     """
     # Displacement field over r:
     Psi_r = 1 - np.cbrt(1 + Delta(r)) if exact_displacement else -Delta(r)/3
@@ -3174,6 +3175,9 @@ def get_zspace_centres(halo_indices, snap_list, snap_list_rev,
 
     Returns:
         list of arrays: Redshift-space centers of voids for each snapshot
+    
+    Tests:
+        TODO: NEED SIMULATIONS TO CONSTRUCT THESE TESTS.
     """
     if len(halo_indices) != len(snap_list):
         raise ValueError("halo_indices list does not match snapshot list.")
@@ -3237,6 +3241,12 @@ def combine_los_lists(los_lists):
 
     Raises:
         Exception: If input lists are not all the same length
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_stacking_functions.py
+        Unit tests: test_combine_los_lists_basic
+        Regression tests: test_combine_los_lists
+        
     """
     lengths = np.array([len(x) for x in los_lists], dtype=int)
     if not np.all(lengths == lengths[0]):
@@ -3258,30 +3268,46 @@ def combine_los_lists(los_lists):
     return new_list
 
 
-def get_2d_void_stack_from_los_pos(los_pos, spar_bins, sperp_bins, radii, stacked=True):
+def get_2d_void_stack_from_los_pos(los_pos, spar_bins, sperp_bins, radii, 
+        stacked=True
+    ):
     """
     Construct a stacked dataset of LOS positions around void centers, 
     normalized by effective void radius (R_eff).
 
     Parameters:
-        los_pos (list): Per-void list of LOS particle positions (usually 2D: void x LOS array)
+        los_pos (list): Per-void list of LOS particle positions 
+                        (usually 2D: void x LOS array)
         spar_bins (array): Bins along the line of sight (s_parallel)
         sperp_bins (array): Bins perpendicular to LOS (s_perp)
         radii (list of arrays): Effective radii (R_eff) per void
-        stacked (bool): If True, return a single combined array of all particles;
-                        If False, return nested list of per-void normalized LOS data
+        stacked (bool): If True, return a single combined array of all 
+                        particles;
+                        If False, return nested list of per-void normalized 
+                        LOS data
 
     Returns:
         array or list: 
             - If stacked=True: ndarray of shape (N_particles, 2)
             - Else: List of per-void arrays of normalized LOS positions
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_stacking_functions.py
+        Regression tests: test_get_2d_fields_per_void_regression,
+                          test_get_2d_void_stack_from_los_pos_regression,
+                          test_get_2d_field_from_stacked_voids_regression,
+                          test_get_field_from_los_data_regression
+        Unit tests: test_get_2d_void_stack_from_los_pos_shape,
+                    test_get_field_from_los_data_basic,
+                    test_get_2d_field_from_stacked_voids_basic,
+                    test_get_field_from_los_data_shape
     """
     # Identify voids with at least one non-empty LOS
     voids_used = [np.array([len(x) for x in los]) > 0 for los in los_pos]
     # Remove empty LOS entries to avoid stacking issues
     los_pos_filtered = [[x for x in los if len(x) > 0] for los in los_pos]
-    # Compute cell volumes (not used here directly, possibly for weighting later)
-    # cell_volumes_reff = np.outer(np.diff(spar_bins), np.diff(sperp_bins))
+    # Compute cell volumes (not used here directly, possibly for weighting 
+    # later)
     # Filter radii accordingly
     void_radii = [rad[filt] for rad, filt in zip(radii, voids_used)]
     # Normalize LOS positions by R_eff (to work in R-scaled coordinates)
@@ -3291,14 +3317,18 @@ def get_2d_void_stack_from_los_pos(los_pos, spar_bins, sperp_bins, radii, stacke
     ]
     if stacked:
         # Flatten all voids into one large particle stack
-        stacked_particles_reff = np.vstack([np.vstack(los_list) for los_list in los_list_reff])
+        stacked_particles_reff = np.vstack(
+            [np.vstack(los_list) for los_list in los_list_reff]
+        )
         return stacked_particles_reff
     else:
         # Return per-void lists of normalized LOS positions
         return los_list_reff
 
 
-def get_weights_for_stack(los_pos, void_radii, additional_weights=None, stacked=True):
+def get_weights_for_stack(los_pos, void_radii, additional_weights=None, 
+        stacked=True
+    ):
     """
     Compute volume-based stacking weights for LOS particles.
 
@@ -3312,13 +3342,19 @@ def get_weights_for_stack(los_pos, void_radii, additional_weights=None, stacked=
     Parameters:
         los_pos (list): List of LOS particle arrays per void
         void_radii (list): List of R_eff per void
-        additional_weights (list or scalar or None): Optional multiplicative weights
+        additional_weights (list or scalar or None): Optional multiplicative 
+                                                     weights
         stacked (bool): If True, flatten the weights across all voids
 
     Returns:
         array or list of arrays:
             - Flattened array if stacked=True
             - Nested weight list matching los_pos structure if stacked=False
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_stacking_functions.py
+        Regression tests: test_get_weights_for_stack
+        Unit tests: test_get_weights_for_stack_basic
     """
     if additional_weights is None:
         v_weight = [
@@ -3332,7 +3368,9 @@ def get_weights_for_stack(los_pos, void_radii, additional_weights=None, stacked=
             v_weight = [
                 [(1.0 / rad)**3 * np.ones(len(los)) * weight
                  for los, rad, weight in zip(all_los, all_radii, all_weights)]
-                for all_los, all_radii, all_weights in zip(los_pos, void_radii, additional_weights)
+                for all_los, all_radii, all_weights in zip(
+                    los_pos, void_radii, additional_weights
+                )
             ]
         else:
             # Scalar weight broadcast across all
@@ -3350,20 +3388,30 @@ def get_weights_for_stack(los_pos, void_radii, additional_weights=None, stacked=
 def get_field_from_los_data(los_data, spar_bins, sperp_bins, v_weight,
                             void_count, nbar=None):
     """
-    Bin all LOS particles into a 2D histogram to compute the stacked void density field.
+    Bin all LOS particles into a 2D histogram to compute the stacked void 
+    density field.
 
-    Includes a cylindrical Jacobian factor and optional normalization by cosmic mean density.
+    Includes a cylindrical Jacobian factor and optional normalization by cosmic 
+    mean density.
 
     Parameters:
-        los_data (ndarray): Array of shape (N_particles, 2) with (s_par, s_perp) values
+        los_data (ndarray): Array of shape (N_particles, 2) with (s_par, s_perp)
+                            values
         spar_bins (array): Bin edges along LOS direction
         sperp_bins (array): Bin edges perpendicular to LOS
         v_weight (array): Weights for each particle (same length as los_data)
         void_count (int): Total number of contributing voids
-        nbar (float or None): Mean number density. If supplied, normalizes output.
+        nbar (float or None): Mean number density. If supplied, normalizes 
+                              output.
 
     Returns:
         ndarray: 2D stacked density field (shape: [N_spar_bins, N_sperp_bins])
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_stacking_functions.py
+        Regression tests: test_get_field_from_los_data_regression
+        Unit tests: test_get_field_from_los_data_basic,
+                    test_get_field_from_los_data_shape
     """
     cell_volumes_reff = np.outer(np.diff(spar_bins), np.diff(sperp_bins))
     hist = np.histogramdd(
@@ -3381,10 +3429,12 @@ def get_field_from_los_data(los_data, spar_bins, sperp_bins, v_weight,
 def get_2d_fields_per_void(los_per_void, sperp_bins, spar_bins,
                            void_radii, nbar=None):
     """
-    Compute 2D density fields for a set of voids from their LOS particle positions.
+    Compute 2D density fields for a set of voids from their LOS particle 
+    positions.
 
     The stacking is performed in coordinates rescaled by void radius R_eff,
-    so the resulting histograms are corrected to yield densities in physical units.
+    so the resulting histograms are corrected to yield densities in physical 
+    units.
 
     This involves:
       - Histogramming each void’s LOS particles into (s_perp, s_par) bins
@@ -3393,25 +3443,34 @@ def get_2d_fields_per_void(los_per_void, sperp_bins, spar_bins,
       - Optionally normalizing by mean cosmic density nbar to yield 1 + δ
 
     Parameters:
-        los_per_void (list): Per-void list of LOS particle positions, each shape (N, 2)
+        los_per_void (list): Per-void list of LOS particle positions, each 
+                             shape (N, 2)
         sperp_bins (array): Radial bins (perpendicular to LOS)
         spar_bins (array): Bins along LOS
         void_radii (array): R_eff per void (same length as los_per_void)
-        nbar (float or None): Mean particle density. If supplied, returns dimensionless density.
+        nbar (float or None): Mean particle density. If supplied, returns 
+                              dimensionless density.
 
     Returns:
-        ndarray: 3D array of shape (N_voids, N_spar_bins, N_sperp_bins) representing 2D density fields
+        ndarray: 3D array of shape (N_voids, N_spar_bins, N_sperp_bins) 
+                 representing 2D density fields
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_stacking_functions.py
+        Regression tests: test_get_2d_fields_per_void_regression
     """
     # Compute cell volumes in scaled (R_eff) units
     cell_volumes_reff = np.outer(np.diff(spar_bins), np.diff(sperp_bins))
-    # Compute 2D density histograms for each void (weighted by Jacobian correction)
+    # Compute 2D density histograms for each void 
+    # (weighted by Jacobian correction)
     histograms = np.array([
         np.histogramdd(los, bins=[spar_bins, sperp_bins],
                        density=False,
                        weights=1.0 / (2 * np.pi * los[:, 1]))[0]
         for los in los_per_void
     ])
-    # Convert back to physical units (1 / R_eff^3 for scaling back from R_eff units)
+    # Convert back to physical units (1 / R_eff^3 for scaling back from R_eff 
+    # units)
     volume_weight = 1.0 / void_radii**3
     # Denominator accounts for volume and optional density normalization
     if nbar is not None:
@@ -3419,7 +3478,9 @@ def get_2d_fields_per_void(los_per_void, sperp_bins, spar_bins,
     else:
         denominator = 2 * cell_volumes_reff
     # Final normalized density: (1/R^3) * histogram / volume
-    density = volume_weight[:, None, None] * histograms / denominator[None, :, :]
+    density = (
+        volume_weight[:, None, None] * histograms / denominator[None, :, :]
+    )
     return density
 
 
@@ -3443,6 +3504,11 @@ def get_2d_field_from_stacked_voids(los_per_void, sperp_bins, spar_bins,
 
     Returns:
         ndarray: Averaged 2D density field
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_stacking_functions.py
+        Regression tests: test_get_2d_field_from_stacked_voids_regression
+        Unit tests: test_get_2d_field_from_stacked_voids_basic
     """
     # Compute per-void 2D density histograms
     density = get_2d_fields_per_void(
@@ -3458,7 +3524,8 @@ def profile_broken_power_log(r, A, r0, c1, f1, B):
     Used internally to simplify fitting and enforce positivity.
 
     Form:
-        log(ρ/ρ̄) = log|A + B(r/r₀)² + (r/r₀)^4| + ((c₁ - 4)/f₁) * log(1 + (r/r₀)^f₁)
+        log(ρ/ρ̄) = log|A + B(r/r₀)² + (r/r₀)^4| + ((c₁ - 4)/f₁) * 
+                    log(1 + (r/r₀)^f₁)
 
     Parameters:
         r (float or array): Radial distance
@@ -3468,6 +3535,11 @@ def profile_broken_power_log(r, A, r0, c1, f1, B):
 
     Returns:
         float or array: Logarithm of the void density profile
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_profiles.py
+        Regression tests: test_profile_broken_power_log
+        Unit tests: test_broken_power_log_consistency
     """
     return np.log(np.abs(A + B * (r / r0)**2 + (r / r0)**4)) + \
            ((c1 - 4) / f1) * np.log(1 + (r / r0)**f1)
@@ -3476,7 +3548,8 @@ def profile_broken_power(r, A, r0, c1, f1, B):
     """
     Broken power-law profile for void density.
 
-    This is the exponential of profile_broken_power_log, ensuring a positive density.
+    This is the exponential of profile_broken_power_log, ensuring a positive 
+    density.
 
     Parameters:
         r (float or array): Radial distance
@@ -3486,10 +3559,17 @@ def profile_broken_power(r, A, r0, c1, f1, B):
 
     Returns:
         float or array: Density contrast profile δ(r)
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_profiles.py
+        Regression tests: test_broken_power_regression
+        Unit tests: test_broken_power_log_consistency
     """
     return np.exp(profile_broken_power_log(r, A, r0, c1, f1, B))
 
-def profile_modified_hamaus(r, alpha, beta, rs, delta_c, delta_large=0.0, rv=1.0):
+def profile_modified_hamaus(r, alpha, beta, rs, delta_c, delta_large=0.0, 
+        rv=1.0
+    ):
     """
     Modified Hamaus et al. (2014) void density profile.
 
@@ -3506,6 +3586,15 @@ def profile_modified_hamaus(r, alpha, beta, rs, delta_c, delta_large=0.0, rv=1.0
 
     Returns:
         float or array: Density contrast δ(r)
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_profiles.py
+        Regression tests: test_integrated_hamaus_regression,
+                          test_modified_hamaus_regression
+        Unit tests: test_modified_hamaus_output_shape,
+                    test_integrated_profile_finite,
+                    test_rho_real_matches_hamaus,
+                    test_integrated_matches_numerical
     """
     return ((delta_c - delta_large) * (1.0 - (r / rs)**alpha) /
             (1.0 + (r / rv)**beta)) + delta_large
@@ -3522,6 +3611,10 @@ def profile_modified_hamaus_derivative(r,order,alpha,beta,rs,delta_c,
     
     Returns:
         float or array: Derivative at r
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_profiles.py
+        Regression tests: test_profile_modified_hamaus_derivative
     """
     if order not in [0,1,2]:
         raise Exception("Derivative order not valid or not implemented.")
@@ -3532,9 +3625,10 @@ def profile_modified_hamaus_derivative(r,order,alpha,beta,rs,delta_c,
     denominator = 1 + (r/rv)**beta
     extra_factor = ( (alpha/rs)*(r/rs)**(alpha-1)/numerator
                     +(beta/rv)*(r/rv)**(beta-1)/denominator)
+    delta = profile_modified_hamaus(
+        r,alpha,beta,rs,delta_c,delta_large=delta_large,rv=rv
+    )
     if order == 1:
-        delta = profile_modified_hamaus(r,alpha,beta,rs,delta_c,
-                                       delta_large=delta_large,rv=rv)
         return -(delta - delta_large)*extra_factor
     if order == 2:
         deltap = profile_modified_hamaus_derivative(r,1,alpha,beta,rs,delta_c,
@@ -3568,10 +3662,18 @@ def integrated_profile_modified_hamaus(r, alpha, beta, rs, delta_c,
 
     Returns:
         float or array: Cumulative density contrast Δ(r)
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_profiles.py
+        Regression tests: test_integrated_hamaus_regression
+        Unit tests: test_integrated_profile_finite,
+                    test_integrated_matches_numerical,
     """
     arg = (r / rv)**beta
     hyp_1 = scipy.special.hyp2f1(1,3 / beta, 1 + (3 / beta), -arg)
-    hyp_2 = scipy.special.hyp2f1(1,(alpha + 3) / beta, 1 + ( (alpha + 3) / beta), -arg)
+    hyp_2 = scipy.special.hyp2f1(
+        1,(alpha + 3) / beta, 1 + ( (alpha + 3) / beta), -arg
+    )
     return delta_large + (delta_c - delta_large)*( hyp_1 - 
         ( 3 / (alpha + 3) ) * ( r / rs )**alpha * hyp_2 )
 
@@ -3590,6 +3692,11 @@ def rho_real(r, *profile_args):
 
     Returns:
         float or array: Real-space density profile ρ(r)
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_profiles.py
+        Regression tests: test_rho_real
+        Unit tests: test_rho_real_matches_hamaus
     """
     return profile_modified_hamaus(r, *profile_args)
 
@@ -3605,21 +3712,33 @@ def get_weights(los_zspace, void_radii, additional_weights=None):
     Parameters:
         los_zspace (list): Per-snapshot list of LOS arrays (per void)
         void_radii (list): Per-snapshot list of void radii
-        additional_weights (list or None): Optional weights per void (same structure)
+        additional_weights (list or None): Optional weights per void 
+                                           (same structure)
 
     Returns:
         Array of weights for all particles in all voids in all snapshots
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_stacking_functions.py
+        Regression tests: test_get_weights
+        Unit tests: test_get_weights_basic
     """
     # Mask voids that actually contribute LOS data
     voids_used = [np.array([len(x) for x in los]) > 0 for los in los_zspace]
     # Remove empty entries
-    los_pos = [[los[i] for i in np.where(ind)[0]] for los, ind in zip(los_zspace, voids_used)]
+    los_pos = [
+        [los[i] for i in np.where(ind)[0]] for los, ind in zip(
+            los_zspace, voids_used
+        )
+    ]
     # Prepare additional weights
     if additional_weights is None:
         weights_list = None
     else:
         all_additional_weights = np.hstack([
-            weights[used] for weights, used in zip(additional_weights, voids_used)
+            weights[used] for weights, used in zip(
+                additional_weights, voids_used
+            )
         ])
         weights_list = [
             weights[used] / np.sum(all_additional_weights)
@@ -3649,7 +3768,9 @@ def get_halo_indices(catalogue):
         list of arrays: Per-snapshot list of halo indices
     """
     final_cat = catalogue.get_final_catalogue(void_filter=True)
-    halo_indices = [-np.ones(len(final_cat), dtype=int) for _ in range(catalogue.numCats)]
+    halo_indices = [
+        -np.ones(len(final_cat), dtype=int) for _ in range(catalogue.numCats)
+    ]
     for ns in range(catalogue.numCats):
         have_void = final_cat[:, ns] >= 0
         halo_indices[ns][have_void] = catalogue.indexListShort[ns][
@@ -3681,6 +3802,12 @@ def trim_los_list(los_list, spar_bins, sperp_bins, all_radii):
         tuple:
             - los_list_trimmed (list of lists): Filtered LOS particle arrays
             - voids_used (list of bool arrays): Mask of retained voids
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_stacking_functions
+        Regression tests: test_trim_los_list_regression
+        Unit tests: test_trim_los_list_shapes,
+                    test_trim_los_list_basic
     """
     los_list_trimmed = get_2d_void_stack_from_los_pos(
         los_list, spar_bins, sperp_bins,
@@ -3690,7 +3817,9 @@ def trim_los_list(los_list, spar_bins, sperp_bins, all_radii):
     voids_used = [np.array([len(x) > 0 for x in los]) for los in los_list]
     return los_list_trimmed, voids_used
 
-def get_trimmed_los_list_per_void(los_pos, spar_bins, sperp_bins, void_radii_list):
+def get_trimmed_los_list_per_void(
+        los_pos, spar_bins, sperp_bins, void_radii_list
+    ):
     """
     Get a flat list of trimmed LOS particle arrays from all voids.
 
@@ -3705,6 +3834,11 @@ def get_trimmed_los_list_per_void(los_pos, spar_bins, sperp_bins, void_radii_lis
 
     Returns:
         list: Flattened list of LOS particle arrays per void (trimmed)
+    Tests:
+        Tested in cosmology_inference_tests/test_stacking_functions
+        Regression tests: test_get_trimmed_los_list_per_void_regression
+        Unit tests: test_get_trimmed_los_list_per_void_shape,
+                    test_get_trimmed_los_list_per_void_basic
     """
     los_list_trimmed, _ = trim_los_list(
         los_pos, spar_bins, sperp_bins, void_radii_list
@@ -3719,20 +3853,24 @@ def get_borg_density_estimate(snaps, densities_file=None, dist_max=135,
     If precomputed density samples are provided, loads them from file.
     Otherwise, computes them from raw snapshot data using spherical averaging.
 
-    Returns a bootstrap estimate of the MAP (maximum a posteriori) density contrast
-    and its uncertainty interval.
+    Returns a bootstrap estimate of the MAP (maximum a posteriori) density 
+    contrast and its uncertainty interval.
 
     Parameters:
         snaps (SnapHandler): Object containing snapshots in `snaps["snaps"]`
-        densities_file (str or None): Pickle file containing precomputed delta samples
-        dist_max (float): Radius (in Mpc/h) for subvolume used to compute densities
+        densities_file (str or None): Pickle file containing precomputed delta 
+                                      samples
+        dist_max (float): Radius (in Mpc/h) for subvolume used to compute 
+                          densities
         seed (int): RNG seed for reproducibility of bootstrap
         interval (float): Confidence level for bootstrap interval (e.g., 0.68)
 
     Returns:
         tuple:
-            - deltaMAPBootstrap (BootstrapResult): Bootstrap distribution object
-            - deltaMAPInterval (ConfidenceInterval): Confidence interval of MAP estimate
+            - deltaMAPBootstrap (BootstrapResult): Bootstrap distribution 
+                                                   object
+            - deltaMAPInterval (ConfidenceInterval): Confidence interval of 
+                                                     MAP estimate
     """
     boxsize = snaps.boxsize
     # Determine center of sphere based on particle positions
@@ -3768,14 +3906,17 @@ def get_lcdm_void_catalogue(snaps, delta_interval=None, dist_max=135,
         3. Filtering voids that fall in those regions and meet radius cuts
 
     Parameters:
-        snaps (SnapHandler): Snapshot object with 'void_centres' and 'void_radii'
-        delta_interval (tuple or None): Density contrast bounds to select regions
+        snaps (SnapHandler): Snapshot object with 'void_centres' and 
+                             'void_radii'
+        delta_interval (tuple or None): Density contrast bounds to select 
+                                        regions
         dist_max (float): Radius of the spherical region used
         radii_range (list): Acceptable radius range for void selection
         centres_file (str or None): Pickle file path for caching random regions
         nRandCentres (int): Number of random regions to generate if no cache
         seed (int): Random seed for reproducibility
-        flattened (bool): Whether to flatten per-region void mask into a single list
+        flattened (bool): Whether to flatten per-region void mask into a single 
+                          list
 
     Returns:
         list of arrays: Boolean masks per snapshot indicating selected voids
@@ -3799,7 +3940,9 @@ def get_lcdm_void_catalogue(snaps, delta_interval=None, dist_max=135,
         centres_to_use, 2 * dist_max, boxsize, returnIndices=True
     )
     selected_region_centres = [
-        centres[idx] for centres, idx in zip(centres_to_use, nonoverlapping_indices)
+        centres[idx] for centres, idx in zip(
+            centres_to_use, nonoverlapping_indices
+        )
     ]
     selected_region_masks = [
         mask[idx] for mask, idx in zip(region_masks, nonoverlapping_indices)
@@ -3842,7 +3985,9 @@ def _filter_regions_by_density(rand_centres, rand_densities, delta_interval):
             centres[mask,:] for centres, mask in zip(centres_list, region_masks)
         ]
     else:
-        region_masks = [np.ones_like(deltas, dtype=bool) for deltas in rand_densities]
+        region_masks = [
+            np.ones_like(deltas, dtype=bool) for deltas in rand_densities
+        ]
         centres_to_use = centres_list
     return region_masks, centres_to_use
 
@@ -3851,14 +3996,17 @@ def _compute_void_distances(void_centres, region_centres, boxsize):
     Compute distances from each void to every selected region.
 
     Returns:
-        list of lists: [ [distances for region 1], [region 2], ... ] per snapshot
+        list of lists: [ [distances for region 1], [region 2], ... ] per 
+                        snapshot
     """
     return [[
         np.sqrt(np.sum(snapedit.unwrap(voids - region, boxsize)**2, axis=1))
         for region in regions
     ] for voids, regions in zip(void_centres, region_centres)]
 
-def _filter_voids_by_distance_and_radius(dist_lists, radii_lists, dist_max, radii_range):
+def _filter_voids_by_distance_and_radius(
+        dist_lists, radii_lists, dist_max, radii_range
+    ):
     """
     Apply filtering to voids based on spatial and size constraints.
 
@@ -3880,21 +4028,26 @@ def get_stacked_void_density_field(snaps, void_radii_lists, void_centre_lists,
                                    suffix=".lospos_all_zspace2.p",
                                    los_pos=None, **kwargs):
     """
-    Compute the 2D stacked density field from LOS particle data for a set of voids.
+    Compute the 2D stacked density field from LOS particle data for a set of 
+    voids.
 
-    Handles filtering, redshift-space conversion, void trimming, and weighted stacking.
+    Handles filtering, redshift-space conversion, void trimming, and weighted 
+    stacking.
 
     Parameters:
-        snaps (SnapHandler): Simulation snapshot handler (must include boxsize, snaps, etc.)
+        snaps (SnapHandler): Simulation snapshot handler (must include boxsize, 
+                             snaps, etc.)
         void_radii_lists (list): Per-snapshot list of void radii
         void_centre_lists (list): Per-snapshot list of void centers
-        spar_bins, sperp_bins (array): Bin edges for LOS and transverse directions
+        spar_bins, sperp_bins (array): Bin edges for LOS and transverse 
+                                       directions
         halo_indices (list or None): Indices for each void (optional)
         filter_list (list or None): Optional masks for void selection
         additional_weights (list or None): Optional void weights
         dist_max, (float): Stacking distance threshold
         rmin, rmax, (float) minimum and maximum void radius to consider
-        recompute, zspace, recompute_zspace (bool): Control redshift-space position cache
+        recompute, zspace, recompute_zspace (bool): Control redshift-space 
+                                                    position cache
         recompute, (bool): if true, recompute LOS positions in the cache
         zspace, (bool): if true, use redshift space positions, not real space
         recompute_zspace, (bool): if true, recompute redshift space positions.
@@ -3930,10 +4083,14 @@ def get_stacked_void_density_field(snaps, void_radii_lists, void_centre_lists,
     los_list_per_void = sum(los_list_trimmed, [])
     num_voids = sum(np.sum(u) for u in voids_used)
     # Per-void radius and weights
-    void_radii_per_void = np.hstack([r[used] for r, used in zip(void_radii_lists, voids_used)])
+    void_radii_per_void = np.hstack(
+        [r[used] for r, used in zip(void_radii_lists, voids_used)]
+    )
     if additional_weights is not None:
         additional_weights_per_void = np.hstack([
-            weights[used] for weights, used in zip(additional_weights, voids_used)
+            weights[used] for weights, used in zip(
+                additional_weights, voids_used
+            )
         ])
     else:
         additional_weights_per_void = np.ones(len(void_radii_per_void))
@@ -3954,13 +4111,17 @@ def get_1d_real_space_field(snaps, rbins=None, filter_list=None,
     Compute a bootstrapped real-space 1D void density profile (radial stacking).
 
     Parameters:
-        snaps (SnapHandler): Object with snapshot data and precomputed pair counts
-        rbins (array or None): Radial bin edges. If None, defaults to linspace(0, 3)
-        filter_list (list or None): Per-snapshot list of boolean masks for void selection
+        snaps (SnapHandler): Object with snapshot data and precomputed pair 
+                             counts
+        rbins (array or None): Radial bin edges. If None, defaults to 
+                               linspace(0, 3)
+        filter_list (list or None): Per-snapshot list of boolean masks for void 
+                                    selection
         additional_weights (list or None): Optional void-level weights
         n_boot (int): Number of bootstrap samples
         seed (int): RNG seed for bootstrap
-        halo_indices (list or None): Void indices to use (alternative to filter_list)
+        halo_indices (list or None): Void indices to use (alternative to 
+                                     filter_list)
         use_precomputed_profiles (bool): If True, use stored pair counts
 
     Returns:
@@ -3974,7 +4135,9 @@ def get_1d_real_space_field(snaps, rbins=None, filter_list=None,
     if halo_indices is not None and filter_list is None:
         filter_list = [halo_indices[ns] >= 0 for ns in range(snaps.N)]
     if filter_list is None:
-        filter_list = [np.ones(len(x), dtype=bool) for x in snaps["pair_counts"]]
+        filter_list = [
+            np.ones(len(x), dtype=bool) for x in snaps["pair_counts"]
+        ]
     # Load pair counts
     if use_precomputed_profiles:
         rbins = snaps["radius_bins"][0]
@@ -3985,7 +4148,9 @@ def get_1d_real_space_field(snaps, rbins=None, filter_list=None,
             rbins = np.linspace(0, 3, 31)
         all_counts, all_volumes = [], []
         for ns in range(snaps.N):
-            tree = scipy.spatial.cKDTree(snaps["snaps"][ns]['pos'], boxsize=boxsize)
+            tree = scipy.spatial.cKDTree(
+                snaps["snaps"][ns]['pos'], boxsize=boxsize
+            )
             counts, volumes = stacking.getPairCounts(
                 snaps["void_centres"][ns], snaps["void_radii"][ns],
                 snaps["snaps"][ns], rbins,
@@ -3996,19 +4161,27 @@ def get_1d_real_space_field(snaps, rbins=None, filter_list=None,
             all_volumes.append(volumes)
     # Select voids
     if halo_indices is not None:
-        all_antihalos = [halo_indices[ns][halo_indices[ns] >= 0] - 1 for ns in range(snaps.N)]
+        all_antihalos = [
+            halo_indices[ns][halo_indices[ns] >= 0] - 1 
+            for ns in range(snaps.N)
+        ]
     elif filter_list is not None:
         all_antihalos = [np.where(filt)[0] for filt in filter_list]
     else:
         all_antihalos = [np.arange(len(x)) for x in snaps["pair_counts"]]
     # Compute all individual density profiles
     all_profiles = [counts[idx] / (vols[idx] * nbar)
-                    for counts, vols, idx in zip(all_counts, all_volumes, all_antihalos)]
+                    for counts, vols, idx in zip(
+                        all_counts, all_volumes, all_antihalos
+                        )
+                    ]
     density = np.vstack(all_profiles)
     # Weights
     if additional_weights is not None:
         additional_weights_per_void = np.hstack([
-            weights[used] for weights, used in zip(additional_weights, filter_list)
+            weights[used] for weights, used in zip(
+                additional_weights, filter_list
+            )
         ])
     else:
         additional_weights_per_void = np.ones(density.shape[0])
@@ -4029,15 +4202,17 @@ def get_additional_weights_borg(cat, voids_used=None):
     """
     Get reproducibility-based weights for BORG voids.
 
-    Uses the finalCatFrac property as a proxy for the confidence or reproducibility
-    of a void detection. These are normalized across all voids used in stacking.
+    Uses the finalCatFrac property as a proxy for the confidence or 
+    reproducibility of a void detection. These are normalized across all voids 
+    used in stacking.
 
     Parameters:
         cat (BorgVoidCatalogue): Void catalogue object
         voids_used (list of bool arrays or None): Optional mask per snapshot
 
     Returns:
-        list of arrays: Normalized reproducibility weights for each void (per snapshot)
+        list of arrays: Normalized reproducibility weights for each void 
+                        (per snapshot)
     """
     rep_scores = cat.property_with_filter(cat.finalCatFrac, void_filter=True)
     if voids_used is None:
@@ -4051,7 +4226,8 @@ def get_additional_weights_borg(cat, voids_used=None):
 # VELOCITY MODELLING
 
 def get_ur_profile_for_void(void_centre,void_radius,rbins,snap,tree=None,
-                            cell_vols=None,relative_velocity=True):
+        cell_vols=None,relative_velocity=True,n_threads=-1,
+    ):
     """
     Compute the radial velocity profile around a given void
         
@@ -4073,19 +4249,33 @@ def get_ur_profile_for_void(void_centre,void_radius,rbins,snap,tree=None,
                                   to the centre of the void, taking into 
                                   account the bulk void motion. Otherwise, 
                                   just uses the simulation velocity.
+        n_threads (int): Number of threads to use for computing profile. If
+                         -1 (default), then use all available threads.
+
     Returns:
         ur_profile (num_bins component array): velocity profile in the provided 
                                                bins
         Delta_r (num_bins component array): Number density of particles in the 
                                             same bins
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_stacking_functions
+        Regression tests: test_get_ur_profile_for_void
     """
     boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
     nbar = len(snap)/boxsize**3
     # KD Tree:
+    wrapped = np.all(snap['pos'] > 0) and np.all(snap['pos'] < boxsize)
+    wrapped_pos = snap['pos'] if wrapped else snapedit.wrap(
+        snap['pos'],boxsize
+    )
+    wrapped_centre = void_centre if wrapped else snapedit.wrap(
+        void_centre,boxsize
+    )
     if tree is None:
-        tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
+        tree = scipy.spatial.cKDTree(wrapped_pos,boxsize=boxsize)
     # Get particles around the void:
-    indices_list = np.array(tree.query_ball_point(void_centre,\
+    indices_list = np.array(tree.query_ball_point(wrapped_centre,\
             rbins[-1]*void_radius,workers=n_threads),dtype=np.int64)
     # Displacement from void centre:
     disp = snapedit.unwrap(snap['pos'][indices_list,:] - void_centre,boxsize)
@@ -4127,9 +4317,18 @@ def get_all_ur_profiles(centres, radii,rbins,snap,tree=None,cell_vols=None,
                                                     void
         Delta_r_profiles (N x num_bins array of floats): Number density for 
                                                          each void.
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_stacking_functions.py
+        Regression tests: test_get_all_ur_profiles
     """
+    boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
+    wrapped = np.all(snap['pos'] > 0) and np.all(snap['pos'] < boxsize)
+    wrapped_pos = snap['pos'] if wrapped else snapedit.wrap(
+        snap['pos'],boxsize
+    )
     if tree is None:
-        tree = scipy.spatial.cKDTree(snap['pos'],boxsize=boxsize)
+        tree = scipy.spatial.cKDTree(wrapped_pos,boxsize=boxsize)
     profiles = [
         get_ur_profile_for_void(void_centre,void_radius,rbins,snap,
                                 tree=tree,cell_vols=cell_vols,
@@ -4144,6 +4343,47 @@ def get_all_ur_profiles(centres, radii,rbins,snap,tree=None,cell_vols=None,
     return ur_profiles,Delta_r_profiles
 
 def semi_analytic_model(u,alphas,z=0,Om=0.3111,f1=None,h=1,nf1 = 5/9,**kwargs):
+    """
+    Semi-analytic model for velocities around a void. Uses 1LPT, but then has 
+    arbitrary coefficients for higher orders, which are matched to the velocity
+    data.
+    
+    The model is defined as:
+    
+    v = a*H(a)*f1*(u + \sum_{n=2}^{N}\alpha_n u^n)
+    
+    were a is the scale factor, H(a) the Hubble rate at that scale factor,
+    f1 the linear growth rate, and u is the displacement field for which we 
+    want to computet he corresponding velocity. The parameters to be fixed
+    are alpha_n from n=2 to n=N.
+    
+    Parameters:
+        u (float or array): Displacement field divided by radius (dimensionless)
+        alphas (list or array): Parameters for the model, representing
+                                alpha_2 ...alpha_N. Number of parameters is 
+                                inferred from alphas, N = len(alphas) + 1
+                                (note, N is one more than the number of 
+                                parameters).
+        z (float): Redshift at which to compute the model.
+        Om (float): Matter density parameters
+        f1 (float or None): Linear growth rate. If None, the Lambda-CDM value
+                            is assumed, calculated at the given redshift from 
+                            Om and z.
+        h (float): Dimensionless Hubble rate. h = 1 (default) means that
+                    distances are assumed to be in units of Mpc/h.
+        nf1 (float): Exponent of Omega_m(z) used to approximate the Lambda-CDM
+                     value of f1, if f1 is not given.
+    
+    Returns:
+        float or array: Velocities for the given displacement field, divided by
+                        radius from the void centre. Units (km/s)*h/Mpc if
+                        h = 1, otherwise (km/s)/Mpc.
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py
+        Unit tests: test_semi_analytic_model_functions_consistency
+        Regression tests: test_semi_analytic_model
+    """
     if f1 is None:
         Omz = Omega_z(z,Om,**kwargs)
         f1 = Omz**nf1
@@ -4156,64 +4396,89 @@ def semi_analytic_model(u,alphas,z=0,Om=0.3111,f1=None,h=1,nf1 = 5/9,**kwargs):
 #-------------------------------------------------------------------------------
 # SPHERICAL OVERDENSITY MODEL
 
-def Delta_theta(theta):
+def Delta_theta(theta,taylor_expand=False,exact = False):
     """
     Computes the cumulative density contrast for a given void development angle,
     assuming the spherical shell model.
     
     Parameters:
         theta (float or array): Development angle
+        taylor_expand (bool): If true, force Taylor expansion around theta = 0
+                              to avoid problems near theta = 0.
+        exact (bool): If true, force the theta > 0 expression.
     
     Returns:
         Delta (float or array): same size as theta. Cumulative density contrast.
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py
+        Regression tests: test_Delta_theta
+        Unit tests: test_theta_of_Delta_basic,
+                    test_invert_Delta_theta_scalar_basic,
+                    test_get_upper_bound_basic,
+                    
     """
+    if exact:
+        return 9*(np.sinh(theta) - theta)**2/(2*(np.cosh(theta) - 1)**3)
+    if taylor_expand:
+        return 1 - 3*theta**2/20
     if np.isscalar(theta):
-        if theta < 1e-10:
-            return 1 - 3*theta**2/20
+        if theta == np.inf:
+            return 0.0
+        elif theta < 1e-10:
+            return Delta_theta(theta, taylor_expand = True)
         else:
-            return 9*(np.sinh(theta) - theta)**2/(2*(np.cosh(theta) - 1)**3)
+            return Delta_theta(theta, exact=True)
     else:
         small = (theta < 1e-10)
-        not_small = np.logical_not(small)
+        infinite = (theta == np.inf)
+        not_small = np.logical_not(np.logical_or(small,infinite))
         retval = np.zeros(theta.shape)
-        retval[small] = 1 - 3*theta[small]**2/20
-        retval[not_small] = (
-            9*(np.sinh(theta[not_small]) - theta[not_small])**2
-            /(2*(np.cosh(theta[not_small]) - 1)**3)
-        )
+        retval[small] = Delta_theta(theta[small],taylor_expand=True)
+        retval[not_small] = Delta_theta(theta[not_small],exact=True)
+        retval[infinite] = 0.0
         return retval
 
-def V_theta(theta):
+def V_theta(theta,taylor_expand=False,exact = False):
     """
     Computes the radial velocity around voids as a function of the void
     development angle, assuming the spherical shell model.
     
     Parameters:
         theta (float or array): Development angle
+        taylor_expand (bool): If true, force Taylor expansion around theta = 0
+                              to avoid problems near theta = 0.
+        exact (bool): If true, force the theta > 0 expression.
     
     Returns:
         V (float or array): same size as theta. Radial peculiar velocity.
     
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py
+        Regression tests: test_V_theta
     """
+    if exact:
+        return 3*(
+            np.sinh(theta)*(np.sinh(theta) - theta)/
+            (2*(np.cosh(theta) - 1)**2)
+        ) - 1
+    if taylor_expand:
+        return theta**2/20
     if np.isscalar(theta):
-        if theta < 1e-10:
-            return theta**2/20
+        if theta == np.inf:
+            return 0.5
+        elif theta < 1e-10:
+            return V_theta(theta,taylor_expand=True)
         else:
-            return 3*(
-                        np.sinh(theta)*(
-                            np.sinh(theta) - theta
-                        )/(2*(np.cosh(theta) - 1)**2)
-            ) - 1
+            return V_theta(theta,exact=True)
     else:
         small = (theta < 1e-10)
-        not_small = np.logical_not(small)
+        infinite = (theta == np.inf)
+        not_small = np.logical_not(np.logical_or(small,infinite))
         retval = np.zeros(theta.shape)
-        retval[small] = theta[small]**2/20
-        retval[not_small] = (
-            3*(np.sinh(theta[not_small])*(
-                np.sinh(theta[not_small]) - theta[not_small]
-            )/(2*(np.cosh(theta[not_small]) - 1)**2)) - 1
-        )
+        retval[small] = V_theta(theta[small],taylor_expand=True)
+        retval[not_small] = V_theta(theta[not_small],exact=True)
+        retval[infinite] = 0.5
         return retval
 
 # Inversion:
@@ -4231,7 +4496,14 @@ def get_upper_bound(Delta,count_max=10):
     Returns:
         theta_max (float): Upper bound on the solution for the development 
                            angle for the supplied Delta.
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py
+        Regression tests: test_get_upper_bound
+        Unit tests: test_get_upper_bound_basic
     """
+    if Delta == -1:
+        return np.inf
     f = lambda x: Delta_theta(x) - Delta - 1
     theta_max = -np.log(2*(1 + Delta)/9) # Asymtotic guess at solution
     count = 0
@@ -4257,6 +4529,11 @@ def invert_Delta_theta_scalar(Delta,theta_min=0,theta_max = None,count_max=10):
     
     Returns:
         theta (float): Development angle that gives the specified Delta
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py
+        Regression tests: test_invert_Delta_theta_scalar
+        Unit tests: test_invert_Delta_theta_scalar_basic
     """
     if Delta == -1:
         return np.inf
@@ -4277,11 +4554,16 @@ def theta_of_Delta(Delta,count_max = 10):
     Returns:
         theta (float or array): Same size as Delta, the development angle 
                                 for each Delta.
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_lpt.py
+        Regression tests: test_theta_of_Delta
+        Unit tests: test_theta_of_Delta_basic
     """
     theta_min = 0
     # Get bound:
     scalar = np.isscalar(Delta)
-    Delta_min = Delta if scalar else np.min(Delta)
+    Delta_min = Delta if scalar else np.min(Delta[Delta > -1])
     theta_max = get_upper_bound(Delta_min,count_max=count_max)
     if scalar:
         return invert_Delta_theta_scalar(
@@ -4322,10 +4604,15 @@ def get_void_weights(los_list_trimmed, voids_used, all_radii,
         los_list_trimmed (list): List of per-void LOS particle arrays (2D)
         voids_used (list of bool arrays): Per-snapshot mask of valid voids
         all_radii (list of arrays): R_eff for all voids (before masking)
-        additional_weights (list or scalar or None): Optional multiplicative weights
+        additional_weights (list or scalar or None): Optional multiplicative 
+                                                     weights
 
     Returns:
         list of arrays: Per-void weights (unstacked)
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_stacking_functions.py
+        Regression tests: test_get_void_weights
     """
     # Apply void selection mask to radii
     filtered_radii = [rad[used] for used, rad in zip(voids_used, all_radii)]
@@ -4372,6 +4659,12 @@ def get_covariance_matrix(los_list, void_radii_all,
     Returns:
         cov (ndarray): Covariance matrix (or Cholesky factor if cholesky=True)
         mean (ndarray, optional): Mean field if return_mean=True
+    
+    Tests:
+        Tested in cosmology_inference_tests/test_covariance_and_statistics.py
+        Regression tests: test_covariance_matrix_regression
+        Unit tests: test_get_covariance_matrix_symmetry,
+                    test_get_covariance_matrix_positive_definite
     """
     # --- Step 1: Trim out voids with no contributing particles
     los_list_trimmed, voids_used = trim_los_list(
@@ -4426,127 +4719,34 @@ def get_covariance_matrix(los_list, void_radii_all,
     else:
         return cov
 
-
-# Covariance function:
-def get_covariance_matrix_old(los_list,void_radii_all,spar_bins,sperp_bins,nbar,
-                          additional_weights = None,n_boot=10000,seed=42,
-                          lambda_reg = 1e-15,cholesky=True,regularise=True,
-                          log_field=False,return_mean=False):
-    # Get 2D stacked fields for each sample:
-    los_list_trimmed, voids_used = trim_los_list(
-        los_list,spar_bins,sperp_bins,void_radii_all)
-    los_per_void = sum(los_list_trimmed,[])
-    void_radii_per_void = np.hstack([rad[used] 
-        for rad, used in zip(void_radii_all,voids_used)])
-    num_voids = len(void_radii_per_void)
-    stacked_fields = get_2d_fields_per_void(
-        los_per_void,sperp_bins,spar_bins,
-        void_radii_per_void,nbar=nbar).reshape(num_voids,
-        (len(spar_bins) - 1)*(len(sperp_bins) - 1))
-    # Weights, accounting for differing lengths of the void catalogues
-    # in each sample:
-    # Weights for each void:
-    if additional_weights is not None:
-        additional_weights_per_void = np.hstack([weights[used] 
-            for weights, used in zip(additional_weights,voids_used)])
-    else:
-        additional_weights_per_void = np.ones(void_radii_per_void.shape)
-    # Bootstrap samples of the voids:
-    np.random.seed(42)
-    bootstrap_samples = np.random.choice(num_voids,size=(num_voids,n_boot))
-    bootstrap_stacks = np.array([np.average(
-        stacked_fields[bootstrap_samples[:,k],:],
-        axis=0,weights=additional_weights_per_void[bootstrap_samples[:,k]]) 
-        for k in tools.progressbar(range(0,n_boot))]).T
-    # Compute covariance of the bootstrap samples:
-    if log_field:
-        # Covariance of the log-field
-        log_samples = np.log(bootstrap_stacks)
-        finite_samples = np.where(np.all(np.isfinite(log_samples),0))[0]
-        cov = np.cov(log_samples[:,finite_samples])
-        mean =  np.mean(log_samples[:,finite_samples],1)
-    else:
-        cov = np.cov(bootstrap_stacks)
-        mean = np.mean(bootstrap_stacks,1)
-    if regularise:
-        cov = regularise_covariance(cov,lambda_reg= lambda_reg)
-    if cholesky:
-        # If we want to use the Cholesky decomposition, instead of the
-        # covariance directly.
-        cov = scipy.linalg.cholesky(cov,lower=True)
-    if return_mean:
-        return cov, mean
-    else:
-        return cov
-
 #-------------------------------------------------------------------------------
 # COSMOLOGICAL INFERENCE
 
-def get_mle_estimate(initial_guess_eps, theta_ranges_epsilon, *args, **kwargs):
+def get_mle_estimate(initial_guess, theta_ranges, 
+        log_likelihood,*args, **kwargs
+    ):
     """
-    Compute the Maximum Likelihood Estimate (MLE) for cosmological parameters,
+    Compute the Maximum Likelihood Estimate (MLE) for parameters,
     by minimizing the negative log-likelihood function.
 
     Parameters:
-        initial_guess_eps (array): Initial guess for [epsilon, f] or [Omega_m, f]
-        theta_ranges_epsilon (list of tuples): Parameter bounds
+        initial_guess (array): Initial guess for parameters
+        theta_ranges (list of tuples): Parameter bounds
+        log_likelihood (function): Log likelihood to file mle estimate for.
+        
         *args: Arguments passed to the likelihood function
         **kwargs: Keyword args for the likelihood
 
     Returns:
         OptimizeResult: Output from scipy.optimize.minimize
     """
-    nll = lambda theta: -log_likelihood_aptest(theta, *args, **kwargs)
+    nll = lambda theta: -log_likelihood(theta, *args, **kwargs)
     mle_estimate = scipy.optimize.minimize(
         nll,
-        initial_guess_eps,
-        bounds=theta_ranges_epsilon
+        initial_guess,
+        bounds=theta_ranges
     )
-    return mle_estimate
-
-def get_fixed_inverse(Delta_func, ntab=100, ntab_f=100,
-                      sval_range=[0, 3], rperp_range=[0, 3],
-                      f_val_range=[0, 1]):
-    """
-    Precompute and tabulate the inverse mapping from redshift-space
-    (s_parallel) to real-space (r_parallel), assuming fixed profile parameters.
-
-    This accelerates likelihood evaluations when the inverse is not dependent
-    on sampled parameters.
-    
-    FUNCTION IS NOW DEPRECATED
-
-    Parameters:
-        Delta_func (function): Cumulative density profile Δ(r)
-        ntab (int): Number of grid points for r_perp and s_parallel
-        ntab_f (int): Number of grid points for f
-        sval_range (list): Range of s_parallel values
-        rperp_range (list): Range of r_perp values
-        f_val_range (list): Range of f values
-
-    Returns:
-        function: Interpolated inverse mapping function F_inv(s_perp, s_par, f)
-    """
-    svals = np.linspace(sval_range[0], sval_range[1], ntab)
-    rperp_vals = np.linspace(rperp_range[0], rperp_range[1], ntab)
-    f_vals = np.linspace(f_val_range[0], f_val_range[1], ntab_f)
-    F_inv_vals = np.zeros((ntab, ntab, ntab_f))
-    for i in tools.progressbar(range(ntab)):
-        for j in range(ntab):
-            for k in range(ntab_f):
-                f = f_vals[k]
-                rperp = rperp_vals[i]
-                spar = svals[j]
-                func = lambda r: r - r * (f / 3.0) * Delta_func(np.sqrt(r**2 + rperp**2)) - spar
-                F_inv_vals[i, j, k] = scipy.optimize.fsolve(func, spar)
-
-    F_inv = lambda x, y, z: scipy.interpolate.interpn(
-        (rperp_vals, svals, f_vals),
-        F_inv_vals,
-        np.vstack((x, y, z)).T,
-        method="cubic"
-    )
-    return F_inv
+    return mle_estimate.x
 
 def generate_scoord_grid(sperp_bins, spar_bins):
     """

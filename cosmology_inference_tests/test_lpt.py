@@ -25,11 +25,18 @@ from void_analysis.cosmology_inference import (
     void_los_velocity_ratio_1lpt,
     void_los_velocity_ratio_derivative_1lpt,
     void_los_velocity_ratio_semi_analytic,
-    void_los_velocity_ratio_derivative_semi_analytic
+    void_los_velocity_ratio_derivative_semi_analytic,
+    semi_analytic_model,
+    Delta_theta,
+    V_theta,
+    get_upper_bound,
+    invert_Delta_theta_scalar,
+    theta_of_Delta
 )
 
 from void_analysis.simulation_tools import gaussian_delta, gaussian_Delta
 from void_analysis import tools
+from void_analysis.cosmology import Hz
 
 SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "snapshots")
 
@@ -48,6 +55,11 @@ def mock_lpt_order_data():
     rvals = np.linspace(0,3,101)
     Psi_n = [0.5**n*np.exp(-rvals**2/(2*n**2)) for n in range(1,6)]
     return rvals,Psi_n
+
+@pytest.fixture
+def development_angles():
+    theta = np.linspace(0,10,101)
+    return theta
 
 # -----------------------UNIT TESTS---------------------------------------------
 
@@ -121,6 +133,60 @@ def test_semi_analytic_velocity_derivative_integral(mock_profile_data):
         rtol=1e-5,atol=1e-5,f1=0.53,lower_lim = -10
     )
 
+def test_semi_analytic_model_functions_consistency(mock_profile_data):
+    """
+    Test whether the two functions, semi_analytic_model, and 
+    void_los_velocity_ratio_semi_analytic are consistent with each other. These
+    are technically functions of different variables, but represent the same
+    velocity model, so they should agree. Note, 
+    void_los_velocity_ratio_semi_analytic leaves off the factor of H(z)/(1+z),
+    so we need to account for this.
+    """
+    rvals, Delta, delta_f, Delta_f, A, sigma = mock_profile_data
+    u = 1 - np.cbrt(1 + Delta_f(rvals))
+    alphas = [-0.5,0.1]
+    z = 0.1
+    Om = 0.3111
+    Ha = Hz(z,Om,h=1)
+    function1 = void_los_velocity_ratio_semi_analytic(
+        rvals,Delta_f,0.53,params = [-0.5,0.1]
+    )
+    function2 = ((1.0 + z)/Ha)*semi_analytic_model(
+        u,alphas,z=z,Om=Om,f1=0.53,h=1,nf1 = 5/9
+    )
+    np.testing.assert_allclose(function1,function2)
+
+def test_get_upper_bound_basic():
+    """
+    Test whether the function to compute upper bounds for solving 
+    Delta(theta) actually returns a valid upper bounds. Specifically, the range
+    (0,theta_upper) should actually contain a solution of the equation
+    Delta_theta(theta) = Delta
+    
+    """
+    Delta = -0.85
+    f = lambda x: Delta_theta(x) - Delta - 1
+    theta_upper = get_upper_bound(Delta)
+    assert(f(0)*f(theta_upper) < 0)
+
+def test_invert_Delta_theta_scalar_basic():
+    """
+    Test that inver_Delta_theta_scalar actually inverts Delta_theta
+    sufficiently closely.
+    """
+    Delta = -0.85
+    theta = invert_Delta_theta_scalar(Delta)
+    np.testing.assert_allclose(Delta,Delta_theta(theta)-1)
+
+def test_theta_of_Delta_basic():
+    """
+    Test that theta_of_Delta actually inverts Delta_theta
+    sufficiently closely, for a vectorised range of Delta:
+    """
+    Delta = np.linspace(0,-1,21)
+    theta = theta_of_Delta(Delta)
+    Delta2 = Delta_theta(theta) - 1
+    np.testing.assert_allclose(Delta,Delta2)
 
 # ---------------------- REGRESSION TESTS---------------------------------------
 
@@ -371,7 +437,7 @@ def test_void_los_velocity_ratio_semi_analytic(mock_profile_data):
         rvals,Delta_f,0.53,rtol=1e-5,atol=1e-5,params = [-0.5,0.1]
     )
 
-def test_void_los_velocity_ratio_semi_analytic(mock_profile_data):
+def test_void_los_velocity_ratio_derivative_semi_analytic(mock_profile_data):
     rvals, Delta, delta_f, Delta_f, A, sigma = mock_profile_data
     tools.run_basic_regression_test(
         void_los_velocity_ratio_derivative_semi_analytic,
@@ -382,6 +448,54 @@ def test_void_los_velocity_ratio_semi_analytic(mock_profile_data):
         rvals,Delta_f,delta_f,0.53,rtol=1e-5,atol=1e-5,params = [-0.5,0.1]
     )
 
+def test_semi_analytic_model(mock_profile_data):
+    rvals, Delta, delta_f, Delta_f, A, sigma = mock_profile_data
+    u = 1 - np.cbrt(1 + Delta)
+    alphas = [-0.5,0.1]
+    tools.run_basic_regression_test(
+        semi_analytic_model,
+        os.path.join(
+            SNAPSHOT_DIR, 
+            "semi_analytic_model_ref.npy"
+        ),
+        u,alphas,z=0,Om=0.3111,f1=0.53,h=1,nf1 = 5/9
+    )
 
+def test_Delta_theta(development_angles):
+    theta = development_angles
+    tools.run_basic_regression_test(
+        Delta_theta,
+        os.path.join(SNAPSHOT_DIR,"Delta_theta_ref.npy"),
+        theta
+    )
 
+def test_V_theta(development_angles):
+    theta = development_angles
+    tools.run_basic_regression_test(
+        V_theta,
+        os.path.join(SNAPSHOT_DIR,"V_theta_ref.npy"),
+        theta
+    )
 
+def test_get_upper_bound():
+    tools.run_basic_regression_test(
+        get_upper_bound,
+        os.path.join(SNAPSHOT_DIR,"get_upper_bound_ref.npy"),
+        -0.85
+    )
+
+def test_invert_Delta_theta_scalar():
+    Delta = -0.85
+    tools.run_basic_regression_test(
+        invert_Delta_theta_scalar,
+        os.path.join(SNAPSHOT_DIR,"invert_Delta_theta_scalar_ref.npy"),
+        -0.85
+    )
+
+def test_theta_of_Delta():
+    Delta = np.linspace(0,-1,21)
+    tools.run_basic_regression_test(
+        theta_of_Delta,
+        os.path.join(SNAPSHOT_DIR,"theta_of_Delta_ref.npy"),
+        Delta
+    )

@@ -14,7 +14,8 @@ from void_analysis.cosmology_inference import (
     generate_scoord_grid,
     void_los_velocity_ratio_1lpt,
     get_tabulated_inverse,
-    iterative_zspace_inverse
+    iterative_zspace_inverse,
+    get_mle_estimate
 )
 from void_analysis import tools
 from void_analysis.simulation_tools import gaussian_delta, gaussian_Delta
@@ -53,7 +54,15 @@ def synthetic_inversion_data():
     ntab = 10
     f1 = 0.53
     return spar_bins,sperp_bins,scoords, ntab, f1
-    
+
+@pytest.fixture
+def gaussian_likelihood():
+    np.random.seed(0)
+    N = 5
+    mu = np.random.rand(5)
+    A = np.random.randn(5, 5)
+    C = A @ A.T
+    return mu, C
 
 # ---------------------- UNIT TESTS: Flat Priors -------------------------------
 
@@ -251,3 +260,15 @@ def test_log_flat_prior():
         np.array([0.1, 0.5, 0.9]),[(0.0, 1.0)] * 3
     )
 
+def test_get_mle_estimate(gaussian_likelihood):
+    mu, C = gaussian_likelihood
+    np.random.seed(42)
+    guess = np.random.rand(5)
+    bounds = [(0,1) for _ in range(5)]
+    tools.run_basic_regression_test(
+        get_mle_estimate,
+        os.path.join(SNAPSHOT_DIR, "get_mle_estimate_ref.npy"),
+        guess,bounds,tools.gaussian_log_likelihood_function,
+        mu,C
+    )
+    

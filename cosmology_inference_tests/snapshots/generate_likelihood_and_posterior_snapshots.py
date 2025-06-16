@@ -11,7 +11,8 @@ from void_analysis.cosmology_inference import (
     profile_modified_hamaus,
     generate_scoord_grid,
     void_los_velocity_ratio_1lpt,
-    get_tabulated_inverse
+    get_tabulated_inverse,
+    get_mle_estimate
 )
 
 from void_analysis import tools
@@ -22,7 +23,8 @@ GENERATED_SNAPSHOTS = [
     "log_probability_aptest_ref.npy",
     "get_tabulated_inverse_ref.npy",
     "log_flat_prior_single_ref.npy",
-    "log_flat_prior_ref.npy"
+    "log_flat_prior_ref.npy",
+    "get_mle_estimate_ref.npy"
 ]
 
 def generate_snapshots():
@@ -78,6 +80,22 @@ def generate_snapshots():
     tools.generate_regression_test_data(
         log_flat_prior,"log_flat_prior_ref.npy",
         np.array([0.1, 0.5, 0.9]),[(0.0, 1.0)] * 3
+    )
+    
+    # get_mle_estimate
+    np.random.seed(0)
+    N = 5
+    mu = np.random.rand(5)
+    A = np.random.randn(5, 5)
+    C = A @ A.T
+    np.random.seed(42)
+    guess = np.random.rand(5)
+    bounds = [(0,1) for _ in range(5)]
+    tools.generate_regression_test_data(
+        get_mle_estimate,
+        "get_mle_estimate_ref.npy",
+        guess,bounds,tools.gaussian_log_likelihood_function,
+        mu,C
     )
     
     

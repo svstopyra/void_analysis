@@ -343,7 +343,7 @@ def compareData(result,compare,tolerance = 1e-5,enforceExact = False):
         return (result == compare)
 
 # Tests whether the computed results match the stored test data.
-def testComputation(filename,func,*args,_testTolerance = 1e-5,\
+def _testComputation(filename,func,*args,_testTolerance = 1e-5,\
         _enforceExact = False,_result = None,_compare=None,\
         _return_result = False,**kwargs):
     if not os.path.isfile(filename):
@@ -789,8 +789,48 @@ def product_where_finite(x,y,undefined_value = 0.0):
 
 
 
-
-
+def gaussian_log_likelihood_function(x,mu,C,use_cholesky=True,
+        pre_inverted=False,include_constants=True
+    ):
+    """
+    Compute the Gaussian log-likelihood for observed data, given the mean and 
+    covariance matrix.
+    
+    Parameters:
+        x (array): Data
+        mu (N-component array): Mean of the Gaussian log-likelihood
+        C (NxN matrix): Covariance of the Gaussian log-likelihood
+        use_cholesky (bool): If true, use cholesky decomposition to solve, 
+                             rather than inverting.
+        pre_inverted (bool): If true, assume C is actually the inverse 
+                             covariance. Cannot be used together with 
+                             use_cholesky = True.
+        include_constants(bool): If true, include constants such as factors of
+                                 the determinant which don't change with the 
+                                 data.
+    
+    Returns:
+        float: Gaussian log-likelihood for the given data.
+    """
+    delta_vec = x - mu
+    N = len(mu)
+    if include_constants:
+        detC = scipy.linalg.det(C)
+        if pre_inverted:
+            detC = 1.0/detC            
+        constants = -(N/2)*np.log(2*np.pi) - 0.5*np.log(detC)
+    else:
+        constants = 0.0
+    if use_cholesky:
+        if pre_inverted:
+            raise Exception("Cannot use pre_inverted = True together with " + 
+                            "use_cholesky = True.")
+        chol = scipy.linalg.cholesky(C,lower=True)
+        alpha = scipy.linalg.solve_triangular(chol, delta_vec, lower=True)
+        return -0.5 * np.dot(alpha, alpha) + constants
+    else:
+        inv_cov = C if pre_inverted else scipy.linalg.inv(C)
+        return -0.5 * np.dot(delta_vec, inv_cov @ delta_vec) + constants
 
 
 

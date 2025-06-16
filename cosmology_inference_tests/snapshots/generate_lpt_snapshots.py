@@ -22,7 +22,13 @@ from void_analysis.cosmology_inference import (
     void_los_velocity_ratio_1lpt,
     void_los_velocity_ratio_derivative_1lpt,
     void_los_velocity_ratio_semi_analytic,
-    void_los_velocity_ratio_derivative_semi_analytic
+    void_los_velocity_ratio_derivative_semi_analytic,
+    semi_analytic_model,
+    Delta_theta,
+    V_theta,
+    get_upper_bound,
+    invert_Delta_theta_scalar,
+    theta_of_Delta
 )
 
 from void_analysis.simulation_tools import gaussian_delta, gaussian_Delta
@@ -49,7 +55,13 @@ GENERATED_SNAPSHOTS = [
     "test_void_los_velocity_ratio_1lpt.npy",
     "test_void_los_velocity_ratio_derivative_1lpt.npy",
     "test_void_los_velocity_ratio_semi_analytic.npy",
-    "test_void_los_velocity_ratio_derivative_semi_analytic.npy"
+    "test_void_los_velocity_ratio_derivative_semi_analytic.npy",
+    "semi_analytic_model_ref.npy",
+    "Delta_theta_ref.npy",
+    "V_theta_ref.npy",
+    "get_upper_bound_ref.npy",
+    "invert_Delta_theta_scalar_ref.npy",
+    "theta_of_Delta_ref.npy"
 ]
 
 
@@ -161,6 +173,49 @@ def generate_snapshots():
         void_los_velocity_ratio_derivative_semi_analytic,
         "test_void_los_velocity_ratio_derivative_semi_analytic.npy",
         rvals,Delta_f,delta_f,f1,params = [-0.5,0.1]
+    )
+    
+    # semi_analytic_model
+    u = 1 - np.cbrt(1 + Delta)
+    alphas = [-0.5,0.1]
+    tools.generate_regression_test_data(
+        semi_analytic_model,
+        "semi_analytic_model_ref.npy",
+        u,alphas,z=0,Om=0.3111,f1=0.53,h=1,nf1 = 5/9
+    )
+    # Delta_theta:
+    theta = np.linspace(0,10,101)
+    tools.generate_regression_test_data(
+        Delta_theta,
+        "Delta_theta_ref.npy",
+        theta
+    )
+    # V_theta:
+    theta = np.linspace(0,10,101)
+    tools.generate_regression_test_data(
+        V_theta,
+        "V_theta_ref.npy",
+        theta
+    )
+    # get_upper_bound
+    tools.generate_regression_test_data(
+        get_upper_bound,
+        "get_upper_bound_ref.npy",
+        -0.85
+    )
+    # invert_Delta_theta_scalar
+    Delta = -0.85
+    tools.generate_regression_test_data(
+        invert_Delta_theta_scalar,
+        "invert_Delta_theta_scalar_ref.npy",
+        -0.85
+    )
+    # theta_of_Delta
+    Delta = np.linspace(0,-1,21)
+    tools.generate_regression_test_data(
+        theta_of_Delta,
+        "theta_of_Delta_ref.npy",
+        Delta
     )
 
     print("✅ LPT snapshots saved!")

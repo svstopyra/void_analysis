@@ -7,8 +7,11 @@ from void_analysis.cosmology_inference import (
     integrated_profile_modified_hamaus,
     profile_broken_power,
     profile_broken_power_log,
-    rho_real
+    rho_real,
+    profile_modified_hamaus_derivative
 )
+
+from void_analysis import tools
 
 SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "snapshots")
 
@@ -16,6 +19,12 @@ SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "snapshots")
 @pytest.fixture
 def r_grid():
     return np.linspace(0.1, 3.0, 100)
+
+@pytest.fixture
+def profile_broken_params():
+    r = np.linspace(0.1, 3.0, 100)
+    params = (1.0, 1.0, 2.0, 1.0, 0.5)
+    return r, params
 
 # ---------------------- UNIT TESTS: profile_modified_hamaus -------------------
 
@@ -81,10 +90,40 @@ def test_integrated_hamaus_regression():
     ref = np.load(os.path.join(SNAPSHOT_DIR, "integrated_hamaus_ref.npy"))
     np.testing.assert_allclose(out, ref, rtol=1e-6)
 
-def test_broken_power_regression():
-    r = np.linspace(0.1, 3.0, 100)
-    params = (1.0, 1.0, 2.0, 1.0, 0.5)
+def test_broken_power_regression(profile_broken_params):
+    r, params = profile_broken_params
     out = profile_broken_power(r, *params)
     ref = np.load(os.path.join(SNAPSHOT_DIR, "broken_power_ref.npy"))
     np.testing.assert_allclose(out, ref, rtol=1e-6)
+
+def test_profile_broken_power_log(profile_broken_params):
+    r, params = profile_broken_params
+    tools.run_basic_regression_test(
+        profile_broken_power_log,
+        os.path.join(SNAPSHOT_DIR,"profile_broken_power_log_ref.npy"),
+        r,*params
+    )
+
+def test_profile_modified_hamaus_derivative():
+    r = np.linspace(0.1, 3.0, 100)
+    params = (1.5, 3.0, 1.0, -0.5, 0.1, 1.0)
+    computed = lambda r, *params: (
+        profile_modified_hamaus_derivative(r,0,*params),
+        profile_modified_hamaus_derivative(r,1,*params),
+        profile_modified_hamaus_derivative(r,2,*params)
+    )
+    tools.run_basic_regression_test(
+        computed,
+        os.path.join(SNAPSHOT_DIR,"profile_modified_hamaus_derivative_ref.npz"),
+        r,*params
+    )
+
+def test_rho_real():
+    r = np.linspace(0.1, 3.0, 100)
+    params = (1.5, 3.0, 1.0, -0.5, 0.1, 1.0)
+    tools.run_basic_regression_test(
+        rho_real,
+        os.path.join(SNAPSHOT_DIR,"rho_real_ref.npy"),
+        r,*params
+    )
 

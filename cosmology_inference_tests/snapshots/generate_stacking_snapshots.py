@@ -10,13 +10,21 @@ from void_analysis.cosmology_inference import (
     get_field_from_los_data,
     trim_los_list,
     get_trimmed_los_list_per_void,
-    get_los_velocities_for_void
+    get_los_velocities_for_void,
+    combine_los_lists,
+    get_weights_for_stack,
+    get_weights,
+    get_ur_profile_for_void,
+    get_all_ur_profiles,
+    get_void_weights
 )
 
 from void_analysis.simulation_tools import (
     DummySnapshot, 
     generate_synthetic_void_snap
 )
+
+from void_analysis import tools
 
 GENERATED_SNAPSHOTS = [
     "get_2d_void_stack_from_los_pos_ref.npy",
@@ -29,7 +37,13 @@ GENERATED_SNAPSHOTS = [
     "stacked_void_density_ref.npy",
     "real_space_profile_mean_ref.npy",
     "real_space_profile_std_ref.npy",
-    "get_los_velocities_for_void_test.npz"
+    "get_los_velocities_for_void_test.npz",
+    "combine_los_lists_ref.npy",
+    "get_weights_for_stack_ref.npy",
+    "get_weights_ref.npy",
+    "get_ur_profile_for_void_ref.npy",
+    "get_void_weights_ref.npy",
+    "get_all_ur_profiles_ref.npy"
 ]
 
 def generate_snapshots():
@@ -118,6 +132,73 @@ def generate_snapshots():
     np.savez(
         "get_los_velocities_for_void_test.npz",r_par=r_par, u_par=u_par,
         disp=disp, u=u
+    )
+    
+    # Consistent regression test framework:
+    # combine_los_lists:
+    np.random.seed(0)
+    los_list1 = [np.random.rand(5, 2), np.random.rand(5, 2)]
+    los_list2 = [np.random.rand(5, 2), np.random.rand(5, 2)]
+    tools.generate_regression_test_data(
+        combine_los_lists,
+        "combine_los_lists_ref.npy",[los_list1,los_list2]
+    )
+    # get_weights_for_stack
+    np.random.seed(0)
+    los_list = [[np.random.rand(5, 2)]]
+    radii = [np.random.uniform(1.0, 2.0, size=5)]
+    tools.generate_regression_test_data(
+        get_weights_for_stack,
+        "get_weights_for_stack_ref.npy",
+        los_list, radii
+    )
+    
+    # get_weights 
+    np.random.seed(0)
+    los_list = [[np.random.rand(5, 2) for _ in range(5)]]
+    radii = [np.random.uniform(1.0, 2.0, size=5)]
+    tools.generate_regression_test_data(
+        get_weights,
+        "get_weights_ref.npy",
+        los_list, radii
+    )
+    # get_ur_profile_for_void
+    void_centre = np.array([0]*3)
+    void_radius = 10
+    rbins = np.linspace(0,30,31)
+    snap = generate_synthetic_void_snap(
+        N=32,rmax=50,A=0.85,sigma=10,seed=0,H0=70
+    )
+    tools.generate_regression_test_data(
+        get_ur_profile_for_void,
+        "get_ur_profile_for_void_ref.npy",
+        void_centre,void_radius,rbins,snap,relative_velocity=True
+    )
+    # get_all_ur_profiles
+    boxsize = 100.0
+    centres = np.array([[0,0,0],
+                        [boxsize/4,0,0],
+                        [-boxsize/4,-boxsize/4,-boxsize/4],
+                        [boxsize/4,0,-boxsize/4]
+                       ])
+    radii = np.array([10,5,5,7])
+    snap = synthetic_void_snap
+    rbins = np.linspace(0,30,31)
+    tools.generate_regression_test_data(
+        get_all_ur_profiles,
+        "get_all_ur_profiles_ref.npy",
+        centres, radii,rbins,snap,relative_velocity=True
+    )
+    # get_void_weights
+    np.random.seed(0)
+    los_list = [[np.random.rand(5, 2)] for _ in range(0,3)]
+    radii = [np.random.uniform(1.0, 2.0, size=5) for _ in range(0,3)]
+    voids_used = [np.random.rand(5) > 0.5 for _ in range(0,3)]
+    additional_weights = [[np.random.rand(5)*2.0 - 1.0] for _ in range(0,3)]
+    tools.generate_regression_test_data(
+        get_void_weights,
+        "get_void_weights_ref.npy",
+        los_list,voids_used,radii,additional_weights=additional_weights
     )
 
     print("✅ Stacking snapshots generated successfully.")

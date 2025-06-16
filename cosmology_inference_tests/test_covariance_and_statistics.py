@@ -30,7 +30,9 @@ def mock_covariance_matrix():
 @pytest.fixture
 def mock_los_data():
     np.random.seed(1)
-    los_list = [[np.random.rand(10, 2) * 3.0 for _ in range(5)] for _ in range(2)]
+    los_list = [
+        [np.random.rand(10, 2) * 3.0 for _ in range(5)] for _ in range(2)
+    ]
     radii = [np.random.uniform(1.0, 2.0, size=5),
              np.random.uniform(1.0, 2.0, size=5)]
     return los_list, radii
@@ -91,6 +93,29 @@ def test_compute_normality_statistics_output():
     assert isinstance(B, float)
 
 # ---------------------- UNIT TESTS: Covariance Functions ----------------------
+
+def test_get_covariance_matrix_symmetry(mock_los_data, bin_edges):
+    los_list, radii = mock_los_data
+    spar_bins, sperp_bins = bin_edges
+    cov = get_covariance_matrix(
+        los_list, radii, spar_bins, sperp_bins,
+        nbar=1e-3, n_boot=500, seed=1234,
+        lambda_reg=1e-10, cholesky=False, regularise=True, log_field=False
+    )
+    N = (len(spar_bins)-1)*(len(sperp_bins)-1)
+    assert cov.shape == (N,N)
+    assert np.allclose(cov,cov.T,atol=1e-8)
+
+def test_get_covariance_matrix_positive_definite(mock_los_data, bin_edges):
+    los_list, radii = mock_los_data
+    spar_bins, sperp_bins = bin_edges
+    cov = get_covariance_matrix(
+        los_list, radii, spar_bins, sperp_bins,
+        nbar=1e-3, n_boot=500, seed=1234,
+        lambda_reg=1e-10, cholesky=False, regularise=True, log_field=False
+    )
+    eigvals = np.linalg.eigvalsh(cov)
+    np.all(eigvals > 0)
 
 def test_covariance_symmetry():
     X = np.random.randn(5, 100).T
@@ -178,7 +203,9 @@ def test_profile_jackknife_covariance_regression():
     _ = np.random.rand(5, 5)
     X = np.random.randn(5, 100).T
     cov = profile_jackknife_covariance(X,lambda x: np.mean(x,0)**2)
-    ref = np.load(os.path.join(SNAPSHOT_DIR, "profile_jackknife_covariance_ref.npy"))
+    ref = np.load(
+        os.path.join(SNAPSHOT_DIR, "profile_jackknife_covariance_ref.npy")
+    )
     np.testing.assert_allclose(cov, ref, rtol=1e-6)
 
 def test_compute_singular_log_likelihood_regression():

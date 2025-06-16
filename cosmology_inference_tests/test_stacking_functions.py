@@ -19,7 +19,9 @@ from void_analysis.cosmology_inference import (
     get_halo_indices,
     get_stacked_void_density_field,
     get_1d_real_space_field,
-    get_los_velocities_for_void
+    get_los_velocities_for_void,
+    get_ur_profile_for_void,
+    get_all_ur_profiles
 )
 
 from void_analysis.simulation_tools import (
@@ -27,6 +29,7 @@ from void_analysis.simulation_tools import (
     generate_synthetic_void_snap
 )
 
+from void_analysis import tools
 
 SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "snapshots")
 
@@ -48,6 +51,20 @@ def synthetic_void_snap():
     return generate_synthetic_void_snap(
         N=32,rmax=50,A=0.85,sigma=10,seed=0,H0=70
     )
+
+@pytest.fixture
+def los_list_data():
+    np.random.seed(0)
+    los_list1 = [np.random.rand(5, 2), np.random.rand(5, 2)]
+    los_list2 = [np.random.rand(5, 2), np.random.rand(5, 2)]
+    return los_list1, los_list2
+
+@pytest.fixture
+def weights_data():
+    np.random.seed(0)
+    los_list = [[np.random.rand(5, 2)]]
+    radii = [np.random.uniform(1.0, 2.0, size=5)]
+    return los_list, radii
 
 class DummySnap:
     def __init__(self,synthetic_los_data):
@@ -86,18 +103,16 @@ def test_get_2d_void_stack_from_los_pos_shape(synthetic_los_data):
 
 # ---------------------- UNIT TESTS: combine_los_lists -------------------------
 
-def test_combine_los_lists_basic():
-    los_list1 = [np.random.rand(5, 2), np.random.rand(5, 2)]
-    los_list2 = [np.random.rand(5, 2), np.random.rand(5, 2)]
+def test_combine_los_lists_basic(los_list_data):
+    los_list1, los_list2 = los_list_data
     combined = combine_los_lists([los_list1, los_list2])
     assert isinstance(combined, list)
     assert all(isinstance(item, np.ndarray) for item in combined)
 
 # ---------------------- UNIT TESTS: get_weights_for_stack ---------------------
 
-def test_get_weights_for_stack_basic():
-    los_list = [[np.random.rand(5, 2)]]
-    radii = [np.random.uniform(1.0, 2.0, size=5)]
+def test_get_weights_for_stack_basic(weights_data):
+    los_list, radii = weights_data
     weights = get_weights_for_stack(los_list, radii)
     assert isinstance(weights, np.ndarray)
     assert np.all(weights > 0)
@@ -114,6 +129,7 @@ def test_get_void_weights_basic():
 # ---------------------- UNIT TESTS: get_weights -------------------------------
 
 def test_get_weights_basic():
+    np.random.seed(0)
     los_list = [[np.random.rand(5, 2) for _ in range(5)]]
     radii = [np.random.uniform(1.0, 2.0, size=5)]
     weights = get_weights(los_list, radii)
@@ -352,12 +368,71 @@ def test_get_los_velocities_for_void(synthetic_void_snap):
         np.testing.assert_allclose(arr, arr_ref, rtol=1e-5)
 
 
+def test_combine_los_lists(los_list_data):
+    los_list1, los_list2 = los_list_data
+    tools.run_basic_regression_test(combine_los_lists,
+        os.path.join(SNAPSHOT_DIR, "combine_los_lists_ref.npy"),
+        [los_list1,los_list2]
+    )
+
+def test_get_weights_for_stack(weights_data):
+    los_list, radii = weights_data
+    tools.run_basic_regression_test(
+        get_weights_for_stack,
+        os.path.join(SNAPSHOT_DIR, "get_weights_for_stack_ref.npy"),
+        los_list, radii
+    )
 
 
+def test_get_void_weights():
+    np.random.seed(0)
+    los_list = [[np.random.rand(5, 2)] for _ in range(0,3)]
+    radii = [np.random.uniform(1.0, 2.0, size=5) for _ in range(0,3)]
+    voids_used = [np.random.rand(5) > 0.5 for _ in range(0,3)]
+    additional_weights = [[np.random.rand(5)*2.0 - 1.0] for _ in range(0,3)]
+    tools.run_basic_regression_test(
+        get_void_weights,
+        os.path.join(SNAPSHOT_DIR, "get_void_weights_ref.npy"),
+        los_list,voids_used,radii,additional_weights=additional_weights
+    )
 
 
+def test_get_weights():
+    np.random.seed(0)
+    los_list = [[np.random.rand(5, 2) for _ in range(5)]]
+    radii = [np.random.uniform(1.0, 2.0, size=5)]
+    tools.run_basic_regression_test(
+        get_weights,
+        os.path.join(SNAPSHOT_DIR, "get_weights_ref.npy"),
+        los_list, radii
+    )
 
+def test_get_ur_profile_for_void(synthetic_void_snap):
+    void_centre = np.array([0]*3)
+    void_radius = 10
+    snap = synthetic_void_snap
+    rbins = np.linspace(0,30,31)
+    tools.run_basic_regression_test(
+        get_ur_profile_for_void,
+        os.path.join(SNAPSHOT_DIR, "get_ur_profile_for_void_ref.npy"),
+        void_centre,void_radius,rbins,snap,relative_velocity=True
+    )
 
+def test_get_all_ur_profiles(synthetic_void_snap):
+    boxsize = 100.0
+    centres = np.array([[0,0,0],
+                        [boxsize/4,0,0],
+                        [-boxsize/4,-boxsize/4,-boxsize/4],
+                        [boxsize/4,0,-boxsize/4]
+                       ])
+    radii = np.array([10,5,5,7])
+    snap = synthetic_void_snap
+    rbins = np.linspace(0,30,31)
+    tools.run_basic_regression_test(
+        get_all_ur_profiles,
+        os.path.join(SNAPSHOT_DIR, "get_all_ur_profiles_ref.npy"),
+        centres, radii,rbins,snap,relative_velocity=True
+    )
 
 
 
