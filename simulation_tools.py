@@ -24,9 +24,10 @@ def eulerToZ(pos,vel,cosmo,boxsize,h,centre = None,Ninterp=1000,\
         dispXYZ = pos
     r = np.sqrt(np.sum(dispXYZ**2,1))
     rq = r*astropy.units.Mpc/h
-    # Compute relationship between comoving distance and redshift at discrete points.
-    # For speed, we will interpolate any other points as computing it for each point
-    # individually requires an expensive function inversion:
+    # Compute relationship between comoving distance and redshift at discrete 
+    # points.
+    # For speed, we will interpolate any other points as computing it for each 
+    # point individually requires an expensive function inversion:
     zqMin = astropy.cosmology.z_at_value(cosmo.comoving_distance,np.min(rq))
     zqMax = astropy.cosmology.z_at_value(cosmo.comoving_distance,np.max(rq))
     # Grid of redshifts vs comoving distances used for interpolation:
@@ -45,8 +46,10 @@ def eulerToZ(pos,vel,cosmo,boxsize,h,centre = None,Ninterp=1000,\
     # Get local peculiar velocity correction:
     if localCorrection:
         local = SkyCoord(l=l*u.deg,b=b*u.deg,distance=1*u.Mpc,frame='galactic')
-        vhat = np.array([local.icrs.cartesian.x.value,local.icrs.cartesian.y.value,\
-            local.icrs.cartesian.z.value])
+        vhat = np.array(
+            [local.icrs.cartesian.x.value,local.icrs.cartesian.y.value,\
+            local.icrs.cartesian.z.value]
+        )
         vd = velFudge*np.sum(pos*(vel - vl*vhat),1)/r
     else:
         vd = np.sum(pos*vel,1)/r
@@ -62,8 +65,10 @@ def eulerToZ(pos,vel,cosmo,boxsize,h,centre = None,Ninterp=1000,\
 
 # Computes the density field of a pynbody snapshot using a naiive cloud-in-cell
 # scheme (counts particles in a give cubic cell)
-def getGriddedDensity(snap,N,redshiftSpace= False,velFudge = 1,snapPos = None,snapVel = None,
-        snapMass = None):
+def getGriddedDensity(
+        snap,N,redshiftSpace= False,velFudge = 1,snapPos = None,snapVel = None,
+        snapMass = None
+    ):
     boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
     if snapPos is None:
         snapPos = np.array(snap['pos'].in_units("Mpc a h**-1"))
@@ -99,7 +104,10 @@ def pointsInRangeWithWrap(positions,lim,axis=2,boxsize=None):
     else:
         wrappedPositions = snapedit.unwrap(positions,boxsize)
         wrappedLim = snapedit.unwrap(np.array(lim),boxsize)
-    return (wrappedPositions[:,axis]>= wrappedLim[0]) & (wrappedPositions[:,axis] <= wrappedLim[1])
+    return (
+        (wrappedPositions[:,axis]>= wrappedLim[0]) & 
+        (wrappedPositions[:,axis] <= wrappedLim[1])
+    )
 
 # Compute the points that lie within a plane with specified bounds, accounting
 # for periodicity.
@@ -112,7 +120,12 @@ def pointsInBoundedPlaneWithWrap(positions,xlim,ylim,boxsize=None):
         wrappedPositions = snapedit.unwrap(positions,boxsize)
         wrappedXLim = snapedit.unwrap(np.array(xlim),boxsize)
         wrappedYLim = snapedit.unwrap(np.array(ylim),boxsize)
-    return (wrappedPositions[:,0] >= wrappedXLim[0]) & (wrappedPositions[:,0] <= wrappedXLim[1]) & (wrappedPositions[:,1] >= wrappedYLim[0]) & (wrappedPositions[:,1] <= wrappedYLim[1])
+    return (
+        (wrappedPositions[:,0] >= wrappedXLim[0]) & 
+        (wrappedPositions[:,0] <= wrappedXLim[1]) & 
+        (wrappedPositions[:,1] >= wrappedYLim[0]) & 
+        (wrappedPositions[:,1] <= wrappedYLim[1])
+    )
 
 # Count number of objects within N^3 grid cells
 def getGriddedGalCount(pos,N,boxsize):
@@ -342,45 +355,52 @@ def getHaloMassByMethod(halo,method):
         return mUnit*len(halo)
 
 def getHaloCentresAndMassesFromCatalogue(h,remap=True,\
-        inMpcs = True):
+        inMpcs = True,pynbody_offset=0):
     hcentres = np.zeros((len(h),3))
     hmasses = np.zeros(len(h))
     # Figure out what kind of method should work:
-    massCalcMethod = getMassCalcMethod(h[1])
+    massCalcMethod = getMassCalcMethod(h[pynbody_offset])
     for k in range(0,len(h)):
-        hcentres[k,0] = h[k+1].properties['Xc']
-        hcentres[k,1] = h[k+1].properties['Yc']
-        hcentres[k,2] = h[k+1].properties['Zc']
+        hcentres[k,0] = h[k+pynbody_offset].properties['Xc']
+        hcentres[k,1] = h[k+pynbody_offset].properties['Yc']
+        hcentres[k,2] = h[k+pynbody_offset].properties['Zc']
         #hmasses[k] = h[k+1].properties['mass']
-        hmasses[k] = getHaloMassByMethod(h[k+1],massCalcMethod)
+        hmasses[k] = getHaloMassByMethod(h[k+pynbody_offset],massCalcMethod)
     if inMpcs:
         hcentres /= 1000
     if remap:
-        boxsize = h[1].properties['boxsize'].ratio("Mpc a h**-1")
+        boxsize = h[pynbody_offset].properties['boxsize'].ratio("Mpc a h**-1")
         hcentres = tools.remapAntiHaloCentre(hcentres,boxsize)
     return [hcentres,hmasses]
 
-def getHaloCentresAndMassesRecomputed(h,boxsize=677.7,fixedMass=True):
+def getHaloCentresAndMassesRecomputed(
+        h,boxsize=677.7,fixedMass=True,pynbody_offset=0
+    ):
     hcentres = np.zeros((len(h),3))
     hmasses = np.zeros(len(h))
-    mUnit = h[1]['mass'].in_units("Msol h**-1")[0]*1e10
+    mUnit = h[pynbody_offset]['mass'].in_units("Msol h**-1")[0]*1e10
     for k in range(0,len(h)):
         if fixedMass:
             hcentres[k,:] = context.computePeriodicCentreWeighted(\
-                h[k+1]['pos'],mUnit*np.ones(len(h[k+1])),\
+                h[k+pynbody_offset]['pos'],mUnit*np.ones(
+                    len(h[k+pynbody_offset])
+                ),\
                 boxsize,accelerate=True)
-            hmasses[k] = mUnit*len(h[k+1])
+            hmasses[k] = mUnit*len(h[k+pynbody_offset])
         else:
             hcentres[k,:] = context.computePeriodicCentreWeighted(\
-                h[k+1]['pos'],h[k+1]['mass'],\
+                h[k+pynbody_offset]['pos'],h[k+pynbody_offset]['mass'],\
                 boxsize,accelerate=True)
-            hmasses[k] = np.sum(h[k+1]['mass'].in_units("Msol h**-1"))
+            hmasses[k] = np.sum(
+                h[k+pynbody_offset]['mass'].in_units("Msol h**-1")
+            )
     hcentres = tools.remapAntiHaloCentre(hcentres,boxsize)
     return [hcentres,hmasses]
 
 def getAllHaloCentresAndMasses(snapList,boxsize,recompute=False,\
         suffix = "halo_mass_and_centres",\
-        function=getHaloCentresAndMassesFromCatalogue):
+        function=getHaloCentresAndMassesFromCatalogue,
+        pynbody_offset=0):
     massesAndCentresList = []
     for k in range(0,len(snapList)):
         print("Masses and centres for sample " + str(k+1) + " of " + \
@@ -390,9 +410,13 @@ def getAllHaloCentresAndMasses(snapList,boxsize,recompute=False,\
             massesAndCentresList.append(tools.loadPickle(\
                 snapList[k].filename + "." + suffix))
         else:
-            massesAndCentresList.append(tools.loadOrRecompute(\
-                snapList[k].filename + "." + suffix,function,\
-                snapList[k].halos(),boxsize=boxsize,_recomputeData=recompute))
+            massesAndCentresList.append(
+                tools.loadOrRecompute(\
+                    snapList[k].filename + "." + suffix,function,\
+                    snapList[k].halos(),boxsize=boxsize,
+                    _recomputeData=recompute,pynbody_offset=pynbody_offset
+                )
+            )
     return massesAndCentresList
 
 # Recentre clusters to account for simulation drift of cluster locations:
@@ -483,7 +507,30 @@ def getClusterCentres(approxCentre,snap=None,snapPath="snapshot_001",
 # halo finder has already been run, as well as ZOBOV, with the relevant 
 # volumes data file moved to be in the same place.
 def processSnapshot(standard,reverse,nBins,offset=4,output=None,rMax=3.0,\
-        rMin=0.0):
+        rMin=0.0,pynbody_offset = 0):
+    """
+        Process a pair of simulation snapshots to get data for constructing
+        catalogues.
+        
+        Parameters:
+            standard (string): Filename of the forward simulation
+            reverse (string): Filename of the reverse simulation
+            nBins (int): Number of radial bins to use for the void profile.
+            offset (int): Bytes to ignore in the volumes file.
+            output (string or None): Filename for the output file. If None,
+                                     uses the default ".AHproperties.p"
+                                     extension to the forward snapshot.
+            rMax (float): Maximum radius (in units of void radius) out to which
+                          to compute the void density profile.
+            rMin (float): Minimum radius (in units of void radius) out to which
+                          to compute the void density profile.
+            pynbody_offset (int): Offset for accessing halo catalogues. Older
+                                  versions of pynbody used halos[1] as the first
+                                  entry, but this seems to have changed in 
+                                  more recent versions. This parameter allows
+                                  for backwards compatibility. Set to 1
+                                  for older versions of pynbody.
+    """
     if output is None:
         output = standard + ".AHproperties.p"
     # Load snapshots and halo catalogues.
@@ -502,8 +549,12 @@ def processSnapshot(standard,reverse,nBins,offset=4,output=None,rMax=3.0,\
         sortedr = np.argsort(snapr['iord'])
 
     # Get halo masses and centres from the halo catalogues:
-    [hncentres,hnmasses] = getHaloCentresAndMassesFromCatalogue(hn,remap=False)
-    [hrcentres,hrmasses] = getHaloCentresAndMassesFromCatalogue(hr,remap=False)
+    [hncentres,hnmasses] = getHaloCentresAndMassesFromCatalogue(
+        hn,remap=False,pynbody_offset=pynbody_offset
+    )
+    [hrcentres,hrmasses] = getHaloCentresAndMassesFromCatalogue(
+        hr,remap=False,pynbody_offset=pynbody_offset
+    )
     # Import the ZOBOV Voronoi information:
     haveVoronoi = os.path.isfile(standard + ".vols")
     if haveVoronoi:
@@ -521,9 +572,13 @@ def processSnapshot(standard,reverse,nBins,offset=4,output=None,rMax=3.0,\
     periodicity = [boxsize]*3
     for k in range(0,len(hr)):
         antiHaloCentres[k,:] = context.computePeriodicCentreWeighted(\
-            snapn['pos'][sortedn[hr[k+1]['iord']],:],\
-            volumes[sortedn[hr[k+1]['iord']]],periodicity,accelerate=True)
-        antiHaloVolumes[k] = np.sum(volumes[sortedn[hr[k+1]['iord']]])
+            snapn['pos'][sortedn[hr[k+pynbody_offset]['iord']],:],\
+            volumes[sortedn[hr[k+pynbody_offset]['iord']]],periodicity,
+            accelerate=True
+        )
+        antiHaloVolumes[k] = np.sum(
+            volumes[sortedn[hr[k+pynbody_offset]['iord']]]
+        )
     antiHaloRadii = np.cbrt(3*antiHaloVolumes/(4*np.pi))
     # Perform pair counting (speeds up computing density profiles, 
     # but needs to be recomputed if we want different bins):
@@ -540,8 +595,8 @@ def processSnapshot(standard,reverse,nBins,offset=4,output=None,rMax=3.0,\
         deltaCentral[k] = stacking.centralDensity(antiHaloCentres[k,:],\
             antiHaloRadii[k],snapn['pos'],volumes,snapn['mass'],\
             tree=tree,centralRatio = 4,nThreads=thread_count)/rhoBar - 1.0
-        deltaAverage[k] = np.sum(hr[k+1]['mass'])/\
-            np.sum(volumes[sortedn[hr[k+1]['iord']]])/rhoBar - 1.0
+        deltaAverage[k] = np.sum(hr[k+pynbody_offset]['mass'])/\
+            np.sum(volumes[sortedn[hr[k+pynbody_offset]['iord']]])/rhoBar - 1.0
     pickle.dump([hncentres,hnmasses,hrcentres,hrmasses,volumes,\
       antiHaloCentres,antiHaloVolumes,antiHaloRadii,rBinStack,pairCounts,\
       volumesList,deltaCentral,deltaAverage],\
@@ -677,7 +732,8 @@ def get_los_pos(pos,los,boxsize):
 # Get LOS positions, but only for the filtered voids:
 def get_los_pos_with_filter(centres,filt,hr_list,void_indices,positions,
                             sorted_indices,boxsize,dist_max,tree,
-                            all_particles=True):
+                            all_particles=True,
+                            pynbody_offset=0):
     los_pos_all = []
     for k in tools.progressbar(range(0,len(centres))):
         if filt[k]:
@@ -686,7 +742,7 @@ def get_los_pos_with_filter(centres,filt,hr_list,void_indices,positions,
             else:
                 max_distance = dist_max[k]
             if not all_particles:
-                indices = hr_list[void_indices[k]+1]['iord']
+                indices = hr_list[void_indices[k]+pynbody_offset]['iord']
                 halo_pos = snapedit.unwrap(positions[sorted_indices[indices],:],
                     boxsize)
                 distances = np.sqrt(
@@ -958,6 +1014,322 @@ def generate_synthetic_void_snap(N=32,rmax=50,A=0.85,sigma=10,seed=0,H0=70):
     return DummySnapshot(
         pos,vel,mass,boxsize=2*rmax*pynbody.units.Unit("Mpc a h**-1")
     )
+
+
+def get_borg_density_estimate(snaps, densities_file=None, dist_max=135,
+                              seed=1000, interval=0.68):
+    """
+    Estimate the density contrast in a specified subvolume using BORG snapshots.
+
+    If precomputed density samples are provided, loads them from file.
+    Otherwise, computes them from raw snapshot data using spherical averaging.
+
+    Returns a bootstrap estimate of the MAP (maximum a posteriori) density 
+    contrast and its uncertainty interval.
+
+    Parameters:
+        snaps (SnapHandler): Object containing snapshots in `snaps["snaps"]`
+        densities_file (str or None): Pickle file containing precomputed delta 
+                                      samples
+        dist_max (float): Radius (in Mpc/h) for subvolume used to compute 
+                          densities
+        seed (int): RNG seed for reproducibility of bootstrap
+        interval (float): Confidence level for bootstrap interval (e.g., 0.68)
+
+    Returns:
+        tuple:
+            - deltaMAPBootstrap (BootstrapResult): Bootstrap distribution 
+                                                   object
+            - deltaMAPInterval (ConfidenceInterval): Confidence interval of 
+                                                     MAP estimate
+    """
+    boxsize = snaps.boxsize
+    # Determine center of sphere based on particle positions
+    if np.min(snaps["snaps"][0]["pos"]) < 0:
+        centre = np.array([0, 0, 0])
+    else:
+        centre = np.array([boxsize / 2] * 3)
+    # Load or compute density samples
+    if densities_file is not None:
+        deltaMCMCList = tools.loadPickle(densities_file)
+    else:
+        deltaMCMCList = np.array([
+            simulation_tools.density_from_snapshot(snap, centre, dist_max)
+            for snap in snaps["snaps"]
+        ])
+    # Bootstrap MAP density estimator
+    deltaMAPBootstrap = scipy.stats.bootstrap(
+        (deltaMCMCList,),
+        simulation_tools.get_map_from_sample,
+        confidence_level=interval,
+        vectorized=False,
+        random_state=seed
+    )
+    return deltaMAPBootstrap, deltaMAPBootstrap.confidence_interval
+
+
+
+#-------------------------------------------------------------------------------
+# SNAPSHOT GROUP CLASS
+
+def get_antihalo_properties(snap, file_suffix="AHproperties",
+                            default=".h5", low_memory_mode=True):
+    """
+    Load anti-halo property data for a given snapshot.
+
+    Attempts to load from an HDF5 file (.h5), and falls back to a legacy 
+    pickle format (.p) if necessary. Supports a low-memory mode that avoids 
+    loading the data into memory unless explicitly requested.
+
+    Parameters:
+        snap (pynbody.Snapshot): The simulation snapshot to load from.
+        file_suffix (str): Suffix for the filename (default: "AHproperties").
+        default (str): File extension to look for first (default: ".h5").
+        low_memory_mode (bool): If True, return just a file reference 
+                                instead of loading full data.
+
+    Returns:
+        If low_memory_mode is True and using legacy format:
+            str: Filename for later loading.
+        Else:
+            h5py.File or list: Anti-halo data loaded from file.
+    Tests:
+        No tests implemented
+    """
+    filename = snap.filename + "." + file_suffix + default
+    filename_old = snap.filename + "." + file_suffix + ".p"
+    if os.path.isfile(filename):
+        return h5py.File(filename, "r")
+    elif os.path.isfile(filename_old):
+        if low_memory_mode:
+            return filename_old
+        else:
+            return tools.loadPickle(filename_old)
+    else:
+        raise Exception("Anti-halo properties file not found.")
+
+class SnapshotGroup:
+    """
+    A container for managing forward and reverse simulation snapshots and 
+    accessing their associated void/halo properties.
+
+    This class handles:
+    - Loading multiple simulation snapshots (and their time-reversed 
+        counterparts)
+    - Accessing halo and void properties (e.g., positions, masses, radii)
+    - Remapping coordinates to Equatorial space via configurable transformations
+    - Efficient memory usage through optional lazy loading and caching
+
+    Coordinate System Note:
+    The underlying simulation snapshots may not be in Equatorial coordinates.
+    To convert to Equatorial space, properties like void centres or halo 
+    positions are remapped via `tools.remapAntiHaloCentre`, which applies:
+        - A shift to box-centred coordinates
+        - Optional axis swapping (swapXZ=True swaps X and Z)
+        - Optional axis flipping (reverse=True mirrors positions)
+
+    These transformations are controlled by the `swapXZ` and `reverse` flags. 
+    Their default values assume a particular snapshot orientation, but users
+    should verify and adjust these flags if working with different conventions.
+    
+    Tests:
+        No tests implemented
+    """
+
+    def __init__(self, snap_list, snap_list_reverse, low_memory_mode=True,
+                 swapXZ=False, reverse=False, remap_centres=False):
+        """
+        Initialize a SnapshotGroup from lists of forward and reverse snapshots.
+
+        Parameters:
+            snap_list (list): Forward-time simulation snapshots
+            snap_list_reverse (list): Corresponding reverse-time snapshots
+            low_memory_mode (bool): If True, avoid loading all properties into 
+                                    memory
+            swapXZ (bool): Whether to swap X and Z axes when remapping 
+                           coordinates
+            reverse (bool): Whether to flip coordinates around box center
+            remap_centres (bool): (Not yet implemented - ignored) Whether to 
+                                  remap void/halo centres to Equatorial frame.
+        """
+        self.snaps = [tools.getPynbodySnap(snap) for snap in snap_list]
+        self.snaps_reverse = [tools.getPynbodySnap(snap) 
+                              for snap in snap_list_reverse]
+        self.N = len(self.snaps)
+        self.low_memory_mode = low_memory_mode
+        if low_memory_mode:
+            self.all_property_lists = [None for snap in snap_list]
+        else:
+            self.all_property_lists = [get_antihalo_properties(snap) 
+                                       for snap in snap_list]
+        self.property_list = [
+            "halo_centres", "halo_masses",
+            "antihalo_centres", "antihalo_masses",
+            "cell_volumes", "void_centres",
+            "void_volumes", "void_radii",
+            "radius_bins", "pair_counts",
+            "bin_volumes", "delta_central",
+            "delta_average"
+        ]
+        self.additional_properties = {
+            "halos": None,
+            "antihalos": None,
+            "snaps": self.snaps,
+            "snaps_reverse": self.snaps_reverse,
+            "trees": None,
+            "trees_reverse": None
+        }
+        self.property_map = {
+                                name: idx for idx, name in enumerate(
+                                   self.property_list)
+                            }
+        self.reverse = reverse
+        self.swapXZ = swapXZ
+        self.remap_centres = remap_centres
+        self.boxsize = self.snaps[0].properties['boxsize'].ratio("Mpc a h**-1")
+        self.all_properties = [None for _ in self.property_list]
+        self.snap_filenames = [snap.filename for snap in self.snaps]
+        self.snap_reverse_filenames = [
+            snap.filename for snap in self.snaps_reverse
+        ]
+    def is_valid_property(self, prop):
+        if isinstance(prop, int):
+            return prop in range(len(self.property_list))
+        elif isinstance(prop, str):
+            return prop in self.property_list
+        return False
+    def get_property_index(self, prop):
+        if isinstance(prop, int):
+            if prop in range(len(self.property_list)):
+                return prop
+            raise Exception("Property index is out of range.")
+        elif isinstance(prop, str):
+            if prop in self.property_list:
+                return self.property_map[prop]
+            raise Exception("Requested property does not exist.")
+        else:
+            raise Exception("Invalid property type")
+    def get_property_name(self, prop):
+        if isinstance(prop, int):
+            if prop in range(len(self.property_list)):
+                return self.property_list[prop]
+            raise Exception("Property index is out of range.")
+        elif isinstance(prop, str):
+            if prop in self.property_list:
+                return prop
+            raise Exception("Requested property does not exist.")
+        else:
+            raise Exception("Invalid property type")
+    def get_property(self, snap_index, property_name, recompute=False):
+        """
+        Access a property for a single snapshot, loading from cache or disk.
+        """
+        prop_index = self.get_property_index(property_name)
+        if self.all_properties[prop_index] is not None and not recompute:
+            return self.all_properties[prop_index][snap_index]
+
+        property_list = self.all_property_lists[snap_index]
+        if property_list is None:
+            property_list = get_antihalo_properties(self.snaps[snap_index])
+
+        if isinstance(property_list, h5py._hl.files.File):
+            return property_list[self.get_property_name(property_name)]
+        elif isinstance(property_list, list):
+            return property_list[self.get_property_index(property_name)]
+        elif isinstance(property_list, str):
+            props_list = tools.loadPickle(property_list)
+            return props_list[self.get_property_index(property_name)]
+        else:
+            raise Exception("Invalid Property Type")
+    def check_remappable(self, property_name):
+        """
+        Check if a property represents a position needing coordinate remapping.
+        """
+        index = self.get_property_index(property_name)
+        return index in [0, 5]  # halo_centres or void_centres
+    def get_all_properties(self, property_name, cache=True, recompute=False):
+        """
+        Get a list of a given property for all snapshots.
+        Handles remapping to Equatorial coordinates if applicable.
+        """
+        prop_index = self.get_property_index(property_name)
+        if self.all_properties[prop_index] is None:
+            if self.check_remappable(property_name):
+                # Remap positions to Equatorial coordinates
+                properties = [
+                    tools.remapAntiHaloCentre(
+                        self.get_property(
+                            i, property_name, recompute=recompute
+                        ),
+                        boxsize=self.boxsize,
+                        swapXZ=self.swapXZ,
+                        reverse=self.reverse)
+                    for i in range(self.N)
+                ]
+            else:
+                properties = [
+                    self.get_property(i, property_name, recompute=recompute)
+                    for i in range(self.N)
+                ]
+            if cache:
+                self.all_properties[prop_index] = properties
+            return properties
+        else:
+            return self.all_properties[prop_index]
+    def __getitem__(self, property_name):
+        """
+        Enable bracket-access to named or additional properties.
+        Automatically returns all-snapshot versions of properties.
+        """
+        if self.is_valid_property(property_name):
+            return self.get_all_properties(property_name)
+        elif isinstance(property_name, str) and property_name in self.additional_properties:
+            if self.additional_properties[property_name] is not None:
+                return self.additional_properties[property_name]
+            else:
+                # Lazy-load derived properties
+                if property_name == "halos":
+                    self.additional_properties["halos"] = [
+                        snap.halos() for snap in self.snaps
+                    ]
+                elif property_name == "antihalos":
+                    self.additional_properties["antihalos"] = [
+                        snap.halos() for snap in self.snaps_reverse
+                    ]
+                elif property_name == "trees":
+                    self.additional_properties["trees"] = [
+                        scipy.spatial.cKDTree(snap['pos'],boxsize=self.boxsize)
+                        for snap in self.snaps
+                    ]
+                elif property_name == "trees_reverse":
+                    self.additional_properties["trees_reverse"] = [
+                        scipy.spatial.cKDTree(snap['pos'],boxsize=self.boxsize)
+                        for snap in self.snaps_reverse
+                    ]
+                else:
+                    raise Exception("Invalid property_name")
+                return self.additional_properties[property_name]
+        else:
+            raise Exception("Invalid property_name")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

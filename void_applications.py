@@ -5,7 +5,10 @@ from void_analysis.catalogue import *
 from void_analysis.paper_plots_borg_antihalos_generate_data import *
 from void_analysis.real_clusters import getClusterSkyPositions
 from void_analysis import massconstraintsplot
-from void_analysis.simulation_tools import ngPerLBin
+from void_analysis.simulation_tools import (
+    ngPerLBin,
+    get_borg_density_estimate
+)
 from void_analysis.cosmology_inference import *
 from matplotlib import transforms
 import matplotlib.ticker
@@ -119,7 +122,7 @@ def extract_antihalo_property(snap_list,prop):
 #-------------------------------------------------------------------------------
 # SNAPSHOT GROUP CLASS
 
-from void_analysis.cosmology_inference import SnapshotGroup
+from void_analysis.simulation_tools import SnapshotGroup
 
 borg_snaps = SnapshotGroup(snapList,snapListRev,low_memory_mode=True,
                            swapXZ  = False,reverse = True,remap_centres=True)

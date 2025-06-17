@@ -4,10 +4,13 @@ from void_analysis.catalogue import *
 from void_analysis.paper_plots_borg_antihalos_generate_data import *
 from void_analysis.real_clusters import getClusterSkyPositions
 from void_analysis import massconstraintsplot
-from void_analysis.simulation_tools import ngPerLBin
-from void_analysis.simulation_tools import redshift_space_positions
-from void_analysis.simulation_tools import get_los_pos_for_snapshot
-from void_analysis.simulation_tools import get_los_positions_for_all_catalogues
+from void_analysis.simulation_tools import (
+    ngPerLBin,
+    SnapshotGroup,
+    redshift_space_positions,
+    get_los_pos_for_snapshot,
+    get_los_positions_for_all_catalogues,
+)
 from void_analysis.plot import draw_ellipse, plot_los_void_stack
 from void_analysis import context
 from void_analysis.tools import ratio_where_finite, product_where_finite
@@ -34,241 +37,6 @@ from fractions import Fraction
 
 from void_analysis.cosmology import Hz, D1, D1_CPT, f_lcdm, Omega_z, Ez2
 from fractions import Fraction
-
-#-------------------------------------------------------------------------------
-# SNAPSHOT GROUP CLASS
-
-def get_antihalo_properties(snap, file_suffix="AHproperties",
-                            default=".h5", low_memory_mode=True):
-    """
-    Load anti-halo property data for a given snapshot.
-
-    Attempts to load from an HDF5 file (.h5), and falls back to a legacy 
-    pickle format (.p) if necessary. Supports a low-memory mode that avoids 
-    loading the data into memory unless explicitly requested.
-
-    Parameters:
-        snap (pynbody.Snapshot): The simulation snapshot to load from.
-        file_suffix (str): Suffix for the filename (default: "AHproperties").
-        default (str): File extension to look for first (default: ".h5").
-        low_memory_mode (bool): If True, return just a file reference 
-                                instead of loading full data.
-
-    Returns:
-        If low_memory_mode is True and using legacy format:
-            str: Filename for later loading.
-        Else:
-            h5py.File or list: Anti-halo data loaded from file.
-    Tests:
-        No tests implemented
-    """
-    filename = snap.filename + "." + file_suffix + default
-    filename_old = snap.filename + "." + file_suffix + ".p"
-    if os.path.isfile(filename):
-        return h5py.File(filename, "r")
-    elif os.path.isfile(filename_old):
-        if low_memory_mode:
-            return filename_old
-        else:
-            return tools.loadPickle(filename_old)
-    else:
-        raise Exception("Anti-halo properties file not found.")
-
-class SnapshotGroup:
-    """
-    A container for managing forward and reverse simulation snapshots and 
-    accessing their associated void/halo properties.
-
-    This class handles:
-    - Loading multiple simulation snapshots (and their time-reversed counterparts)
-    - Accessing halo and void properties (e.g., positions, masses, radii)
-    - Remapping coordinates to Equatorial space via configurable transformations
-    - Efficient memory usage through optional lazy loading and caching
-
-    Coordinate System Note:
-    The underlying simulation snapshots may not be in Equatorial coordinates.
-    To convert to Equatorial space, properties like void centres or halo positions
-    are remapped via `tools.remapAntiHaloCentre`, which applies:
-        - A shift to box-centred coordinates
-        - Optional axis swapping (swapXZ=True swaps X and Z)
-        - Optional axis flipping (reverse=True mirrors positions)
-
-    These transformations are controlled by the `swapXZ` and `reverse` flags. 
-    Their default values assume a particular snapshot orientation, but users
-    should verify and adjust these flags if working with different conventions.
-    
-    Tests:
-        No tests implemented
-    """
-
-    def __init__(self, snap_list, snap_list_reverse, low_memory_mode=True,
-                 swapXZ=False, reverse=False, remap_centres=False):
-        """
-        Initialize a SnapshotGroup from lists of forward and reverse snapshots.
-
-        Parameters:
-            snap_list (list): Forward-time simulation snapshots
-            snap_list_reverse (list): Corresponding reverse-time snapshots
-            low_memory_mode (bool): If True, avoid loading all properties into memory
-            swapXZ (bool): Whether to swap X and Z axes when remapping coordinates
-            reverse (bool): Whether to flip coordinates around box center
-            remap_centres (bool): (Not yet implemented - ignored) Whether to 
-                                  remap void/halo centres to Equatorial frame.
-        """
-        self.snaps = [tools.getPynbodySnap(snap) for snap in snap_list]
-        self.snaps_reverse = [tools.getPynbodySnap(snap) 
-                              for snap in snap_list_reverse]
-        self.N = len(self.snaps)
-        self.low_memory_mode = low_memory_mode
-        if low_memory_mode:
-            self.all_property_lists = [None for snap in snap_list]
-        else:
-            self.all_property_lists = [get_antihalo_properties(snap) 
-                                       for snap in snap_list]
-        self.property_list = [
-            "halo_centres", "halo_masses",
-            "antihalo_centres", "antihalo_masses",
-            "cell_volumes", "void_centres",
-            "void_volumes", "void_radii",
-            "radius_bins", "pair_counts",
-            "bin_volumes", "delta_central",
-            "delta_average"
-        ]
-        self.additional_properties = {
-            "halos": None,
-            "antihalos": None,
-            "snaps": self.snaps,
-            "snaps_reverse": self.snaps_reverse,
-            "trees": None,
-            "trees_reverse": None
-        }
-        self.property_map = {name: idx for idx, name in enumerate(self.property_list)}
-        self.reverse = reverse
-        self.swapXZ = swapXZ
-        self.remap_centres = remap_centres
-        self.boxsize = self.snaps[0].properties['boxsize'].ratio("Mpc a h**-1")
-        self.all_properties = [None for _ in self.property_list]
-        self.snap_filenames = [snap.filename for snap in self.snaps]
-        self.snap_reverse_filenames = [snap.filename for snap in self.snaps_reverse]
-    def is_valid_property(self, prop):
-        if isinstance(prop, int):
-            return prop in range(len(self.property_list))
-        elif isinstance(prop, str):
-            return prop in self.property_list
-        return False
-    def get_property_index(self, prop):
-        if isinstance(prop, int):
-            if prop in range(len(self.property_list)):
-                return prop
-            raise Exception("Property index is out of range.")
-        elif isinstance(prop, str):
-            if prop in self.property_list:
-                return self.property_map[prop]
-            raise Exception("Requested property does not exist.")
-        else:
-            raise Exception("Invalid property type")
-    def get_property_name(self, prop):
-        if isinstance(prop, int):
-            if prop in range(len(self.property_list)):
-                return self.property_list[prop]
-            raise Exception("Property index is out of range.")
-        elif isinstance(prop, str):
-            if prop in self.property_list:
-                return prop
-            raise Exception("Requested property does not exist.")
-        else:
-            raise Exception("Invalid property type")
-    def get_property(self, snap_index, property_name, recompute=False):
-        """
-        Access a property for a single snapshot, loading from cache or disk.
-        """
-        prop_index = self.get_property_index(property_name)
-        if self.all_properties[prop_index] is not None and not recompute:
-            return self.all_properties[prop_index][snap_index]
-
-        property_list = self.all_property_lists[snap_index]
-        if property_list is None:
-            property_list = get_antihalo_properties(self.snaps[snap_index])
-
-        if isinstance(property_list, h5py._hl.files.File):
-            return property_list[self.get_property_name(property_name)]
-        elif isinstance(property_list, list):
-            return property_list[self.get_property_index(property_name)]
-        elif isinstance(property_list, str):
-            props_list = tools.loadPickle(property_list)
-            return props_list[self.get_property_index(property_name)]
-        else:
-            raise Exception("Invalid Property Type")
-    def check_remappable(self, property_name):
-        """
-        Check if a property represents a position needing coordinate remapping.
-        """
-        index = self.get_property_index(property_name)
-        return index in [0, 5]  # halo_centres or void_centres
-    def get_all_properties(self, property_name, cache=True, recompute=False):
-        """
-        Get a list of a given property for all snapshots.
-        Handles remapping to Equatorial coordinates if applicable.
-        """
-        prop_index = self.get_property_index(property_name)
-        if self.all_properties[prop_index] is None:
-            if self.check_remappable(property_name):
-                # Remap positions to Equatorial coordinates
-                properties = [
-                    tools.remapAntiHaloCentre(
-                        self.get_property(i, property_name, recompute=recompute),
-                        boxsize=self.boxsize,
-                        swapXZ=self.swapXZ,
-                        reverse=self.reverse)
-                    for i in range(self.N)
-                ]
-            else:
-                properties = [
-                    self.get_property(i, property_name, recompute=recompute)
-                    for i in range(self.N)
-                ]
-            if cache:
-                self.all_properties[prop_index] = properties
-            return properties
-        else:
-            return self.all_properties[prop_index]
-    def __getitem__(self, property_name):
-        """
-        Enable bracket-access to named or additional properties.
-        Automatically returns all-snapshot versions of properties.
-        """
-        if self.is_valid_property(property_name):
-            return self.get_all_properties(property_name)
-        elif isinstance(property_name, str) and property_name in self.additional_properties:
-            if self.additional_properties[property_name] is not None:
-                return self.additional_properties[property_name]
-            else:
-                # Lazy-load derived properties
-                if property_name == "halos":
-                    self.additional_properties["halos"] = [
-                        snap.halos() for snap in self.snaps
-                    ]
-                elif property_name == "antihalos":
-                    self.additional_properties["antihalos"] = [
-                        snap.halos() for snap in self.snaps_reverse
-                    ]
-                elif property_name == "trees":
-                    self.additional_properties["trees"] = [
-                        scipy.spatial.cKDTree(snap['pos'],boxsize=self.boxsize)
-                        for snap in self.snaps
-                    ]
-                elif property_name == "trees_reverse":
-                    self.additional_properties["trees_reverse"] = [
-                        scipy.spatial.cKDTree(snap['pos'],boxsize=self.boxsize)
-                        for snap in self.snaps_reverse
-                    ]
-                else:
-                    raise Exception("Invalid property_name")
-                return self.additional_properties[property_name]
-        else:
-            raise Exception("Invalid property_name")
-
-
 
 
 #-------------------------------------------------------------------------------
@@ -2016,11 +1784,12 @@ def void_los_velocity_ratio_semi_analytic(r,Delta,f1,params=None,
         r (float or array): Radius at which to compute the velocity
         Delta (function): Cumulative density contrast profile Δ(r)
         f1 (float): Linear growth rate
-        alphas (array): Coefficients of the quadratic and higher terms in the displacement
-                        field. Assumed to be in order from n = 2 to n = N
-        exact_displacement (bool): If True (default), use an exact expression for the 
-                                   displacement field. Otherwise, approximate it using the
-                                   1 LPT expression.
+        alphas (array): Coefficients of the quadratic and higher terms in the 
+                        displacement field. Assumed to be in order from n = 2 
+                        to n = N
+        exact_displacement (bool): If True (default), use an exact expression 
+                                   for the displacement field. Otherwise, 
+                                   approximate it using the 1 LPT expression.
         params (list or None): Parameters for the model:
 
     Returns:
@@ -2040,8 +1809,10 @@ def void_los_velocity_ratio_semi_analytic(r,Delta,f1,params=None,
     sum_term = np.sum([alphas[n-2]*Psi_r**n for n in range(2,N+1)],0)
     return f1*(Psi_r + sum_term)
 
-def void_los_velocity_ratio_derivative_semi_analytic(r,Delta,delta,f1,params=None,
-                                                     exact_displacement=True,**kwargs):
+def void_los_velocity_ratio_derivative_semi_analytic(
+        r,Delta,delta,f1,params=None,
+        exact_displacement=True,**kwargs
+    ):
     """
     Compute the derivative of the los velocity with respect to r_par,
     multiplied by H(z)/(1+z), using a semi-analytic velocity model.
@@ -2126,10 +1897,11 @@ def get_dudr_hz_o1pz(Delta, delta, r_par, r_perp, f1,
         r_par (float): LOS distance
         r_perp (float): Transverse distance
         f (float or None): Growth rate
-        vel_model (function): Velocity ratio model, (same as in void_los_velocity)
-        dvel_dlogr_model (function): Derivative of the dimensionless velocity ratio 
-                                     model with respect to log(r). Ie, should 
-                                     return d( v*(1+z)/(r*H(z)) )/dlog(r)
+        vel_model (function): Velocity ratio model, (same as in 
+                              void_los_velocity)
+        dvel_dlogr_model (function): Derivative of the dimensionless velocity 
+                                     ratio model with respect to log(r). Ie, 
+                                     should return d( v*(1+z)/(r*H(z)) )/dlog(r)
         vel_params (array or None): Additional parameter for the velocity model
         
     Returns:
@@ -2164,7 +1936,8 @@ def void_los_velocity_derivative(z, Delta, delta, r_par, r_perp, Om, f1=None,
         r_par (float): LOS distance
         r_perp (float): Transverse distance
         Om (float): Matter density
-        f1 (float or None): Growth rate (Lambda-CDM value assumed if not provided)
+        f1 (float or None): Growth rate (Lambda-CDM value assumed if not 
+                            provided)
         vel_params (array or None): Additional parameter for the velocity model
         
     Returns:
@@ -2192,7 +1965,8 @@ def z_space_jacobian(Delta, delta, r_par, r_perp, f1=None, z = 0, Om=0.3,
         delta (function): Local density profile
         r_par (float): LOS distance
         r_perp (float): Transverse distance
-        f1 (float or None): Linear growth rate. If None, computed using Lambda-CDM.
+        f1 (float or None): Linear growth rate. If None, computed using 
+                            Lambda-CDM.
         z (float): Redshift
         Om (float): Matter density
         linearise_jacobian (bool): If True, return 1st-order approximation
@@ -2234,7 +2008,8 @@ def to_z_space(r_par, r_perp, z=0, Om=0.3, Delta=None, u_par=None, f1=None,
         Delta (function): Cumulative density profile Δ(r)
         u_par (float or array): LOS dimensionless velocity ratio (optional)
                                 ie, (1+z)*v/(H(z)*r)
-        f1 (float or None): Growth rate (Lambda-CDM value assumed if not provided)
+        f1 (float or None): Growth rate (Lambda-CDM value assumed if not 
+                            provided)
         vel_model (function): function which returns the dimensionless 
                             velocity ratio, (1+z)*v/(H(z)*r) at radius r. Should
                             have r, Delta, and f1 as parameters, but additional
@@ -3845,56 +3620,6 @@ def get_trimmed_los_list_per_void(
     )
     return sum(los_list_trimmed, [])
 
-def get_borg_density_estimate(snaps, densities_file=None, dist_max=135,
-                              seed=1000, interval=0.68):
-    """
-    Estimate the density contrast in a specified subvolume using BORG snapshots.
-
-    If precomputed density samples are provided, loads them from file.
-    Otherwise, computes them from raw snapshot data using spherical averaging.
-
-    Returns a bootstrap estimate of the MAP (maximum a posteriori) density 
-    contrast and its uncertainty interval.
-
-    Parameters:
-        snaps (SnapHandler): Object containing snapshots in `snaps["snaps"]`
-        densities_file (str or None): Pickle file containing precomputed delta 
-                                      samples
-        dist_max (float): Radius (in Mpc/h) for subvolume used to compute 
-                          densities
-        seed (int): RNG seed for reproducibility of bootstrap
-        interval (float): Confidence level for bootstrap interval (e.g., 0.68)
-
-    Returns:
-        tuple:
-            - deltaMAPBootstrap (BootstrapResult): Bootstrap distribution 
-                                                   object
-            - deltaMAPInterval (ConfidenceInterval): Confidence interval of 
-                                                     MAP estimate
-    """
-    boxsize = snaps.boxsize
-    # Determine center of sphere based on particle positions
-    if np.min(snaps["snaps"][0]["pos"]) < 0:
-        centre = np.array([0, 0, 0])
-    else:
-        centre = np.array([boxsize / 2] * 3)
-    # Load or compute density samples
-    if densities_file is not None:
-        deltaMCMCList = tools.loadPickle(densities_file)
-    else:
-        deltaMCMCList = np.array([
-            simulation_tools.density_from_snapshot(snap, centre, dist_max)
-            for snap in snaps["snaps"]
-        ])
-    # Bootstrap MAP density estimator
-    deltaMAPBootstrap = scipy.stats.bootstrap(
-        (deltaMCMCList,),
-        simulation_tools.get_map_from_sample,
-        confidence_level=interval,
-        vectorized=False,
-        random_state=seed
-    )
-    return deltaMAPBootstrap, deltaMAPBootstrap.confidence_interval
 
 def get_lcdm_void_catalogue(snaps, delta_interval=None, dist_max=135,
                             radii_range=[10, 20], centres_file=None,
