@@ -1177,23 +1177,32 @@ def loadCatalogueData(snapList,snapListRev,ahProps,sortMethod,snapSortList,\
         deltaCentral,deltaAverage]
 
 
-def overlapMap(cat1,cat2,volumes1,volumes2,checkFirst = False,verbose=False):
+def overlapMap(cat1,cat2,volumes1,volumes2,checkFirst = False,verbose=False,
+        pynbody_offset=0
+    ):
     overlap = np.zeros((len(cat1),len(cat2)))
     vol1 = np.array([np.sum(volumes1[halo['iord']]) for halo in cat1])
     vol2 = np.array([np.sum(volumes2[halo['iord']]) for halo in cat2])
     if checkFirst:
         for k in range(0,len(cat1)):
             for l in range(0,len(cat2)):
-                if checkOverlap(cat1[k+1]['iord'],cat2[l+1]['iord']):
-                    intersection = np.intersect1d(cat1[k+1]['iord'],\
-                        cat2[l+1]['iord'])
+                if checkOverlap(
+                    cat1[k+pynbody_offset]['iord'],
+                    cat2[l+pynbody_offset]['iord']
+                ):
+                    intersection = np.intersect1d(
+                        cat1[k+pynbody_offset]['iord'],\
+                        cat2[l+pynbody_offset]['iord']
+                    )
                     overlap[k,l] = np.sum(\
                         volumes1[intersection])/np.sqrt(vol1[k]*vol2[l])
     else:
         for k in range(0,len(cat1)):
             for l in range(0,len(cat2)):
-                intersection = np.intersect1d(cat1[k+1]['iord'],\
-                    cat2[l+1]['iord'])
+                intersection = np.intersect1d(
+                    cat1[k+pynbody_offset]['iord'],\
+                    cat2[l+pynbody_offset]['iord']
+                )
                 if len(intersection) > 0:
                     overlap[k,l] = np.sum(\
                         volumes1[intersection])/np.sqrt(vol1[k]*vol2[l])

@@ -24,7 +24,21 @@ def test_gaussian_log_likelihood_function_negative(gaussian_likelihood):
     data = np.random.rand(5)
     LL = gaussian_log_likelihood_function(data,mu,C)
     assert(LL < 0)
-    
+
+def test_get_finite_range_basic():
+    ranges = [
+        [0, np.inf], [-np.inf, np.inf], [-np.inf, 0],
+        [-1, 0]
+    ]
+    target = ranges = [
+        [0, 1], [-1, 1], [-1, 0],
+        [-1, 0]
+    ]
+    for range_list, target_list in zip(ranges, target):
+        computed = get_finite_range(range_list)
+        assert(np.all(np.isfinite(computed)))
+        for x,y in zip(target_list,computed):
+            assert(x == y)
 
 # ---------------------- REGRESSION TESTS --------------------------------------
 

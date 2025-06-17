@@ -336,7 +336,7 @@ deltaMAPBootstrap, deltaMAPInterval = get_borg_density_estimate(
 # Creat voids list for lcdm:
 centres_file = data_folder2 + "random_centres_and_densities.p"
 voids_used_lcdm = get_lcdm_void_catalogue(
-    lcdm_snaps,deltaMAPBootstrap.confidence_interval,
+    lcdm_snaps,deltaMAPInterval,
     centres_file = centres_file)
 # Sample of lcdm voids without applying density constraints:
 voids_used_lcdm_unconstrained = get_lcdm_void_catalogue(

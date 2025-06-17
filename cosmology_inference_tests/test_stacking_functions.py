@@ -21,12 +21,15 @@ from void_analysis.cosmology_inference import (
     get_1d_real_space_field,
     get_los_velocities_for_void,
     get_ur_profile_for_void,
-    get_all_ur_profiles
+    get_all_ur_profiles,
+    get_lcdm_void_catalogue,
+    get_zspace_centres
 )
 
 from void_analysis.simulation_tools import (
     DummySnapshot, 
-    generate_synthetic_void_snap
+    generate_synthetic_void_snap,
+    SnapshotGroup
 )
 
 from void_analysis import tools
@@ -99,7 +102,69 @@ def test_get_2d_void_stack_from_los_pos_shape(synthetic_los_data):
     )
     assert stacked_particles.shape[1] == 2
 
+# Mock Catalogue
+@pytest.fixture
+def snapshot_group():
+    root_dir = os.path.join(os.path.dirname(__file__), "../test_snaps/")
+    snap_list = [
+        os.path.join(root_dir,"sample1/forward/snapshot_001"),
+        os.path.join(root_dir,"sample2/forward/snapshot_001"),
+        os.path.join(root_dir,"sample3/forward/snapshot_001")
+    ]
+    snap_list_reverse = [
+        os.path.join(root_dir,"sample1/reverse/snapshot_001"),
+        os.path.join(root_dir,"sample2/reverse/snapshot_001"),
+        os.path.join(root_dir,"sample3/reverse/snapshot_001")
+    ]
+    group = SnapshotGroup(
+        snap_list, snap_list_reverse, low_memory_mode=False,
+        swapXZ=False, reverse=True, remap_centres=True
+    )
+    return group
 
+from void_analysis import catalogue
+@pytest.fixture
+def mock_void_catalogue(snapshot_group):
+    snaps = snapshot_group
+    rSphere = 25 
+    muOpt = 0.25 
+    rSearchOpt = 3
+    NWayMatch = False 
+    refineCentres = True 
+    sortBy = "radius"
+    enforceExclusive = True 
+    mMin = 1e11
+    mMax = 1e16
+    rMin = 5
+    rMax = 30
+    m_unit = snaps.snaps[0]['mass'][0]*1e10
+    # Build catalogue:
+    cat = catalogue.combinedCatalogue(
+        snaps.snap_filenames,snaps.snap_reverse_filenames,\
+        muOpt,rSearchOpt,rSphere,\
+        ahProps=snaps.all_property_lists,hrList=snaps["antihalos"],\
+        max_index=None,\
+        twoWayOnly=True,blockDuplicates=True,\
+        massRange = [mMin,mMax],\
+        NWayMatch = NWayMatch,r_min=rMin,r_max=rMax,\
+        additionalFilters = None,verbose=False,\
+        refineCentres=refineCentres,sortBy=sortBy,\
+        enforceExclusive=enforceExclusive
+    )
+    cat.constructAntihaloCatalogue()
+    # Set filter to a dummy value:
+    rbins = np.linspace(5,10,5)
+    thresh = np.array([0.8,0.4,0.3,0.2])
+    cat.set_filter(thresh,rbins)
+    return cat
+
+@pytest.fixture
+def get_lcdm_void_catalogue_params():
+    seed = 1000
+    dist_max = 15
+    nRandCentres = 100
+    delta_interval = [-0.5,0.0]
+    return seed, dist_max, nRandCentres, delta_interval
 
 # ---------------------- UNIT TESTS: combine_los_lists -------------------------
 
@@ -434,16 +499,57 @@ def test_get_all_ur_profiles(synthetic_void_snap):
         centres, radii,rbins,snap,relative_velocity=True
     )
 
+def test_get_additional_weights_borg(mock_void_catalogue):
+    cat = mock_void_catalogue
+    tools.run_basic_regression_test(
+        get_additional_weights_borg,
+        os.path.join(SNAPSHOT_DIR,"get_additional_weights_borg_ref.npy"),
+        cat
+    )
+
+def test_get_1d_real_space_field(snapshot_group):
+    tools.run_basic_regression_test(
+        get_1d_real_space_field,
+        os.path.join(SNAPSHOT_DIR,"get_1d_real_space_field_ref.npz"),
+        snapshot_group,n_boot=100
+    )
+
+def test_get_stacked_void_density_field(snapshot_group):
+    snaps = snapshot_group
+    tools.run_basic_regression_test(
+        get_stacked_void_density_field,
+        os.path.join(SNAPSHOT_DIR,"get_stacked_void_density_field_ref.npy"),
+        snaps,snaps["void_radii"],snaps["void_centres"],
+        np.linspace(0,2,5),np.linspace(0,2,5),rmin=5,rmax=10,
+        recompute=True,zspace=True,recompute_zspace=True
+    )
 
 
+def test_get_lcdm_void_catalogue(snapshot_group):
+    snaps = snapshot_group
+    tools.run_basic_regression_test(
+        get_lcdm_void_catalogue,
+        os.path.join(SNAPSHOT_DIR,"get_lcdm_void_catalogue_ref.p"),
+        snaps, delta_interval=[-0.5,0.0], dist_max=15,radii_range=[5, 10], 
+        centres_file=None,nRandCentres=100, seed=1000, flattened=True
+    )
 
+def test_get_halo_indices(mock_void_catalogue):
+    tools.run_basic_regression_test(
+        get_halo_indices,
+        os.path.join(SNAPSHOT_DIR,"get_halo_indices_ref.npy"),
+        mock_void_catalogue
+    )
 
-
-
-
-
-
-
+def test_get_zspace_centres(snapshot_group,mock_void_catalogue):
+    snaps = snapshot_group
+    cat = mock_void_catalogue
+    halo_indices = cat.get_final_catalogue(void_filter=True,short_list=False).T
+    tools.run_basic_regression_test(
+        get_zspace_centres,
+        os.path.join(SNAPSHOT_DIR,"get_zspace_centres_ref.npy"),
+        halo_indices,snaps["snaps"],snaps["snaps_reverse"]
+    )
 
 
 

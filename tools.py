@@ -663,6 +663,30 @@ def profile_derivative_test(rvals,delta,Delta,profile,profile_log_derivative,
         u(ri) - u(0), integrals, rtol=rtol,atol=atol
     )
 
+def compatible(computed,reference):
+    if isinstance(computed,type(reference)):
+        return True
+    try:
+        if isinstance(np.array(computed),type(reference)):
+            return True
+    except:
+        return False
+
+def compare_output_to_reference(computed,reference,atol=1e-5,rtol=1e-5):
+    """
+    Test the output of a computation, whether it is a list, an array, tuple,
+    or scalar.
+    """
+    assert compatible(computed,reference)
+    if isinstance(reference,list):
+        for x, y in zip(computed, reference):
+            compare_output_to_reference(x,y,atol=atol,rtol=rtol)
+    elif isinstance(reference,np.ndarray) or np.isscalar(reference):
+        np.testing.assert_allclose(computed,reference,atol=atol,rtol=rtol)
+    elif isinstance(reference,tuple):
+        for x, y in zip(computed, reference):
+            compare_output_to_reference(x,y,atol=atol,rtol=rtol)
+
 def run_basic_regression_test(
         function,filename,*args,rtol=1e-5,atol=1e-5,**kwargs
     ):
@@ -682,20 +706,20 @@ def run_basic_regression_test(
     name, ext = os.path.splitext(filename)
     if ext == ".npy":
         reference = np.load(filename)
-        np.testing.assert_allclose(computed,reference,rtol=rtol,atol=atol)
+        compare_output_to_reference(computed,reference,rtol=rtol,atol=atol)
         return None
     elif ext == ".npz":
         all_refs = np.load(filename)
         reference = [all_refs[key] for key in all_refs]
     elif ext == ".p":
-        reference = tools.loadPickle(filename)
+        reference = loadPickle(filename)
     else:
         raise Exception("File type not implemented or not recognised.")
     if len(computed) != len(reference):
         raise Exception("Number of references does not match number of " + 
                         "computed.")
     for comp, ref in zip(computed, reference):
-        np.testing.assert_allclose(comp,ref,rtol=rtol,atol=atol)
+        compare_output_to_reference(comp,ref,rtol=rtol,atol=atol)
 
 def generate_regression_test_data(function,filename,*args,**kwargs):
     """
@@ -714,7 +738,7 @@ def generate_regression_test_data(function,filename,*args,**kwargs):
     elif ext == ".npz":
         np.savez(filename,*computed)
     elif ext == ".p":
-        tools.savePickle(filename,computed)
+        savePickle(list(computed),filename)
 
 def ratio_where_finite(x,y,undefined_value = 0.0):
     """
@@ -832,9 +856,31 @@ def gaussian_log_likelihood_function(x,mu,C,use_cholesky=True,
         inv_cov = C if pre_inverted else scipy.linalg.inv(C)
         return -0.5 * np.dot(delta_vec, inv_cov @ delta_vec) + constants
 
+def get_finite_range(range_list):
+    """
+    Return a finite range, given a list of ranges that are possible infinite.
+    
+    Parameters:
+        range_list (list of floats): 2-component list with lower and upper
+                                     bounds for a variable, possibly infinite
+    
+    Returns:
+        list of floats: For finite ranges, returns the original range, but
+                       ranges including +/- np.inf are replaced with
+                       +/- 1
+    
+    Tests:
+        Tested in test_tools.py
+        Unit tests: test_get_finite_range_basic
+    """
+    return [x if np.isfinite(x) else np.sign(x) for x in range_list]
 
-
-
+def load_npz_arrays(filename):
+    name, ext = os.path.splitext(filename)
+    if ext != ".npz":
+        raise Exception("Not an npz file.")
+    loaded = np.load(filename)
+    return [loaded[key] for key in loaded]
 
 
 

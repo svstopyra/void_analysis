@@ -12,7 +12,10 @@ from void_analysis.cosmology_inference import (
     generate_scoord_grid,
     void_los_velocity_ratio_1lpt,
     get_tabulated_inverse,
-    get_mle_estimate
+    get_mle_estimate,
+    generate_scoord_grid,
+    generate_data_filter,
+    log_likelihood_profile
 )
 
 from void_analysis import tools
@@ -24,7 +27,10 @@ GENERATED_SNAPSHOTS = [
     "get_tabulated_inverse_ref.npy",
     "log_flat_prior_single_ref.npy",
     "log_flat_prior_ref.npy",
-    "get_mle_estimate_ref.npy"
+    "get_mle_estimate_ref.npy",
+    "generate_scoord_grid_ref.npy",
+    "generate_data_filter_ref.npy",
+    "log_likelihood_profile_ref.npy"
 ]
 
 def generate_snapshots():
@@ -98,6 +104,44 @@ def generate_snapshots():
         mu,C
     )
     
+    # generate_scoord_grid
+    sperp_bins, spar_bins = np.linspace(0,2,21),np.linspace(0,3,31)
+    tools.generate_regression_test_data(
+        generate_scoord_grid,
+        "generate_scoord_grid_ref.npy",
+        sperp_bins,spar_bins
+    )
+    
+    # generate_data_filter
+    # Setup co-ordinate grid:
+    sperp_bins, spar_bins = np.linspace(0,2,5),np.linspace(0,3,7)
+    scoords = generate_scoord_grid(sperp_bins, spar_bins)
+    N = (len(sperp_bins)-1)*(len(spar_bins)-1)
+    # Mock mean and covariance matrix:
+    np.random.seed(0)
+    mean = np.random.rand(N)
+    A = np.random.randn(N, N)
+    cov = A @ A.T
+    # Test:
+    tools.generate_regression_test_data(
+        generate_data_filter,
+        "generate_data_filter_ref.npy",
+        cov, mean, scoords, cov_thresh=0.1, srad_thresh=1.5
+    )
+    
+    # run_basic_regression_test
+    r = np.linspace(0.1, 2.0, 100)
+    params = [1.0, 2.0, 1.0, -0.5, 0.0, 1.0]
+    y_true = profile_modified_hamaus(r, *params)
+    noise = 0.01
+    np.random.seed(0)
+    y_obs = y_true + noise * np.random.randn(len(r))
+    sigma = noise * np.ones_like(r)
+    tools.generate_regression_test_data(
+        log_likelihood_profile,
+        "log_likelihood_profile_ref.npy",
+        params, r, y_obs, sigma, profile_modified_hamaus
+    )
     
 
     print("✅ Likelihood and posterior snapshots saved!")

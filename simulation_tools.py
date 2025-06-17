@@ -13,6 +13,7 @@ thread_count = mp.cpu_count()
 from astropy.coordinates import SkyCoord
 import astropy.units as u
 import gc
+import h5py
 
 # Convert eulerian co-ordinate to redshift space co-ordinates:
 def eulerToZ(pos,vel,cosmo,boxsize,h,centre = None,Ninterp=1000,\
@@ -1017,7 +1018,7 @@ def generate_synthetic_void_snap(N=32,rmax=50,A=0.85,sigma=10,seed=0,H0=70):
 
 
 def get_borg_density_estimate(snaps, densities_file=None, dist_max=135,
-                              seed=1000, interval=0.68):
+                              seed=1000, interval=0.68,nboot=9999):
     """
     Estimate the density contrast in a specified subvolume using BORG snapshots.
 
@@ -1042,6 +1043,10 @@ def get_borg_density_estimate(snaps, densities_file=None, dist_max=135,
                                                    object
             - deltaMAPInterval (ConfidenceInterval): Confidence interval of 
                                                      MAP estimate
+    
+    Tests:
+        Tested in test_simulation_tools.py
+        Regression tests: test_get_borg_density_estimate
     """
     boxsize = snaps.boxsize
     # Determine center of sphere based on particle positions
@@ -1054,16 +1059,17 @@ def get_borg_density_estimate(snaps, densities_file=None, dist_max=135,
         deltaMCMCList = tools.loadPickle(densities_file)
     else:
         deltaMCMCList = np.array([
-            simulation_tools.density_from_snapshot(snap, centre, dist_max)
+            density_from_snapshot(snap, centre, dist_max)
             for snap in snaps["snaps"]
         ])
     # Bootstrap MAP density estimator
     deltaMAPBootstrap = scipy.stats.bootstrap(
         (deltaMCMCList,),
-        simulation_tools.get_map_from_sample,
+        get_map_from_sample,
         confidence_level=interval,
         vectorized=False,
-        random_state=seed
+        random_state=seed,
+        n_resamples=nboot
     )
     return deltaMAPBootstrap, deltaMAPBootstrap.confidence_interval
 
@@ -1096,6 +1102,8 @@ def get_antihalo_properties(snap, file_suffix="AHproperties",
     Tests:
         No tests implemented
     """
+    if isinstance(snap,str):
+        snap = pynbody.load(snap)
     filename = snap.filename + "." + file_suffix + default
     filename_old = snap.filename + "." + file_suffix + ".p"
     if os.path.isfile(filename):
@@ -1160,8 +1168,10 @@ class SnapshotGroup:
         if low_memory_mode:
             self.all_property_lists = [None for snap in snap_list]
         else:
-            self.all_property_lists = [get_antihalo_properties(snap) 
-                                       for snap in snap_list]
+            self.all_property_lists = [
+                get_antihalo_properties(snap,low_memory_mode=low_memory_mode) 
+                for snap in snap_list
+            ]
         self.property_list = [
             "halo_centres", "halo_masses",
             "antihalo_centres", "antihalo_masses",
@@ -1283,7 +1293,10 @@ class SnapshotGroup:
         """
         if self.is_valid_property(property_name):
             return self.get_all_properties(property_name)
-        elif isinstance(property_name, str) and property_name in self.additional_properties:
+        elif (
+            isinstance(property_name, str)
+            and property_name in self.additional_properties
+        ):
             if self.additional_properties[property_name] is not None:
                 return self.additional_properties[property_name]
             else:
@@ -1311,6 +1324,101 @@ class SnapshotGroup:
                 return self.additional_properties[property_name]
         else:
             raise Exception("Invalid property_name")
+
+
+def filter_regions_by_density(rand_centres, rand_densities, delta_interval):
+    """
+    Select underdense regions within a delta contrast range.
+
+    Parameters:
+        rand_centres (array, N x 3): Centres to search through
+        rand_densities (array, N): Density constrasts in a sphere around
+                                   each centre in rand_centres.
+        delta_interval (tuple, 2 components): Density range to filter for.
+
+    Returns:
+        - region_masks: Boolean masks for selected centres
+        - centres_to_use: Filtered centres as list of arrays per snapshot
+    
+    Tests:
+        Tested in test_simulation_tools.py
+        Regression tests: test_filter_regions_by_density
+    """
+    if isinstance(rand_centres,list):
+        centres_list = rand_centres
+    elif isinstance(rand_centres,np.ndarray):
+        centres_list = [rand_centres for _ in rand_densities]
+    else:
+        raise Exception("Invalid rand_centres")
+    if delta_interval is not None:
+        interval = np.sort(delta_interval)
+        region_masks = [
+            (deltas > interval[0]) & (deltas <= interval[1])
+            for deltas in rand_densities
+        ]
+        centres_to_use = [
+            centres[mask,:] for centres, mask in zip(centres_list, region_masks)
+        ]
+    else:
+        region_masks = [
+            np.ones_like(deltas, dtype=bool) for deltas in rand_densities
+        ]
+        centres_to_use = centres_list
+    return region_masks, centres_to_use
+
+def compute_void_distances(void_centres, region_centres, boxsize):
+    """
+    Compute distances from each void to every selected region.
+    
+    Parameters:
+        void_centres (list of array, each N x 3): Void centres to compute 
+                                                  distances for, in each
+                                                  region of the simulation
+                                                  considered.
+        region_centres (array, M x 3): Centres of each region. M should match
+                                       the length of void_centres
+        boxsize (float): Size of the periodic box.
+
+    Returns:
+        list of lists: [ [distances for region 1], [region 2], ... ] per 
+                        snapshot
+    
+    Tests:
+        Tested in test_simulation_tools.py
+        Regression tests: test_compute_void_distances
+    """
+    return [[
+        np.sqrt(np.sum(snapedit.unwrap(voids - region, boxsize)**2, axis=1))
+        for region in regions
+    ] for voids, regions in zip(void_centres, region_centres)]
+
+def filter_voids_by_distance_and_radius(
+        dist_lists, radii_lists, dist_max, radii_range
+    ):
+    """
+    Apply filtering to voids based on spatial and size constraints.
+    
+    Parameters:
+        dist_lists (list): List of arrays, each containing the distances of
+                           voids from a common region centre.
+        radii_lists (list): List of arrays, each containing the radii of voids
+                            in a common region. Should be the same length as
+                            the corresponding array in dist_lists.
+        dist_max (float): Maximum distance out to which to include voids.
+        radii_range (list, 2 components): Range of radii to filter for.
+
+    Returns:
+        list of lists of boolean arrays: One list per region per snapshot
+    
+    Tests:
+        Tested in test_simulation_tools.py
+        Regression tests: test_filter_voids_by_distance_and_radius
+    """
+    radii_range = np.sort(radii_range)
+    return [[
+        (dist < dist_max) & (radii > radii_range[0]) & (radii <= radii_range[1])
+        for dist in region_dists
+    ] for region_dists, radii in zip(dist_lists, radii_lists)]
 
 
 

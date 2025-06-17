@@ -15,7 +15,8 @@ from void_analysis.cosmology_inference import (
     void_los_velocity_ratio_1lpt,
     get_tabulated_inverse,
     iterative_zspace_inverse,
-    get_mle_estimate
+    get_mle_estimate,
+    generate_data_filter
 )
 from void_analysis import tools
 from void_analysis.simulation_tools import gaussian_delta, gaussian_Delta
@@ -193,6 +194,12 @@ def test_tabluated_inverse_accuracy(synthetic_inversion_data):
     # level should be more than enough.
     np.testing.assert_allclose(tabulated,exact,atol=1e-3,rtol=1e-3)
 
+def test_generate_scoord_grid_shape():
+    sperp_bins, spar_bins = np.linspace(0,2,21),np.linspace(0,3,31)
+    scoords = generate_scoord_grid(sperp_bins, spar_bins)
+    N = (len(sperp_bins)-1)*(len(spar_bins)-1)
+    assert scoords.shape == (N,2)
+
 # ---------------------- REGRESSION TESTS ----------------------
 
 
@@ -271,4 +278,59 @@ def test_get_mle_estimate(gaussian_likelihood):
         guess,bounds,tools.gaussian_log_likelihood_function,
         mu,C
     )
-    
+
+def test_generate_scoord_grid():
+    sperp_bins, spar_bins = np.linspace(0,2,21),np.linspace(0,3,31)
+    tools.run_basic_regression_test(
+        generate_scoord_grid,
+        os.path.join(SNAPSHOT_DIR,"generate_scoord_grid_ref.npy"),
+        sperp_bins, spar_bins
+    )
+
+def test_generate_data_filter():
+    # Setup co-ordinate grid:
+    sperp_bins, spar_bins = np.linspace(0,2,5),np.linspace(0,3,7)
+    scoords = generate_scoord_grid(sperp_bins, spar_bins)
+    N = (len(sperp_bins)-1)*(len(spar_bins)-1)
+    # Mock mean and covariance matrix:
+    np.random.seed(0)
+    mean = np.random.rand(N)
+    A = np.random.randn(N, N)
+    cov = A @ A.T
+    # Test:
+    tools.run_basic_regression_test(
+        generate_data_filter,
+        os.path.join(SNAPSHOT_DIR,"generate_data_filter_ref.npy"),
+        cov, mean, scoords, cov_thresh=0.1, srad_thresh=1.5
+    )
+
+def test_log_likelihood_profile():
+    r = np.linspace(0.1, 2.0, 100)
+    params = [1.0, 2.0, 1.0, -0.5, 0.0, 1.0]
+    y_true = profile_modified_hamaus(r, *params)
+    noise = 0.01
+    np.random.seed(0)
+    y_obs = y_true + noise * np.random.randn(len(r))
+    sigma = noise * np.ones_like(r)
+    tools.run_basic_regression_test(
+        log_likelihood_profile,
+        os.path.join(SNAPSHOT_DIR,"log_likelihood_profile_ref.npy"),
+        params, r, y_obs, sigma, profile_modified_hamaus
+    )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
