@@ -1063,12 +1063,13 @@ def get_borg_density_estimate(snaps, densities_file=None, dist_max=135,
             for snap in snaps["snaps"]
         ])
     # Bootstrap MAP density estimator
+    rng = np.random.default_rng(seed)
     deltaMAPBootstrap = scipy.stats.bootstrap(
         (deltaMCMCList,),
         get_map_from_sample,
         confidence_level=interval,
         vectorized=False,
-        random_state=seed,
+        random_state=rng,
         n_resamples=nboot
     )
     return deltaMAPBootstrap, deltaMAPBootstrap.confidence_interval
