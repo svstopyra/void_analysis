@@ -3,6 +3,7 @@
 import numpy as np
 from void_analysis.simulation_tools import *
 from void_analysis import tools
+import astropy
 
 GENERATED_SNAPSHOTS = [
     "get_borg_density_estimate_ref.npz",
@@ -11,7 +12,8 @@ GENERATED_SNAPSHOTS = [
     "filter_regions_by_density_ref.p",
     "compute_void_distances_ref.p",
     "getNonOverlappingCentres_ref.p",
-    "filter_voids_by_distance_and_radius_ref.p"
+    "filter_voids_by_distance_and_radius_ref.p",
+    "eulerToZ_ref.npy"
 ]
 
 def wrapper_get_borg_density_estimate(*args,**kwargs):
@@ -90,6 +92,22 @@ def generate_snapshots():
         "filter_voids_by_distance_and_radius_ref.p",
         region_void_dists, snapshot_group["void_radii"], dist_max, radii_range
     )
+    
+    # eulerToZ
+    np.random.seed(1000)
+    pos = np.random.randn(100,3)*50
+    vel = np.random.randn(100,3)*30
+    boxsize = 50.0
+    h = 0.7
+    centre = np.array([boxsize/2]*3)
+    cosmo = astropy.cosmology.LambdaCDM(70,0.3,0.7)
+    tools.generate_regression_test_data(
+        eulerToZ,
+        "eulerToZ_ref.npy",
+        pos,vel,cosmo,boxsize,h,centre = None,Ninterp=1000,\
+        l = 268,b = 38,vl=540,localCorrection = True,velFudge = 1
+    )
+    
     print("✅ Tools snapshots saved!")
 
 if __name__ == "__main__":

@@ -15,9 +15,40 @@ import astropy.units as u
 import gc
 import h5py
 
-# Convert eulerian co-ordinate to redshift space co-ordinates:
-def eulerToZ(pos,vel,cosmo,boxsize,h,centre = None,Ninterp=1000,\
-        l = 268,b = 38,vl=540,localCorrection = True,velFudge = 1):
+def eulerToZ(
+        pos,vel,cosmo,boxsize,h,centre = None,Ninterp=1000,\
+        l = 268,b = 38,vl=540,localCorrection = True,velFudge = 1
+    ):
+    """
+    Convert eulerian co-ordinate to redshift space co-ordinates:
+    
+    Parameters:
+        pos (Nx3 array): Positions in Eulerian co-ordinates.
+        vel (Nx3 array): Velocities
+        cosmo (astroy cosmology object): Cosmological parameters from astropy.
+        boxsize (float): Size of the periodic box in Mpc/h
+        h (float): Dimensionless Hubble rate.
+        centre (array or None): Centre with respect to which to compute
+                                displacements. If None, assume positions are
+                                already relative to the centre.
+        Ninterp (int): Number of interpolation points, used for speeding up
+                       inversion. Inverses are computed only at these points 
+                       and other values are interpolated.
+        l (float): Galactic longitude of the local direction used for removing
+                   local frame.
+        b (float): Galactic latitude of local direction.
+        vl (float): Velocity in the direction of (l,b)
+        localCorrection (bool): If true, apply local correction.
+        velFudge (float): Factor by which to multiply velocities (mostly ussed
+                          for testing)
+    
+    Returns:
+        array: Positions in redshift space co-ordinates.
+    
+    Tests:
+        Tested in test_simulation_tools.py
+        Regression test: test_eulerToZ    
+    """    
     # Compute comoving distance:
     if centre is not None:
         dispXYZ = snapedit.unwrap(pos - centre,boxsize)

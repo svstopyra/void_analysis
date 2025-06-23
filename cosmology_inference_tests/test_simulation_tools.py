@@ -5,6 +5,7 @@ import pytest
 import os
 from void_analysis.simulation_tools import *
 from void_analysis import tools
+import astropy
 
 SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "snapshots")
 
@@ -104,7 +105,7 @@ def test_filter_voids_by_distance_and_radius(snapshot_group):
     region_void_dists = tools.loadPickle(
         os.path.join(SNAPSHOT_DIR,"compute_void_distances_ref.p")
     )
-    tools.generate_regression_test_data(
+    tools.run_basic_regression_test(
         filter_voids_by_distance_and_radius,
         os.path.join(
             SNAPSHOT_DIR,"filter_voids_by_distance_and_radius_ref.p"
@@ -113,7 +114,20 @@ def test_filter_voids_by_distance_and_radius(snapshot_group):
     )
 
 
-
+def test_eulerToZ():
+    np.random.seed(1000)
+    pos = np.random.randn(100,3)*50
+    vel = np.random.randn(100,3)*30
+    boxsize = 50.0
+    h = 0.7
+    centre = np.array([boxsize/2]*3)
+    cosmo = astropy.cosmology.LambdaCDM(70,0.3,0.7)
+    tools.run_basic_regression_test(
+        eulerToZ,
+        os.path.join(SNAPSHOT_DIR,"eulerToZ_ref.npy"),
+        pos,vel,cosmo,boxsize,h,centre = None,Ninterp=1000,\
+        l = 268,b = 38,vl=540,localCorrection = True,velFudge = 1
+    )
 
 
 
