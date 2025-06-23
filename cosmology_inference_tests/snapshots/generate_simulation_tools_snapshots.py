@@ -13,7 +13,13 @@ GENERATED_SNAPSHOTS = [
     "compute_void_distances_ref.p",
     "getNonOverlappingCentres_ref.p",
     "filter_voids_by_distance_and_radius_ref.p",
-    "eulerToZ_ref.npy"
+    "eulerToZ_ref.npy",
+    "getGriddedDensity_ref.npy",
+    "pointsInRangeWithWrap_ref.npy",
+    "run_basic_regression_test_ref.npy",
+    "getGriddedGalCount_ref.npy",
+    "biasOld_ref.npy",
+    "biasNew_ref.npy"
 ]
 
 def wrapper_get_borg_density_estimate(*args,**kwargs):
@@ -106,6 +112,86 @@ def generate_snapshots():
         "eulerToZ_ref.npy",
         pos,vel,cosmo,boxsize,h,centre = None,Ninterp=1000,\
         l = 268,b = 38,vl=540,localCorrection = True,velFudge = 1
+    )
+    # getGriddedDensity
+    N = 32
+    snapn = snapshot_group.snaps[0]
+    tools.generate_regression_test_data(
+        getGriddedDensity,
+        "getGriddedDensity_ref.npy",
+        snapn,N,redshiftSpace=True
+    )
+    # pointsInRangeWithWrap
+    np.random.seed(1000)
+    positions = np.random.random((10000,3))*1000 - 1000
+    boxsize = 1000.0
+    tools.generate_regression_test_data(
+        pointsInRangeWithWrap,
+        "pointsInRangeWithWrap_ref.npy",
+        positions,[-100,100],boxsize=boxsize
+    )
+    # pointsInBoundedPlaneWithWrap
+    np.random.seed(1000)
+    positions = np.random.random((10000,3))*1000 - 1000
+    boxsize = 1000.0
+    tools.generate_regression_test_data(
+        pointsInBoundedPlaneWithWrap,
+        "run_basic_regression_test_ref.npy",
+        positions,[-100,100],[-100,100],boxsize=boxsize
+    )
+    # getGriddedGalCount
+    np.random.seed(1000)
+    positions = np.random.random((10000,3))*1000 - 1000
+    N = 64
+    boxsize = 1000.0
+    tools.generate_regression_test_data(
+        getGriddedGalCount,
+        "getGriddedGalCount_ref.npy",
+        positions,N,boxsize
+    )
+    # biasOld
+    rhoArray = np.linspace(0,1.2,101)
+    params = [1.0,0.5,0.5,0.5]
+    tools.generate_regression_test_data(
+        biasOld,
+        "biasOld_ref.npy",
+        rhoArray,params
+    )
+    # biasNew
+    biasParam = tools.loadPickle(self.dataFolder + "bias_param_example.p")
+    rhoArray = np.linspace(0,1.2,101)
+    params = biasParam[0][0,:]
+    tools.generate_regression_test_data(
+        biasNew,
+        "biasNew_ref.npy",
+        rhoArray,params
+    )
+    # ngPerLBin
+    N = 16
+    referenceMaskList = np.load(
+        os.path.joint(SNAPSHOT_DIR,"surveyMask_ref.npy")
+    )
+    np.random.seed(1000)
+    maskRandom = np.random.random((16,16**3))
+    biasParam = tools.loadPickle(
+        os.path.join(SNAPSHOT_DIR,"bias_param_example.p")
+    )
+    rng = np.random.default_rng(1000)
+    mcmcDen = scipy.stats.lognorm(
+        s = 1, scale=np.exp(1),random_state=rng,
+    ).rvs((N,N,N))
+    mcmcDenLin = np.reshape(mcmcDen,N**3)
+    mcmcDen_r = np.reshape(mcmcDenLin,(N,N,N),order='F')
+    mcmcDenLin_r = np.reshape(mcmcDen_r,N**3)
+    tools.generate_regression_test_data(
+        ngPerLBin,
+        "ngPerLBin_ref.npy",
+        biasParam,return_samples=True,mask=referenceMaskList[0],\
+        accelerate=True,N=N,\
+        delta = [mcmcDenLin_r],contrast=False,sampleList=[0],\
+        beta=biasParam[:,:,1],rhog = biasParam[:,:,3],\
+        epsg=biasParam[:,:,2],\
+        nmean=biasParam[:,:,0],biasModel = biasNew
     )
     
     print("✅ Tools snapshots saved!")

@@ -95,12 +95,32 @@ def eulerToZ(
     posZ[np.where(posZ > boxsize/2)] -= boxsize
     return posZ
 
-# Computes the density field of a pynbody snapshot using a naiive cloud-in-cell
-# scheme (counts particles in a give cubic cell)
+
 def getGriddedDensity(
         snap,N,redshiftSpace= False,velFudge = 1,snapPos = None,snapVel = None,
         snapMass = None
     ):
+    """
+    Computes the density field of a pynbody snapshot using a naiive 
+    cloud-in-cell scheme (counts particles in a give cubic cell). Only works
+    for exactly cubic particle counts.
+    
+    Parameters:
+        snap (pynbody snapshot): Pynbody snapshot to get density field for.
+        N (int): Cube root of particle count.
+        redshiftSpace (bool): If true, convert to redshift space first.
+        velFudge (float): Rescale velocity by this amount. Used for testing.
+        snapPos (array or None): Positions of particles in the snapshot. If 
+                                 None, loaded from the simulation. Use this 
+                                 argument to over-ride this, especially if 
+                                 different co-ordinates are used.
+        snapVel (array or None): Simulation velocities over-ride, as snapPos.
+        snapMass (array or None): Simulation masses override, as snapPos.
+    
+    Tests:
+        Tested in test_simulation_tools.py
+        Regression test: test_getGriddedDensity
+    """
     boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
     if snapPos is None:
         snapPos = np.array(snap['pos'].in_units("Mpc a h**-1"))

@@ -129,6 +129,245 @@ def test_eulerToZ():
         l = 268,b = 38,vl=540,localCorrection = True,velFudge = 1
     )
 
+def test_getGriddedDensity(snapshot_group):
+    N = 32
+    snapn = snapshot_group.snaps[0]
+    tools.run_basic_regression_test(
+        getGriddedDensity,
+        os.path.join(SNAPSHOT_DIR,"getGriddedDensity_ref.npy"),
+        snapn,N,redshiftSpace=True
+    )
+
+def test_pointsInRangeWithWrap():
+    np.random.seed(1000)
+    positions = np.random.random((10000,3))*1000 - 1000
+    boxsize = 1000.0
+    tools.run_basic_regression_test(
+        pointsInRangeWithWrap,
+        os.path.join(SNAPSHOT_DIR,"pointsInRangeWithWrap_ref.npy"),
+        positions,[-100,100],boxsize=boxsize
+    )
+
+def test_pointsInBoundedPlaneWithWrap():
+    np.random.seed(1000)
+    positions = np.random.random((10000,3))*1000 - 1000
+    boxsize = 1000.0
+    tools.run_basic_regression_test(
+        pointsInBoundedPlaneWithWrap,
+        os.path.join(SNAPSHOT_DIR,"run_basic_regression_test_ref.npy"),
+        positions,[-100,100],[-100,100],boxsize=boxsize
+    )
+
+def test_getGriddedGalCount():
+    np.random.seed(1000)
+    positions = np.random.random((10000,3))*1000 - 1000
+    N = 64
+    boxsize = 1000.0
+    tools.run_basic_regression_test(
+        getGriddedGalCount,
+        os.path.join(SNAPSHOT_DIR,"getGriddedGalCount_ref.npy"),
+        positions,N,boxsize
+    )
+
+def test_biasOld():
+    rhoArray = np.linspace(0,1.2,101)
+    params = [1.0,0.5,0.5,0.5]
+    tools.run_basic_regression_test(
+        biasOld,
+        os.path.join(SNAPSHOT_DIR,"biasOld_ref.npy"),
+        rhoArray,params
+    )
+
+def test_biasNew(self):
+    biasParam = tools.loadPickle(self.dataFolder + "bias_param_example.p")
+    rhoArray = np.linspace(0,1.2,101)
+    params = biasParam[0][0,:]
+    tools.run_basic_regression_test(
+        biasNew,
+        os.path.join(SNAPSHOT_DIR,"biasNew_ref.npy"),
+        rhoArray,params
+    )
+
+def test_ngPerLBin(self):
+    N = 16
+    referenceMaskList = np.load(
+        os.path.joint(SNAPSHOT_DIR,"surveyMask_ref.npy")
+    )
+    np.random.seed(1000)
+    maskRandom = np.random.random((16,16**3))
+    biasParam = tools.loadPickle(
+        os.path.join(SNAPSHOT_DIR,"bias_param_example.p")
+    )
+    rng = np.random.default_rng(1000)
+    mcmcDen = scipy.stats.lognorm(
+        s = 1, scale=np.exp(1),random_state=rng,
+    ).rvs((N,N,N))
+    mcmcDenLin = np.reshape(mcmcDen,N**3)
+    mcmcDen_r = np.reshape(mcmcDenLin,(N,N,N),order='F')
+    mcmcDenLin_r = np.reshape(mcmcDen_r,N**3)
+    tools.run_basic_regression_test(
+        ngPerLBin,
+        os.path.join(SNAPSHOT_DIR,"ngPerLBin_ref.npy"),
+        biasParam,return_samples=True,mask=referenceMaskList[0],\
+        accelerate=True,N=N,\
+        delta = [mcmcDenLin_r],contrast=False,sampleList=[0],\
+        beta=biasParam[:,:,1],rhog = biasParam[:,:,3],\
+        epsg=biasParam[:,:,2],\
+        nmean=biasParam[:,:,0],biasModel = biasNew
+    )
+
+def snaptest_matchClustersAndHalos(self,ahProps,hn,boxsize):
+    print("Running simulation_tools.matchClustersAndHalos test...")
+    haloCentresList = tools.remapAntiHaloCentre(ahProps[0][0:1000,:],\
+        boxsize)
+    haloMasseslist = ahProps[1][0:1000]
+    [combinedAbellN,combinedAbellPos,abell_nums] = \
+        real_clusters.getCombinedAbellCatalogue(\
+        catFolder = self.dataFolder)
+    tmppFile=self.dataFolder + "2mpp_data/2MPP.txt"
+    cosmo = astropy.cosmology.LambdaCDM(70,0.3,0.7)
+    tmpp = np.loadtxt(tmppFile)
+    # Comoving distance in Mpc/h
+    h = cosmo.h
+    d = cosmo.comoving_distance(tmpp[:,3]).value*h
+    dL = cosmology.comovingToLuminosity(d[np.where(d > 0)],cosmo)
+    posD = np.where(d > 0)[0]
+    # Angular co-ordinates:
+    theta = tmpp[:,2]
+    phi = tmpp[:,1]
+    # Cartesian positions:
+    Z = d*np.sin(theta)
+    X = d*np.cos(theta)*np.cos(phi)
+    Y = d*np.cos(theta)*np.sin(phi)
+    pos2mpp = np.vstack((X,Y,Z)).T[posD]
+    computed = simulation_tools.matchClustersAndHalos(combinedAbellPos,\
+        haloCentresList,haloMasseslist,boxsize,pos2mpp)
+    referenceFile = self.dataFolder + self.test_subfolder + \
+        "matchClustersAndHalos_ref.p"
+    reference = self.getReference(referenceFile,computed)
+    self.compareToReference(computed,reference)
+def snaptest_getHaloCentresAndMassesFromCatalogue(self,hn,boxsize):
+    print("Running simulation_tools.matchClustersAndHalos test...")
+    computed = simulation_tools.getHaloCentresAndMassesFromCatalogue(\
+        hn,boxsize=boxsize)
+    referenceFile = self.dataFolder + self.test_subfolder + \
+        "getHaloCentresAndMassesFromCatalogue_ref.p"
+    reference = self.getReference(referenceFile,computed)
+    self.compareToReference(computed,reference)
+def snaptest_getHaloCentresAndMassesRecomputed(self,hn,boxsize):
+    print("Running simulation_tools.matchClustersAndHalos test...")
+    computed = simulation_tools.getHaloCentresAndMassesRecomputed(\
+        hn,boxsize=boxsize)
+    referenceFile = self.dataFolder + self.test_subfolder + \
+        "getHaloCentresAndMassesRecomputed_ref.p"
+    reference = self.getReference(referenceFile,computed)
+    self.compareToReference(computed,reference)
+def test_getAllHaloCentresAndMasses(self):
+    print("Running simulation_tools.getAllHaloCentresAndMasses test...")
+    snapNumList = [2791,3250]
+    rMin=5
+    rMax=25
+    snapname = "gadget_full_forward/snapshot_001"
+    snapnameRev = "gadget_full_reverse/snapshot_001"
+    samplesFolder = self.dataFolder + "reference_constrained/"
+    # Load snapshots:
+    snapList =  [pynbody.load(samplesFolder + "sample" + \
+        str(snapNum) + "/" + snapname) for snapNum in snapNumList]
+    boxsize = snapList[0].properties['boxsize'].ratio("Mpc a h**-1")
+    computed = simulation_tools.getAllHaloCentresAndMasses(snapList,\
+        boxsize,\
+        function = simulation_tools.getHaloCentresAndMassesFromCatalogue)
+    referenceFile = self.dataFolder + self.test_subfolder + \
+        "getAllHaloCentresAndMasses_ref.p"
+    reference = self.getReference(referenceFile,computed)
+    self.compareToReference(computed,reference)
+def snaptest_getClusterCentres(self,centre,snapn,snapPath):
+    print("Running simulation_tools.getClusterCentres test...")
+    computed = simulation_tools.getClusterCentres(centre,snap=snapn,\
+        snapPath=snapPath)
+    referenceFile = self.dataFolder + self.test_subfolder + \
+        "getClusterCentres_ref.p"
+    reference = self.getReference(referenceFile,computed)
+    self.compareToReference(computed,reference)
+def test_snap_tests(self):
+    print("Running simulation_tools snap test...")
+    standard = self.dataFolder + \
+        "reference_constrained/sample2791/gadget_full_forward/snapshot_001"
+    snapn = pynbody.load(standard)
+    hn = snapn.halos()
+    boxsize = snapn.properties['boxsize'].ratio("Mpc a h**-1")
+    ahProps = tools.loadPickle(snapn.filename + ".AHproperties.p")
+    [combinedAbellN,combinedAbellPos,abell_nums] = \
+        real_clusters.getCombinedAbellCatalogue(\
+        catFolder = self.dataFolder)
+    self.snaptest_getHaloCentresAndMassesFromCatalogue(hn,boxsize)
+    self.snaptest_matchClustersAndHalos(ahProps,hn,boxsize)
+    self.snaptest_getGriddedDensity(snapn)
+    self.snaptest_getHaloCentresAndMassesRecomputed(hn,boxsize)
+    self.snaptest_getClusterCentres(combinedAbellPos[0],snapn,standard)
+def test_get_random_centres_and_densities(self):
+    snapNumList = [2791,3250]
+    snapname = "gadget_full_forward/snapshot_001"
+    samplesFolder = self.dataFolder + "reference_constrained/"
+    snapList =  [pynbody.load(samplesFolder + "sample" + \
+        str(snapNum) + "/" + snapname) for snapNum in snapNumList]
+    computed = simulation_tools.get_random_centres_and_densities(
+        135,snapList,seed=1000,nRandCentres = 100)
+    referenceFile = self.dataFolder + self.test_subfolder + \
+        "get_random_centres_and_densities_ref.p"
+    reference = self.getReference(referenceFile,computed)
+    self.compareToReference(computed,reference)
+def test_get_mcmc_supervolume_densities(self):
+    snapNumList = [2791,3250]
+    snapname = "gadget_full_forward/snapshot_001"
+    samplesFolder = self.dataFolder + "reference_constrained/"
+    snapList =  [pynbody.load(samplesFolder + "sample" + \
+        str(snapNum) + "/" + snapname) for snapNum in snapNumList]
+    computed = simulation_tools.get_mcmc_supervolume_densities(
+        snapList,r_sphere=135)
+    referenceFile = self.dataFolder + self.test_subfolder + \
+        "get_mcmc_supervolume_densities_ref.p"
+    reference = self.getReference(referenceFile,computed)
+    self.compareToReference(computed,reference)
+def test_get_map_from_sample(self):
+    deltaMCMCList = tools.loadPickle(self.dataFolder 
+                                     + self.test_subfolder 
+                                     + "delta_list.p")
+    computed = simulation_tools.get_map_from_sample(deltaMCMCList)
+    referenceFile = self.dataFolder + self.test_subfolder + \
+        "get_map_from_sample_ref.p"
+    reference = self.getReference(referenceFile,computed)
+    self.compareToReference(computed,reference)
+def test_getNonOverlappingCentres(self):
+    [randCentres,randOverDen] = tools.loadPickle(
+        self.dataFolder + self.test_subfolder + \
+        "get_random_centres_and_densities_ref.p")
+    snapNumList = [2791,3250]
+    snapname = "gadget_full_forward/snapshot_001"
+    samplesFolder = self.dataFolder + "reference_constrained/"
+    snapList =  [pynbody.load(samplesFolder + "sample" + \
+        str(snapNum) + "/" + snapname) for snapNum in snapNumList]
+    rSep = 2*135
+    boxsize = snapList[0].properties['boxsize'].ratio("Mpc a h**-1")
+    centresListAll = [randCentres for ns in range(0,len(snapList))]
+    computed = simulation_tools.getNonOverlappingCentres(
+        centresListAll,rSep,boxsize,returnIndices=True)
+    referenceFile = self.dataFolder + self.test_subfolder + \
+        "getNonOverlappingCentres_ref.p"
+    reference = self.getReference(referenceFile,computed)
+    self.compareToReference(computed,reference)
+def test_getDistanceBetweenCentres(self):
+    [randCentres,randOverDen] = tools.loadPickle(
+        self.dataFolder + self.test_subfolder + \
+        "get_random_centres_and_densities_ref.p")
+    boxsize = 677.7
+    computed = simulation_tools.getDistanceBetweenCentres(randCentres[0],
+                                                          randCentres[1],
+                                                          boxsize)
+    referenceFile = self.dataFolder + self.test_subfolder + \
+        "getDistanceBetweenCentres_ref.p"
+    reference = self.getReference(referenceFile,computed)
+    self.compareToReference(computed,reference)
 
 
 

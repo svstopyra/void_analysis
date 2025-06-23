@@ -40,6 +40,21 @@ def getCompletenessInSelection(rl,mlow,mupp,Mlow,Mupp,cosmo,nstar,keCorr,\
     return np.maximum(0.0,c)
 
 def keCorr(z,fit = [-1.456552772320231,-0.7687913554110967]):
+    """
+    Apply ke correction. Originally we used a fitted version, but for now
+    just using a fixed value.
+    
+    Parameters:
+        z (float or array): Redshift
+        fit (list): Fitting parameters. Currently unused.
+        
+    Returns:
+        float or array (same size as z): ke correction
+    
+    Tests:
+        Tested in test_survey.py
+        Regression test: test_keCorr
+    """
     #return -fit[0]*z# - fit[1]
     return 2.9*z
 
