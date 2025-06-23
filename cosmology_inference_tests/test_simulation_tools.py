@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import os
 from void_analysis.simulation_tools import *
-from void_analysis import tools
+from void_analysis import tools, real_clusters
 import astropy
 
 SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "snapshots")
@@ -23,7 +23,7 @@ def snapshot_group():
         os.path.join(root_dir,"sample3/reverse/snapshot_001")
     ]
     group = SnapshotGroup(
-        snap_list, snap_list_reverse, low_memory_mode=True,
+        snap_list, snap_list_reverse, low_memory_mode=False,
         swapXZ=False, reverse=True, remap_centres=True
     )
     return group
@@ -178,8 +178,10 @@ def test_biasOld():
         rhoArray,params
     )
 
-def test_biasNew(self):
-    biasParam = tools.loadPickle(self.dataFolder + "bias_param_example.p")
+def test_biasNew():
+    biasParam = tools.loadPickle(
+        os.path.join(SNAPSHOT_DIR,"bias_param_example.p")
+    )
     rhoArray = np.linspace(0,1.2,101)
     params = biasParam[0][0,:]
     tools.run_basic_regression_test(
@@ -188,7 +190,7 @@ def test_biasNew(self):
         rhoArray,params
     )
 
-def test_ngPerLBin(self):
+def test_ngPerLBin():
     N = 16
     referenceMaskList = np.load(
         os.path.joint(SNAPSHOT_DIR,"surveyMask_ref.npy")
@@ -216,15 +218,18 @@ def test_ngPerLBin(self):
         nmean=biasParam[:,:,0],biasModel = biasNew
     )
 
-def snaptest_matchClustersAndHalos(self,ahProps,hn,boxsize):
-    print("Running simulation_tools.matchClustersAndHalos test...")
-    haloCentresList = tools.remapAntiHaloCentre(ahProps[0][0:1000,:],\
-        boxsize)
-    haloMasseslist = ahProps[1][0:1000]
+def test_matchClustersAndHalos(snapshot_group):
+    ahProps = snapshot_group.all_property_lists[0]
+    boxsize = snapshot_group.boxsize
+    nVoids = ahProps[0].shape[0]
+    haloCentresList = tools.remapAntiHaloCentre(
+        ahProps[0][0:nVoids,:],boxsize
+    )
+    haloMasseslist = ahProps[1][0:nVoids]
     [combinedAbellN,combinedAbellPos,abell_nums] = \
         real_clusters.getCombinedAbellCatalogue(\
-        catFolder = self.dataFolder)
-    tmppFile=self.dataFolder + "2mpp_data/2MPP.txt"
+        catFolder = SNAPSHOT_DIR + "/")
+    tmppFile=os.path.join(SNAPSHOT_DIR,"2mpp_data/2MPP.txt")
     cosmo = astropy.cosmology.LambdaCDM(70,0.3,0.7)
     tmpp = np.loadtxt(tmppFile)
     # Comoving distance in Mpc/h
@@ -240,12 +245,13 @@ def snaptest_matchClustersAndHalos(self,ahProps,hn,boxsize):
     X = d*np.cos(theta)*np.cos(phi)
     Y = d*np.cos(theta)*np.sin(phi)
     pos2mpp = np.vstack((X,Y,Z)).T[posD]
-    computed = simulation_tools.matchClustersAndHalos(combinedAbellPos,\
-        haloCentresList,haloMasseslist,boxsize,pos2mpp)
-    referenceFile = self.dataFolder + self.test_subfolder + \
-        "matchClustersAndHalos_ref.p"
-    reference = self.getReference(referenceFile,computed)
-    self.compareToReference(computed,reference)
+    tools.run_basic_regression_test(
+        matchClustersAndHalos,
+        os.path.join(SNAPSHOT_DIR,"matchClustersAndHalos_ref.npy"),
+        combinedAbellPos,haloCentresList,haloMasseslist,boxsize,pos2mpp
+    )
+
+
 def snaptest_getHaloCentresAndMassesFromCatalogue(self,hn,boxsize):
     print("Running simulation_tools.matchClustersAndHalos test...")
     computed = simulation_tools.getHaloCentresAndMassesFromCatalogue(\

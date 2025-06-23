@@ -19,7 +19,9 @@ GENERATED_SNAPSHOTS = [
     "run_basic_regression_test_ref.npy",
     "getGriddedGalCount_ref.npy",
     "biasOld_ref.npy",
-    "biasNew_ref.npy"
+    "biasNew_ref.npy",
+    "ngPerLBin_ref.npy",
+    "matchClustersAndHalos_ref.npy"
 ]
 
 def wrapper_get_borg_density_estimate(*args,**kwargs):
@@ -158,7 +160,9 @@ def generate_snapshots():
         rhoArray,params
     )
     # biasNew
-    biasParam = tools.loadPickle(self.dataFolder + "bias_param_example.p")
+    biasParam = tools.loadPickle(
+        os.path.join(SNAPSHOT_DIR,"bias_param_example.p")
+    )
     rhoArray = np.linspace(0,1.2,101)
     params = biasParam[0][0,:]
     tools.generate_regression_test_data(
@@ -192,6 +196,38 @@ def generate_snapshots():
         beta=biasParam[:,:,1],rhog = biasParam[:,:,3],\
         epsg=biasParam[:,:,2],\
         nmean=biasParam[:,:,0],biasModel = biasNew
+    )
+    # matchClustersAndHalos
+        ahProps = snapshot_group.all_property_lists[0]
+    boxsize = snapshot_group.boxsize
+    nVoids = ahProps[0].shape[0]
+    haloCentresList = tools.remapAntiHaloCentre(
+        ahProps[0][0:nVoids,:],boxsize
+    )
+    haloMasseslist = ahProps[1][0:nVoids]
+    [combinedAbellN,combinedAbellPos,abell_nums] = \
+        real_clusters.getCombinedAbellCatalogue(\
+        catFolder = SNAPSHOT_DIR + "/")
+    tmppFile=os.path.join(SNAPSHOT_DIR,"2mpp_data/2MPP.txt")
+    cosmo = astropy.cosmology.LambdaCDM(70,0.3,0.7)
+    tmpp = np.loadtxt(tmppFile)
+    # Comoving distance in Mpc/h
+    h = cosmo.h
+    d = cosmo.comoving_distance(tmpp[:,3]).value*h
+    dL = cosmology.comovingToLuminosity(d[np.where(d > 0)],cosmo)
+    posD = np.where(d > 0)[0]
+    # Angular co-ordinates:
+    theta = tmpp[:,2]
+    phi = tmpp[:,1]
+    # Cartesian positions:
+    Z = d*np.sin(theta)
+    X = d*np.cos(theta)*np.cos(phi)
+    Y = d*np.cos(theta)*np.sin(phi)
+    pos2mpp = np.vstack((X,Y,Z)).T[posD]
+    tools.generate_regression_test_data(
+        matchClustersAndHalos,
+        "matchClustersAndHalos_ref.npy",
+        combinedAbellPos,haloCentresList,haloMasseslist,boxsize,pos2mpp
     )
     
     print("✅ Tools snapshots saved!")
