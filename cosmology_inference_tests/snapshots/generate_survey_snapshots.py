@@ -8,7 +8,7 @@ from void_analysis.simulation_tools import gaussian_delta, gaussian_Delta
 from void_analysis import snapedit
 
 GENERATED_SNAPSHOTS = [
-    "surveyMask_ref.npy",
+    "surveyMask_ref.p",
     "keCorr_ref.npy"
 ]
 
@@ -33,11 +33,11 @@ def generate_snapshots():
     cosmo = astropy.cosmology.LambdaCDM(100*h,Om0,Ode0)
     tools.generate_regression_test_data(
         surveyMask,
-        "surveyMask_ref.npy",
+        "surveyMask_ref.p",
         positions,surveyMask11,surveyMask12,cosmo,-0.94,
         -23.28,keCorr = keCorr,mmin=mmin,numericalIntegration=True,
         mmax=mmax,splitApparent=True,splitAbsolute=True,
-        returnComponents=True
+        returnComponents=True,nside=N
     )
     # keCorr
     tools.generate_regression_test_data(

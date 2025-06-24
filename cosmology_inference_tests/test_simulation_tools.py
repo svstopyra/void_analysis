@@ -192,8 +192,8 @@ def test_biasNew():
 
 def test_ngPerLBin():
     N = 16
-    referenceMaskList = np.load(
-        os.path.joint(SNAPSHOT_DIR,"surveyMask_ref.npy")
+    referenceMaskList = tools.loadPickle(
+        os.path.join(SNAPSHOT_DIR,"surveyMask_ref.p")
     )
     np.random.seed(1000)
     maskRandom = np.random.random((16,16**3))
@@ -202,8 +202,8 @@ def test_ngPerLBin():
     )
     rng = np.random.default_rng(1000)
     mcmcDen = scipy.stats.lognorm(
-        s = 1, scale=np.exp(1),random_state=rng,
-    ).rvs((N,N,N))
+        s = 1, scale=np.exp(1),
+    ).rvs((N,N,N),random_state=rng)
     mcmcDenLin = np.reshape(mcmcDen,N**3)
     mcmcDen_r = np.reshape(mcmcDenLin,(N,N,N),order='F')
     mcmcDenLin_r = np.reshape(mcmcDen_r,N**3)
@@ -247,133 +247,97 @@ def test_matchClustersAndHalos(snapshot_group):
     pos2mpp = np.vstack((X,Y,Z)).T[posD]
     tools.run_basic_regression_test(
         matchClustersAndHalos,
-        os.path.join(SNAPSHOT_DIR,"matchClustersAndHalos_ref.npy"),
+        os.path.join(SNAPSHOT_DIR,"matchClustersAndHalos_ref.p"),
         combinedAbellPos,haloCentresList,haloMasseslist,boxsize,pos2mpp
     )
 
+# Tests that still need converting to the new framework:
+def test_getHaloCentresAndMassesFromCatalogue(snapshot_group):
+    hn = snapshot_group.snaps[0].halos()
+    tools.run_basic_regression_test(
+        getHaloCentresAndMassesFromCatalogue,
+        os.path.join(SNAPSHOT_DIR,"getHaloCentresAndMassesFromCatalogue_ref.p"),
+        hn
+    )
 
-def snaptest_getHaloCentresAndMassesFromCatalogue(self,hn,boxsize):
-    print("Running simulation_tools.matchClustersAndHalos test...")
-    computed = simulation_tools.getHaloCentresAndMassesFromCatalogue(\
-        hn,boxsize=boxsize)
-    referenceFile = self.dataFolder + self.test_subfolder + \
-        "getHaloCentresAndMassesFromCatalogue_ref.p"
-    reference = self.getReference(referenceFile,computed)
-    self.compareToReference(computed,reference)
-def snaptest_getHaloCentresAndMassesRecomputed(self,hn,boxsize):
-    print("Running simulation_tools.matchClustersAndHalos test...")
-    computed = simulation_tools.getHaloCentresAndMassesRecomputed(\
-        hn,boxsize=boxsize)
-    referenceFile = self.dataFolder + self.test_subfolder + \
-        "getHaloCentresAndMassesRecomputed_ref.p"
-    reference = self.getReference(referenceFile,computed)
-    self.compareToReference(computed,reference)
-def test_getAllHaloCentresAndMasses(self):
-    print("Running simulation_tools.getAllHaloCentresAndMasses test...")
-    snapNumList = [2791,3250]
-    rMin=5
-    rMax=25
-    snapname = "gadget_full_forward/snapshot_001"
-    snapnameRev = "gadget_full_reverse/snapshot_001"
-    samplesFolder = self.dataFolder + "reference_constrained/"
-    # Load snapshots:
-    snapList =  [pynbody.load(samplesFolder + "sample" + \
-        str(snapNum) + "/" + snapname) for snapNum in snapNumList]
-    boxsize = snapList[0].properties['boxsize'].ratio("Mpc a h**-1")
-    computed = simulation_tools.getAllHaloCentresAndMasses(snapList,\
-        boxsize,\
-        function = simulation_tools.getHaloCentresAndMassesFromCatalogue)
-    referenceFile = self.dataFolder + self.test_subfolder + \
-        "getAllHaloCentresAndMasses_ref.p"
-    reference = self.getReference(referenceFile,computed)
-    self.compareToReference(computed,reference)
-def snaptest_getClusterCentres(self,centre,snapn,snapPath):
-    print("Running simulation_tools.getClusterCentres test...")
-    computed = simulation_tools.getClusterCentres(centre,snap=snapn,\
-        snapPath=snapPath)
-    referenceFile = self.dataFolder + self.test_subfolder + \
-        "getClusterCentres_ref.p"
-    reference = self.getReference(referenceFile,computed)
-    self.compareToReference(computed,reference)
-def test_snap_tests(self):
-    print("Running simulation_tools snap test...")
-    standard = self.dataFolder + \
-        "reference_constrained/sample2791/gadget_full_forward/snapshot_001"
-    snapn = pynbody.load(standard)
-    hn = snapn.halos()
-    boxsize = snapn.properties['boxsize'].ratio("Mpc a h**-1")
-    ahProps = tools.loadPickle(snapn.filename + ".AHproperties.p")
-    [combinedAbellN,combinedAbellPos,abell_nums] = \
-        real_clusters.getCombinedAbellCatalogue(\
-        catFolder = self.dataFolder)
-    self.snaptest_getHaloCentresAndMassesFromCatalogue(hn,boxsize)
-    self.snaptest_matchClustersAndHalos(ahProps,hn,boxsize)
-    self.snaptest_getGriddedDensity(snapn)
-    self.snaptest_getHaloCentresAndMassesRecomputed(hn,boxsize)
-    self.snaptest_getClusterCentres(combinedAbellPos[0],snapn,standard)
-def test_get_random_centres_and_densities(self):
-    snapNumList = [2791,3250]
-    snapname = "gadget_full_forward/snapshot_001"
-    samplesFolder = self.dataFolder + "reference_constrained/"
-    snapList =  [pynbody.load(samplesFolder + "sample" + \
-        str(snapNum) + "/" + snapname) for snapNum in snapNumList]
-    computed = simulation_tools.get_random_centres_and_densities(
-        135,snapList,seed=1000,nRandCentres = 100)
-    referenceFile = self.dataFolder + self.test_subfolder + \
-        "get_random_centres_and_densities_ref.p"
-    reference = self.getReference(referenceFile,computed)
-    self.compareToReference(computed,reference)
-def test_get_mcmc_supervolume_densities(self):
-    snapNumList = [2791,3250]
-    snapname = "gadget_full_forward/snapshot_001"
-    samplesFolder = self.dataFolder + "reference_constrained/"
-    snapList =  [pynbody.load(samplesFolder + "sample" + \
-        str(snapNum) + "/" + snapname) for snapNum in snapNumList]
-    computed = simulation_tools.get_mcmc_supervolume_densities(
-        snapList,r_sphere=135)
-    referenceFile = self.dataFolder + self.test_subfolder + \
-        "get_mcmc_supervolume_densities_ref.p"
-    reference = self.getReference(referenceFile,computed)
-    self.compareToReference(computed,reference)
-def test_get_map_from_sample(self):
-    deltaMCMCList = tools.loadPickle(self.dataFolder 
-                                     + self.test_subfolder 
-                                     + "delta_list.p")
-    computed = simulation_tools.get_map_from_sample(deltaMCMCList)
-    referenceFile = self.dataFolder + self.test_subfolder + \
-        "get_map_from_sample_ref.p"
-    reference = self.getReference(referenceFile,computed)
-    self.compareToReference(computed,reference)
-def test_getNonOverlappingCentres(self):
+def test_getHaloCentresAndMassesRecomputed(snapshot_group):
+    hn = snapshot_group.snaps[0].halos()
+    boxsize = snapshot_group.boxsize
+    tools.run_basic_regression_test(
+        getHaloCentresAndMassesRecomputed,
+        os.path.join(SNAPSHOT_DIR,"getHaloCentresAndMassesRecomputed_ref.p"),
+        hn,boxsize=boxsize
+    )
+
+def test_getAllHaloCentresAndMasses(snapshot_group):
+    snapList =  snapshot_group.snaps
+    tools.run_basic_regression_test(
+        getAllHaloCentresAndMasses,
+        os.path.join(SNAPSHOT_DIR,"getAllHaloCentresAndMasses_ref.p"),
+        snapList,
+        function = getHaloCentresAndMassesFromCatalogue
+    )
+
+def test_getClusterCentres(snapshot_group):
+    snapn = snapshot_group.snaps[0]
+    all_centres = snapshot_group['halo_centres'][0]
+    np.random.seed(1000)
+    centre = all_centres[0] + np.random.rand(3)*5
+    tools.run_basic_regression_test(
+        getClusterCentres,
+        os.path.join(SNAPSHOT_DIR,"getClusterCentres_ref.npy"),
+        centre,snap=snapn,snapPath=snapn.filename
+    )
+
+def test_get_random_centres_and_densities(snapshot_group):
+    snapList =  snapshot_group.snaps
+    tools.run_basic_regression_test(
+        get_random_centres_and_densities,
+        os.path.join(SNAPSHOT_DIR,"get_random_centres_and_densities_ref.p"),
+        135,snapList,seed=1000,nRandCentres = 100
+    )
+
+def test_get_mcmc_supervolume_densities(snapshot_group):
+    snapList =  snapshot_group.snaps
+    tools.run_basic_regression_test(
+        get_mcmc_supervolume_densities,
+        os.path.join(SNAPSHOT_DIR,"get_mcmc_supervolume_densities_ref.npy"),
+        snapList,r_sphere=135
+    )
+
+def test_get_map_from_sample():
+    np.random.seed(1000)
+    deltaMCMCList = np.random.rand(20)*0.06 - 0.08
+    tools.run_basic_regression_test(
+        get_map_from_sample,
+        os.path.join(SNAPSHOT_DIR,"get_map_from_sample_ref.npy"),
+        deltaMCMCList
+    )
+
+def test_getNonOverlappingCentres(snapshot_group):
     [randCentres,randOverDen] = tools.loadPickle(
-        self.dataFolder + self.test_subfolder + \
-        "get_random_centres_and_densities_ref.p")
-    snapNumList = [2791,3250]
-    snapname = "gadget_full_forward/snapshot_001"
-    samplesFolder = self.dataFolder + "reference_constrained/"
-    snapList =  [pynbody.load(samplesFolder + "sample" + \
-        str(snapNum) + "/" + snapname) for snapNum in snapNumList]
+        os.path.join(SNAPSHOT_DIR,"get_random_centres_and_densities_ref.p")
+    )
+    snapList =  snapshot_group.snaps
     rSep = 2*135
-    boxsize = snapList[0].properties['boxsize'].ratio("Mpc a h**-1")
+    boxsize = snapshot_group.boxsize
     centresListAll = [randCentres for ns in range(0,len(snapList))]
-    computed = simulation_tools.getNonOverlappingCentres(
-        centresListAll,rSep,boxsize,returnIndices=True)
-    referenceFile = self.dataFolder + self.test_subfolder + \
-        "getNonOverlappingCentres_ref.p"
-    reference = self.getReference(referenceFile,computed)
-    self.compareToReference(computed,reference)
-def test_getDistanceBetweenCentres(self):
+    tools.run_basic_regression_test(
+        getNonOverlappingCentres,
+        os.path.join(SNAPSHOT_DIR,"getNonOverlappingCentres_ref.p"),
+        centresListAll,rSep,boxsize,returnIndices=True
+    )
+
+def test_getDistanceBetweenCentres():
     [randCentres,randOverDen] = tools.loadPickle(
-        self.dataFolder + self.test_subfolder + \
-        "get_random_centres_and_densities_ref.p")
+        os.path.join(SNAPSHOT_DIR,"get_random_centres_and_densities_ref.p")
+    )
     boxsize = 677.7
-    computed = simulation_tools.getDistanceBetweenCentres(randCentres[0],
-                                                          randCentres[1],
-                                                          boxsize)
-    referenceFile = self.dataFolder + self.test_subfolder + \
-        "getDistanceBetweenCentres_ref.p"
-    reference = self.getReference(referenceFile,computed)
-    self.compareToReference(computed,reference)
+    tools.run_basic_regression_test(
+        getDistanceBetweenCentres,
+        os.path.join(SNAPSHOT_DIR,"getDistanceBetweenCentres_ref.npy"),
+        randCentres[0],randCentres[1],boxsize
+    )
 
 
 

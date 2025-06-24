@@ -688,7 +688,7 @@ def compare_output_to_reference(computed,reference,atol=1e-5,rtol=1e-5):
             compare_output_to_reference(x,y,atol=atol,rtol=rtol)
 
 def run_basic_regression_test(
-        function,filename,*args,rtol=1e-5,atol=1e-5,**kwargs
+        _function,filename,*args,rtol=1e-5,atol=1e-5,**kwargs
     ):
     """
     Run a basic regression test, comparing the computed output of some function
@@ -702,7 +702,7 @@ def run_basic_regression_test(
         atol (float): Absolute tolerance for the comparison.
         kwargs (dictionary): Keyword arguments for the function being tested.
     """
-    computed = function(*args,**kwargs)
+    computed = _function(*args,**kwargs)
     name, ext = os.path.splitext(filename)
     if ext == ".npy":
         reference = np.load(filename)
@@ -721,7 +721,7 @@ def run_basic_regression_test(
     for comp, ref in zip(computed, reference):
         compare_output_to_reference(comp,ref,rtol=rtol,atol=atol)
 
-def generate_regression_test_data(function,filename,*args,**kwargs):
+def generate_regression_test_data(_function,filename,*args,**kwargs):
     """
     Generate reference data used for a regression test.
     
@@ -731,7 +731,7 @@ def generate_regression_test_data(function,filename,*args,**kwargs):
         *args (tuple): Arguments supplied to function
         **kwargs (dictionary): Keyword arguments supplied to function.
     """
-    computed = function(*args,**kwargs)
+    computed = _function(*args,**kwargs)
     name, ext = os.path.splitext(filename)
     if ext == ".npy":
         np.save(filename,computed)

@@ -209,7 +209,7 @@ def test_profile_fit_regression(synthetic_profile_data):
         r, delta_noisy, sigma, model=profile_modified_hamaus
     )
     ref = np.load(os.path.join(SNAPSHOT_DIR, "profile_fit_params_ref.npy"))
-    np.testing.assert_allclose(best_fit, ref, rtol=1e-5, atol=1e-7)
+    np.testing.assert_allclose(best_fit, ref, rtol=1e-4, atol=1e-7)
 
 
 

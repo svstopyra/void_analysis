@@ -138,7 +138,7 @@ def getGriddedDensity(
     H, edges = np.histogramdd(pos,bins = N,\
         range = ((-boxsize/2,boxsize/2),(-boxsize/2,boxsize/2),\
             (-boxsize/2,boxsize/2)),\
-            weights = snapMass,normed=False)
+            weights = snapMass,density=False)
     cellWidth = boxsize/N
     cellVol = cellWidth**3
     meanDensity = np.double(np.sum(snapMass))/(boxsize**3)
@@ -147,9 +147,26 @@ def getGriddedDensity(
     density = np.reshape(np.reshape(density,N**3),(N,N,N),order='F')
     return density
 
-# Compute the points within a co-ordinate range, accounting for periodic 
-# wrapping.
+
 def pointsInRangeWithWrap(positions,lim,axis=2,boxsize=None):
+    """
+    Compute the points within a co-ordinate range, accounting for periodic 
+    wrapping.
+    
+    Parameters:
+        positions (array): positions to check
+        lim (tuple): Limits to considered
+        axis (int): 1, 2, or 3, the co-ordinate axis to check.
+        boxsize (float or None): Periodic boxsize. If None, assume not periodic.
+    
+    Returns:
+        array of bools: Positions within the specified range.
+    
+    Tests:
+        Tested in test_simulation_tools.py
+        Regression test: test_pointsInRangeWithWrap
+
+    """
     if boxsize is None:
         wrappedPositions = positions
         wrappedLim = np.array(lim)
@@ -449,7 +466,7 @@ def getHaloCentresAndMassesRecomputed(
     hcentres = tools.remapAntiHaloCentre(hcentres,boxsize)
     return [hcentres,hmasses]
 
-def getAllHaloCentresAndMasses(snapList,boxsize,recompute=False,\
+def getAllHaloCentresAndMasses(snapList,recompute=False,\
         suffix = "halo_mass_and_centres",\
         function=getHaloCentresAndMassesFromCatalogue,
         pynbody_offset=0):
@@ -465,7 +482,7 @@ def getAllHaloCentresAndMasses(snapList,boxsize,recompute=False,\
             massesAndCentresList.append(
                 tools.loadOrRecompute(\
                     snapList[k].filename + "." + suffix,function,\
-                    snapList[k].halos(),boxsize=boxsize,
+                    snapList[k].halos(),
                     _recomputeData=recompute,pynbody_offset=pynbody_offset
                 )
             )

@@ -15,6 +15,40 @@ SNAPSHOT_DIR = os.path.join(os.path.dirname(__file__), "snapshots")
 # ---------------------- REGRESSION TESTS --------------------------------------
 
 def test_surveyMask():
+    # surveyMask
+    N = 16 # Use a smaller one to reduce the storage space.
+    Nmask = 12*N**2
+    np.random.seed(1000)
+    # Fake survey masks
+    surveyMask11 = np.array(np.random.rand(Nmask) > 0.3,dtype=float)
+    surveyMask12 = np.array(np.random.rand(Nmask) > 0.3,dtype=float)
+    Om0 = 0.3111
+    Ode0 = 0.6889
+    boxsize = 677.7
+    h=0.6766
+    mmin = 0.0
+    mmax = 12.5
+    grid = snapedit.gridListPermutation(N,perm=(2,1,0))
+    centroids = grid*boxsize/N + boxsize/(2*N)
+    positions = snapedit.unwrap(centroids - np.array([boxsize/2]*3),\
+        boxsize)
+    cosmo = astropy.cosmology.LambdaCDM(100*h,Om0,Ode0)
+    tools.run_basic_regression_test(
+        surveyMask,
+        os.path.join(SNAPSHOT_DIR,"surveyMask_ref.p"),
+        positions,surveyMask11,surveyMask12,cosmo,-0.94,
+        -23.28,keCorr = keCorr,mmin=mmin,numericalIntegration=True,
+        mmax=mmax,splitApparent=True,splitAbsolute=True,
+        returnComponents=True,nside=N
+    )
+
+def test_keCorr():
+    # keCorr
+    tools.run_basic_regression_test(
+        keCorr,
+        os.path.join(SNAPSHOT_DIR,"keCorr_ref.npy"),
+        0.1,fit = [-1.456552772320231,-0.7687913554110967]
+    )
     
 
 

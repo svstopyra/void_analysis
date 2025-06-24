@@ -2,7 +2,7 @@
 
 import numpy as np
 from void_analysis.simulation_tools import *
-from void_analysis import tools
+from void_analysis import tools, real_clusters
 import astropy
 
 GENERATED_SNAPSHOTS = [
@@ -21,7 +21,16 @@ GENERATED_SNAPSHOTS = [
     "biasOld_ref.npy",
     "biasNew_ref.npy",
     "ngPerLBin_ref.npy",
-    "matchClustersAndHalos_ref.npy"
+    "matchClustersAndHalos_ref.p",
+    "getHaloCentresAndMassesFromCatalogue_ref.p",
+    "getHaloCentresAndMassesRecomputed_ref.p",
+    "getAllHaloCentresAndMasses_ref.p",
+    "getClusterCentres_ref.npy",
+    "get_random_centres_and_densities_ref.p",
+    "get_mcmc_supervolume_densities_ref.npy",
+    "get_map_from_sample_ref.npy",
+    "getNonOverlappingCentres_ref.p",
+    "getDistanceBetweenCentres_ref.npy"
 ]
 
 def wrapper_get_borg_density_estimate(*args,**kwargs):
@@ -43,7 +52,7 @@ def generate_snapshots():
         os.path.join(root_dir,"sample3/reverse/snapshot_001")
     ]
     snapshot_group = SnapshotGroup(
-        snap_list, snap_list_reverse, low_memory_mode=True,
+        snap_list, snap_list_reverse, low_memory_mode=False,
         swapXZ=False, reverse=True, remap_centres=True
     )
     
@@ -161,7 +170,7 @@ def generate_snapshots():
     )
     # biasNew
     biasParam = tools.loadPickle(
-        os.path.join(SNAPSHOT_DIR,"bias_param_example.p")
+        "bias_param_example.p"
     )
     rhoArray = np.linspace(0,1.2,101)
     params = biasParam[0][0,:]
@@ -172,18 +181,18 @@ def generate_snapshots():
     )
     # ngPerLBin
     N = 16
-    referenceMaskList = np.load(
-        os.path.joint(SNAPSHOT_DIR,"surveyMask_ref.npy")
+    referenceMaskList = tools.loadPickle(
+        "surveyMask_ref.p"
     )
     np.random.seed(1000)
     maskRandom = np.random.random((16,16**3))
     biasParam = tools.loadPickle(
-        os.path.join(SNAPSHOT_DIR,"bias_param_example.p")
+        "bias_param_example.p"
     )
     rng = np.random.default_rng(1000)
     mcmcDen = scipy.stats.lognorm(
-        s = 1, scale=np.exp(1),random_state=rng,
-    ).rvs((N,N,N))
+        s = 1, scale=np.exp(1),
+    ).rvs((N,N,N),random_state=rng)
     mcmcDenLin = np.reshape(mcmcDen,N**3)
     mcmcDen_r = np.reshape(mcmcDenLin,(N,N,N),order='F')
     mcmcDenLin_r = np.reshape(mcmcDen_r,N**3)
@@ -198,7 +207,7 @@ def generate_snapshots():
         nmean=biasParam[:,:,0],biasModel = biasNew
     )
     # matchClustersAndHalos
-        ahProps = snapshot_group.all_property_lists[0]
+    ahProps = snapshot_group.all_property_lists[0]
     boxsize = snapshot_group.boxsize
     nVoids = ahProps[0].shape[0]
     haloCentresList = tools.remapAntiHaloCentre(
@@ -207,8 +216,8 @@ def generate_snapshots():
     haloMasseslist = ahProps[1][0:nVoids]
     [combinedAbellN,combinedAbellPos,abell_nums] = \
         real_clusters.getCombinedAbellCatalogue(\
-        catFolder = SNAPSHOT_DIR + "/")
-    tmppFile=os.path.join(SNAPSHOT_DIR,"2mpp_data/2MPP.txt")
+        catFolder = "./")
+    tmppFile="2mpp_data/2MPP.txt"
     cosmo = astropy.cosmology.LambdaCDM(70,0.3,0.7)
     tmpp = np.loadtxt(tmppFile)
     # Comoving distance in Mpc/h
@@ -226,8 +235,86 @@ def generate_snapshots():
     pos2mpp = np.vstack((X,Y,Z)).T[posD]
     tools.generate_regression_test_data(
         matchClustersAndHalos,
-        "matchClustersAndHalos_ref.npy",
+        "matchClustersAndHalos_ref.p",
         combinedAbellPos,haloCentresList,haloMasseslist,boxsize,pos2mpp
+    )
+    # getHaloCentresAndMassesFromCatalogue
+    hn = snapshot_group.snaps[0].halos()
+    tools.generate_regression_test_data(
+        getHaloCentresAndMassesFromCatalogue,
+        "getHaloCentresAndMassesFromCatalogue_ref.p",
+        hn
+    )
+    # getHaloCentresAndMassesRecomputed
+    hn = snapshot_group.snaps[0].halos()
+    boxsize = snapshot_group.boxsize
+    tools.generate_regression_test_data(
+        getHaloCentresAndMassesRecomputed,
+        "getHaloCentresAndMassesRecomputed_ref.p",
+        hn,boxsize=boxsize
+    )
+    # getAllHaloCentresAndMasses
+    snapList =  snapshot_group.snaps
+    tools.generate_regression_test_data(
+        getAllHaloCentresAndMasses,
+        "getAllHaloCentresAndMasses_ref.p",
+        snapList,
+        function = getHaloCentresAndMassesFromCatalogue
+    )
+    # getClusterCentres
+    snapn = snapshot_group.snaps[0]
+    all_centres = snapshot_group['halo_centres'][0]
+    np.random.seed(1000)
+    centre = all_centres[0] + np.random.rand(3)*5
+    tools.generate_regression_test_data(
+        getClusterCentres,
+        "getClusterCentres_ref.npy",
+        centre,snap=snapn,snapPath=snapn.filename
+    )
+    # get_random_centres_and_densities
+    snapList =  snapshot_group.snaps
+    tools.generate_regression_test_data(
+        get_random_centres_and_densities,
+        "get_random_centres_and_densities_ref.p",
+        135,snapList,seed=1000,nRandCentres = 100
+    )
+    # get_mcmc_supervolume_densities
+    snapList =  snapshot_group.snaps
+    tools.generate_regression_test_data(
+        get_mcmc_supervolume_densities,
+        "get_mcmc_supervolume_densities_ref.npy",
+        snapList,r_sphere=135
+    )
+    # get_map_from_sample
+    np.random.seed(1000)
+    deltaMCMCList = np.random.rand(20)*0.06 - 0.08
+    tools.generate_regression_test_data(
+        get_map_from_sample,
+        "get_map_from_sample_ref.npy",
+        deltaMCMCList
+    )
+    # getNonOverlappingCentres
+    [randCentres,randOverDen] = tools.loadPickle(
+        "get_random_centres_and_densities_ref.p"
+    )
+    snapList =  snapshot_group.snaps
+    rSep = 2*135
+    boxsize = snapshot_group.boxsize
+    centresListAll = [randCentres for ns in range(0,len(snapList))]
+    tools.generate_regression_test_data(
+        getNonOverlappingCentres,
+        "getNonOverlappingCentres_ref.p",
+        centresListAll,rSep,boxsize,returnIndices=True
+    )
+    # 
+    [randCentres,randOverDen] = tools.loadPickle(
+        "get_random_centres_and_densities_ref.p"
+    )
+    boxsize = 677.7
+    tools.generate_regression_test_data(
+        getDistanceBetweenCentres,
+        "getDistanceBetweenCentres_ref.npy",
+        randCentres[0],randCentres[1],boxsize
     )
     
     print("✅ Tools snapshots saved!")
