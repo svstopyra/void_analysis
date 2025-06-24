@@ -633,7 +633,27 @@ def getStacks(
         sizeBins (array): Void radius bins to use.
         plotAH (bool): If True, include anti-halos on plot.
         plotZV (bool): If True, include ZOBOV voids on plot.
-        binType (string): 
+        binType (string): Type of binning to do. Options are
+                          binning by radius, by mass, and by Radius converted
+                          to mass using a fitted relationship.
+        tree (scipy.cKDTree): KD tree used to speed up stacking.
+        sumType (string): Parameter that defines how the void profile is
+                          computed.
+        yUpper (float): Upper bound for y axis.
+        valuesAH (array): Values to bin for antihalos. 
+                          If None, determined by binType.
+        valuesZV (array): Values to bin for ZOBOV voids. If None, determined
+                          by binType.
+        binLabel (string): Label for the x axis.
+        errorType (string): Method for computing profile errors. See 
+                            stacking.stackVoidsWithFilter for details.
+    
+    Returns:
+        4-component list: 1st component: Anti-halo density profile
+                          2nd component: ZOBOV void density profile
+                          3rd component: Anti-halo profile errors.
+                          4th component: ZOBOV profile errors.
+        
     """
     AHfilters = []
     ZVfilters = []
