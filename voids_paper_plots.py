@@ -30,7 +30,6 @@ import matplotlib.pyplot as plt
 fontfamily = "serif"
 plt.rcParams["font.family"] = "serif"
 plt.rcParams['font.serif'] = ["Times New Roman"]
-#plt.rcParams['font.serif'] = ["DejaVu Serif"]
 plt.rcParams["mathtext.fontset"] = "stix"
 
 
@@ -39,12 +38,6 @@ save_plot_data = True
 load_plot_data = True
 
 figuresFolder = "borg-antihalos_paper_figures/all_samples/"
-#figuresFolder = "borg-antihalos_paper_figures/batch5-2/"
-#figuresFolder = "borg-antihalos_paper_figures/batch5-4/"
-#figuresFolder = "borg-antihalos_paper_figures/batch5-1/"
-#figuresFolder = "borg-antihalos_paper_figures/batch5-3/"
-#figuresFolder = "borg-antihalos_paper_figures/batch10-2/"
-#figuresFolder = "borg-antihalos_paper_figures/batch10-1/"
 
 recomputeData = False
 testDataFolder = figuresFolder + "tests_data/"
@@ -68,8 +61,7 @@ legendFontsize = 9
 #-------------------------------------------------------------------------------
 # LOAD SNAPSHOT DATA:
 
-
-
+# Named clusters:
 clusterNames = np.array([['Perseus-Pisces (A426)'],
        ['Hercules B (A2147)'],
        ['Coma (A1656)'],
@@ -80,48 +72,22 @@ clusterNames = np.array([['Perseus-Pisces (A426)'],
        ['Hercules C (A2063)'],
        ['Leo (A1367)']], dtype='<U21')
 
-
-# HMF plots data:
-
 # Snapshots to use:
-snapNumListOld = [7422,7500,8000,8500,9000,9500]
-#snapNumList = [7000,7200,7400,7600,8000]
-#snapNumList = [7000,7200,7400,7600,7800,8000]
-#snapNumList = np.arange(7000,10300 +1,300)
-#snapNumList = [8800,9100,9400,9700,10000]
-snapNumList = [7300,7600,7900,8200,8500,8800,9100,9400,9700,10000,\
-    10300,10600,10900,11200,11500,11800,12100,12400,12700,13000]
-#snapNumList = [7300,7600,7900,8200,8500,8800,9100,9400,9700,10000,\
-#    10300,10600,10900,11200,11500,11800,12100,12400,12700,13000,\
-#    13300,13600,13900,14200,14500,14800,15100,15400,15700,16000]
-# Batch5-1:
-#snapNumList = [7300,7600,7900,8200,8500]
-# Batch5-2:
-#snapNumList = [8800,9100,9400,9700,10000]
-# Batch5-3:
-#snapNumList = [10300,10600,10900,11200,11500]
-# Batch5-4:
-#snapNumList = [11800,12100,12400,12700,13000]
-# Batch10-1 
-#snapNumList = [7300,7600,7900,8200,8500,8800,9100,9400,9700,10000]
-# Batch10-2
-#snapNumList = [10300,10600,10900,11200,11500,11800,12100,12400,12700,13000]
-# Batch 5-5:
-#snapNumList = [13000,13300,13600,13900,14200]
-
-#snapNumListUncon = [1,2,3,4,5]
-snapNumListUncon = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
-#snapNumListUncon = [2,4,5,6,7,8,9,10]
-snapNumListUnconOld = [1,2,3,5,6]
+# BORG constrained posterior resimulations:
+snapNumList = np.arange(7300,13300,300)
+# Unconstrained simulations:
+snapNumListUncon = np.arange(1,21,1)
+# Size of the periodic box:
 boxsize = 677.7
 
-# Get profiles for the constrained voids only:
+# Load all simulation snapshots:
 snapList =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" 
              + "gadget_full_forward_512/snapshot_001") 
              for snapNum in snapNumList]
 snapListRev =  [pynbody.load(samplesFolder + "sample" + str(snapNum) + "/" 
                 + "gadget_full_reverse_512/snapshot_001") 
                 for snapNum in snapNumList]
+# Filenames
 snapNameList = [samplesFolder + "sample" + str(snapNum) + "/" 
                 + "gadget_full_forward_512/snapshot_001" 
                 for snapNum in snapNumList]

@@ -1,3 +1,8 @@
+"""
+Contains functions that compute various properties of antihalos.
+"""
+
+
 import numpy as np
 import pynbody
 from . import context, stacking
@@ -5,16 +10,40 @@ import os
 import multiprocessing as mp
 thread_count = mp.cpu_count()
 
-# Get the radii of anti-halo voids:
+
 def voidsRadiiFromAntiHalos(snapn,snapr,hn,hr,volumes):
+    """
+    Get the radii of anti-halo voids:
+    
+    Parameters:
+        snapn (pynbody snapshot): Forward simulation.
+        snapr (pynbody snapshot): Reverse simulation
+        hn (pynbody halo catalogue): Forward simulation halos
+        hr (pynbody halo catalogue): Reverse simulation halos
+        volumes (array): Voronoi volumes of particles in the forward simulation
+    
+    Returns:
+        array (length of hn): Radii of all voids in the catalogue.
+    """
     b = pynbody.bridge.Bridge(snapn,snapr)
     voidRadii = np.zeros(len(hr))
     for k in range(0,len(hr)):
         voidRadii[k] = np.cbrt(3.0*np.sum(volumes[hr[k+1]['iord']])/(4.0*np.pi))
     return voidRadii
 
-# Compute anti-halo centres:
 def computeAntiHaloCentres(hr,snap,volumes):
+    """
+    Compute anti-halo centres
+    
+    Parameters:
+        hr (pynbody halo catalogue): Halo catalogue of the reverse simulation
+        snap (pynbody snapshot): Forward simulation snapshot
+        volumes (array): Voronoi volumes of particles in the forward sim.
+    
+    Returns:
+        array (Nx3): Centres of all voids in the anti-halo-catalogue. 
+                     N = len(hr)
+    """
     centres = np.zeros((len(hr),3))
     periodicity = [snap.properties['boxsize'].ratio("Mpc a h**-1")]*3
     for k in range(0,len(hr)):
@@ -22,8 +51,19 @@ def computeAntiHaloCentres(hr,snap,volumes):
             snap['pos'][hr[k+1]['iord']],volumes[hr[k+1]['iord']],periodicity)
     return centres
 
-# Get vector of anti-halo masses
+
 def getAntiHaloMasses(hr,fixedMass=False):
+    """
+    Get vector of anti-halo masses
+    
+    Parameters:
+        hr (pynbody halo catalogue): Halo catalogue of the reverse simulation
+        fixedMass (bool): If True, assume all particles have the same mass, 
+                          allowing for optimisation.
+    
+    Returns:
+        array (length of hr): Masses of all anti-halos.
+    """
     antiHaloMasses = np.zeros(len(hr))
     mUnit = hr[1]['mass'][0]*1e10
     for k in range(0,len(hr)):
@@ -33,8 +73,18 @@ def getAntiHaloMasses(hr,fixedMass=False):
             antiHaloMasses[k] = np.sum(hr[k+1]['mass'])
     return antiHaloMasses
 
-# Get the volume averaged densities of all the anti-halos.
 def getAntiHaloDensities(hr,snap,volumes=None):
+    """
+    Get the volume averaged densities of all the anti-halos.
+    
+    Parameters:
+        hr (pynbody halo catalogue): Halo catalogue of the reverse simulation
+        snap (pynbody snapshot): Forward simulation snapshot
+        volumes (array): Voronoi volumes of particles in the forward sim.
+    
+    Returns:
+        array (len(hr)): Average density (Mass/Volume) of all voids.
+    """
     if volumes is None:
         # Use the nearest neighbour distance:
         volumes = snap['smooth']
@@ -47,24 +97,67 @@ def getAntiHaloDensities(hr,snap,volumes=None):
             volumes[hr[k+1]['iord']])/np.sum(volumes[hr[k+1]['iord']])
     return antiHaloDensities
 
-# Polynomial fit of the anti-halo massses and their radii above a given mass threshold
 def fitMassAndRadii(antiHaloMasses,antiHaloRadii,logThresh=14):
+    """
+    Polynomial fit of the anti-halo massses and their radii above a given mass 
+    threshold
+    
+    Parameters:
+        antiHaloMasses (array): Masses of all anti-halos.
+        antiHaloRadii (array): Radii of all anti-halos. Must be same length
+                               as antiHaloMasses
+        logThresh (float): log(10) of the lowest mass included in the fit.
+    
+    Returns:
+        Numpy polyfit for the relation log(Mass) = fit[0]*log(Radii) + fit[1]
+    """
     logMass = np.log10(antiHaloMasses)
     logRad = np.log10(antiHaloRadii)
     aboveThresh = np.where(logMass > logThresh)
     fit = np.polyfit(logMass[aboveThresh],logRad[aboveThresh],1)# = (b,a)
     return fit
 
-# Conversion between mass and radius, according to the fit provided by fitMassAndRadius
 def MtoR(x,a,b):
+    """
+    Conversion between mass and radius, according to the fit provided by 
+    fitMassAndRadius
+    
+    Parameters:
+        x (array): Masses to convert
+        a (float): Prefactor exponent. fit[1] from output of fitMassAndRadius
+        b (float): Exponent of log(radii), fit[0] from output of 
+                   fitMassAndRadius
+    
+    Returns:
+        array (length of x): Radii of the void of mass x
+    """
     return (10**a)*(x**b)
 
-# Conversion between radius and mass, according to the fit provided by fitMassAndRadius
 def RtoM(y,a,b):
+    """
+    Conversion between radius and mass, according to the fit provided by 
+    fitMassAndRadius
+    
+    Parameters:
+        x (array): Radii to convert
+        a (float): Prefactor exponent. fit[1] from output of fitMassAndRadius
+        b (float): Exponent of log(radii), fit[0] from output of 
+                   fitMassAndRadius
+    """
     return (y/(10**a))**(1/b)
 
-# Volume weighted barycentres of a set of particles:
 def computeVolumeWeightedBarycentre(positions,volumes):
+    """
+    Volume weighted barycentres of a set of particles:
+    
+    Parameters:
+        positions (Nx3 array): Positions of the tracers of which to compute
+                               the barycentre.
+        volumes (Nx1-component array): Voronoi volumes of the tracers.
+    
+    Returns:
+        1x3 array: Volume-weighted barycentre of the tracers.
+    """
     if volumes.shape != (1,len(positions)):
         volumes2 = np.reshape(volumes,(1,len(positions)))
     else:
@@ -72,48 +165,84 @@ def computeVolumeWeightedBarycentre(positions,volumes):
     weightedPos = (volumes2.T)*positions
     return np.sum(weightedPos,0)/np.sum(volumes)
 
-# Weighted barycentre of particles, accounting for periodic boundary conditions.
-def computePeriodicCentreWeighted(positions,weight,periodicity):
-    if np.isscalar(periodicity):
-        period = (periodicity,periodicity,periodicity)
-    else:
-        period = periodicity
-    if(len(period) != 3):
-        raise Exception("Periodicity must be a length 3 vector or a scalar.")
-    # Map everything into angles so that we can properly account for how close particles are:
-    theta = np.zeros((len(positions),3))
-    theta[:,0] = (positions[:,0])*2.0*np.pi/period[0]
-    theta[:,1] = (positions[:,1])*2.0*np.pi/period[1]
-    theta[:,2] = (positions[:,2])*2.0*np.pi/period[2]
-    M = np.sum(weight)
-    xi = np.cos(theta)
-    zeta = np.sin(theta)
-    # Angular averages:
-    xibar = np.sum(weight[:,None]*xi,0)/M
-    zetabar = np.sum(weight[:,None]*zeta,0)/M
-    # Back to theta:
-    thetabar = np.arctan2(-zetabar,-xibar) + np.pi
-    return (period*thetabar/(2.0*np.pi))
+# For backwards compatibility (this function used to be here):
+from void_analysis.context import computePeriodicCentreWeighted
 
-# Return the voids which lie within an effective radius of a given halo:
 def getCoincidingVoids(centre,radius,voidCentres):
+    """
+    Return the voids which lie within an effective radius of a given halo.
+    
+    Parameters:
+        centre (1x3 array): Centre of the halo or point about which to find
+                            voids
+        radius (float): Distance out to which to search for voids
+        voidCentres (Nx3 array): Centres of the voids
+    
+    Returns:
+        Indices of the halos which lie within radius of the halo centre.
+    """
     dist = np.sqrt(np.sum((voidCentres - centre)**2,1))
     return np.where(dist <= radius)
 
-# Return all the coincident voids with a given radius range	
-def getCoincidingVoidsInRadiusRange(centre,radius,voidCentres,voidRadii,\
-        rMin,rMax):
+def getCoincidingVoidsInRadiusRange(
+        centre,radius,voidCentres,voidRadii,rMin,rMax
+    ):
+    """
+    Return all the coincident voids with a given radius range.
+    
+    Parameters:
+        centre, radius, voidCentres: as in getCoincidingVoids
+        voidRadii (Nx1 array): radii of the voids
+        rMin, rMax (floats): Lower and upper radii to filter voids by.       
+        
+    Returns:
+        Voids close to a given centre which are in a particular radius range.
+    """
     coinciding = getCoincidingVoids(centre,radius,voidCentres)
     inRange = np.where((voidRadii[coinciding] >= rMin) & \
         (voidRadii[coinciding] <= rMax))
     return coinciding[0][inRange]
 
 def getAntihaloOverlapWithVoid(antiHaloParticles,voidParticles,volumes):
+    """
+    Given a set of anti-halo particles, and a set of void particles from some
+    other void definition (or a different anti-halo), compute the fraction of 
+    volume the two voids have in common.
+    
+    Parameters:
+        antiHaloParticles (Nx1 array of ints): IDs of the particles in the 
+                                               antihalos
+        voidParticles (Nx1 array of ints): IDs of the particles in the void
+        volumes (Nx1-component array): Voronoi volumes of the tracers.
+    
+    Returns:
+        2 component list. First element is the fraction of anti-halo volume
+        in the intersection, Second is the fraction of the void volume.
+    """
     intersection = np.intersect1d(antiHaloParticles,voidParticles)
-    return [np.sum(volumes[intersection])/np.sum(volumes[antiHaloParticles]),np.sum(volumes[intersection])/\
-        np.sum(volumes[voidParticles])]
+    return [
+        np.sum(volumes[intersection])/np.sum(volumes[antiHaloParticles]),
+        np.sum(volumes[intersection])/np.sum(volumes[voidParticles])
+    ]
 
 def getOverlapFractions(antiHaloParticles,cat,voidList,volumes,mode = 0):
+    """
+    Given a catalogue of ZOBOV voids, compute the overlap with a given set
+    of anti-halo particles.
+    
+    Parameters:
+        antiHaloParticles: as in getAntihaloOverlapWithVoid
+        cat: ZOBOV void catalogue
+        voidList (list): List of voids we wish to process from the ZOBOV 
+                         catalogue.
+        volumes (Nx1-component array): Voronoi volumes of the tracers.
+        mode (int or string): Component to return (fraction of anti-halo volume 
+                    if mode = 0, or of the void volume if mode = 1. If set to 
+                    "both", just returns both fractions as an array.
+    
+    Returns:
+        array (Mx1 or Mx2): Volume fractions shared by the voids.
+    """
     fraction = np.zeros((len(voidList),2))
     for k in range(0,len(fraction)):
         overlap = getAntihaloOverlapWithVoid(antiHaloParticles,cat.void2Parts(\
@@ -124,8 +253,23 @@ def getOverlapFractions(antiHaloParticles,cat,voidList,volumes,mode = 0):
     else:
         return fraction[:,mode]
 
-def getVoidOverlapFractionsWithAntihalos(voidParticles,hr,antiHaloList,\
-        volumes,mode = 0):
+def getVoidOverlapFractionsWithAntihalos(
+        voidParticles,hr,antiHaloList,volumes,mode = 0
+    ):
+    """
+    Return the overlap fractions between a list of ZOBOV voids, and a list of
+    antihalos.
+    
+    Parameters:
+        voidParticles: ZOBOV void catalogue
+        hr (pynbody halo catalogue): Anti-halo catalogue
+        antiHaloList (List): Anti-halos to include from hr.
+        volumes (Nx1-component array): Voronoi volumes of the tracers.
+        mode (int or string): as in getAntihaloOverlapWithVoid
+    
+    Returns:
+        Array with overlap fractions.
+    """
     fraction = np.zeros((len(antiHaloList),2))
     for k in range(0,len(fraction)):
         overlap = getAntihaloOverlapWithVoid(hr[antiHaloList[k]+1]['iord'],\
@@ -136,25 +280,52 @@ def getVoidOverlapFractionsWithAntihalos(voidParticles,hr,antiHaloList,\
     else:
         return fraction[:,mode]
 
-# Remove any voids from the set that are actually subvoids of another in the set:
 def removeSubvoids(cat,voidSet):
+    """
+    Remove any voids from the set that are actually subvoids of another in 
+    the set.
+    
+    Parameters:
+        cat (ZOBOV void catalogue)
+        voidSet: Subset of voids to consider
+    """
     # Get ID list:
     voidIDs = cat.voidID[voidSet]
     parentIDs = cat.parentID[voidSet]
     subvoids = np.in1d(parentIDs,voidIDs)
     return voidSet[np.logical_not(subvoids)]
 
-# Function to figure out if an anti-halo has a corresponding ZOBOV void:
-def getAntiHaloVoidCandidates(antiHalo,centre,radius,cat,volumes,rMin=None,rMax=None,threshold = 0.5,removeSubvoids = False,rank = True,searchRadius = None):
+
+def getAntiHaloVoidCandidates(
+        antiHalo,centre,radius,cat,volumes,rMin=None,rMax=None,threshold = 0.5,
+        removeSubvoids = False,rank = True
+    ):
+    """
+    Function to figure out if an anti-halo has a corresponding ZOBOV void.
+    
+    Parameters:
+        antiHalo (pynbody halo snapshot): Halo to consider
+        centre (1x3 array): Centre of the antihalo
+        radius (float): Distance out to which to search for ZOBOV voids.
+        volumes (Nx1-component array): Voronoi volumes of the tracers.
+        rMin, rMax (floats): Lower and upper radius limits.
+        threshold (float): Lower volume fraction for the intersection to 
+                           consider something a candidate.
+        removeSubvoids (bool): If True, remove any subvoids from the ZOBOV 
+                               catalogue.
+        rank (bool): If True, sort in descending order of overlap with the 
+                     antihalo.
+    
+    Returns:
+        List of ZOBOV voids which might correspond to this antihalo.
+    """
     voidCentres = cat.voidCentres
     voidRadii = cat.radius
-    if searchRadius is None:
-        searchRadius = radius
     if rMin is None:
-        rMin = 0.75*searchRadius
+        rMin = 0.75*radius
     if rMax is None:
-        rMax = 1.2*searchRadius
-    coinciding = getCoincidingVoidsInRadiusRange(centre,searchRadius,voidCentres,voidRadii,rMin=rMin,rMax=rMax)
+        rMax = 1.2*radius
+    coinciding = getCoincidingVoidsInRadiusRange(centre,radius,voidCentres,voidRadii,rMin=rMin,rMax=rMax)
     fractions = np.zeros((len(coinciding),2))
     for k in range(0,len(coinciding)):
         fractions[k,:] = getAntihaloOverlapWithVoid(antiHalo['iord'],cat.void2Parts(coinciding[k]),volumes)
@@ -169,8 +340,18 @@ def getAntiHaloVoidCandidates(antiHalo,centre,radius,cat,volumes,rMin=None,rMax=
     else:
         return removeSubvoids(cat,coinciding[candidates])
 
-# Compute the volume weighted barycentres of each zone:
 def computeZoneCentres(snap,cat,volumes):
+    """
+    Compute the volume weighted barycentres of each zone.
+    
+    Parameters:
+        snap (pynbody snapshot): Simulation snapshot where voids are found.
+        cat: ZOBOV void catalogue
+        volumes (Nx1-component array): Voronoi volumes of the tracers.
+    
+    Returns:
+        Array: Volume-weighted barycentres of all zones.
+    """
     zoneCentres = np.zeros((cat.numZonesTot,3))
     boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
     periodicity = [boxsize]*3
@@ -179,14 +360,29 @@ def computeZoneCentres(snap,cat,volumes):
         zoneCentres[k,:] = computePeriodicCentreWeighted(snap[zoneParts]['pos'],volumes[zoneParts],periodicity)
     return zoneCentres
 
-# Find the ZOBOV zones that could correspond to a particular halo
-def getCorrespondingZoneCandidates(antiHalo,centre,radius,volumes,catalog,zoneCentres,threshold = 0.5,searchRadius = None):
-    # Automatically choose a search radius based on the anti-halo radius, if not specified:
-    if searchRadius is None:
-        searchRadius = 1.5*radius
+def getCorrespondingZoneCandidates(
+        antiHalo,centre,radius,volumes,catalog,zoneCentres,threshold = 0.5
+    ):
+    """
+    Find the ZOBOV zones that could correspond to a particular halo
+    
+    Parameters
+        antiHalo (pynbody halo snapshot): Halo to consider
+        centre (1x3 array): Centre of the antihalo
+        radius (float): Distance out to which to search for ZOBOV voids.
+        volumes (Nx1-component array): Voronoi volumes of the tracers.
+        catalog: ZOBOV catalogue
+        zoneCentres (array): Centres of the ZOBOV zones
+        threshold (float): Lower volume fraction for the intersection to 
+                           consider something a candidate.
+    
+    Returns:
+        2 component list: 1st component: IDs of candidate zones
+                          2nd component: Volume fractions of candidates.
+    """
     # Find which zones are within the search radius:
     zoneDistances = np.sqrt(np.sum((zoneCentres - centre)**2,1))
-    inRadius = np.where(zoneDistances <= searchRadius)
+    inRadius = np.where(zoneDistances <= radius)
     # For these zones, compute the fraction of volume they share with the anti-halo:
     volumeShared = np.zeros(inRadius[0].shape)
     for k in range(0,len(volumeShared)):
@@ -194,14 +390,31 @@ def getCorrespondingZoneCandidates(antiHalo,centre,radius,volumes,catalog,zoneCe
     highlyCorrelated = np.where(volumeShared >= threshold)
     return [inRadius[0][highlyCorrelated],volumeShared[highlyCorrelated]]
 
-# Get possible subvoids that could correspond to a particular anti-halos
-def getCorrespondingSubVoidCandidates(antiHalo,centre,radius,volumes,catalog,voidCentres,threshold = 0.5,searchRadius = None,subVoidsOnly = False):
-    # Automatically choose a search radius based on the anti-halo radius, if not specified:
-    if searchRadius is None:
-        searchRadius = 1.5*radius
+def getCorrespondingSubVoidCandidates(
+        antiHalo,centre,radius,volumes,catalog,voidCentres,threshold = 0.5,
+        subVoidsOnly = False
+    ):
+    """
+    Get possible subvoids that could correspond to a particular anti-halos
+    
+    Parameters
+        antiHalo (pynbody halo snapshot): Halo to consider
+        centre (1x3 array): Centre of the antihalo
+        radius (float): Distance out to which to search for ZOBOV voids.
+        volumes (Nx1-component array): Voronoi volumes of the tracers.
+        catalog: ZOBOV catalogue
+        voidCentres (array): Centres of the ZOBOV voids
+        threshold (float): Lower volume fraction for the intersection to 
+                           consider something a candidate.
+        subVoidsOnly (bool): If True, return only voids which are subvoids.
+    
+    Returns:
+        2 component list: 1st component: IDs of candidate voids
+                          2nd component: Volume fractions of candidates.
+    """
     # Find which zones are within the search radius:
     voidDistances = np.sqrt(np.sum((voidCentres - centre)**2,1))
-    inRadius = np.where(voidDistances <= searchRadius)
+    inRadius = np.where(voidDistances <= radius)
     # For these zones, compute the fraction of volume they share with the anti-halo:
     volumeShared = np.zeros(inRadius[0].shape)
     voidVolumes = np.zeros(inRadius[0].shape)
@@ -228,7 +441,27 @@ def getCorrespondingSubVoidCandidates(antiHalo,centre,radius,volumes,catalog,voi
         voidVolumeFraction = np.sum(voidVolumes[highlyCorrelated][parentVoids])/np.sum(voidFullVolumes[highlyCorrelated][parentVoids])
         return [inRadius[0][highlyCorrelated][parentVoids],volumeShared[highlyCorrelated][parentVoids],volumeFraction,voidVolumeFraction]
 
-def runGenPk(centresAH,centresZV,massesAH,massesZV,rFilterAH = None,rFilterZV=None):
+def runGenPk(
+        centresAH,centresZV,massesAH,massesZV,rFilterAH = None,rFilterZV=None
+    ):
+    """
+    Wrapper code that calls GenPK to compute power spectra, if it exists on the
+    path.
+    
+    Parameters:
+        centresAH (Nx3 array): Anti-halo centres
+        centresZV (Mx3 array): Void centres
+        massesAH (Nx1 array): Antohalo masses
+        massesZV (Nx1 array): ZOBOV void masses
+        rFilterAH (array): Filter for anti-halos
+        rFilterZV (array): Filter for ZOBOV voids.
+    
+    Returns:
+        4 component list: 1st component: Antihalo power spectrum
+                          2nd component: ZOBOV void power spectrum
+                          3rd component: Cross-spectrum of antihalos and voids.
+                          4th component: DM power spectrum.
+    """
     if rFilterAH is None:
         rFilterAH = slice(len(centresAH[:,0]))
     if rFilterZV is None:
@@ -252,9 +485,30 @@ def runGenPk(centresAH,centresZV,massesAH,massesZV,rFilterAH = None,rFilterZV=No
     psMatter = np.loadtxt("./genpk_out/PK-DM-snapshot_011")
     return [psAHs,psVoids,psCross,psMatter]
 
-# Estimate correlation function of discrete data. If data2 is specified, it computes the cross correlation of the two data sets
+# 
 import Corrfunc
-def simulationCorrelation(rBins,boxsize,data1,data2=None,nThreads = 1,weights1=None,weights2 = None):
+def simulationCorrelation(
+        rBins,boxsize,data1,data2=None,nThreads = 1,weights1=None,
+        weights2 = None
+    ):
+    """
+    Estimate correlation function of discrete data. If data2 is specified, it 
+    computes the cross correlation of the two data sets
+    
+    Parameters:
+        rBins (array): Edges of the radial bins.
+        boxsize (float): Periodic box size.
+        data1 (N1x3 array): First quantity to compute correlation function of.
+        data2 (N2x3 array or None): Second quantity. If None, autocorrelation
+                                    is computed for data1. Otherwise, compute
+                                    the cross-correlation.
+        nThreads (int): Number of threads to use
+        weights1 (float): Weights for data1.
+        weights2 (float): Weights for data2.
+    
+    Returns:
+        array: Estimated correlation function of the data in the specified bins.
+    """
     X1 = data1[:,0]
     Y1 = data1[:,1]
     Z1 = data1[:,2]
@@ -275,34 +529,69 @@ def simulationCorrelation(rBins,boxsize,data1,data2=None,nThreads = 1,weights1=N
         Z2rand = np.random.uniform(0,boxsize,rand_N2)
     if data2 is None:
         # Auto-correlation:
-        DD1 = Corrfunc.theory.DD(1,nThreads,rBins,X1,Y1,Z1,periodic=True,boxsize=boxsize,weights1=weights1)
-        DR1 = Corrfunc.theory.DD(0,nThreads,rBins,X1,Y1,Z1,periodic=True,boxsize=boxsize,X2 = X1rand,Y2=Y1rand,Z2=Z1rand,weights1=weights1)
-        RR1 = Corrfunc.theory.DD(1,nThreads,rBins,X1rand,Y1rand,Z1rand,periodic=True,boxsize=boxsize,weights1=weights1)
-        xiEst = Corrfunc.utils.convert_3d_counts_to_cf(N1,N1,rand_N1,rand_N1,DD1,DR1,DR1,RR1)
+        DD1 = Corrfunc.theory.DD(
+            1,nThreads,rBins,X1,Y1,Z1,periodic=True,boxsize=boxsize,
+            weights1=weights1
+        )
+        DR1 = Corrfunc.theory.DD(
+            0,nThreads,rBins,X1,Y1,Z1,periodic=True,boxsize=boxsize,
+            X2 = X1rand,Y2=Y1rand,Z2=Z1rand,weights1=weights1
+        )
+        RR1 = Corrfunc.theory.DD(
+            1,nThreads,rBins,X1rand,Y1rand,Z1rand,periodic=True,
+            boxsize=boxsize,weights1=weights1
+        )
+        xiEst = Corrfunc.utils.convert_3d_counts_to_cf(
+            N1,N1,rand_N1,rand_N1,DD1,DR1,DR1,RR1
+        )
     else:
         # Cross correlation:
-        D1D2 = Corrfunc.theory.DD(0,nThreads,rBins,X1,Y1,Z1,X2=X2,Y2=Y2,Z2=Z2,periodic=True,boxsize=boxsize,weights1=weights1,weights2=weights2)
-        D1R2 = Corrfunc.theory.DD(0,nThreads,rBins,X1,Y1,Z1,periodic=True,boxsize=boxsize,X2 = X2rand,Y2=Y2rand,Z2=Z2rand,weights1=weights1,weights2=weights2)
-        D2R1 = Corrfunc.theory.DD(0,nThreads,rBins,X2,Y2,Z2,periodic=True,boxsize=boxsize,X2 = X1rand,Y2=Y1rand,Z2=Z1rand,weights1=weights1,weights2=weights2)
-        R1R2 = Corrfunc.theory.DD(0,nThreads,rBins,X1rand,Y1rand,Z1rand,X2 = X2rand,Y2=Y2rand,Z2=Z2rand,periodic=True,boxsize=boxsize,weights1=weights1,weights2=weights2)
-        xiEst = Corrfunc.utils.convert_3d_counts_to_cf(N1,N2,rand_N1,rand_N2,D1D2,D1R2,D2R1,R1R2)
+        D1D2 = Corrfunc.theory.DD(
+            0,nThreads,rBins,X1,Y1,Z1,X2=X2,Y2=Y2,Z2=Z2,periodic=True,
+            boxsize=boxsize,weights1=weights1,weights2=weights2
+        )
+        D1R2 = Corrfunc.theory.DD(
+            0,nThreads,rBins,X1,Y1,Z1,periodic=True,boxsize=boxsize,
+            X2 = X2rand,Y2=Y2rand,Z2=Z2rand,weights1=weights1,
+            weights2=weights2
+        )
+        D2R1 = Corrfunc.theory.DD(
+            0,nThreads,rBins,X2,Y2,Z2,periodic=True,boxsize=boxsize,
+            X2 = X1rand,Y2=Y1rand,Z2=Z1rand,weights1=weights1,
+            weights2=weights2
+        )
+        R1R2 = Corrfunc.theory.DD(
+            0,nThreads,rBins,X1rand,Y1rand,Z1rand,X2 = X2rand,Y2=Y2rand,
+            Z2=Z2rand,periodic=True,boxsize=boxsize,weights1=weights1,
+            weights2=weights2
+        )
+        xiEst = Corrfunc.utils.convert_3d_counts_to_cf(
+            N1,N2,rand_N1,rand_N2,D1D2,D1R2,D2R1,R1R2
+        )
     return xiEst
 
-# Cross correlation of voids and anti-halo centres:
-#def getCrossCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,rMin = 0,rMax = np.inf,rRange = np.linspace(0.1,10,101),nThreads=thread_count,boxsize = 200.0):
-#    rFilter1 = np.where((ahRadii > rMin) & (ahRadii < rMax))[0]
-#    rFilter2 = np.where((voidRadii > rMin) & (voidRadii < rMax))[0]
-#    ahPos = ahCentres[rFilter1,:]
-#    vdPos = voidCentres[rFilter2,:]
-#    xiAM = simulationCorrelation(rRange,boxsize,ahPos,data2=snap['pos'],nThreads=nThreads,weights2 = snap['mass'])
-#    xiVM = simulationCorrelation(rRange,boxsize,vdPos,data2=snap['pos'],nThreads=nThreads,weights2 = snap['mass'])
-#    xiAV = simulationCorrelation(rRange,boxsize,ahPos,data2=vdPos,nThreads=nThreads)
-#    return [xiAM,xiVM,xiAV]
 
-# Auto correlations of void and anti-halo centres:
-def getAutoCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,rMin = 0,\
-        rMax = np.inf,rRange = np.linspace(0.1,10,101),nThreads=thread_count,\
-        boxsize = 200.0):
+def getAutoCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,rMin = 0,
+        rMax = np.inf,rRange = np.linspace(0.1,10,101),nThreads=thread_count,
+        boxsize = 200.0
+    ):
+    """
+    Auto correlations of void and anti-halo centres:#
+    
+    Parameters:
+        ahCentres (Nx3 array): Antihalo centres
+        voidCentres (Mx3 array): Void centres
+        ahRadii (Nx1 array): Antihalo radii
+        voidRadii (Mx1 array): Void radii
+        rMin, rMax (floats): Lower and upper radius limits
+        rRange (array): Points at which to compute correlation function.
+        nThreads (int): Number of threads to use
+        boxsize (float): Size of the periodic box
+    
+    Returns:
+        2 component list: 1st component: Antihalos autocorrelation
+                          2nd component: Voids autocorrelation
+    """
     rFilter1 = np.where((ahRadii > rMin) & (ahRadii < rMax))[0]
     rFilter2 = np.where((voidRadii > rMin) & (voidRadii < rMax))[0]
     ahPos = ahCentres[rFilter1,:]
@@ -312,7 +601,40 @@ def getAutoCorrelations(ahCentres,voidCentres,ahRadii,voidRadii,rMin = 0,\
     return [xiAA,xiVV]
 
 # Return specified stacks
-def getStacks(ahRadius,ahMasses,antiHaloCentres,zvRadius,zvMasses,voidCentres,snap,pairCountsAH,pairCountsZV,volumesListAH,volumesListZV,conditionAH = None,conditionZV = None,showPlot=True,ax=None,rBins = np.linspace(0,3,31),sizeBins = [2,4,10,21],plotAH=True,plotZV=True,binType="radius",tree=None,sumType='poisson',yUpper = 1.3,valuesAH = None,valuesZV = None,binLabel="",errorType="Profile"):
+def getStacks(
+        ahRadius,ahMasses,antiHaloCentres,zvRadius,zvMasses,voidCentres,snap,
+        pairCountsAH,pairCountsZV,volumesListAH,volumesListZV,
+        conditionAH = None,conditionZV = None,showPlot=True,ax=None,
+        rBins = np.linspace(0,3,31),sizeBins = [2,4,10,21],plotAH=True,
+        plotZV=True,binType="radius",tree=None,sumType='poisson',
+        yUpper = 1.3,valuesAH = None,valuesZV = None,binLabel="",
+        errorType="Profile"
+    ):
+    """
+    Stack voids and antihalos in 1D and compare on the same plot.
+    
+    Parameters:
+        ahRadius (Nx1 array): Antihalo radii
+        ahMasses (Nx1 array): Anti-halo masses
+        antiHaloCentres (Nx3 array): Anti-halo centres
+        zvRadius (Mx1 array): ZOBOV void radii
+        zvMasses (Mx1 array): ZOBOV void masses
+        voidCentre (Mx3 array): ZOBOV void centres
+        snap (pynbody snapshot): Forward simulation snapshot
+        pairCountsAH (array of ints): Pair counts around anti-halos
+        pairCountsZV (array of ints): Pair counts around ZOBOV voids.
+        volumesListAH (array): Anti-halo volumes
+        volumesListZV (array): ZOBOV void volumes.
+        conditionAH (array): Filter for antihalos
+        conditionZV (array): Filter for ZOBOV voids
+        showPlot (bool): If true, display plot after computing.
+        ax (Axis handle of None): Axis on which to display the plot.
+        rBins (array): Radius bins to use.
+        sizeBins (array): Void radius bins to use.
+        plotAH (bool): If True, include anti-halos on plot.
+        plotZV (bool): If True, include ZOBOV voids on plot.
+        binType (string): 
+    """
     AHfilters = []
     ZVfilters = []
     nbar = len(snap)/(snap.properties['boxsize'].ratio("Mpc a h**-1"))**3
@@ -329,8 +651,12 @@ def getStacks(ahRadius,ahMasses,antiHaloCentres,zvRadius,zvMasses,voidCentres,sn
                 valuesZV = RtoM(zvMasses,a,b)
             else:
                 raise Exception("Unrecognised bin type.")
-        filterConditionAH = (valuesAH > sizeBins[k]) & (valuesAH <= sizeBins[k+1])
-        filterConditionZV = (valuesZV > sizeBins[k]) & (valuesZV <= sizeBins[k+1])
+        filterConditionAH = (
+            (valuesAH > sizeBins[k]) & (valuesAH <= sizeBins[k+1]
+        )
+        filterConditionZV = (
+            (valuesZV > sizeBins[k]) & (valuesZV <= sizeBins[k+1])
+        )
         if conditionAH is not None:
             filterConditionAH = filterConditionAH & conditionAH
         if conditionZV is not None:
@@ -342,18 +668,24 @@ def getStacks(ahRadius,ahMasses,antiHaloCentres,zvRadius,zvMasses,voidCentres,sn
     sigmaBarsAH = []
     sigmaBarsZV = []
     for k in range(0,len(sizeBins)-1):
-        [nbarj_AH,sigma_AH] = stacking.stackVoidsWithFilter(antiHaloCentres,ahRadius,AHfilters[k][0],snap,rBins,tree=tree,method=sumType,nPairsList=pairCountsAH,volumesList=volumesListAH,errorType=errorType)
-        [nbarj_ZV,sigma_ZV] = stacking.stackVoidsWithFilter(voidCentres,zvRadius,ZVfilters[k][0],snap,rBins,tree=tree,method=sumType,nPairsList=pairCountsZV,volumesList=volumesListZV,errorType=errorType)
+        [nbarj_AH,sigma_AH] = stacking.stackVoidsWithFilter(
+            antiHaloCentres,ahRadius,AHfilters[k][0],snap,rBins,tree=tree,
+            method=sumType,nPairsList=pairCountsAH,volumesList=volumesListAH,
+            errorType=errorType
+        )
+        [nbarj_ZV,sigma_ZV] = stacking.stackVoidsWithFilter(
+            voidCentres,zvRadius,ZVfilters[k][0],snap,rBins,tree=tree,
+            method=sumType,nPairsList=pairCountsZV,volumesList=volumesListZV,
+            errorType=errorType
+        )
         nBarsAH.append(nbarj_AH)
         nBarsZV.append(nbarj_ZV)
         sigmaBarsAH.append(sigma_AH)
         sigmaBarsZV.append(sigma_ZV)
     if showPlot:
-        plotStacks(rBins,nBarsAH,nBarsZV,sigmaBarsAH,sigmaBarsZV,sizeBins,binType,nbar,plotAH=plotAH,plotZV=plotZV,yUpper = yUpper,binLabel=binLabel)
-
+        plotStacks(
+            rBins,nBarsAH,nBarsZV,sigmaBarsAH,sigmaBarsZV,sizeBins,binType,
+            nbar,plotAH=plotAH,plotZV=plotZV,yUpper = yUpper,binLabel=binLabel
+        )
     return [nBarsAH,nBarsZV,sigmaBarsAH,sigmaBarsZV]
-
-
-# Pair counts about void centres:
-
 

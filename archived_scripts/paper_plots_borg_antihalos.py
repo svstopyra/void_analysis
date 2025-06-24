@@ -55,6 +55,7 @@ legendFontsize = 8
 #-------------------------------------------------------------------------------
 # DATA FOR PLOTS
 
+# Names of the clusters of interest:
 clusterNames = np.array([['Perseus-Pisces (A426)'],
        ['Hercules B (A2147)'],
        ['Coma (A1656)'],
@@ -65,52 +66,23 @@ clusterNames = np.array([['Perseus-Pisces (A426)'],
        ['Hercules C (A2063)'],
        ['Leo (A1367)']], dtype='<U21')
 
-
-# HMF plots data:
-
 # Snapshots to use:
+# Old run snapshots. Mostly used to demonstrate the problem with PM10:
 snapNumListOld = [7422,7500,8000,8500,9000,9500]
-#snapNumList = [7000,7200,7400,7600,8000]
-#snapNumList = [7000,7200,7400,7600,7800,8000]
-#snapNumList = np.arange(7000,10300 +1,300)
-#snapNumList = [8800,9100,9400,9700,10000]
-snapNumList = [7300,7600,7900,8200,8500,8800,9100,9400,9700,10000,\
-    10300,10600,10900,11200,11500,11800,12100,12400,12700,13000]
-#snapNumList = [7300,7600,7900,8200,8500,8800,9100,9400,9700,10000,\
-#    10300,10600,10900,11200,11500,11800,12100,12400,12700,13000,\
-#    13300,13600,13900,14200,14500,14800,15100,15400,15700,16000]
-# Batch5-1:
-#snapNumList = [7300,7600,7900,8200,8500]
-# Batch5-2:
-#snapNumList = [8800,9100,9400,9700,10000]
-# Batch5-3:
-#snapNumList = [10300,10600,10900,11200,11500]
-# Batch5-4:
-#snapNumList = [11800,12100,12400,12700,13000]
-# Batch10-1 
-#snapNumList = [7300,7600,7900,8200,8500,8800,9100,9400,9700,10000]
-# Batch10-2
-#snapNumList = [10300,10600,10900,11200,11500,11800,12100,12400,12700,13000]
-# Batch 5-5:
-#snapNumList = [13000,13300,13600,13900,14200]
-
-#snapNumListUncon = [1,2,3,4,5]
-snapNumListUncon = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
-#snapNumListUncon = [2,4,5,6,7,8,9,10]
-snapNumListUnconOld = [1,2,3,5,6]
+# New run snapshots, with COLA20:
+snapNumList = np.arange(7300,13300,300)# From 7300 to 13000, every 300 samples.
+# Unconstrained snapshots:
+snapNumListUnconOld = np.arange(1,7,1) # Old setup (only for comparison)
+snapNumListUncon = np.arange(1,21,1) # New setup
+# Periodic box size:
 boxsize = 677.7
-
-
+# Snapshot files for the new setup:
 snapNameList = ["new_chain/sample" + str(k) + \
     "/gadget_full_forward_512/snapshot_001" \
     for k in snapNumList]
-
-# PPT plots data:
-if runTests:
-    testComputation(testDataFolder + "ppt_pipeline_test.p",getPPTPlotData,\
-        snapNumList = [7000, 7200, 7400],samplesFolder = 'new_chain/',\
-        recomputeData = True)
-
+    
+#...............................................................................
+# Posterior predictive tests:
 nBinsPPT = 6
 rebin = False
 print("Doing ppts")
@@ -141,19 +113,8 @@ if doPPTs:
             centreMethod="density",data_folder = data_folder,\
             bootstrapInterval = [16,84,2.5,97.5,0.5,99.5,0.05,99.95])
 
-
-# Load or recompute the HMF/AMF data:
-if runTests:
-    testComputation(testDataFolder + "hmf_pipeline_test.p",getHMFAMFData,\
-        [7000, 7200, 7400],[7422,7500,8000],[1,3,5],\
-        [1,2,3],recomputeData = True,\
-        unconstrainedFolderNew = unconstrainedFolderNew,\
-        unconstrainedFolderOld = unconstrainedFolderOld,\
-        snapnameNew = snapnameNew,snapnameNewRev=snapnameNewRev,\
-        snapnameOld = snapnameOld,snapnameOldRev = snapnameOldRev,\
-        samplesFolder = samplesFolder,samplesFolderOld=samplesFolderOld)
-
-
+#...............................................................................
+# Halo mass function plots:
 doHMFs = True
 if doHMFs:
     [constrainedHaloMasses512New,constrainedAntihaloMasses512New,\
@@ -181,35 +142,11 @@ if doHMFs:
                     samplesFolderOld=samplesFolderOld,\
                     data_folder=data_folder)
 
-loadOld = False
-if loadOld:
-    [constrainedHaloMasses512New2,constrainedAntihaloMasses512New2,\
-        deltaListMeanNew2,deltaListErrorNew2,\
-        constrainedHaloMasses512Old2,constrainedAntihaloMasses512Old2,\
-        deltaListMeanOld2,deltaListErrorOld2,\
-        comparableHalosNew2,comparableHaloMassesNew2,\
-        comparableAntihalosNew2,comparableAntihaloMassesNew2,\
-        centralHalosNew2,centralAntihalosNew2,\
-        centralHaloMassesNew2,centralAntihaloMassesNew2,\
-        comparableHalosOld2,comparableHaloMassesOld2,\
-        comparableAntihalosOld2,comparableAntihaloMassesOld2,\
-        centralHalosOld2,centralAntihalosOld2,\
-        centralHaloMassesOld2,centralAntihaloMassesOld2] = tools.loadPickle(\
-            figuresFolder + "amf_hmf_data_old.p")
 
-
-
-
+#...............................................................................
 # Void profile data:
-if runTests:
-    testComputation(testDataFolder + "void_profiles_pipeline_test.p",\
-        getVoidProfilesData,\
-        [7000, 7200, 7400],[1,3,5],\
-        unconstrainedFolder = unconstrainedFolderNew,\
-        samplesFolder = samplesFolder,\
-        snapname=snapnameNew,snapnameRev = snapnameNewRev)
-
-
+# Independent centres. These represent positions where a 135 Mpc/h sphere
+# can be placed without overlapping with any of the others:
 independentCentres = np.array([[0,0,0],[-boxsize/2,0,0],[0,-boxsize/2,0],\
     [0,0,-boxsize/2],[boxsize/4,boxsize/4,boxsize/4],\
     [-boxsize/4,boxsize/4,boxsize/4],[boxsize/4,-boxsize/4,boxsize/4],\
@@ -217,17 +154,6 @@ independentCentres = np.array([[0,0,0],[-boxsize/2,0,0],[0,-boxsize/2,0],\
     [-boxsize/4,boxsize/4,-boxsize/4],[boxsize/4,-boxsize/4,-boxsize/4],\
     [-boxsize/4,-boxsize/4,-boxsize/4]])
 
-#[rBinStackCentres,nbarjSepStack,\
-#        sigmaSepStack,nbarjSepStackUn,sigmaSepStackUn,\
-#        nbarjAllStacked,sigmaAllStacked,nbarjAllStackedUn,sigmaAllStackedUn,\
-#        nbar,rMin,mMin,mMax] = \
-#            tools.loadOrRecompute(figuresFolder + "void_profile_data.p",\
-#                getVoidProfilesData,snapNumList,snapNumListUncon,\
-#                unconstrainedFolder = unconstrainedFolderNew,\
-#                samplesFolder = samplesFolder,\
-#                snapname=snapnameNew,snapnameRev = snapnameNewRev,\
-#                _recomputeData = recomputeData,\
-#                unconstrainedCentreList = independentCentres)
 # Reference snapshot:
 samplesFolder = "new_chain/"
 referenceSnapOld = pynbody.load("sample7500/forward_output/snapshot_006")
@@ -237,24 +163,13 @@ referenceSnap = pynbody.load(samplesFolder + \
 snapsort = np.argsort(referenceSnap['iord'])
 # Resolution limit (256^3):
 mLimLower = referenceSnap['mass'][0]*1e10*100*8
-
-mMin = 1e11
-mMax = 1e16
-rMin = 5
-rMax = 30
-#muOpt = 0.9
-#muOpt = 0.55830868
-#rSearchOpt = 1
-#rSearchOpt = 1.1565106
-rSphere = 300
-rSphereInner = 135
-# Optimum parameters with 1-way purity/completeness:
-# np.array([1.21232077, 0.54490005])
-# Optimum with 2-way:
-# np.array([1.1565106 , 0.55830868])
-
-# Optimal number of voids in the final catalogue:
-# [0.14237877, 0.85891552]
+mMin = 1e11 # Lower mass limit
+mMax = 1e16 # Upper mass limit
+rMin = 5 # Lower radius limit for voids (around the linear limit)
+rMax = 30 # Upper radius limit for voids (never any anti-halos larger than this)
+rSphere = 300 # Radius in which to find halos
+rSphereInner = 135 # High SNR region
+# Parameters for the catalogue combination algorithm:
 muOpt = 0.85891552
 rSearchOpt = 0.14237877
 
@@ -293,12 +208,6 @@ if doCat:
         alreadyMatched] = pickle.load(\
             open(data_folder + "catalogue_all_data.p","rb"))
     catData = np.load(data_folder + "catalogue_data.npz")
-    # New method for void profiles:
-    #[rBinStackCentres,nbarMean,sigmaMean,nbarVar,sigmaVar,nbar,\
-    #    nbarjUnSameRadii,sigmaUnSameRadii] = getVoidProfilesForPaper(\
-    #        finalCatOpt,combinedFilter135,snapNameList,\
-    #        snapNumListUncon,centreListUn,data_folder = data_folder,\
-    #        recomputeData=recomputeData)
 
 
 # Timesteps data. Rerunning this from here not yet implemented 
@@ -320,13 +229,6 @@ filename2 = "profiles_plot_data_random.p"
         massList200c2,massListFull200c2,\
         fluxList52,fluxList102,\
         fluxListFull52,fluxListFull102] = pickle.load(open(filename2,"rb"))
-
-# Antihalo sky plot data:
-if runTests:
-    testComputation(testDataFolder + "skyplot_pipeline_test.p",\
-        getAntihaloSkyPlotData,\
-        [7000, 7200, 7400],samplesFolder=samplesFolder,recomputeData = True)
-
 
 # Centres about which to compute SNR:
 Nden = 256
