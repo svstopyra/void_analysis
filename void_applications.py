@@ -356,12 +356,6 @@ los_lcdm_zspace_unconstrained = get_los_positions_for_all_catalogues(
     rmin=10,rmax=20,recompute=False,zspace=True,recompute_zspace=False,
     suffix=".lospos_all_zspace.p",flatten_filters=True)
 
-#los_lcdm_real = get_los_positions_for_all_catalogues(
-#    lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],
-#    lcdm_snaps["void_centres"],lcdm_snaps["void_radii"],all_particles=True,
-#    filter_list=voids_used_lcdm,dist_max=3,rmin=10,rmax=20,
-#    recompute=False,zspace=False,suffix=".lospos_all.p")
-
 los_lcdm_real_unconstrained = get_los_positions_for_all_catalogues(
     lcdm_snaps["snaps"],lcdm_snaps["snaps_reverse"],
     lcdm_snaps["void_centres"],lcdm_snaps["void_radii"],all_particles=True,
@@ -384,15 +378,6 @@ los_borg_zspace = get_los_positions_for_all_catalogues(
     all_particles=True,void_indices = halo_indices,
     filter_list=filter_list_borg,dist_max=3,rmin=10,rmax=20,recompute=False,
     zspace=True,recompute_zspace=False,suffix=".lospos_all_zspace2.p")
-
-
-#los_borg_real = get_los_positions_for_all_catalogues(
-#    borg_snaps["snaps"],borg_snaps["snaps_reverse"],
-#    cat300.getAllCentres(void_filter=True),
-#    cat300.getAllProperties("radii",void_filter=True).T,all_particles=True,
-#    filter_list=filter_list_borg,dist_max=3,rmin=10,rmax=20,
-#    void_indices = halo_indices,recompute=False,zspace=False,
-#    suffix=".lospos_all.p")
 
 # Trimmed LOS lists:
 void_radii_borg = cat300.getMeanProperty("radii",void_filter=True)[0]
