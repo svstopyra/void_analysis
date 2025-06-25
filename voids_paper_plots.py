@@ -27,10 +27,11 @@ import sys
 
 # Set global figure font:
 import matplotlib.pyplot as plt
-fontfamily = "serif"
-plt.rcParams["font.family"] = "serif"
-plt.rcParams['font.serif'] = ["Times New Roman"]
-plt.rcParams["mathtext.fontset"] = "stix"
+fontfamily = None
+#fontfamily = "serif"
+#plt.rcParams["font.family"] = "serif"
+#plt.rcParams['font.serif'] = ["Times New Roman"]
+#plt.rcParams["mathtext.fontset"] = "stix"
 
 
 # Data export options:
@@ -752,17 +753,6 @@ for val, bins in zip(noInBins,binLists):
 
 
 
-plt.hist2d(cat['rep_score'],cat['radii'],bins=[bins_rep,bins_rad],cmap='Blues',
-    weights=None)
-plt.colorbar(label='Number of Voids')
-#plt.colorbar(label='Fraction of voids this radius')
-plt.xlabel('Reproducibility Score')
-plt.ylabel('Radius [$\\mathrm{Mpc}h^{-1}$]')
-plt.show()
-
-
-
-
 
 #-------------------------------------------------------------------------------
 # COMPUTE VOID STACKS APPLYING DIFFERENT CONDITIONS
@@ -985,10 +975,8 @@ for k in range(0,len(dictionaries)):
     axij.set_xlim([0,3])
     axij.set_title(labels[k],y=1.0,pad=-3,fontsize=8,va="top",
                    fontfamily=fontfamily)
-    axij.tick_params(axis='both',which='major',labelsize=fontsize,
-                     labelfontfamily=fontfamily)
-    axij.tick_params(axis='both',which='minor',labelsize=fontsize,
-                     labelfontfamily=fontfamily)
+    axij.tick_params(axis='both',which='major',labelsize=fontsize)
+    axij.tick_params(axis='both',which='minor',labelsize=fontsize)
     # Adjust the tick labels to prevent annoying overlaps:
     if i > 0:
         axij.set_yticks(axij.get_yticks()[0:-1])
@@ -1076,7 +1064,7 @@ plt.show()
 # CATALOGUE PERMUTATIONS
 
 
-cat300 = catalogue.combinedCatalogue(
+cat300pert = catalogue.combinedCatalogue(
         snapNameList,snapNameListRev,\
         muOpt,rSearchOpt,rSphere,\
         ahProps=ahProps,hrList=hrList,max_index=None,\
@@ -1086,7 +1074,7 @@ cat300 = catalogue.combinedCatalogue(
         additionalFilters = snrFilter,verbose=False,\
         refineCentres=refineCentres,sortBy=sortBy,\
         enforceExclusive=enforceExclusive)
-
+finalCat300pert = cat300pert.constructAntihaloCatalogue()
 # Order testing:
 permutations = []
 randomlyOrderedCats = []
@@ -1591,29 +1579,6 @@ imgs = [
 plot_gif_animation(
     imgs,figuresFolder + 'sky_plot_animation_largest_voids.gif')
 
-# Combined outlines (plotting not working at present for unknown reasons)
-ns = 0
-plot.plotLocalUniverseMollweide(rCut,snapList[ns],\
-    alpha_shapes = asListTot,\
-    largeAntihalos = laListTot,hr=hrList[ns],\
-    coordAbell = coordCombinedAbellSphere,\
-    abellListLocation = clusterIndMain,\
-    nameListLargeClusters = [name[0] for name in clusterNames],\
-    ha = ha,va= va, annotationPos = annotationPos,\
-    title = 'Local super-volume: large voids (antihalos) within $' + \
-    str(rCut) + "\\mathrm{\\,Mpc}h^{-1}$",\
-    vmin=1e-2,vmax=1e2,legLoc = 'lower left',\
-    bbox_to_anchor = (-0.1,-0.2),\
-    snapsort = snapSortList[ns],antihaloCentres = ahMWPos,\
-    figOut = figuresFolder + "/ah_match_combined" + plotFormat,\
-    showFig=False,figsize = (scale*textwidth,scale*0.55*textwidth),\
-    voidColour = colourListTot,antiHaloLabel=labelListTot,\
-    bbox_inches = bound_box,galaxyAngles=equatorialRThetaPhi[:,1:],\
-    galaxyDistances = equatorialRThetaPhi[:,0],showGalaxies=False,\
-    voidAlpha = 0.6,margins=None,positions = [None for x in laListTot],
-    hpxMap = hpx_map_list[ns],pad=0.05,cbar_aspect=10,shrink=0.35,
-    cbar_y_pos=0.2)
-
 
 #-------------------------------------------------------------------------------
 # VOID DENSITY DISTRIBUTION PLOT
@@ -1729,26 +1694,16 @@ rat = np.zeros(samplingMCMCLin.shape,dtype=int)
 rat[nzMCMC] = samplingRandLin[nzMCMC]/samplingMCMCLin[nzMCMC]
 minRatio = np.min(rat[rat > 0])
 
-#samplingRand0 = np.sum(samplingRand,(1,2))
-#samplingRand1 = np.sum(samplingRand,(0,2))
-#samplingRand2 = np.sum(samplingRand,(0,1))
 samplingRand0 = samplingRandRadii
 samplingRand1 = samplingRandCentralDensity
 samplingRand2 = samplingRandAverageDensity
 samplingRand3 = samplingRandMasses
 
-
-#samplingMCMC0 = np.sum(samplingMCMC,(1,2))
-#samplingMCMC1 = np.sum(samplingMCMC,(0,2))
-#samplingMCMC2 = np.sum(samplingMCMC,(0,1))
 samplingMCMC0 = samplingMCMCRadii
 samplingMCMC1 = samplingMCMCCentralDensity
 samplingMCMC2 = samplingMCMCAverageDensity
 samplingMCMC3 = samplingMCMCMasses
 
-#samplingRandSelected0 = np.sum(samplingRandSelected,(1,2))
-#samplingRandSelected1 = np.sum(samplingRandSelected,(0,2))
-#samplingRandSelected2 = np.sum(samplingRandSelected,(0,1))
 
 samplingRandSelected0 = samplingRandSelectedRadii
 samplingRandSelected1 = samplingRandSelectedCentralDensity
@@ -1775,38 +1730,19 @@ def barAsHist(counts,bins,ax=None,density=True,**kwargs):
 
 # All distributions:
 nRows = 2
-#nCols = 4
 nCols = 2
-
-#randCounts = [[samplingRand0,samplingRand1,samplingRand2,samplingRand3],\
-#    [samplingRandSelected0,samplingRandSelected1,samplingRandSelected2,\
-#    samplingRandSelected3]]
 
 randCounts = [[samplingRand1,samplingRand2],\
     [samplingRandSelected1,samplingRandSelected2]]
-
-#mcmcCounts = [[samplingMCMC0,samplingMCMC1,samplingMCMC2,samplingMCMC3],\
-#    [samplingMCMC0,samplingMCMC1,samplingMCMC2,samplingMCMC3]]
-
 mcmcCounts = [[samplingMCMC1,samplingMCMC2],\
     [samplingMCMC1,samplingMCMC2]]
 
-#histBins = [radBins,conBinEdges,conBinEdges,massBins]
 histBins = [conBinEdges,conBinEdges]
-
-#xlabels = ['$R [\\mathrm{Mpc}h^{-1}]$','$\\delta_{\\mathrm{central}}$',\
-    '$\\bar{\\delta}$','Mass [$M_{\\odot}h^{-1}$]']
 xlabels = ['$\\delta_{\\mathrm{central}}$',\
     '$\\bar{\\delta}$']
-#ylims = [[0,0.3],[0,20],[0,20],[0,7e-15]]
+
 ylims = [[0,30],[0,30]]
 xlims = [[-0.95,-0.7],[-0.85,-0.6]]
-#titlesList = [['Void radii, \nall samples','Central Density, \nall samples',\
-#    'Average Density, \nall samples','Void mass, \nall samples'],\
-#    ['Void radii, \nconditioned samples',\
-#    'Central Density, \nconditioned samples',\
-#    'Average Density, \nconditioned samples',\
-#    'Void mass, \nconditioned samples']]
 
 titlesList = [['Central Density, \nall samples',\
     'Average Density, \nall samples'],\
@@ -1916,9 +1852,7 @@ mean_radii_mcmc = cat300.getMeanProperty('radii',void_filter=True)
 all_radii_mcmc = cat300.getAllProperties('radii',void_filter=True)
 mean_radii_inverted = cat300Inverted.getMeanProperty('radii',void_filter=True)
 all_radii_inverted = cat300Inverted.getAllProperties('radii',void_filter=True)
-#mean_radii_mcmc = cat300test.getMeanProperty('radii',
-#                                             void_filter=cat300test.filter)
-#mean_radii_mcmc = vsfPerm135
+
 
 radius_bins = np.linspace(10,21,7)
 plt.clf()
