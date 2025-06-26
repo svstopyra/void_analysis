@@ -3,7 +3,11 @@ import pynbody
 import numpy as np
 import scipy
 from void_analysis import tools, snapedit, plot_utilities, stacking
-import alphashape
+try:
+    import alphashape
+except:
+    alphashape = None
+    print("WARNING: alphashape not found. Some functionality is disabled.")
 
 class combinedCatalogue:
     # Class to store and compute a combined catalogue
@@ -1063,9 +1067,13 @@ class combinedCatalogue:
                     self.indexListShort[ns][final_cat[have_void,ns]-1]
             final_cat_long = np.array(halo_indices).T
             return final_cat_long
-    def get_alpha_shapes(self,snapList,snapListRev,antihaloCatalogueList=None,
-                         ahProps = None,snapsortList=None,reCentreSnaps=False,
-                         void_filter=False,alphaVal = 7):
+    def get_alpha_shapes(
+            self,snapList,snapListRev,antihaloCatalogueList=None,
+            ahProps = None,snapsortList=None,reCentreSnaps=False,
+            void_filter=False,alphaVal = 7
+        ):
+        if alphashape is None:
+            raise Exception("alphashape not found.")
         if reCentreSnaps:
             for snap in snapList:
                 # Necessary to place snimulations in equatorial co-ordinates:

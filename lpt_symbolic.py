@@ -12,7 +12,6 @@ Psi = [Matrix(3, 3, lambda i, j: sp.Function(f'Psi^{(n)}_{i}{j}')(x, y, z)) for 
 #-------------------------------------------------------------------------------
 
 import sympy as sp
-import jupyprint as jp
 from sympy import MatrixSymbol, symbols, Trace, expand, collect, latex, Mul
 from collections import defaultdict
 
@@ -372,7 +371,6 @@ import sympy as sp
 from sympy import symbols, MatrixSymbol, Trace, MatMul, simplify, latex
 from collections import defaultdict
 from itertools import product
-import jupyprint as jp
 
 # --- Setup
 epsilon = symbols('epsilon')

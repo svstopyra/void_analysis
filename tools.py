@@ -2,14 +2,24 @@
 import scipy
 import scipy.spatial, scipy.stats, scipy.fft
 import numpy as np
-import numexpr as ne
+try:
+    import numexpr as ne
+except:
+    ne = None
+    print("WARNING: numexpr not found. Accelerated calculations disabled.")
+
 import alphashape
 import pynbody
 from . import snapedit, plot_utilities
 import pickle
 import os
 import traceback, logging
-import h5py
+try:
+    import h5py
+except:
+    h5py = None
+    print("WARNING: h5py not found. Some functionality is disabled.")
+
 from astropy.coordinates import SkyCoord
 import astropy.units as u
 import astropy
@@ -430,8 +440,12 @@ def createTestData(filename,func,*args,_return_result = True,\
         return _result
 
 # Convert an MCMC file into a white noise file:
-def mcmcFileToWhiteNoise(mcmcfile,outputName,normalise = True,\
-        fromInverseFourier = False,flip = False,reverse=False):
+def mcmcFileToWhiteNoise(
+        mcmcfile,outputName,normalise = True,\
+        fromInverseFourier = False,flip = False,reverse=False
+    ):
+    if h5py is None:
+        raise Exception("h5py not found.")
     f = h5py.File(mcmcfile,'r')
     if fromInverseFourier:
         wn = scipy.fft.irfftn(f['scalars']['s_hat_field'][()])
@@ -499,7 +513,10 @@ def getCountsInHealpixSlices(ng,hpIndices,nside = 4,nMagBins = 16,nslices=10,\
     reshapedNG = ng.reshape((nMagBins,nres,nres,nres))
     if old_method:
         for k in range(0,npixels*nslices):
-            filterK = ne.evaluate("hpIndices == k")
+            if ne is not None:
+                filterK = ne.evaluate("hpIndices == k")
+            else:
+                filterK = (hpIndices == k)
             for l in range(0,nMagBins):
                 ngHP[l,k] = np.sum(reshapedNG[l][filterK])
     else:
@@ -881,7 +898,6 @@ def load_npz_arrays(filename):
         raise Exception("Not an npz file.")
     loaded = np.load(filename)
     return [loaded[key] for key in loaded]
-
 
 
 

@@ -64,7 +64,3 @@ mesh = cat.to_mesh(resampler = 'tsc',Nmesh=args.N,BoxSize = args.boxsize,\
 ps = nlab.FFTPower(mesh,mode='1d',dk = args.dk,kmin = args.kmin)
 
 pickle.dump(ps,open(output,"wb"))
-
-# Theory prediction for the power spectrum
-#cosmo = nbodykit.cosmology.cosmology.Cosmology(Omega_cdm = Om0 - Ob0,h=h,Omega0_b=Ob0,n_s=parser['ns']).match(sigma8=sigma8)
-

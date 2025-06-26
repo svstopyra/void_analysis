@@ -3,7 +3,12 @@ import numpy as np
 import pynbody
 import pickle
 import astropy
-import numexpr as ne
+try:
+    import numexpr as ne
+except:
+    ne = None
+    print("WARNING: numexpr not found. Accelerated calculations disabled.")
+
 from . import snapedit
 import scipy
 
@@ -56,7 +61,7 @@ def computePeriodicCentreWeighted(positions,weights=None,periodicity = None,\
         period = periodicity
     if(len(period) != 3):
         raise Exception("Periodicity must be a length 3 vector or a scalar.")
-    if not accelerate:
+    if not accelerate or ne is None:
         # Map everything into angles so that we can properly account 
         # for how close particles are:
         theta = np.zeros((len(positions),3))

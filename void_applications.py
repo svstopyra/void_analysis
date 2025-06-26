@@ -19,15 +19,29 @@ import matplotlib.lines as mlines
 import matplotlib.colors as colors
 import pickle
 import numpy as np
-import seaborn as sns
-import pandas
-seabornColormap = sns.color_palette("colorblind",as_cmap=True)
+try:
+    import seaborn as sns
+    seabornColormap = sns.color_palette("colorblind",as_cmap=True)
+except:
+    sns = None
+    seabornColormap = [
+        '#0173B2', '#DE8F05', '#029E73', '#D55E00', '#CC78BC',
+        '#CA9161', '#FBAFE4', '#949494', '#ECE133', '#56B4E9'
+    ]
+
 import pynbody
 import astropy.units as u
 from astropy.coordinates import SkyCoord
 import scipy
 import os
 import sys
+try:
+    import emcee
+except:
+    emcee = None
+    print("WARNING: emcee not found. Some functionality disabled.")
+
+
 
 # Set global figure font:
 import matplotlib.pyplot as plt
@@ -1533,7 +1547,7 @@ F_inv = lambda x, y, z: scipy.interpolate.interpn((rperp_vals,svals,f_vals),
 
 
 
-import emcee
+
 
 tau, sampler = run_inference(data_field,theta_ranges_epsilon,mle_estimate.x,
                              data_folder + "inference_weighted.h5",
@@ -1599,8 +1613,6 @@ all_samples = chain.reshape(chain.shape[0]*chain.shape[1],chain.shape[2])
 redo_chain = False
 continue_chain = True
 backup_start = True
-import emcee
-import h5py
 nwalkers = 64
 ndims = 2
 n_mcmc = 10000

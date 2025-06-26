@@ -1,7 +1,12 @@
 # This holds code used by plot that doesn't need to integrate with any graphical backends.
 # This avoids having to load those backends on systems (such as clusters) that might not support them
 from . import context, snapedit, tools
-import healpy
+try:
+    import healpy
+    from healpy import nside2npix, ang2pix, projector
+except:
+    print("WARNING: healpy not found. Some functions may not work.")
+
 import pynbody
 import numpy as np
 from scipy import stats
@@ -120,9 +125,12 @@ def float_formatter(x,d=2):
 def floatsToStrings(floatArray,precision=2):
     return [("%." + str(precision) + "f") % number for number in floatArray]
 
-from healpy import nside2npix, ang2pix, projector
+
 # Healpix map for a spherical slice through a simulation
-def sphericalSlice(snap,radius,centre=np.array([0,0,0]),thickness=15,nside=64,fillZeros = 1e-3):
+def sphericalSlice(
+        snap,radius,centre=np.array([0,0,0]),thickness=15,nside=64,
+        fillZeros = 1e-3
+    ):
     annulus = pynbody.filt.Annulus(radius-thickness/2,radius+thickness/2,cen=centre)
     posXYZ = snap[annulus]['pos']
     boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")

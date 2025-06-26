@@ -9,7 +9,10 @@ from . import context, stacking
 import os
 import multiprocessing as mp
 thread_count = mp.cpu_count()
+import Corrfunc
 
+# For backwards compatibility (this function used to be here):
+from void_analysis.context import computePeriodicCentreWeighted
 
 def voidsRadiiFromAntiHalos(snapn,snapr,hn,hr,volumes):
     """
@@ -165,8 +168,7 @@ def computeVolumeWeightedBarycentre(positions,volumes):
     weightedPos = (volumes2.T)*positions
     return np.sum(weightedPos,0)/np.sum(volumes)
 
-# For backwards compatibility (this function used to be here):
-from void_analysis.context import computePeriodicCentreWeighted
+
 
 def getCoincidingVoids(centre,radius,voidCentres):
     """
@@ -486,7 +488,7 @@ def runGenPk(
     return [psAHs,psVoids,psCross,psMatter]
 
 # 
-import Corrfunc
+
 def simulationCorrelation(
         rBins,boxsize,data1,data2=None,nThreads = 1,weights1=None,
         weights2 = None

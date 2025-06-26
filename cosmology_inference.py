@@ -23,16 +23,28 @@ import matplotlib.lines as mlines
 import matplotlib.colors as colors
 import pickle
 import numpy as np
-import seaborn as sns
-import pandas
-seabornColormap = sns.color_palette("colorblind",as_cmap=True)
+try:
+    import seaborn as sns
+    seabornColormap = sns.color_palette("colorblind",as_cmap=True)
+except:
+    sns = None
+    seabornColormap = [
+        '#0173B2', '#DE8F05', '#029E73', '#D55E00', '#CC78BC',
+        '#CA9161', '#FBAFE4', '#949494', '#ECE133', '#56B4E9'
+    ]
+
 import pynbody
 import astropy.units as u
 from astropy.coordinates import SkyCoord
 import scipy
 import os
 import sys
-import emcee
+try:
+    import emcee
+except:
+    emcee = None
+    print("WARNING: emcee not found. Some functionality is disabled.")
+
 from fractions import Fraction
 
 from void_analysis.cosmology import Hz, D1, D1_CPT, f_lcdm, Omega_z, Ez2
@@ -4624,6 +4636,8 @@ def run_inference(data_field, theta_ranges_list, theta_initial, filename,
         Tested in test_inference_core.py
         Unit tests: test_run_inference_basic
     """
+    if emcee is None:
+        raise Exception("emcee not found.")
     if sample == "all":
         sample = np.array([True for _ in theta_ranges_list])
     ndims = np.sum(sample)

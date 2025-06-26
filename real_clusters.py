@@ -1,4 +1,3 @@
-import healpy
 import pynbody
 import numpy as np
 from scipy import io
@@ -10,10 +9,9 @@ import os
 import astropy
 import scipy.special as special
 import scipy
-import alphashape
-from descartes import PolygonPatch
 import matplotlib.cm as cm
 import matplotlib.colors as colors
+import xml.etree.ElementTree as ET
 
 from astropy.coordinates import SkyCoord
 import astropy.units as u
@@ -162,7 +160,6 @@ def getCombinedAbellCatalogue(Om0 = 0.3111,Ode0 = 0.6889,h=0.6766,\
             abell_d,p_abell,coordAbell] = getClusterSkyPositions(catFolder)
     # ABELL DATA FROM XML FILE:
     # https://ui.adsabs.harvard.edu/abs/2014MNRAS.445.4073C/abstract
-    import xml.etree.ElementTree as ET
     xmlTree = ET.parse(catFolder + "VII_110A/aco_redshifts.xml")
     root = xmlTree.getroot()
     xmlAbell = [int(tr[0].text) for tr in root[0][0][25][0]]

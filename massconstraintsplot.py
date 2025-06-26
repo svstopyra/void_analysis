@@ -23,7 +23,8 @@ seabornColormap = sns.color_palette("colorblind",as_cmap=True)
 plt.rcParams['mathtext.fontset'] = 'dejavuserif'
 from void_analysis.tools import MassConstraint
 from astropy.io import fits
-
+import matplotlib.patches as mpatches
+import matplotlib.lines as mlines
 
 
 # MASS CONSTRAINTS PLOT
@@ -714,8 +715,6 @@ def showClusterMassConstraints(meanCriticalMass,stdErrorCriticalMass,\
     ax[8].set_xticklabels(['$' + plot.scientificNotation(k) + '$' \
         for k in tick_list])
     # Fake legend:
-    import matplotlib.patches as mpatches
-    import matplotlib.lines as mlines
     patchList = [mpatches.Patch(color=methodToColour[k],label=k,
         alpha=alpha,ec=methodToColour[k]) for k in methodsToUse]
     simLine = mlines.Line2D([],[],linestyle='-',marker='x',color='k',

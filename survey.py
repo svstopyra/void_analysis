@@ -1,10 +1,14 @@
 # Tools for computing properties of galaxy surveys
 import scipy
 import numpy as np
-import numexpr as ne
 from .cosmology import comovingToLuminosity
 import scipy.special as special
-import healpy
+try:
+    import healpy
+except:
+    healpy = None
+    print("WARNING: healpy not found. Some functionality will be disabled.")
+
 import astropy
 from .simulation_tools import getGriddedGalCount
 from .cosmology import comovingToLuminosity
@@ -59,13 +63,17 @@ def keCorr(z,fit = [-1.456552772320231,-0.7687913554110967]):
     return 2.9*z
 
 # Apply the survey mask for the 2M++ galaxy survey
-def surveyMask(points,mask11,mask12,cosmo,alpha,Mstar,\
+def surveyMask(
+        points,mask11,mask12,cosmo,alpha,Mstar,\
         centre = np.array([0,0,0]),boxsize=None,nside=512,Mmin = -25,\
         Mmax = -21,mmax=12.5,mmin=None,mcut = 11.5,Ninterp=1000,\
         nstar=1.14e-2*(0.705**3),\
         keCorr = None,numericalIntegration=False,interpolateMask = True,\
         splitApparent = True,splitAbsolute=True,nLumBins=8,nAppMagBins=2,\
-        returnComponents = False):
+        returnComponents = False
+    ):
+    if healpy is None:
+        raise Exception("healpy not found.")
     equatorial = pointsToEquatorial(points,boxsize=boxsize,centre=centre)
     theta = np.pi/2 - equatorial[:,2]
     # Now need to get luminosity distance:

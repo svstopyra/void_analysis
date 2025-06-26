@@ -2,17 +2,42 @@
 import numpy as np
 import scipy.integrate as integrate
 from scipy.optimize import brentq
-import hmf, astropy
-#from .import plot
+import astropy
+try:
+    import hmf
+    # New fitting function for Horizon Run simulation (arxiv:1508.05107)
+    from hmf.mass_function.fitting_functions import Bhattacharya
+    from hmf.mass_function.fitting_functions import Tinker08
+except:
+    hmf = None
+    Bhattacharya = None
+    Tinker08 = None
+    print(
+        "WARNING: hmf not found. Functions relating to computing " + 
+        "halo mass functions will not work."
+    )
+
+
 from scipy import interpolate
-import camb
+try:
+    import camb
+    from camb import model, initialpower
+except:
+    camb = None
+    model = None
+    initialpower = None
+    print(
+        "WARNING: camb not found. Functions using it to compute" + 
+        " power spectra will not work."
+    )
+
 import scipy
 import pynbody
 import os
 from . import snapedit
 from astropy.coordinates import SkyCoord
 import astropy.units as u
-from camb import model, initialpower
+
 
 # Linear growth factor as a function of z:
 def fLinear(z,Om,Ol):
@@ -160,11 +185,7 @@ def TMF(M,A,a,b,c,z,rhoB,Tki,ki,ns,sigma8):
     sigmap = computeDSigmaDM(z,M,rhoB,Tki,ki,ns,amp)
     return fsigma(sigma,A,a,b,c)*(rhoB/M)*(-sigmap/sigma)
 
-# Extension of HMF to include Horizon Run fitting function:
 
-# New fitting function for Horizon Run simulation (arxiv:1508.05107)
-from hmf.mass_function.fitting_functions import Bhattacharya
-from hmf.mass_function.fitting_functions import Tinker08
 
 class HorizonRunFittingFunction(Bhattacharya):
     def __init__(self,**kwargs):
@@ -201,7 +222,14 @@ class HorizonRunFittingFunction(Bhattacharya):
 # Mmin - log10 of minimum mass, in units of Msol/h
 # Mmax - log10 of maximum halo mass, in units of Msol/h
 # dlog10m - step between Mmin and Mmax, in log10 space.
-def TMF_from_hmf(Mmin,Mmax,dlog10m=0.01,h = 0.677,Tcmb0 = 2.725,Om0=0.307,Ob0 = 0.0486,returnObjects = False,sigma8 = 0.8159,delta_wrt='SOCritical',Delta=200,z=0,mass_function = "Tinker",Ol0 = None,transfer_model='CAMB',fname=None,ns=0.9667,linking_length=0.2):
+def TMF_from_hmf(
+        Mmin,Mmax,dlog10m=0.01,h = 0.677,Tcmb0 = 2.725,Om0=0.307,Ob0 = 0.0486,
+        returnObjects = False,sigma8 = 0.8159,delta_wrt='SOCritical',Delta=200,
+        z=0,mass_function = "Tinker",Ol0 = None,transfer_model='CAMB',
+        fname=None,ns=0.9667,linking_length=0.2
+    ):
+    if hmf is None:
+        raise Exception("hmf not found.")
     if Ol0 is None:
         cosmo = astropy.cosmology.FlatLambdaCDM(H0 = 100*h,Om0 = Om0, Tcmb0 = Tcmb0, Ob0 = Ob0)
     else:
@@ -257,9 +285,13 @@ def TMF_from_hmf(Mmin,Mmax,dlog10m=0.01,h = 0.677,Tcmb0 = 2.725,Om0=0.307,Ob0 = 
     else:
         return [tmf.dndm,tmf.m*hfactor]
 
-def PSMF(Mmin,Mmax,dlog10m=0.01,h = 0.677,Tcmb0 = 2.725,Om0=0.307,\
+def PSMF(
+        Mmin,Mmax,dlog10m=0.01,h = 0.677,Tcmb0 = 2.725,Om0=0.307,\
         Ob0 = 0.0486,returnObjects = False,sigma8 = 0.8159,delta_c=1.686,\
-        delta_wrt='SOCritical'):
+        delta_wrt='SOCritical'
+    ):
+    if hmf is None:
+        raise Exception("hmf not found.")
     cosmo = astropy.cosmology.FlatLambdaCDM(H0 = 100*h,Om0 = Om0,\
         Tcmb0 = Tcmb0, Ob0 = Ob0)
     tmf = hmf.hmf.MassFunction(Mmin=np.log10(Mmin),Mmax=np.log10(Mmax),\
@@ -479,9 +511,13 @@ def rhoCos(Om):
 
 
 # Code to compute power spectra with CAMB
-def powerSpectrum(h = 0.67,Om0=0.315568,Ob0 = 0.059235,sigma8=0.830,z = 0,\
-    kmin = 1e-4,kmax=2.0,npoints=200,\
-    Ok = 0.0,mnu=0.06,ns=0.96,As=2e-9,r=0,tau=0.06,nonLinear=True):
+def powerSpectrum(
+        h = 0.67,Om0=0.315568,Ob0 = 0.059235,sigma8=0.830,z = 0,
+        kmin = 1e-4,kmax=2.0,npoints=200,
+        Ok = 0.0,mnu=0.06,ns=0.96,As=2e-9,r=0,tau=0.06,nonLinear=True
+    ):
+    if camb is None:
+        raise Exception("camb not found.")
     pars = camb.CAMBparams()
     pars.set_cosmology(H0 = 100.0*h,ombh2=Ob0*h**2,omch2=(Om0 - Ob0)*h**2,\
         mnu=mnu,omk=Ok,tau=tau)
@@ -503,9 +539,13 @@ def powerSpectrum(h = 0.67,Om0=0.315568,Ob0 = 0.059235,sigma8=0.830,z = 0,\
 
 
 # Code to compute power spectra with CAMB
-def cambTransferFunction(h = 0.67,Om0=0.315568,Ob0 = 0.059235,sigma8=0.830,\
-    z = 0,kmin = 1e-4,kmax=2.0,npoints=200,\
-    Ok = 0.0,mnu=0.06,ns=0.96,r=0,tau=0.06,nonLinear=True):
+def cambTransferFunction(
+        h = 0.67,Om0=0.315568,Ob0 = 0.059235,sigma8=0.830,
+        z = 0,kmin = 1e-4,kmax=2.0,npoints=200,
+        Ok = 0.0,mnu=0.06,ns=0.96,r=0,tau=0.06,nonLinear=True
+    ):
+    if camb is None:
+        raise Exception("camb not found.")
     pars = camb.CAMBparams()
     pars.set_cosmology(H0 = 100.0*h,ombh2=Ob0*h**2,omch2=(Om0 - Ob0)*h**2,\
         mnu=mnu,omk=Ok,tau=tau)

@@ -1,20 +1,28 @@
 #
 from . import plot_utilities, context, snapedit, stacking, tools, cosmology
+import sys
 import pynbody
 import numpy as np
-import imageio
 import os
 import gc
 import matplotlib.pylab as plt
 from matplotlib import cm
 from . import cosmology
 from scipy import integrate
-#import pandas
-#import seaborn as sns
 from . plot_utilities import *
 from . cosmology import TMF_from_hmf
-import alphashape
-import healpy
+try:
+    import alphashape
+except:
+    alphashape = None
+    print("WARNING: alphashape not found. Some functions will not work.")
+
+try:
+    import healpy
+except:
+    healpy = None
+    print("WARNING: healpy not found. Some functions will not work.")
+
 from matplotlib import patches
 import matplotlib.lines as mlines
 import matplotlib.colors as colors
@@ -22,14 +30,33 @@ import scipy
 from astropy.coordinates import SkyCoord
 import astropy.units as u
 from astropy import stats
-from descartes import PolygonPatch
-import seaborn as sns
+try:
+    from descartes import PolygonPatch
+except:
+    PolygonPatch = None
+    print("WARNING: descartes not found. Some functions will not work.")
+
+try:
+    import seaborn as sns
+    # Use seaborn colours:
+    seabornColormap = sns.color_palette("colorblind",as_cmap=True)
+except:
+    sns = None
+    seabornColormap = [
+        '#0173B2','#DE8F05', '#029E73', '#D55E00', '#CC78BC',
+        '#CA9161', '#FBAFE4', '#949494', '#ECE133', '#56B4E9'
+    ]
+
 from matplotlib.ticker import NullFormatter
 import matplotlib
-from PIL import Image
+try:
+    from PIL import Image
+except:
+    Image = None
+    print("WARNING: pillow not found. Some functions will not work.")
+
 import numbers
-# Use seaborn colours:
-seabornColormap = sns.color_palette("colorblind",as_cmap=True)
+
 
 
 # Halves the RGB values of a specified color
@@ -292,21 +319,6 @@ def plotHaloRelative(halo,centre = None,weights = None,
     boxsize = halo.properties['boxsize'].ratio("Mpc a h**-1")
     plotPointsRelative(halo['pos'],boxsize,centre=centre,weights = weights,color_spec=color_spec,type=type,scale=scale)
 
-# Violin plots
-#def plotViolins(rho,radialBins,radiiFilter=None,ylim=1.4,ax = None,fontsize=14,fontname="serif",color=None,inner=None,linewidth=None,saturation=1.0,palette="colorblind"):
-#	radii = binCentres(radialBins)
-#	if radiiFilter is None:
-#		radiiFilter = np.arange(0,len(radii))
-#	if ax is None:
-#		fig, ax = plt.subplots()
-#	panData = pandas.DataFrame(data=rho[:,radiiFilter],columns=floatsToStrings(radii[radiiFilter]))
-	#sns.violinplot(data=panData,ax=ax,color=color,inner=inner,linewidth=linewidth,saturation=saturation,palette=palette)
-#	ax.set_xlabel('$R/R_{\\mathrm{eff}}$',fontsize=fontsize,fontfamily=fontname)
-#	ax.set_ylabel('$\\rho/\\bar{\\rho}$',fontsize=fontsize,fontfamily=fontname)
-#	ax.set_ylim([0,ylim])
-#	xlim = ax.get_xlim()
-#	ax.tick_params(axis='both',labelsize=fontsize)
-#	ax.axhline(y = 1.0,color='0.75',linestyle=':')
 
 class LinearMapper:
     def __init__(self,inMin,inMax,outMin=0,outMax=1):
@@ -373,6 +385,10 @@ def plotVoidParticles(snap,hr,voidsToPlot,zslice = None,snapsort=None,
     boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
     # Hacky way to filter out edge cases which aren't polygons:
     sample = np.array([[-1,-1],[-1,1],[1,-1],[1,1]])
+    if 'alphashape' not in sys.modules:
+        raise Exception('alphashape required for plotVoidParticles to work.')
+    if PolygonPatch is None:
+        raise Exception('PolygonPatch required for plotVoidParticles to work.')
     alpha_sample = alphashape.alphashape(sample,0.5)
     if snapsort is None:
         snapshort = np.argsort(snap['iord'])
@@ -536,7 +552,14 @@ def plotVoidsInSlice(zslice,width,thickness,snap,hr,hrcentres,
     plt.xlim([-width/2,width/2])
     plt.ylim([-width/2,width/2])
 
-def sphericalSlice(snap,radius,centre=np.array([0,0,0]),thickness=15,nside=64,fillZeros = 1e-3):
+def sphericalSlice(
+        snap,radius,centre=np.array([0,0,0]),thickness=15,nside=64,
+        fillZeros = 1e-3
+    ):
+    if healpy is None:
+        raise Exception(
+            "healpy not found."
+        )
     annulus = pynbody.filt.Annulus(radius-thickness/2,radius+thickness/2,cen=centre)
     posXYZ = snap[annulus]['pos']
     boxsize = snap.properties['boxsize'].ratio("Mpc a h**-1")
@@ -561,13 +584,17 @@ def sphericalSlice(snap,radius,centre=np.array([0,0,0]),thickness=15,nside=64,fi
 def filterPolarPointsToAnnulus(lonlat,r,radius,thickness = 15):
     return lonlat[np.where((r >= radius - thickness/2) & (r <= radius + thickness/2))[0],:]
 
-def plotMollweide(hpxMap,radius=None,galaxyAngles=None,galaxyDistances=None,
+def plotMollweide(
+        hpxMap,radius=None,galaxyAngles=None,galaxyDistances=None,
         centre=np.array([0,0,0]),thickness=15,vmin=1e-2,vmax=1e2,cmap='PuOr_r',
         shrink=0.5,pad=0.05,nside=64,showGalaxies=True,ax=None,title=None,
         fontname='serif',fontsize=8,fig=None,guideColor='grey',boundaryOff=False,
         titleFontSize=8,margins = (0,0,0,0),figsize = (8,4),xsize=800,dpi=300,\
         cbarSize=[4.0,0.5],returnAx=False,doColorbar=True,\
-        cbarLabel='$\\rho/\\bar{\\rho}$',sub=None,reuse_axes=False):
+        cbarLabel='$\\rho/\\bar{\\rho}$',sub=None,reuse_axes=False
+    ):
+    if healpy is None:
+        raise Exception('healpy not found.')
     if galaxyAngles is not None:
         if radius is None:
             radius = 135/2.0
@@ -623,11 +650,15 @@ def plotMollweide(hpxMap,radius=None,galaxyAngles=None,galaxyDistances=None,
         return fig, ax
 
 # Scatter points at the specified angles in a Mollweide projection.
-def mollweideScatter(angles,color='r',s=1,marker='.',angleCoord="ra_dec",
+def mollweideScatter(
+        angles,color='r',s=1,marker='.',angleCoord="ra_dec",
         angleUnit="deg",text=None,
         fontname='serif',fontsize=7,horizontalalignment='left',
         verticalalignment='bottom',ax=None,textPos=None,textcoords='data',
-        arrowprops=None,arrowpad = 0,textColour='k',label=None):
+        arrowprops=None,arrowpad = 0,textColour='k',label=None
+    ):
+    if healpy is None:
+        raise Exception("healpy not found")
     MW = healpy.projector.MollweideProj()
     if ax is None:
         fig, ax = plt.subplots()
@@ -1062,6 +1093,9 @@ def plotMollweideAlphaShape(positions,alpha_shape=None,origin=None,posMW=None,
     angleCoord="ra_dec",angleUnit="deg",text=None,fontname=None,fontsize=10,
     ax=None,includePoints=False,alphaVal=1.22,alpha=0.5,textPos=None,
     horizontalalignment='left',verticalalignment='bottom',h=0.705):
+    if PolygonPatch is None:
+        raise Exception('PolygonPatch required for plotMollweideAlphaShape' + 
+                        ' to work.')
     if ax is None:
         fig, ax = plt.subplots()
     if posMW is None:
@@ -1322,10 +1356,14 @@ def plotHaloCountHistogram(haloCounts,localCount=None,sigmaLocalCount=None,
     if showFig:
         plt.show()
 
-def plotZoA(ax=None,galacticCentreZOA = [-30,30],nPointsZOA=201,\
+def plotZoA(
+        ax=None,galacticCentreZOA = [-30,30],nPointsZOA=201,\
         bRangeCentre = [-10,10],bRange = [-5,5],nPointsEdgeZOA = 21,\
-        fc='grey',ec=None,alpha=0.5,label='Zone of Avoidance'):
-        # Zone of avoidance?
+        fc='grey',ec=None,alpha=0.5,label='Zone of Avoidance'
+    ):
+    if healpy is None:
+        raise Exception("healpy not found.")
+    # Zone of avoidance?
     if ax is None:
         fig, ax = plt.subplots()
     lZOA = np.linspace(-np.pi,np.pi,nPointsZOA)
@@ -1752,7 +1790,8 @@ def plotDensityComparison(denCompareLeft,denCompareRight,clusterNum = 6,N = 256,
     if returnAx:
         return ax
 
-def plotAalphaSkyDistribution(effAalpha,mBin,nSlice,ns,coordAbell,abell_d,\
+def plotAalphaSkyDistribution(
+        effAalpha,mBin,nSlice,ns,coordAbell,abell_d,\
         clusterInd,rLimits,snapNumList,figsize = (8,4),\
         showDeviation = False,boundaryOff = True,pad=0.05,showClusters = True,\
         deviationCmap = "PuOr_r",normalCmap='GnBu',cmap=None,\
@@ -1767,7 +1806,10 @@ def plotAalphaSkyDistribution(effAalpha,mBin,nSlice,ns,coordAbell,abell_d,\
         appRange = ['$m \\leq 11.5$','$11.5 < m \\leq 12.5$'],\
         nameList = None,title=None,galacticCentreZOA = [-30,30],\
         bRangeCentre = [-10,10],bRange = [-5,5],nPointsEdgeZOA = 21,\
-        nPointsZOA = 201,show=True,savename=None):
+        nPointsZOA = 201,show=True,savename=None
+    ):
+    if healpy is None:
+        raise Exception("healpy not found.")
     if cmap is None:
         if showDeviation:
             cmap = deviationCmap
@@ -3656,8 +3698,13 @@ def plotStackedProfileVsRandoms(rBinStackCentres,profileDictionary,nbar,\
     plt.show()
 
 # Combine a sequence of images into an animation:
-def plot_gif_animation(filenames,output_filename,save_all=True,duration=1000,
-                       loop = 0):
+def plot_gif_animation(
+        filenames,output_filename,save_all=True,duration=1000,loop = 0
+    ):
+    if Image is None:
+        raise Exception(
+            'Image required from pillow for plot_gif_animation to work'
+        )
     frames = []
     for i in filenames:
         new_frame = Image.open(i)

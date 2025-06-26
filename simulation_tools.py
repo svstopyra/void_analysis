@@ -2,7 +2,12 @@
 import pynbody
 import numpy as np
 import astropy
-import numexpr as ne
+try:
+    import numexpr as ne
+else:
+    ne = None
+    print("WARNING: numexpr not found. Accelerated calculations disabled.")
+
 from .halos import massCentreAboutPoint
 import scipy
 from . import tools, snapedit, context, stacking, cosmology
@@ -13,7 +18,11 @@ thread_count = mp.cpu_count()
 from astropy.coordinates import SkyCoord
 import astropy.units as u
 import gc
-import h5py
+try:
+    import h5py
+except:
+    h5py = None
+    print("WARNING: h5py not found. Some functionality disabled.")
 
 def eulerToZ(
         pos,vel,cosmo,boxsize,h,centre = None,Ninterp=1000,\
@@ -216,8 +225,12 @@ def biasOld(rhoArray,params,accelerate = True):
         mrhogs = -rhog
         mepsgs = -epsg
         betas = beta
-        resArray = ne.evaluate(\
-            "nmeans*(rhoArray**betas)*exp(mrhogs*(rhoArray**mepsgs))")
+        if ne is not None:
+            resArray = ne.evaluate(\
+                "nmeans*(rhoArray**betas)*exp(mrhogs*(rhoArray**mepsgs))"
+            )
+        else:
+            resArray = nmeans*(rhoArray**betas)*exp(mrhogs*(rhoArray**mepsgs))
     else:
         resArray = nmean[ls,:]*np.power(rhoArray,beta[ls,:])*\
             np.exp(-rhog[ls,:]*np.power(rhoArray,-epsg[ls,:]))
@@ -317,21 +330,28 @@ def ngPerLBin(bias,lumBins = 16,nReal = 6,N = 256,returnError = False,\
     if mask is not None:
         if mask2 is None:
             if accelerate:
-                ng = ne.evaluate("ng*mask")
+                ng = ne.evaluate("ng*mask") if ne is not None else ng*mask
             else:
                 ng *= mask
         else:
             # Apply different survey masks to the different catalogues:
             maskMult = np.tile(np.vstack((mask,mask2)),(8,1))
             if accelerate:
-                ng = ne.evaluate("ng*maskMult")
+                ng = (
+                    ne.evaluate("ng*maskMult") if ne is not Nont 
+                    else ng*maskMult
+                )
             else:
                 ng *= maskMult
     if fixNormalisation:
         # Renormalise the amplitude of each bin to match the excpected counts
         # in each bin:
-        numerator = ne.evaluate("sum(ng*ngExpected,axis=2)")
-        denominator = ne.evaluate("sum(ng**2,axis=2)")
+        if ne is not None:
+            numerator = ne.evaluate("sum(ng*ngExpected,axis=2)")
+            denominator = ne.evaluate("sum(ng**2,axis=2)")
+        else:
+            numerator = np.sum(ng*ngExpected,axis=2)
+            denominator = np.sum(ng**2,axis=2)
         nbar = nmean*numerator/denominator
         ng = (nbar.reshape((lumBins,1)))*(ng/(nmean.reshape((lumBins,1))))
     if return_samples:
@@ -1179,6 +1199,8 @@ def get_antihalo_properties(snap, file_suffix="AHproperties",
     filename = snap.filename + "." + file_suffix + default
     filename_old = snap.filename + "." + file_suffix + ".p"
     if os.path.isfile(filename):
+        if h5py is None:
+            raise Exception("h5py not found.")
         return h5py.File(filename, "r")
     elif os.path.isfile(filename_old):
         if low_memory_mode:
@@ -1313,9 +1335,17 @@ class SnapshotGroup:
         property_list = self.all_property_lists[snap_index]
         if property_list is None:
             property_list = get_antihalo_properties(self.snaps[snap_index])
-
-        if isinstance(property_list, h5py._hl.files.File):
-            return property_list[self.get_property_name(property_name)]
+        
+        if h5py is not None:
+            if isinstance(property_list, h5py._hl.files.File):
+                return property_list[self.get_property_name(property_name)]
+            elif isinstance(property_list, list):
+                return property_list[self.get_property_index(property_name)]
+            elif isinstance(property_list, str):
+                props_list = tools.loadPickle(property_list)
+                return props_list[self.get_property_index(property_name)]
+            else:
+                raise Exception("Invalid Property Type")
         elif isinstance(property_list, list):
             return property_list[self.get_property_index(property_name)]
         elif isinstance(property_list, str):

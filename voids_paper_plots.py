@@ -15,9 +15,16 @@ import matplotlib.lines as mlines
 import matplotlib.colors as colors
 import pickle
 import numpy as np
-import seaborn as sns
-import pandas
-seabornColormap = sns.color_palette("colorblind",as_cmap=True)
+try:
+    import seaborn as sns
+    seabornColormap = sns.color_palette("colorblind",as_cmap=True)
+except:
+    # Since we only need this colormap, we can do it manually if seaborn
+    # is not installed:
+    seabornColormap = [
+        '#0173B2','#DE8F05', '#029E73', '#D55E00', '#CC78BC',
+        '#CA9161', '#FBAFE4', '#949494', '#ECE133', '#56B4E9'
+    ]
 import pynbody
 import astropy.units as u
 from astropy.coordinates import SkyCoord
@@ -1305,7 +1312,6 @@ plt.show()
 
 
 # Histogram bootstrap samples to check the distribution of the mean:
-import seaborn
 def plot_bootstrap_mean_distribution(data,savename,seed=1000,n_boot=10000,
                                      n_bins = 21,alpha=0.5,color=None,
                                      xlabel = "Mean radius " 
