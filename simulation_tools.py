@@ -4,7 +4,7 @@ import numpy as np
 import astropy
 try:
     import numexpr as ne
-else:
+except:
     ne = None
     print("WARNING: numexpr not found. Accelerated calculations disabled.")
 

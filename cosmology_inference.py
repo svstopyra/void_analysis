@@ -1,7 +1,7 @@
 # CONFIGURATION
-from void_analysis import plot, tools, snapedit, catalogue
+from void_analysis import plot, tools, snapedit, catalogue, simulation_tools
 from void_analysis.catalogue import *
-from void_analysis.paper_plots_borg_antihalos_generate_data import *
+#from void_analysis.paper_plots_borg_antihalos_generate_data import *
 from void_analysis.real_clusters import getClusterSkyPositions
 from void_analysis import massconstraintsplot
 from void_analysis.simulation_tools import (
@@ -49,7 +49,7 @@ from fractions import Fraction
 
 from void_analysis.cosmology import Hz, D1, D1_CPT, f_lcdm, Omega_z, Ez2
 from fractions import Fraction
-
+import astropy
 
 #-------------------------------------------------------------------------------
 # COSMOLOGY FUNCTIONS
