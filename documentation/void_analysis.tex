@@ -1,0 +1,419 @@
+%\documentclass[usenatbib, useAMS]{mnras}
+\documentclass{article}
+
+\usepackage{amsmath}
+\usepackage{bm}
+\usepackage{newtxtext,newtxmath}
+\usepackage{color}
+%\usepackage{tensor}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{natbib}
+\usepackage{myaasmacros}
+\usepackage{enumerate}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+\usepackage{placeins}
+\usepackage{subcaption}
+\usepackage{empheq}
+\captionsetup{compatibility=false}
+\usepackage{url}
+\usepackage[margin=1.5cm]{geometry}
+%\usepackage{auto-pst-pdf}
+%\usepackage{algpseudocode}
+\usepackage{hyperref}
+
+\newcommand{\codefont}[1]{{\texttt{#1}}}
+\newcommand{\Mpch}{\mathrm{\,Mpc}h^{-1}}
+
+\newcommand{\changed}[1]{{\color{red}#1}}
+\newcommand{\removed}[1]{}
+\newcommand{\replaced}[2]{\changed{#1}\removed{#2}}
+\newcommand{\svs}[1]{{\color{red}SVS:#1}}
+\newcommand{\tr}[1]{\mathrm{Tr}\left(#1\right)}
+\newcommand{\nablaq}{\vec{\nabla}_q}
+\newcommand{\order}[2]{{#1}^{(#2)}}
+\newcommand{\vpsi}{\vec{\Psi}}
+\newcommand*\widefbox[1]{\fbox{\hspace{2em}#1\hspace{2em}}}
+\newcommand{\rratio}[2]{\frac{\order{#1}{#2}}{r}}
+
+
+
+\begin{document}
+	\title{Void Analysis User Documentation}
+	\author{Stephen Stopyra}
+	\maketitle
+	\begin{abstract}
+		Documentation for the void analysis pipeline.
+	\end{abstract}
+
+	Contact: Stephen Stopyra (svstopyra@googlemail.com)
+
+	\section{Introduction}
+	
+	This is the user documentation for the \codefont{void\_analysis} pipeline, a collection of scripts and pipelines designed for computing anti-halo void catalogues from pairs of simulations, and analysing the output.
+	
+	Anti-halos are a definition of cosmological voids that places voids and halos on equal footing: instead of using the morphology of the cosmic web (as is done with void finders such as \codefont{VIDE}, ~\citet{Sutter:2014haa}), in the anti-halo approach voids are modelled as clusters in an ``anti-universe'' reverse simulation, obtained from the original simulation by reversing the sign of the density contrast in the initial conditions. This transforms under-dense regions into over-dense regions and vice versa. After running the reversed initial conditions to redshift $z = 0$, a halo finder can be run to identify clusters, and the dark matter particles corresponding to a halo in the reverse simulation correspond to voids in the original, forward simulation. The method was first outlined by ~\citet{Pontzen:2015eoh}. 
+	
+	The purpose of this code is to analyse forward/reverse simulation pairs, typically from initial conditions inferred by \codefont{BORG} (~\citet{jasche2019physical}), and produce an anti-halo void catalogue from these. Since the initial conditions of our Universe can only be known approximately, in the Bayesian framework of \codefont{BORG} it is necessary to draw many samples from the posterior distribution of possible initial conditions. Therefore, generating an anti-halo catalogue of the present day Universe requires combining multiple possible halo catalogues into a single catalogue. This is the purpose of the void analysis code presented here, which was used to produce the catalogue in~\citet{10.1093/mnras/stae1251}.
+	
+	\subsection{Useful links}
+	
+	\begin{itemize}
+		\item Anti-halo void catalogue of the local super-volume, at Zenodo: \url{https://zenodo.org/records/10160612}
+		\item Antihalo analysis github repository: \url{https://github.com/svstopyra/void_analysis}
+		\item Aquila Cloud link for the anti-halo catalogue simulations: \url{https://cloud.aquila-consortium.org/s/bE4dKyJq6wZJ93D}
+		\item Void Catalogue paper (~\citet{10.1093/mnras/stae1251}): \url{https://doi.org/10.1093/mnras/stae1251}
+	\end{itemize}
+	
+	The main body of the code can be found at the gihub repository above. To reproduce the void catalogues presented in ~\citet{10.1093/mnras/stae1251}, however, the simulation data will be needed. The actual void catalogue has already been released on Zenodo, but the underlying simulations are available via the Aquila Cloud (see link above). For problems with accessing the data via the Aquila Cloud link, please contact the Guilhem Lavaux (guilhem.lavaux@iap.fr), but please direct any questions about the content of the files or code to Stephen Stopyra (svstopyra@googlemail.com).
+	
+	While the void catalogue construction is the main focus of the code, aspects of this package were also used in the following papers:
+	
+	\begin{itemize}
+		\item ``How to build a catalogue of linearly evolving cosmic voids'', ~\citet{stopyra2021build}
+		\item ``Quantifying the rarity of the local super-volume''~\citet{stopyra2021quantifying}
+		\item ``Towards accurate field-level inference of massive cosmic structures'' ~\citet{10.1093/mnras/stad3170}
+	\end{itemize}
+	
+	\subsection{License}
+	
+	The code is released under the GNU public license v3, but if you make use of the code for scientific purposes, please cite the void catalogue paper, ~\citet{10.1093/mnras/stae1251}.
+	
+	\subsection{Acknowledgements}
+	
+	I would like to thank the many discussions with my collaborators, over the years in helping to make this work possible. In particular, my co-authors on the works that used this code-base, Hiranya Peiris, Andrew Pontzen, and Jens Jasche. 
+	
+	While conducting the research that led to the development of this code over many years, I was also generously supported by: the Göran Gustafsson Foundation for Research in Natural Sciences and Medicine; the UCL Cosmoparticle Initiative, the European Union’s Horizon 2020 research and innovation programme under grant agreement No. 818085 GMGalaxies; the Royal Society under research grants CEC19\textbackslash 100037, RGF\textbackslash EA\textbackslash181010, and URF\textbackslash R\textbackslash180003. 
+	
+	Much of the technical development and testing was carried out using computing resources provided by: the Research Capital Investment Fund (RCIF) provided by United Kingdom Research and Innovation (UKRI); the Sunrise HPC facility supported by the Technical Division at the Department of Physics, Stockholm University; and the Swedish National Infrastructure for Computing (SNIC) at Linköping University, partially funded by the Swedish Research Council through grant agreement no. 2018-05973. Some of the results of this code make use of the healpy and HEALPix package\footnote{\url{http://healpix.sourceforge.net}}. 
+	
+	\section{Installation}
+	
+	The package is not yet available via \codefont{pip}, so it is necessary to clone the git repository at \url{https://github.com/svstopyra/void_analysis} onto a location in your python path. For example:
+	
+	\begin{verbatim}
+		git clone https://github.com/svstopyra/void_analysis.git
+	\end{verbatim}
+	which can be for example cloned into the \codefont{<PATH\_TO\_PYTHON\_LIBRARIES>/site\_packages/} directory. If installing in a virtual environment, the appropriate virtual environment directory for \codefont{site\_packages} should be used.
+	
+	Once installed, tests can be run by running \codefont{pytest} in the \codefont{void\_analysis} directory. 
+	
+	\subsection{Dependencies}
+	
+	The code has been tested with python 3.10.12. Older versions may also work. It has also been tested with the most recent version of python at the time of writing (3.13.5), and everything except the mayavi visualisation code is functional. Mayavi unfortunately requires older versions of python at the time of writing (3.10 recommended). A requirements.txt file is included in the documentation subfolder, which allows for easier setup.
+	
+	The following packages are required, depending on what parts of the code you wish to use.
+	
+	Essential packages:
+	
+	\begin{itemize}
+		\item \codefont{numpy}: (see \citet{harris2020array}) currently not supporting \codefont{numpy 2+}. Tested with version 1.26.4.
+		\item \codefont{pynbody}: (see \citet{pynbody}) for loading cosmological simulation data and halo catalogues. Install via \codefont{pip} (preferred) or clone from \url{https://github.com/pynbody/pynbody}.
+		\item \codefont{scipy}: (see \citet{2020SciPy-NMeth}) mostly used for statistical and special functions, as well as bootstrapping.
+		\item \codefont{astropy}: (see \citet{astropy:2013,astropy:2018,astropy:2022}) For cosmological calculations.
+		\item \codefont{matplotlib}: (see \citet{Hunter:2007}) For all plotting routines.
+		\item \codefont{Corrfunc}: (\citet{2020MNRAS.491.3022S})For computing correlation functions, and also used by the void stacking code for accelerated stacking.
+	\end{itemize}
+	
+	Highly recommended (most calculations will work, but some plotting functions will be unavailable):
+	\begin{itemize}
+		\item \codefont{alphashape}: (see \citet{ken_bellock_2021_4697576}) For void outlines on sky-plots.
+		\item \codefont{seaborn}: (see \citet{Waskom2021}) For some plotting routines, and colormaps.
+		\item \codefont{healpy}: (see \citet{Zonca2019,2005ApJ...622..759G}) For producing skyplots that use \codefont{HEALPix}.
+		\item \codefont{hmf}: (see \citet{2013A&C.....3...23M}) For computing theoretical halo mass functions.
+		\item \codefont{camb}: (see \citet{2011ascl.soft02026L})For power spectrum calculations.
+		\item \codefont{emcee}: (see \citet{2013PASP..125..306F}) For cosmological inference, particularly in \codefont{cosmology\_inference.py}
+		\item \codefont{pytest}: (see \citet{pytest}) For running the automated test suite.
+		\item \codefont{pytest-cov}: For running the automated test suite (provides coverage statistics).
+		\item \codefont{numexpr}: (see \citet{cooke_2018_1492916}) For fast evaluation of some quantities, such as void barycentres.
+	\end{itemize}
+
+	Optional packages (some functionality will be disabled, but core routines are not effected):
+	\begin{itemize}
+		\item \codefont{sympy}: (see \citet{10.7717/peerj-cs.103}) For symbolic calculations, used mainly in \codefont{lpt\_symbolic.py}.
+		\item \codefont{pillow}: (see \citet{clark2015pillow}) For producing \codefont{GIF} animation plots.
+		\item \codefont{mayavi}: (see \citet{2011CSE....13b..40R}) Only if you wish to use the 3D visualisations provided in \codefont{mayavi\_plot.py}. This package can be quite fiddly to install, which is why the functions using it are separated into \codefont{mayavi\_plot.py}. In particular, \codefont{mayavi} doesn't work on more recent versions of python.
+		\item \codefont{h5py}: (see \citet{andrew_collette_2022_6575970})For loading some file types.
+		\item \codefont{nbodykit}: (see \citet{2018AJ....156..160H}) Only for computing power spectra, if using the \codefont{get\_sim\_ps.py} script.
+		\item \codefont{borg}: (see \citet{jasche2019physical}) Only used by \codefont{generate\_genetIC\_ics.py}. Can be tricky to get working correctly.
+	\end{itemize}
+	
+	\section{Overview of the Code}
+	
+	Examples of how to use the code are found in \codefont{voids\_paper\_plots.py}, which shows how to build a catalogue from scratch, and regenerate all the figures in~\citet{10.1093/mnras/stae1251}. The routines of the codebase are split across several files, which we describe now:
+	
+	\begin{itemize}
+		\item \codefont{antihalos.py}: Routines for computing properties of anti-halo voids, such as void radii, masses, centres, and for comparing with other void definitions by examining volume overlaps.
+		\item \codefont{catalogue.py}: This file contains the main class, \codefont{combinedCatalogue}, used for construction of an anti-halo void catalogue. See \codefont{voids\_paper\_plots.py} for usage examples.
+		\item \codefont{context.py}: Contains functions relating to co-ordinates and void centres, including important functions such as the computation of the volume-weighted void barycentre with periodic boundary conditions.
+		\item \codefont{cosmology.py}: Contains functions for computing cosmological quantities such as the linear growth factor, power spectra, and halo mass functions.
+		\item \codefont{cosmology\_inference.py}: Pipeline for inference of cosmological parameters via the Alcock-Paczynski test. Also contains functions for void velocity profile models, including up to 5th-order Lagrangian Perturbation Theory (LPT).
+		\item \codefont{halos.py}: Functions for computing halo properties.
+		\item \codefont{lpt\_symbolic.py}: Symbolic code for computing and solving the equations of LPT up to 5th order (assuming spherical symmetry).
+		\item \codefont{massconstraintsplot.py}: Code for generating the cluster mass constraints plot used in~\citet{stopyra2021quantifying}.
+		\item \codefont{mayavi\_plot.py}: Functions for generating 3D visualisations of voids and simulations, using \codefont{mayavi}.
+		\item \codefont{plot.py}: Functions for generating various different plots that are useful for analysing void catalogues.
+		\item \codefont{plot\_utilities.py}: Utility functions for creating plots. Includes some simple binning functions.
+		\item \codefont{real\_clusters.py}: Functions for loading and processing data on galaxy clusters and catalogues.
+		\item \codefont{simulation\_tools.py}: Utility functions for loading, processing and analysing simulation data.
+		\item \codefont{snapedit.py}: Utility functions for transforming and editing simulation snapshots. Includes functions for wrapping co-ordinates into the periodic box and changing co-ordinate systems for simulations, as well as generating Zel'dovich extrapolations of initial conditions (such as used for testing void linearity in ~\citet{stopyra2021build}).
+		\item \codefont{stacking.py}: Functions for stacking void density and velocities, both in 1D and 2D.
+		\item \codefont{survey.py}: Utility functions for handling galaxy surveys, notably survey masks.
+		\item \codefont{tools.py}: Generic utility functions useful for handling void catalogue data.
+		\item \codefont{void\_applications.py}: Examples for cosmological parameter inference with void catalogues.
+		\item \codefont{voids\_paper\_plots.py}: Examples for generating figures in~\citet{10.1093/mnras/stae1251}.
+		\item \codefont{example.py}: Worked example of how to use the catalogue code. See sec.~\ref{sec:example}.
+	\end{itemize}
+	
+	There are additionally subfolders which contain useful scripts and utilities:
+	
+	\begin{itemize}
+		\item \codefont{archived\_scripts}: Old scripts, used for plots in~\citet{stopyra2021build,stopyra2021quantifying,10.1093/mnras/stad3170}, along with older code not seeing immediate use. Somewhat un-organised at the moment, but I have retained this folder as it may help with seeing some examples of the codebase in use.
+		\item \codefont{cosmology\_inference\_tests}: Tests and test data for the codebase.
+		\item \codefont{postprocessing}: Post-processing scripts used for analysing simulations. See sec.~\ref{sec:postprocessing}.
+		\item \codefont{simulations}: Scripts for running simulations. See sec.~\ref{sec:simulations}.
+		\item \codefont{test\_snaps}: Low-resolution test snapshots, used for running automated tests on the void catalogue pipeline and other tests that require simulation data to run.
+	\end{itemize}
+	
+	The remaining loose files include \codefont{pytest.ini} which is the configuration file for \codefont{pytest}, and 
+	
+	\subsection{Postprocessing scripts}
+	
+	Found in the subdirectory \codefont{simulations}, these scripts are used when post-processing the resimulated pairs of forward and reversed initial conditions to extract void properties used by the analysis pipelines.
+	
+	\label{sec:postprocessing}
+	\begin{itemize}
+		\item \codefont{combine\_cpu\_catalogues.sh}: Shell script for combining multiple \codefont{AHF} halo catalogues into a single catalogue. This is used when running \codefont{AHF} with \codefont{MPI}, since each CPU generates its own halo catalogue.
+		\item \codefont{get\_sim\_ps.py}: Script to estimate simulation power-spectra using \codefont{nbodykit}.
+		\item \codefont{order\_halo\_catalogue.py}: Script to re-order an \codefont{AHF} halo catalogue(~\citet{AHF}) in descending order of mass. Useful after combining the catalogues with \codefont{combine\_cpu\_catalogues.sh}, since this will produce an out-of-order catalogue.
+		\item \codefont{process\_snapshot.py}: Runs various analysis routines on a simulation-anti-simulation pair. See below for details.
+		\item \codefont{run\_post\_processing.sh}: Shell script for running post-processing routines on simulations.
+		\item \codefont{run\_voz.py}: Runs Voronoi Tesselation code to obtain Voronoi volumes of particles in a simulation. Requires \codefont{VOBOZ/ZOBOV} (\url{https://ascl.net/1304.005}) to function. See ~\citet{neyrinck2005voboz}.
+	\end{itemize}
+	
+	The \codefont{process\_snapshot.py} script performs the following analyses on a simulation/anti-simulation pair. The main body of this code is found in \codefont{simulation\_tools.py} under the function \codefont{processSnapshot}:
+	\begin{itemize}
+		\item Compute halo and anti-halo centres in their respective simulations.
+		\item Convert output of Voronoi tesselation backend (\codefont{run\_voz.py}) to physical volumes. If Voronoi volumes are not available, substitutes them with estimated volumes using \codefont{pynbody}'s spherical particle hydrodynamics (SPH) density estimation code (~\citet{pynbody}).
+		\item Compute void volumes and centres, by mapping anti-halo particles from the reverse simulation to the forward simulation, and adding up Voronoi volumes to compute volume and radius, as well as volume-weighted barycentres.
+		\item Computed stacked 1D density profiles in 30 fixed bins between 0 and 3 effective radii. 
+		\item Computes void central and average densities.
+	\end{itemize}
+	The output is saved in \codefont{pickle} format to a file named \codefont{<snapshot\_name>.AHproperties.p}. The order of arrays in this file is:
+	\begin{enumerate}
+		\item Halo centres in the forward simulation (clusters)
+		\item Halo masses in the forward simulation.
+		\item Anti-halo centres in the reverse simulation (N.B. -- not the same as void centres!)
+		\item Anti-halo masses 
+		\item Voronoi cell volumes for all particles in the simulation, in units of $h^{-3}\,\mathrm{Mpc}^{3}$.
+		\item $X_{\mathrm{void}}$, Void centres (in the forward simulation) after mapping anti-halo particles to the forward simulation. Defined as a volume-weighted barycentre.
+		\item $V_{\mathrm{void}}$, total void volumes in the forward simulation (sum of the Voronoi cell volumes for each particle).
+		\item $R_{\mathrm{eff}}$, void effective radii (radius of a sphere with volume equal to that of the void).
+		\item Radius bin edges used for the 1D density profile.
+		\item $N_{\mathrm{parts}}$, particle counts in each radius bin, for all voids. Used to compute the density profile.
+		\item $V_{\mathrm{parts}}$, sum of the Voronoi volumes for all particles in each radius bin. Volume-weighted density profile is then just $\frac{N_{\mathrm{parts}}}{V_{\mathrm{parts}}}$.
+		\item $\delta_{c}$: Central density contrast for each void, defined as the density contrast within $R_{\mathrm{eff}}/4$.
+		\item $\bar{\delta}$: Average density contrast of each void, defined as Mass/Volume relative to the average density of the Universe.
+	\end{enumerate}
+	
+	\subsection{Simulations}
+	\label{sec:simulations}
+	
+	Found in the \codefont{simulations} subdirectory, these scripts are used for running simulation with \codefont{GADGET2}~\codefont{Springel:2005mi}.
+	
+	\begin{itemize}
+		\item \codefont{config.sh}: Run to setup configuration of the simulations on the cluster where they are being generated. Paths to software and other options can be configured here.
+		\item \codefont{generate\_genetIC\_ics.py}: Script to generate initial conditions using \codefont{genetIC} (~\citet{stopyra2021genetic}, \url{https://github.com/pynbody/genetIC}). To use the \codefont{import\_noise} function, it may be necessary to use the velocity transfer branch at \url{https://github.com/svstopyra/genetIC/tree/velocity_transfer} in order to import white noise generated with \codefont{BORG} (~\citet{jasche2019physical}) into \codefont{genetIC}. At some point, this feature will hopefully be incorporated into the main branch of \codefont{genetIC}.
+		\item \codefont{parameters\_full\_forward\_512.params}: Parameter file used for running forward simulations with \codefont{GADGET2}.
+		\item \codefont{parameters\_full\_reverse\_512.params}: Parameter file for running reverse simulations.
+		\item \codefont{run\_simulations.py}: Script to run both forward and reverse simulations, and perform cleanup operations.
+	\end{itemize}
+	
+	\section{Worked Example}
+	\label{sec:example}
+	
+	To illustrate the usage of the code, an example is included in the file \codefont{example.py}. This example uses only the test data found in the \codefont{test\_snaps} subfolder. Note that these are unrelated random $\Lambda$-CDM simulations, so the void catalogue we will build in this example consists \emph{only} of spurious voids. Construction of a proper catalogue requires data from \url{https://cloud.aquila-consortium.org/s/bE4dKyJq6wZJ93D}. Examples showing how to use this are given in \codefont{voids\_paper\_plots.py}.
+	
+	First, we import the needed libraries:
+	
+	\begin{verbatim}
+		from void_analysis.simulation_tools import SnapshotGroup
+		from void_analysis import catalogue
+		import os
+		import pynbody
+	\end{verbatim}
+	
+	This will require the package to be installed on your python path. The package \codefont{pynbody} is required for much of the functionality of this package to work. \codefont{pynbody} is available for installation with \codefont{pip}.
+	
+	First, we load the simulations and organise them with the \codefont{SnapshotGroup} class:
+	\begin{verbatim}
+		# Forward simulations:
+		snapList = [
+		    pynbody.load(
+		        os.path.join(base_path,f"sample{k}/forward/snapshot_001")
+		    )
+		    for k in range(1,4)
+		]
+		# Reverse simulations:
+		snapListRev = [
+		    pynbody.load(
+		        os.path.join(base_path,f"sample{k}/reverse/snapshot_001")
+		    )
+		    for k in range(1,4)
+		]
+		
+		# Class that handles groups of related snapshots cleanly:
+		snaps = SnapshotGroup(
+		    snapList,snapListRev,low_memory_mode=False,swapXZ  = False,
+		    reverse = True,remap_centres=True
+		)
+	\end{verbatim}
+	The first two parts here are just loading the forward and reverse simulations from the \codefont{test\_snaps} subdirectory. The final part here instantiates a SnapshotGroup class that allows us to access snapshots and their derived properties more easily. An explanation of some of the parameters:
+	\begin{itemize}
+		\item \begin{verbatim}low_memory_mode=False\end{verbatim} instructs the code to load the halo and anti-halo catalogues, along with the postprocessing data computed by \codefont{processSnapshots.py} script in sec.~\ref{sec:postprocessing}. Typically, you would want to avoid doing this (by setting \begin{verbatim}low_memory_mode=True\end{verbatim}) for large simulation sets, to avoid memory problems. Here, since our examples are quite light-weight, loading them is not likely to be problematic.
+		\item \begin{verbatim}swapXY=False\end{verbatim}: If True, this would swap the X and Z co-ordinates of particles when loading the snapshots. Depending on the geometry of the simulation snapshots, this may be needed to get them in the correct units.
+		\item \begin{verbatim}reverse=True\end{verbatim}: This reflects the positions of particles about the centre of the box. Combining \begin{verbatim}reverse=True\end{verbatim} with \begin{verbatim}swapXY=False\end{verbatim} gives the correct loading of the simulations stored on the Aquila Cloud, to put the positions in Equatorial co-ordinates. It isn't strictly necessary here, but we perform this transformation to illustrate how it would be implemented for real data.
+		\item \begin{verbatim}remap\_centres=True\end{verbatim} ensures that the same co-ordinate transformation is applied to the halo and void positions, so we have consistent co-ordinates.
+	\end{itemize}
+	
+	Next, we set up the arguments for the catalogue construction code:
+	
+	\begin{verbatim}
+		# Construction of an anti-halo void catalogue:
+		# Parameters:
+		rSphere = 25 # Radius out to which to search for voids
+		muOpt = 0.2 # Optimal choice of \mu_R, radius ratio
+		rSearchOpt = 3 # Optimal choice of \mu_S, search radius ratio
+		NWayMatch = False # Whether to use N-way matching code.
+		refineCentres = True # Whether to refine centres iteratively using all samples
+		sortBy = "radius" # Quantity to sort catalogue by
+		enforceExclusive = True # Whether to apply the algorithm purging duplicate
+		# voids from the catalogues.
+		mMin = 1e11 # Minimum mass halos to include (Note, this is effectively
+		# over-ridden by the minimum radius threshold)
+		mMax = 1e16 # Maximum mass halos to include (Note, this is effectively 
+		# over-ridden by the maximum radius threshold)
+		rMin = 5 # Minimum radius voids to use
+		rMax = 30 # Maximum radius voids to use
+		m_unit = snaps.snaps[0]['mass'][0]*1e10
+	\end{verbatim}
+	The most important parameters are \codefont{muOpt} and \codefont{rSearchOpt}, which correspond to $\mu_R$ and $\mu_S$ respectively from ~\citet{10.1093/mnras/stae1251}. The values given in the example here are wildly unrealistic, and chosen only to give a viable illustration of the catalogue using these low-resolution test simulations. For actual scientific cases, see the paper for the appropriate choice of parameters.
+	
+	Catalogue construction is done by first instantiating an instance of the combinedCatalogue class, and then computing the final catalogue:
+	
+	\begin{verbatim}
+		cat = catalogue.combinedCatalogue(
+		snaps.snap_filenames,snaps.snap_reverse_filenames,\
+		muOpt,rSearchOpt,rSphere,\
+		ahProps=snaps.all_property_lists,hrList=snaps["antihalos"],\
+		max_index=None,\
+		twoWayOnly=True,blockDuplicates=True,\
+		massRange = [mMin,mMax],\
+		NWayMatch = NWayMatch,r_min=rMin,r_max=rMax,\
+		additionalFilters = None,verbose=False,\
+		refineCentres=refineCentres,sortBy=sortBy,\
+		enforceExclusive=enforceExclusive
+		)
+		# Build the anti-halo catalogue
+		finalCat = cat.constructAntihaloCatalogue()
+	\end{verbatim}
+	Here, we have set \codefont{additionalFilters} to \codefont{None}, but when working with actual posterior sampled simulations, this is where a signal-to-noise filter would be supplied (see examples in \codefont{voids\_paper\_plots.py}). Note that the final call to \codefont{constructAntihaloCatalogue} is necessary to generate an output. If this is not called, the final catalogue will be empty!
+	
+	We can now examine various properties of this mock void catalogue:
+	\begin{verbatim}
+		# Properties of the antihalo catalogue:
+		radii = cat.getMeanProperty("radii")
+		mass = cat.getMeanProperty("mass")
+		centres = cat.getMeanCentres()
+		
+		# Properties of all the constituent halos:
+		all_radii = cat.getAllProperties("radii")
+		all_masses = cat.getAllProperties("mass")
+		all_centres = cat.getAllCentres()
+		
+		# All halo indices:
+		halo_indices = cat.get_final_catalogue(short_list=False)
+	\end{verbatim}
+	
+	We can compute the mean radius, mass, and position of voids in the catalogue:
+	\begin{verbatim}
+		In [59]: radii
+		Out[59]:
+		[array([6.94403629, 7.86756052, 5.49556746, 5.47383931]),
+		array([0.53356164, 0.46516516, 0.05645594, 0.30436382])]
+		
+		In [60]: mass
+		Out[60]:
+		[array([4.65081068e+13, 6.47668499e+13, 2.56901938e+13, 2.19990752e+13]),
+		array([9.70925872e+12, 1.16233394e+13, 2.71441559e+12, 3.02761738e+12])]
+		
+		In [61]: centres
+		Out[61]:
+		array([[ -0.37999936, -14.51207332,  -9.41482562],
+		[ -6.68264413,   6.10391777,   7.30281434],
+		[ -6.94982653,  11.9624704 ,   9.11765419],
+		[-17.15245043, -14.39614657,   2.22468294]])
+	\end{verbatim}
+	With the given parameters, there are four voids. The lists for \codefont{radii} and \codefont{mass} give first the values of these four quantities, and then the standard deviations of the means for each.
+	
+	If we wish to examine the properties of all the anti-halos corresponding to a given void in the catalogue, across the posterior samples, we can look at the output of the \codefont{getAllProperties} and \codefont{getAllCentres} functions:
+	
+	\begin{verbatim}
+		In [62]: all_radii
+		Out[62]:
+		array([[6.18946618,        nan, 7.69860641],
+		[8.86128572, 7.85348824, 6.8879076 ],
+		[       nan, 5.57540821, 5.4157267 ],
+		[5.04340386,        nan, 5.90427476]])
+		
+		In [63]: all_masses
+		Out[63]:
+		array([[3.27771415e+13,            nan, 6.02390722e+13],
+		[8.00234783e+13, 7.79564498e+13, 3.63206216e+13],
+		[           nan, 2.95289571e+13, 2.18514305e+13],
+		[1.77173776e+13,            nan, 2.62807728e+13]])
+		
+		In [64]: all_centres
+		Out[64]:
+		array([[[  5.2190234 ,  -8.68813632, -14.45268237],
+		[ -5.78228292,  17.55552727,  -9.00987174],
+		[         nan,          nan,          nan],
+		[-14.58387323, -17.74368193,  -1.49044033]],
+		
+		[[         nan,          nan,          nan],
+		[ -8.29333347,   9.96858431,  11.75023604],
+		[ -5.3894499 ,  12.36455405,   5.33469134],
+		[         nan,          nan,          nan]],
+		
+		[[ -5.97902213, -20.33601031,  -4.37696886],
+		[ -5.97231601,  -9.21235828,  19.1680787 ],
+		[ -8.51020317,  11.56038676,  12.90061704],
+		[-19.72102762, -11.04861121,   5.93980621]]])
+	\end{verbatim}
+	When no anti-halo was found corresponding to a particular void in a given sample, the value are set to \codefont{nan}. In the final catalogue, these correspond to entries with -1:
+	\begin{verbatim}
+		In [66]: finalCat
+		Out[66]:
+		array([[ 2, -1,  1],
+		[ 1,  1,  2],
+		[-1,  2,  4],
+		[ 3, -1,  3]])
+	\end{verbatim}
+	These are the halo indices in the shortened list of halos satisfying the range criteria (radius range, distance from centre of the box). If we want the indices of halos in the individual reverse simulation halo catalogues, we can compute them using:
+	\begin{verbatim}
+		In [67]: halo_indices = cat.get_final_catalogue(short_list=False)
+		
+		In [68]: halo_indices
+		Out[68]:
+		array([[ 3, -1,  0],
+		[ 0,  1,  1],
+		[-1,  2,  5],
+		[ 4, -1,  4]])
+	\end{verbatim}
+	with again, negative entries indicating that no halo was found.
+	
+	\bibliographystyle{mnras}
+	\bibliography{references}
+	
+\end{document}  

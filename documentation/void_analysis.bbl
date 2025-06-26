@@ -1,0 +1,190 @@
+\begin{thebibliography}{}
+\makeatletter
+\relax
+\def\mn@urlcharsother{\let\do\@makeother \do\$\do\&\do\#\do\^\do\_\do\%\do\~}
+\def\mn@doi{\begingroup\mn@urlcharsother \@ifnextchar [ {\mn@doi@}
+  {\mn@doi@[]}}
+\def\mn@doi@[#1]#2{\def\@tempa{#1}\ifx\@tempa\@empty \href
+  {http://dx.doi.org/#2} {doi:#2}\else \href {http://dx.doi.org/#2} {#1}\fi
+  \endgroup}
+\def\mn@eprint#1#2{\mn@eprint@#1:#2::\@nil}
+\def\mn@eprint@arXiv#1{\href {http://arxiv.org/abs/#1} {{\tt arXiv:#1}}}
+\def\mn@eprint@dblp#1{\href {http://dblp.uni-trier.de/rec/bibtex/#1.xml}
+  {dblp:#1}}
+\def\mn@eprint@#1:#2:#3:#4\@nil{\def\@tempa {#1}\def\@tempb {#2}\def\@tempc
+  {#3}\ifx \@tempc \@empty \let \@tempc \@tempb \let \@tempb \@tempa \fi \ifx
+  \@tempb \@empty \def\@tempb {arXiv}\fi \@ifundefined
+  {mn@eprint@\@tempb}{\@tempb:\@tempc}{\expandafter \expandafter \csname
+  mn@eprint@\@tempb\endcsname \expandafter{\@tempc}}}
+
+\bibitem[\protect\citeauthoryear{{Astropy Collaboration} et~al.,}{{Astropy
+  Collaboration} et~al.}{2013}]{astropy:2013}
+{Astropy Collaboration} et~al., 2013, \mn@doi [\aap]
+  {10.1051/0004-6361/201322068}, \href
+  {http://adsabs.harvard.edu/abs/2013A%26A...558A..33A} {558, A33}
+
+\bibitem[\protect\citeauthoryear{{Astropy Collaboration} et~al.,}{{Astropy
+  Collaboration} et~al.}{2018}]{astropy:2018}
+{Astropy Collaboration} et~al., 2018, \mn@doi [\aj] {10.3847/1538-3881/aabc4f},
+  \href {https://ui.adsabs.harvard.edu/abs/2018AJ....156..123A} {156, 123}
+
+\bibitem[\protect\citeauthoryear{{Astropy Collaboration} et~al.,}{{Astropy
+  Collaboration} et~al.}{2022}]{astropy:2022}
+{Astropy Collaboration} et~al., 2022, \mn@doi [\apj]
+  {10.3847/1538-4357/ac7c74}, \href
+  {https://ui.adsabs.harvard.edu/abs/2022ApJ...935..167A} {935, 167}
+
+\bibitem[\protect\citeauthoryear{Bellock, Godber  \& Kahn}{Bellock
+  et~al.}{2021}]{ken_bellock_2021_4697576}
+Bellock K.,  Godber N.,   Kahn P.,  2021, bellockk/alphashape: v1.3.1 Release,
+  \mn@doi{10.5281/zenodo.4697576}, \url
+  {https://doi.org/10.5281/zenodo.4697576}
+
+\bibitem[\protect\citeauthoryear{Clark}{Clark}{2015}]{clark2015pillow}
+Clark A.,  2015, Pillow (PIL Fork) Documentation, \url
+  {https://buildmedia.readthedocs.org/media/pdf/pillow/latest/pillow.pdf}
+
+\bibitem[\protect\citeauthoryear{Collette et~al.,}{Collette
+  et~al.}{2022}]{andrew_collette_2022_6575970}
+Collette A.,  et~al., 2022, h5py/h5py: 3.7.0, \mn@doi{10.5281/zenodo.6575970},
+  \url {https://doi.org/10.5281/zenodo.6575970}
+
+\bibitem[\protect\citeauthoryear{Cooke, Hochberg, Alted, Vilata, Wiebe, de
+  Menten, Valentino  \& McLeod}{Cooke et~al.}{2018}]{cooke_2018_1492916}
+Cooke D.,  Hochberg T.,  Alted F.,  Vilata I.,  Wiebe M.,  de Menten G.,
+  Valentino A.,   McLeod R.~A.,  2018, NumExpr: Fast numerical expression
+  evaluator for NumPy, \mn@doi{10.5281/zenodo.1492916}, \url
+  {https://doi.org/10.5281/zenodo.1492916}
+
+\bibitem[\protect\citeauthoryear{{Foreman-Mackey}, {Hogg}, {Lang}  \&
+  {Goodman}}{{Foreman-Mackey} et~al.}{2013}]{2013PASP..125..306F}
+{Foreman-Mackey} D.,  {Hogg} D.~W.,  {Lang} D.,   {Goodman} J.,  2013, \mn@doi
+  [\pasp] {10.1086/670067}, \href
+  {https://ui.adsabs.harvard.edu/abs/2013PASP..125..306F} {125, 306}
+
+\bibitem[\protect\citeauthoryear{{G{\'o}rski}, {Hivon}, {Banday}, {Wandelt},
+  {Hansen}, {Reinecke}  \& {Bartelmann}}{{G{\'o}rski}
+  et~al.}{2005}]{2005ApJ...622..759G}
+{G{\'o}rski} K.~M.,  {Hivon} E.,  {Banday} A.~J.,  {Wandelt} B.~D.,  {Hansen}
+  F.~K.,  {Reinecke} M.,   {Bartelmann} M.,  2005, \mn@doi [\apj]
+  {10.1086/427976}, \href {http://adsabs.harvard.edu/abs/2005ApJ...622..759G}
+  {622, 759}
+
+\bibitem[\protect\citeauthoryear{{Hand}, {Feng}, {Beutler}, {Li}, {Modi},
+  {Seljak}  \& {Slepian}}{{Hand} et~al.}{2018}]{2018AJ....156..160H}
+{Hand} N.,  {Feng} Y.,  {Beutler} F.,  {Li} Y.,  {Modi} C.,  {Seljak} U.,
+  {Slepian} Z.,  2018, \mn@doi [\aj] {10.3847/1538-3881/aadae0}, \href
+  {https://ui.adsabs.harvard.edu/abs/2018AJ....156..160H} {156, 160}
+
+\bibitem[\protect\citeauthoryear{Harris et~al.,}{Harris
+  et~al.}{2020}]{harris2020array}
+Harris C.~R.,  et~al., 2020, \mn@doi [Nature] {10.1038/s41586-020-2649-2}, 585,
+  357
+
+\bibitem[\protect\citeauthoryear{Hunter}{Hunter}{2007}]{Hunter:2007}
+Hunter J.~D.,  2007, \mn@doi [Computing in Science \& Engineering]
+  {10.1109/MCSE.2007.55}, 9, 90
+
+\bibitem[\protect\citeauthoryear{{Jasche} \& {Lavaux}}{{Jasche} \&
+  {Lavaux}}{2019}]{jasche2019physical}
+{Jasche} J.,  {Lavaux} G.,  2019, \mn@doi [\aap] {10.1051/0004-6361/201833710},
+  \href {https://ui.adsabs.harvard.edu/abs/2019A&A...625A..64J} {625, A64}
+
+\bibitem[\protect\citeauthoryear{{Knollmann} \& {Knebe}}{{Knollmann} \&
+  {Knebe}}{2009}]{AHF}
+{Knollmann} S.~R.,  {Knebe} A.,  2009, \mn@doi [\apjs]
+  {10.1088/0067-0049/182/2/608}, \href
+  {https://ui.adsabs.harvard.edu/abs/2009ApJS..182..608K} {182, 608}
+
+\bibitem[\protect\citeauthoryear{Krekel, Oliveira, Pfannschmidt, Bruynooghe,
+  Laugher  \& Bruhin}{Krekel et~al.}{2004}]{pytest}
+Krekel H.,  Oliveira B.,  Pfannschmidt R.,  Bruynooghe F.,  Laugher B.,
+  Bruhin F.,  2004, pytest x.y, \url{https://github.com/pytest-dev/pytest}
+
+\bibitem[\protect\citeauthoryear{{Lewis} \& {Challinor}}{{Lewis} \&
+  {Challinor}}{2011}]{2011ascl.soft02026L}
+{Lewis} A.,  {Challinor} A.,  2011, {CAMB: Code for Anisotropies in the
+  Microwave Background}, Astrophysics Source Code Library, record ascl:1102.026
+
+\bibitem[\protect\citeauthoryear{Meurer et~al.,}{Meurer
+  et~al.}{2017}]{10.7717/peerj-cs.103}
+Meurer A.,  et~al., 2017, \mn@doi [PeerJ Computer Science]
+  {10.7717/peerj-cs.103}, 3, e103
+
+\bibitem[\protect\citeauthoryear{{Murray}, {Power}  \& {Robotham}}{{Murray}
+  et~al.}{2013}]{2013A&C.....3...23M}
+{Murray} S.~G.,  {Power} C.,   {Robotham} A.~S.~G.,  2013, \mn@doi [Astronomy
+  and Computing] {10.1016/j.ascom.2013.11.001}, \href
+  {https://ui.adsabs.harvard.edu/abs/2013A&C.....3...23M} {3, 23}
+
+\bibitem[\protect\citeauthoryear{Neyrinck, Gnedin  \& Hamilton}{Neyrinck
+  et~al.}{2005}]{neyrinck2005voboz}
+Neyrinck M.~C.,  Gnedin N.~Y.,   Hamilton A.~J.,  2005, Monthly Notices of the
+  Royal Astronomical Society, 356, 1222
+
+\bibitem[\protect\citeauthoryear{{Pontzen}, {Ro{\v s}kar}, {Stinson}, {Woods},
+  {Reed}, {Coles}  \& {Quinn}}{{Pontzen} et~al.}{2013}]{pynbody}
+{Pontzen} A.,  {Ro{\v s}kar} R.,  {Stinson} G.~S.,  {Woods} R.,  {Reed} D.~M.,
+  {Coles} J.,   {Quinn} T.~R.,  2013, {pynbody: Astrophysics Simulation
+  Analysis for Python}
+
+\bibitem[\protect\citeauthoryear{Pontzen, Slosar, Roth  \& Peiris}{Pontzen
+  et~al.}{2016}]{Pontzen:2015eoh}
+Pontzen A.,  Slosar A.,  Roth N.,   Peiris H.~V.,  2016, \mn@doi [Phys. Rev.]
+  {10.1103/PhysRevD.93.103519}, D93, 103519
+
+\bibitem[\protect\citeauthoryear{{Ramachandran} \& {Varoquaux}}{{Ramachandran}
+  \& {Varoquaux}}{2011}]{2011CSE....13b..40R}
+{Ramachandran} P.,  {Varoquaux} G.,  2011, \mn@doi [Computing in Science and
+  Engineering] {10.1109/MCSE.2011.35}, \href
+  {https://ui.adsabs.harvard.edu/abs/2011CSE....13b..40R} {13, 40}
+
+\bibitem[\protect\citeauthoryear{{Sinha} \& {Garrison}}{{Sinha} \&
+  {Garrison}}{2020}]{2020MNRAS.491.3022S}
+{Sinha} M.,  {Garrison} L.~H.,  2020, \mn@doi [\mnras] {10.1093/mnras/stz3157},
+  \href {https://ui.adsabs.harvard.edu/abs/2020MNRAS.491.3022S} {491, 3022}
+
+\bibitem[\protect\citeauthoryear{Stopyra, Peiris  \& Pontzen}{Stopyra
+  et~al.}{2021a}]{stopyra2021build}
+Stopyra S.,  Peiris H.~V.,   Pontzen A.,  2021a, Monthly Notices of the Royal
+  Astronomical Society, 500, 4173
+
+\bibitem[\protect\citeauthoryear{Stopyra, Peiris, Pontzen, Jasche  \&
+  Natarajan}{Stopyra et~al.}{2021b}]{stopyra2021quantifying}
+Stopyra S.,  Peiris H.~V.,  Pontzen A.,  Jasche J.,   Natarajan P.,  2021b,
+  Monthly Notices of the Royal Astronomical Society, 507, 5425
+
+\bibitem[\protect\citeauthoryear{Stopyra, Peiris, Pontzen, Jasche  \&
+  Lavaux}{Stopyra et~al.}{2023}]{10.1093/mnras/stad3170}
+Stopyra S.,  Peiris H.~V.,  Pontzen A.,  Jasche J.,   Lavaux G.,  2023, \mn@doi
+  [Monthly Notices of the Royal Astronomical Society] {10.1093/mnras/stad3170},
+  527, 1244
+
+\bibitem[\protect\citeauthoryear{Stopyra, Peiris, Pontzen, Jasche  \&
+  Lavaux}{Stopyra et~al.}{2024}]{10.1093/mnras/stae1251}
+Stopyra S.,  Peiris H.~V.,  Pontzen A.,  Jasche J.,   Lavaux G.,  2024, \mn@doi
+  [Monthly Notices of the Royal Astronomical Society] {10.1093/mnras/stae1251},
+  531, 2213
+
+\bibitem[\protect\citeauthoryear{Sutter et~al.,}{Sutter
+  et~al.}{2015}]{Sutter:2014haa}
+Sutter P.,  et~al., 2015, \mn@doi [Astron. Comput.]
+  {10.1016/j.ascom.2014.10.002}, 9, 1
+
+\bibitem[\protect\citeauthoryear{Virtanen et~al.,}{Virtanen
+  et~al.}{2020}]{2020SciPy-NMeth}
+Virtanen P.,  et~al., 2020, \mn@doi [Nature Methods]
+  {10.1038/s41592-019-0686-2}, \href {https://rdcu.be/b08Wh} {17, 261}
+
+\bibitem[\protect\citeauthoryear{Waskom}{Waskom}{2021}]{Waskom2021}
+Waskom M.~L.,  2021, \mn@doi [Journal of Open Source Software]
+  {10.21105/joss.03021}, 6, 3021
+
+\bibitem[\protect\citeauthoryear{Zonca, Singer, Lenz, Reinecke, Rosset, Hivon
+  \& Gorski}{Zonca et~al.}{2019}]{Zonca2019}
+Zonca A.,  Singer L.,  Lenz D.,  Reinecke M.,  Rosset C.,  Hivon E.,   Gorski
+  K.,  2019, \mn@doi [Journal of Open Source Software] {10.21105/joss.01298},
+  4, 1298
+
+\makeatother
+\end{thebibliography}
